@@ -19,7 +19,16 @@ foundation; slice 3 adds real character generation behind a provider boundary:
 | 2 | Scene + membership **interval read model** | ✅ implemented + tested |
 | 3 | Provider boundary + **structured generation → CommitPacket** (Oban) | ✅ implemented + tested |
 | 4 | **Context assembler** (stable→volatile prefix caching) + authored layer | ✅ implemented + tested |
-| 5+ | Director, user ingestion, scene-close pipeline, client, … | ⬜ not started |
+| 5 | **Director**: arbitration, judgment decision, beat loop + lifecycle | ✅ core implemented + tested |
+| 6+ | User ingestion, scene-close pipeline, client, … | ⬜ not started |
+
+Slice 5 note: the Director's decision-making is built as pure/stubbable logic
+(mechanical arbitration, the judgment-decision schema, beat-loop policy,
+fairness, the beat-lifecycle aggregate) and tested exhaustively without an LLM.
+The live process-manager that chains the serial cast jobs across a beat is the
+remaining runtime glue — it composes the tested pieces (`Director.decide/1` →
+`Beat` aggregate → serial `GeneratePacket` jobs → `BeatClosed` → repeat under
+`BeatPolicy`).
 
 The core guarantee — *a character's projection contains only what they could
 structurally witness* — is implemented in `Polyphony.Visibility` and pinned by
@@ -57,6 +66,10 @@ Key modules:
 | `Polyphony.Jobs.GeneratePacket` | Oban job: generation → `CommitPacket` (rules 1–2) |
 | `Polyphony.Context` / `Context.SceneContext` | Stable→volatile assembler; frozen prefix is the cache unit (§9) |
 | `Polyphony.Authoring.*` | WorldBible, CharacterSheet, ArcEntry, EffectiveSheet (§5–6) |
+| `Polyphony.Director.Arbitration` / `Options` / `Proposal` | Stage-1 mechanical arbitration (§10) |
+| `Polyphony.Director` / `Director.Decision` | Stage-2 judgment call + merged plan (§10) |
+| `Polyphony.Director.BeatPolicy` / `Fairness` | Beat-loop stopping rule; casting fairness (§10) |
+| `Polyphony.Director.Beat` | Beat-lifecycle aggregate — the §12 synchronization unit |
 | `Polyphony.MembershipSet` | Pure interval fold — reference membership implementation |
 | `Polyphony.ReadModels.Membership` | Postgres interval read model (write path + queries) |
 | `Polyphony.Projectors.SceneMemberships` | Commanded projector wiring the two together |
@@ -122,6 +135,12 @@ models (and, later, pgvector embeddings).
 | `jobs/generate_packet_test.exs` | Job → `CommitPacket` → projection holds; idempotency; refusal cancel |
 | `context_test.exs` | Frozen prefix byte-identical across packets; filtered-view guard; dedup + oldest-first budget; retrieval runs once |
 | `authoring/effective_sheet_test.exs` | Canon revision override / discovery union in beat order (§5) |
+| `director/arbitration_test.exs` | Stage-1: auto-accept trivial, auto-reject impossible, forward novel |
+| `director/decision_test.exs` | Decision validation incl. "no dialogue in pacing notes" (§10) |
+| `director/director_test.exs` | Two-stage merge: rejections→world events, forwarded rulings, cast/control |
+| `director/beat_policy_test.exs` | Depth cap, yield, membership-change truncation |
+| `director/fairness_test.exs` | Per-scene speak counts; least-spoken-first ordering |
+| `director/beat_test.exs` / `beat_integration_test.exs` | Beat lifecycle + `BeatClosed` split (§12), via pure funcs and real dispatch |
 
 ## Security note (toolchain constraint)
 
@@ -142,7 +161,8 @@ ReqLLM after a toolchain bump is a one-module change.
 
 ## What's next (build order, §15)
 
-5. Director — mechanical arbitration, then the judgment call; serial cast chain.
+- Director runtime glue: the process manager that chains serial cast jobs across
+  a beat and closes it (composes the tested pieces above).
 6. User ingestion + confirmation, then suggestion mode.
 7. Scene-close pipeline — per-character summaries, embeddings, arc extraction.
 8. Branching, re-rolls, client reconnection.

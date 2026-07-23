@@ -133,6 +133,24 @@ defmodule Polyphony.Events do
     defstruct [:beat, :completed, :failed]
   end
 
+  defmodule PacketRecorded do
+    @moduledoc """
+    A character's packet reached the beat as committed. Internal beat-tracking
+    for the §12 synchronization unit; user & system only (default deny).
+    """
+    @derive Jason.Encoder
+    defstruct [:beat, :character_id]
+  end
+
+  defmodule PacketFailed do
+    @moduledoc """
+    A character's generation failed within the beat. Internal beat-tracking; the
+    user-facing failure is `GenerationFailed`. User & system only (default deny).
+    """
+    @derive Jason.Encoder
+    defstruct [:beat, :character_id, :reason]
+  end
+
   defmodule GenerationFailed do
     @moduledoc """
     A generation job reached a terminal failure. **Visible to the user only,
