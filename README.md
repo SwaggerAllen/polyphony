@@ -20,7 +20,8 @@ foundation; slice 3 adds real character generation behind a provider boundary:
 | 3 | Provider boundary + **structured generation → CommitPacket** (Oban) | ✅ implemented + tested |
 | 4 | **Context assembler** (stable→volatile prefix caching) + authored layer | ✅ implemented + tested |
 | 5 | **Director**: arbitration, judgment, beat loop + lifecycle + **runner** | ✅ implemented + tested |
-| 6+ | User ingestion, scene-close pipeline, client, … | ⬜ not started |
+| 6 | **User's agent**: prose ingestion + confirmation, suggestion mode | ✅ implemented + tested |
+| 7+ | Scene-close pipeline, branching, client, … | ⬜ not started |
 
 Slice 5: the Director's decision-making is pure/stubbable logic (arbitration,
 the judgment-decision schema, beat-loop policy, fairness, the beat-lifecycle
@@ -115,6 +116,8 @@ Key modules:
 | `Polyphony.Jobs.RunBeat` / `GeneratePacket` | Oban-driven beat loop (production path); shared `Director.BeatOps` |
 | `Polyphony.Context.Store` | ETS cache of materialized contexts for job-side lookup |
 | `Polyphony.LLM.Mock` | Lorem-ipsum provider — offline dev default, runs the whole loop |
+| `Polyphony.Ingest` / `Ingest.HeuristicSegmenter` | User prose → segments → `TurnPacket`; verbatim gate + OOC (§11) |
+| `Polyphony.Suggest` | 2–3 turn variants from the character's filtered view (§11) |
 | `Polyphony.MembershipSet` | Pure interval fold — reference membership implementation |
 | `Polyphony.ReadModels.Membership` | Postgres interval read model (write path + queries) |
 | `Polyphony.Projectors.SceneMemberships` | Commanded projector wiring the two together |
@@ -189,6 +192,8 @@ models (and, later, pgvector embeddings).
 | `director/runner_test.exs` | Full beat loop w/ Mock: serial cast, truncation, rejection→world event, depth-capped loop |
 | `llm/mock_test.exs` | Mock emits schema-valid TurnPacket/Decision; deterministic |
 | `jobs/oban_beat_test.exs` | Oban-driven loop (inline mode): serial chain, `BeatClosed`, guarantee holds, depth-capped loop |
+| `ingest_test.exs` | Verbatim integrity (rewrite/order rejected), heuristic segmentation, OOC split, self-state carry-forward |
+| `suggest_test.exs` | Variant count/distinctness, steer, and the filtered-view guard on suggestions |
 
 ## Security note (toolchain constraint)
 
@@ -209,7 +214,6 @@ ReqLLM after a toolchain bump is a one-module change.
 
 ## What's next (build order, §15)
 
-6. User ingestion + confirmation, then suggestion mode.
 7. Scene-close pipeline — per-character summaries, embeddings, arc extraction.
 8. Branching, re-rolls, client reconnection.
 9. Character/world authoring with field-level regeneration.
