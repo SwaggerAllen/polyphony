@@ -18,7 +18,7 @@ foundation; slice 3 adds real character generation behind a provider boundary:
 | 1 | Event store + aggregates + **visibility projection** | ✅ implemented + tested |
 | 2 | Scene + membership **interval read model** | ✅ implemented + tested |
 | 3 | Provider boundary + **structured generation → CommitPacket** (Oban) | ✅ implemented + tested |
-| 4 | Context assembler (stable→volatile prefix caching) | ⬜ not started |
+| 4 | **Context assembler** (stable→volatile prefix caching) + authored layer | ✅ implemented + tested |
 | 5+ | Director, user ingestion, scene-close pipeline, client, … | ⬜ not started |
 
 The core guarantee — *a character's projection contains only what they could
@@ -55,6 +55,8 @@ Key modules:
 | `Polyphony.LLM.Provider` / `DeepInfra` / `Stub` | Provider adapter boundary (§2, §3) |
 | `Polyphony.Generation` / `Generation.PacketSchema` | Structured output + §12 failure classification |
 | `Polyphony.Jobs.GeneratePacket` | Oban job: generation → `CommitPacket` (rules 1–2) |
+| `Polyphony.Context` / `Context.SceneContext` | Stable→volatile assembler; frozen prefix is the cache unit (§9) |
+| `Polyphony.Authoring.*` | WorldBible, CharacterSheet, ArcEntry, EffectiveSheet (§5–6) |
 | `Polyphony.MembershipSet` | Pure interval fold — reference membership implementation |
 | `Polyphony.ReadModels.Membership` | Postgres interval read model (write path + queries) |
 | `Polyphony.Projectors.SceneMemberships` | Commanded projector wiring the two together |
@@ -118,6 +120,8 @@ models (and, later, pgvector embeddings).
 | `generation/packet_schema_test.exs` | §6.4 validation: move cap, speech-only fields, blanks |
 | `generation_test.exs` | §12 classification: refusal, empty, transport, schema-invalid, corrective retry |
 | `jobs/generate_packet_test.exs` | Job → `CommitPacket` → projection holds; idempotency; refusal cancel |
+| `context_test.exs` | Frozen prefix byte-identical across packets; filtered-view guard; dedup + oldest-first budget; retrieval runs once |
+| `authoring/effective_sheet_test.exs` | Canon revision override / discovery union in beat order (§5) |
 
 ## Security note (toolchain constraint)
 
@@ -138,7 +142,6 @@ ReqLLM after a toolchain bump is a one-module change.
 
 ## What's next (build order, §15)
 
-4. Context assembler with stable→volatile prefix-cache layering.
 5. Director — mechanical arbitration, then the judgment call; serial cast chain.
 6. User ingestion + confirmation, then suggestion mode.
 7. Scene-close pipeline — per-character summaries, embeddings, arc extraction.

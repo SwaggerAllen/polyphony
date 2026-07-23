@@ -1,0 +1,295 @@
+defmodule Polyphony.Context do
+  @moduledoc """
+  Assembles a character's per-scene context, ordered **stable → volatile** to
+  maximize prefix-cache hits (§9).
+
+  Two phases, matching the refresh cadence in §9:
+
+    * `materialize/1` — run **once at scene open**. Builds the frozen prefix:
+      world bible + rules, effective sheet, core facts, retrieved long-tail
+      facts, retrieved distant summaries, and verbatim recent scenes. Retrieval
+      happens here and only here.
+    * `to_messages/2` — run **per packet**. Prepends the frozen prefix unchanged,
+      then appends the volatile suffix: scene premise + membership + exits, the
+      character's filtered live history, and current state. Growing the history
+      is an *append* to the cached prefix, so caching is unaffected (§10).
+
+  Two guarantees are structural here:
+
+    * **Filtered view only (§8, §9).** Live history and verbatim recent scenes
+      are passed as *raw* events and filtered through `Polyphony.Visibility`
+      inside this module — a caller cannot accidentally feed the omniscient
+      transcript and leak whispers or offscreen moves.
+    * **The prefix is independent of live history.** `materialize/1` never sees
+      the live events, so the cached portion cannot drift turn to turn.
+  """
+
+  alias Polyphony.Authoring.{WorldBible, CharacterSheet}
+  alias Polyphony.Context.{SceneContext, StaticRetriever}
+  alias Polyphony.Visibility
+
+  alias Polyphony.Events.{
+    ThoughtOccurred,
+    PrivateStateReported,
+    SpeechUttered,
+    ActionTaken,
+    DemeanorReported,
+    WorldEventOccurred,
+    CharacterEntered,
+    CharacterExited
+  }
+
+  @default_scene_token_budget 6_000
+
+  @doc """
+  Materialize the frozen prefix for `character_id` in a scene.
+
+  Required keys: `:scene_id`, `:character_id`, `:sheet` (the **effective** sheet),
+  `:premise`. Optional: `:world_bible`, `:distant_summaries` (the character's own
+  summaries, `[%{scene_id:, text:}]`), `:recent_scenes` (`[%{scene_id:, events:}]`
+  as raw events — filtered here), `:retriever`, `:fact_limit`, `:summary_limit`,
+  `:scene_token_budget`.
+  """
+  @spec materialize(keyword() | map()) :: SceneContext.t()
+  def materialize(opts) do
+    opts = Map.new(opts)
+    scene_id = fetch!(opts, :scene_id)
+    character_id = fetch!(opts, :character_id)
+    sheet = fetch!(opts, :sheet)
+    premise = Map.get(opts, :premise)
+
+    retriever = Map.get(opts, :retriever, StaticRetriever)
+    bible = Map.get(opts, :world_bible)
+
+    core_facts = CharacterSheet.core_facts(sheet)
+
+    retrieved_facts =
+      retriever.rank_facts(
+        CharacterSheet.long_tail_facts(sheet),
+        premise || "",
+        limit: Map.get(opts, :fact_limit)
+      )
+
+    # Verbatim recent scenes: filter each to THIS character's view, render, then
+    # budget by tokens dropping oldest-first (§9). Keep the set of included
+    # scene ids so summaries can be deduped against them.
+    {verbatim, verbatim_scene_ids} =
+      opts
+      |> Map.get(:recent_scenes, [])
+      |> render_recent_scenes(character_id)
+      |> budget_scenes(Map.get(opts, :scene_token_budget, @default_scene_token_budget))
+
+    retrieved_summaries =
+      retriever.rank_summaries(
+        Map.get(opts, :distant_summaries, []),
+        premise || "",
+        limit: Map.get(opts, :summary_limit)
+      )
+      # Dedup (§9): a scene included verbatim must not also appear as a summary.
+      |> Enum.reject(&(&1.scene_id in verbatim_scene_ids))
+
+    prefix =
+      [
+        render_bible(bible),
+        render_sheet(sheet),
+        render_facts("Always-resident facts", core_facts),
+        render_facts("Facts relevant to this scene", retrieved_facts),
+        render_summaries(retrieved_summaries),
+        render_verbatim(verbatim)
+      ]
+      |> compact_join()
+
+    %SceneContext{
+      scene_id: scene_id,
+      character_id: character_id,
+      premise: premise,
+      prefix: prefix,
+      meta: %{
+        verbatim_scene_ids: verbatim_scene_ids,
+        retrieved_fact_count: length(retrieved_facts),
+        retrieved_summary_count: length(retrieved_summaries)
+      }
+    }
+  end
+
+  @doc """
+  Build the full message list for one packet: the frozen prefix, then the
+  volatile suffix.
+
+  Options: `:members` (ids present now), `:exits` (available exit labels),
+  `:live_events` (raw scene events — filtered here), `:current_state` (rendered
+  string), `:turn_instruction`.
+  """
+  @spec to_messages(SceneContext.t(), keyword() | map()) :: [
+          %{role: String.t(), content: String.t()}
+        ]
+  def to_messages(%SceneContext{} = ctx, opts \\ []) do
+    opts = Map.new(opts)
+
+    live =
+      opts
+      |> Map.get(:live_events, [])
+      |> Visibility.project({:character, ctx.character_id})
+      |> Enum.map(&render_event(&1, ctx.character_id))
+      |> compact_join("\n")
+
+    volatile =
+      [
+        render_premise(ctx.premise),
+        render_membership(Map.get(opts, :members, []), Map.get(opts, :exits, [])),
+        section("Scene so far", live),
+        section("Current state", Map.get(opts, :current_state)),
+        Map.get(
+          opts,
+          :turn_instruction,
+          "It is your turn. Respond with a single valid TurnPacket JSON object."
+        )
+      ]
+      |> compact_join()
+
+    [
+      %{role: "system", content: ctx.prefix},
+      %{role: "user", content: volatile}
+    ]
+  end
+
+  # ── Token budgeting (§9: budget by tokens, drop oldest-first) ───────────────
+
+  @doc "Rough token estimate (~4 chars/token). Good enough for budgeting."
+  @spec estimate_tokens(String.t()) :: non_neg_integer()
+  def estimate_tokens(text) when is_binary(text), do: div(String.length(text), 4) + 1
+
+  # rendered: [{scene_id, text}] oldest-first. Drop from the front until the
+  # total fits, so the most recent scenes survive.
+  defp budget_scenes(rendered, budget) do
+    kept = drop_until_under(rendered, budget)
+    {Enum.map(kept, &elem(&1, 1)), Enum.map(kept, &elem(&1, 0))}
+  end
+
+  defp drop_until_under(scenes, budget) do
+    total = scenes |> Enum.map(fn {_id, text} -> estimate_tokens(text) end) |> Enum.sum()
+
+    if total <= budget or scenes == [] do
+      scenes
+    else
+      scenes |> tl() |> drop_until_under(budget)
+    end
+  end
+
+  # ── Rendering ───────────────────────────────────────────────────────────────
+
+  defp render_recent_scenes(scenes, character_id) do
+    Enum.map(scenes, fn %{scene_id: sid, events: events} ->
+      body =
+        events
+        |> Visibility.project({:character, character_id})
+        |> Enum.map(&render_event(&1, character_id))
+        |> compact_join("\n")
+
+      {sid, "Scene #{inspect(sid)}:\n" <> body}
+    end)
+  end
+
+  defp render_bible(nil), do: nil
+
+  defp render_bible(%WorldBible{} = b) do
+    rules = if b.rules == [], do: nil, else: "Rules:\n" <> bullets(b.rules)
+
+    [
+      b.name && "World: #{b.name}",
+      b.setting && "Setting: #{b.setting}",
+      b.tone && "Tone: #{b.tone}",
+      rules,
+      b.starting_canon != [] && "Canon:\n" <> bullets(b.starting_canon)
+    ]
+    |> compact_join()
+  end
+
+  defp render_sheet(%CharacterSheet{} = s) do
+    [
+      s.name && "You are #{s.name}.",
+      s.premise && s.premise,
+      s.appearance && "Appearance: #{s.appearance}",
+      s.voice && "Voice: #{s.voice}",
+      s.temperament && "Temperament: #{s.temperament}",
+      s.backstory && "Backstory: #{s.backstory}",
+      s.initial_knowledge != [] && "You know:\n" <> bullets(s.initial_knowledge),
+      render_relationships(s.relationships)
+    ]
+    |> compact_join()
+  end
+
+  defp render_relationships([]), do: nil
+
+  defp render_relationships(rels) do
+    "Relationships:\n" <> bullets(Enum.map(rels, fn r -> "#{r.target}: #{r.descriptor}" end))
+  end
+
+  defp render_facts(_label, []), do: nil
+  defp render_facts(label, facts), do: "#{label}:\n" <> bullets(Enum.map(facts, & &1.statement))
+
+  defp render_summaries([]), do: nil
+
+  defp render_summaries(summaries),
+    do: "Earlier (summarized):\n" <> compact_join(Enum.map(summaries, & &1.text), "\n")
+
+  defp render_verbatim([]), do: nil
+  defp render_verbatim(scenes), do: "Recent scenes:\n" <> compact_join(scenes, "\n\n")
+
+  defp render_premise(nil), do: nil
+  defp render_premise(premise), do: "Scene: #{premise}"
+
+  defp render_membership(members, exits) do
+    [
+      members != [] && "Present: #{Enum.join(members, ", ")}",
+      exits != [] && "Exits: #{Enum.join(exits, ", ")}"
+    ]
+    |> compact_join()
+  end
+
+  # Event rendering. Interior events only ever appear here for the viewer whose
+  # they are (Visibility already filtered), so it's safe to render them.
+  defp render_event(%ThoughtOccurred{} = e, _me), do: "(you think: #{e.content})"
+
+  defp render_event(%PrivateStateReported{} = e, _me),
+    do: "(you feel #{e.mood_felt || "—"}; you intend #{e.intention || "—"})"
+
+  defp render_event(%SpeechUttered{} = e, _me) do
+    to = if e.addressed_to in [nil, []], do: "", else: " (to #{Enum.join(e.addressed_to, ", ")})"
+    whisper = if e.audibility == :private, do: " (whispered)", else: ""
+    "#{e.speaker_id}#{to}#{whisper}: \"#{e.content}\""
+  end
+
+  defp render_event(%ActionTaken{} = e, _me), do: "#{e.character_id} #{e.content}"
+
+  defp render_event(%DemeanorReported{} = e, _me) do
+    bits = [e.demeanor, e.posture, e.position] |> Enum.reject(&is_nil/1) |> Enum.join(", ")
+    "[#{e.character_id}: #{bits}]"
+  end
+
+  defp render_event(%WorldEventOccurred{} = e, _me), do: "[#{e.content}]"
+  defp render_event(%CharacterEntered{} = e, _me), do: "[#{e.character_id} enters]"
+  defp render_event(%CharacterExited{} = e, _me), do: "[#{e.character_id} leaves]"
+  defp render_event(_other, _me), do: nil
+
+  # ── Small helpers ────────────────────────────────────────────────────────────
+
+  defp fetch!(map, key) do
+    case Map.fetch(map, key) do
+      {:ok, v} -> v
+      :error -> raise ArgumentError, "Context.materialize missing required key: #{inspect(key)}"
+    end
+  end
+
+  defp section(_label, content) when content in [nil, ""], do: nil
+  defp section(label, content), do: "#{label}:\n#{content}"
+
+  defp bullets(items), do: Enum.map_join(items, "\n", &"- #{&1}")
+
+  defp compact_join(parts, sep \\ "\n\n") do
+    parts
+    |> List.flatten()
+    |> Enum.reject(&(&1 in [nil, false, ""]))
+    |> Enum.join(sep)
+  end
+end

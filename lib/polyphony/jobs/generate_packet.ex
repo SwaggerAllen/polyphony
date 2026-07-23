@@ -93,8 +93,10 @@ defmodule Polyphony.Jobs.GeneratePacket do
   defp maybe_put(opts, _key, nil), do: opts
   defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 
-  # Placeholder context. The real stable→volatile assembler is slice 4; until
-  # then a job may carry pre-built `messages`, or fall back to this minimal seed.
+  # The stable→volatile assembler is `Polyphony.Context`: the Director
+  # materializes a scene's cached prefix once and passes assembled `messages` in
+  # the job args (slice 5 wires that path). This minimal seed is the fallback
+  # when a job is enqueued without them.
   defp default_messages(args) do
     [
       %{
