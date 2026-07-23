@@ -37,9 +37,39 @@ mira: "Magna aliqua enim ad minim veniam."
 otto: "Aliqua enim ad minim veniam lorem."
 ```
 
-In production each cast generation would be an enqueued `GeneratePacket` job
-with the runner reacting to `BeatClosed`; the inline serial version is what
-makes the loop exercisable end-to-end today.
+There are **two runners**, sharing the same tested Director logic:
+
+- `Director.Runner` — inline/synchronous, for offline demos and tests.
+- **Oban-driven** (`Jobs.RunBeat` + self-chaining `Jobs.GeneratePacket`) — the
+  production path. `RunBeat` makes the one judgment call, opens the beat, and
+  enqueues the first cast member; each `GeneratePacket` generates, commits,
+  records itself on the beat, then enqueues the next cast member — so serial
+  ordering falls out of enqueue-next-on-completion. The last one closes the beat
+  and enqueues the next `RunBeat` per `BeatPolicy`. Each character's frozen
+  context is fetched from `Context.Store` (ETS) rather than serialized through
+  job args. Verified against the **real async queues** in dev:
+
+  ```
+  beat 1 mira: "Enim ad minim veniam lorem ipsum."
+  beat 1 otto: "Lorem ipsum dolor sit amet consectetur."
+  beat 2 mira: "Consectetur adipiscing elit sed do eiusmod."
+  beat 2 otto: "Dolore magna aliqua enim ad minim."
+  ```
+
+## Front end (planned — §13)
+
+Not yet built. The spec names **Phoenix + Channels** in the stack (§2); §13
+specifies a transport-agnostic *contract* — a viewer-parameterized message
+stream (`event.committed`, `beat.opened/closed`, `generation.status`,
+`generation.failed`, `awaiting.user`, `parse.proposed`) with cursor replay
+(`global_seq`) for reconnection. **LiveView fits well.** The key discipline: the
+client push should come from a broadcaster subscribed to the *committed event
+log* (publishing the filtered `event.committed` to each viewer's `Phoenix.PubSub`
+topic), not from the Oban jobs directly. Routing through the log is what
+preserves the two §13 guarantees — per-viewer filtering via the same
+`visible_to?/2`, and reconnection-as-cursor-replay. The generation jobs' only job
+stays "produce commands"; committing a packet is exactly what will trigger the
+push.
 
 The core guarantee — *a character's projection contains only what they could
 structurally witness* — is implemented in `Polyphony.Visibility` and pinned by
@@ -81,7 +111,9 @@ Key modules:
 | `Polyphony.Director` / `Director.Decision` | Stage-2 judgment call + merged plan (§10) |
 | `Polyphony.Director.BeatPolicy` / `Fairness` | Beat-loop stopping rule; casting fairness (§10) |
 | `Polyphony.Director.Beat` | Beat-lifecycle aggregate — the §12 synchronization unit |
-| `Polyphony.Director.Runner` | Drives the beat loop: serial cast chain + `BeatPolicy` (§10) |
+| `Polyphony.Director.Runner` | Inline beat loop: serial cast chain + `BeatPolicy` (§10) |
+| `Polyphony.Jobs.RunBeat` / `GeneratePacket` | Oban-driven beat loop (production path); shared `Director.BeatOps` |
+| `Polyphony.Context.Store` | ETS cache of materialized contexts for job-side lookup |
 | `Polyphony.LLM.Mock` | Lorem-ipsum provider — offline dev default, runs the whole loop |
 | `Polyphony.MembershipSet` | Pure interval fold — reference membership implementation |
 | `Polyphony.ReadModels.Membership` | Postgres interval read model (write path + queries) |
@@ -156,6 +188,7 @@ models (and, later, pgvector embeddings).
 | `director/beat_test.exs` / `beat_integration_test.exs` | Beat lifecycle + `BeatClosed` split (§12), via pure funcs and real dispatch |
 | `director/runner_test.exs` | Full beat loop w/ Mock: serial cast, truncation, rejection→world event, depth-capped loop |
 | `llm/mock_test.exs` | Mock emits schema-valid TurnPacket/Decision; deterministic |
+| `jobs/oban_beat_test.exs` | Oban-driven loop (inline mode): serial chain, `BeatClosed`, guarantee holds, depth-capped loop |
 
 ## Security note (toolchain constraint)
 

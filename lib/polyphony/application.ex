@@ -7,6 +7,7 @@ defmodule Polyphony.Application do
     children =
       [
         Polyphony.Repo,
+        Polyphony.Context.Store,
         {Oban, Application.fetch_env!(:polyphony, Oban)},
         Polyphony.App
       ] ++ projectors()
