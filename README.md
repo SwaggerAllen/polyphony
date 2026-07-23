@@ -10,24 +10,34 @@ structural property of the data, not a prompt instruction.
 
 ## Status
 
-This is the **foundation** — build-order slices 1 & 2 from the brief (§15), the
-part deliberately built and tested *before anything else exists*, with **no LLM
-involved**:
+Build-order slices 1–3 from the brief (§15). Slices 1 & 2 are the LLM-free
+foundation; slice 3 adds real character generation behind a provider boundary:
 
 | Slice | What | State |
 |------|------|-------|
 | 1 | Event store + aggregates + **visibility projection** | ✅ implemented + tested |
 | 2 | Scene + membership **interval read model** | ✅ implemented + tested |
-| 3+ | Real generation, context assembly, Director, client, … | ⬜ not started |
+| 3 | Provider boundary + **structured generation → CommitPacket** (Oban) | ✅ implemented + tested |
+| 4 | Context assembler (stable→volatile prefix caching) | ⬜ not started |
+| 5+ | Director, user ingestion, scene-close pipeline, client, … | ⬜ not started |
 
 The core guarantee — *a character's projection contains only what they could
 structurally witness* — is implemented in `Polyphony.Visibility` and pinned by
 the test suite (`test/polyphony/visibility_test.exs`), the thing the brief says
 to "test hardest."
 
+Slice 3 note: the DeepInfra call is not exercised in this environment (no egress
+to the provider), so the real adapter is written but the pipeline
+(parse → validate → retry → commit) is tested with a deterministic in-process
+stub injected at the provider boundary. Swapping the stub for the live adapter is
+config only.
+
 ## Architecture at a glance
 
 ```
+                       Oban job (generation, rule 1)
+                         │  Provider.complete → PacketSchema.parse
+                         ▼
 command ─▶ Polyphony.App (Commanded) ─▶ Scene aggregate ─▶ events ─▶ event store
                                            (validates)                   │
                                                                          ├─▶ SceneMemberships projector ─▶ Postgres read model
@@ -42,6 +52,9 @@ Key modules:
 | `Polyphony.Scene` | Scene aggregate: lifecycle, membership, packet decomposition (§6.4) |
 | `Polyphony.Commands` / `Polyphony.Router` | Command structs and dispatch |
 | `Polyphony.Visibility` | `visible_to?/3` + `project/3` — **the core guarantee** (§8) |
+| `Polyphony.LLM.Provider` / `DeepInfra` / `Stub` | Provider adapter boundary (§2, §3) |
+| `Polyphony.Generation` / `Generation.PacketSchema` | Structured output + §12 failure classification |
+| `Polyphony.Jobs.GeneratePacket` | Oban job: generation → `CommitPacket` (rules 1–2) |
 | `Polyphony.MembershipSet` | Pure interval fold — reference membership implementation |
 | `Polyphony.ReadModels.Membership` | Postgres interval read model (write path + queries) |
 | `Polyphony.Projectors.SceneMemberships` | Commanded projector wiring the two together |
@@ -81,8 +94,11 @@ Requires **Elixir 1.14+**, **Erlang/OTP 25+**, and **PostgreSQL 16 with
 #   a 'postgres'/'postgres' role, and (per database): CREATE EXTENSION vector;
 
 mix setup          # deps.get + ecto.create + ecto.migrate
-mix test           # 35 tests, no LLM, no network
+mix test           # 56 tests, no LLM, no network
 ```
+
+To point the live provider at DeepInfra, set `DEEPINFRA_API_KEY` (and optionally
+override `config :polyphony, :llm`).
 
 The event store currently uses Commanded's **in-memory adapter** so the domain
 core is runnable and testable without provisioning the EventStore Postgres
@@ -98,7 +114,10 @@ models (and, later, pgvector embeddings).
 | `membership_set_test.exs` | Half-open interval semantics, re-entry gaps, scoping |
 | `scene_test.exs` | Aggregate validation + packet decomposition + idempotency (§12) |
 | `read_models/membership_test.exs` | Postgres ⇄ `MembershipSet` parity across a grid |
-| `integration_test.exs` | End-to-end: real commands → event store → projector → filtered stream |
+| `integration_test.exs` | End-to-end: real commands → event store → filtered stream |
+| `generation/packet_schema_test.exs` | §6.4 validation: move cap, speech-only fields, blanks |
+| `generation_test.exs` | §12 classification: refusal, empty, transport, schema-invalid, corrective retry |
+| `jobs/generate_packet_test.exs` | Job → `CommitPacket` → projection holds; idempotency; refusal cancel |
 
 ## Security note (toolchain constraint)
 
@@ -112,9 +131,13 @@ unlocks patched `postgrex` ≥ 0.20 and the newer `ecto_sql`/`commanded` lines)
 once the toolchain allows it; the version pins in `mix.exs` are marked
 accordingly.
 
+The same 1.14 cap is why the DeepInfra adapter uses Erlang's built-in `:httpc`
+rather than Req: Req's HTTP/2 stack (`hpax`) requires 1.15+ and carries its own
+advisory. The provider behaviour keeps the HTTP client swappable, so moving to
+ReqLLM after a toolchain bump is a one-module change.
+
 ## What's next (build order, §15)
 
-3. Single character, single scene, real DeepInfra generation → `TurnPacket`.
 4. Context assembler with stable→volatile prefix-cache layering.
 5. Director — mechanical arbitration, then the judgment call; serial cast chain.
 6. User ingestion + confirmation, then suggestion mode.

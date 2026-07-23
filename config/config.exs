@@ -26,4 +26,24 @@ config :polyphony, Polyphony.App,
   pubsub: :local,
   registry: :local
 
+# Job dispatch (§2). Generation runs in Oban jobs — never in an aggregate
+# (foundational rule 1) — so a job produces commands.
+config :polyphony, Oban,
+  repo: Polyphony.Repo,
+  queues: [generation: 5],
+  plugins: [{Oban.Plugins.Pruner, max_age: 60 * 60}]
+
+# LLM provider config (§2, §3). DeepInfra direct by default; the workhorse MoE
+# on the volume path, the heavy model reserved for character/world generation.
+config :polyphony, :llm,
+  provider: Polyphony.LLM.DeepInfra,
+  deepinfra: [
+    base_url: "https://api.deepinfra.com",
+    model: "Qwen/Qwen3.5-35B-A3B"
+  ],
+  models: %{
+    workhorse: "Qwen/Qwen3.5-35B-A3B",
+    heavy: "Qwen/Qwen3.5-397B-A17B"
+  }
+
 import_config "#{config_env()}.exs"
