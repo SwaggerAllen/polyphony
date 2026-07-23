@@ -40,6 +40,8 @@ defmodule Polyphony.Generation do
           {:ok, Polyphony.TurnPacket.t()} | {:error, term()}
   def generate(messages, opts \\ []) do
     provider = Keyword.get(opts, :provider, Provider.default())
+    # Hint to structure-aware providers (e.g. the Mock) which shape to emit.
+    opts = Keyword.put_new(opts, :response, :turn_packet)
     attempt(provider, messages, opts, @max_schema_retries)
   end
 

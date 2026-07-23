@@ -13,7 +13,14 @@ defmodule Polyphony.Scene do
   replay. Generation lives in jobs that *produce* these commands.
   """
 
-  alias Polyphony.Commands.{OpenScene, CloseScene, EnterCharacter, ExitCharacter, CommitPacket}
+  alias Polyphony.Commands.{
+    OpenScene,
+    CloseScene,
+    EnterCharacter,
+    ExitCharacter,
+    CommitPacket,
+    RecordWorldEvent
+  }
 
   alias Polyphony.Events.{
     SceneOpened,
@@ -24,7 +31,8 @@ defmodule Polyphony.Scene do
     SpeechUttered,
     ActionTaken,
     PrivateStateReported,
-    DemeanorReported
+    DemeanorReported,
+    WorldEventOccurred
   }
 
   alias Polyphony.TurnPacket
@@ -82,6 +90,12 @@ defmodule Polyphony.Scene do
   end
 
   def execute(%__MODULE__{}, %CloseScene{}), do: {:error, :scene_not_open}
+
+  def execute(%__MODULE__{status: :open}, %RecordWorldEvent{} = c) do
+    %WorldEventOccurred{scene_id: c.scene_id, beat: c.beat, content: c.content}
+  end
+
+  def execute(%__MODULE__{}, %RecordWorldEvent{}), do: {:error, :scene_not_open}
 
   # CommitPacket needs two guards (idempotency + membership) plus decomposition.
   def execute(%__MODULE__{} = state, %CommitPacket{} = c) do

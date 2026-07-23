@@ -19,16 +19,27 @@ foundation; slice 3 adds real character generation behind a provider boundary:
 | 2 | Scene + membership **interval read model** | ✅ implemented + tested |
 | 3 | Provider boundary + **structured generation → CommitPacket** (Oban) | ✅ implemented + tested |
 | 4 | **Context assembler** (stable→volatile prefix caching) + authored layer | ✅ implemented + tested |
-| 5 | **Director**: arbitration, judgment decision, beat loop + lifecycle | ✅ core implemented + tested |
+| 5 | **Director**: arbitration, judgment, beat loop + lifecycle + **runner** | ✅ implemented + tested |
 | 6+ | User ingestion, scene-close pipeline, client, … | ⬜ not started |
 
-Slice 5 note: the Director's decision-making is built as pure/stubbable logic
-(mechanical arbitration, the judgment-decision schema, beat-loop policy,
-fairness, the beat-lifecycle aggregate) and tested exhaustively without an LLM.
-The live process-manager that chains the serial cast jobs across a beat is the
-remaining runtime glue — it composes the tested pieces (`Director.decide/1` →
-`Beat` aggregate → serial `GeneratePacket` jobs → `BeatClosed` → repeat under
-`BeatPolicy`).
+Slice 5: the Director's decision-making is pure/stubbable logic (arbitration,
+the judgment-decision schema, beat-loop policy, fairness, the beat-lifecycle
+aggregate), and `Director.Runner` drives the actual beat loop — decide → apply
+plan → serial cast generation → close beat → repeat under `BeatPolicy`, with
+truncation on membership change. The whole loop runs offline against the
+lorem-ipsum `LLM.Mock` provider (the dev default), so `mix run` produces a real
+scene with no network:
+
+```
+(mira thinks: Eiusmod tempor incididunt.)
+mira: "Magna aliqua enim ad minim veniam."
+(otto thinks: Tempor incididunt ut.)
+otto: "Aliqua enim ad minim veniam lorem."
+```
+
+In production each cast generation would be an enqueued `GeneratePacket` job
+with the runner reacting to `BeatClosed`; the inline serial version is what
+makes the loop exercisable end-to-end today.
 
 The core guarantee — *a character's projection contains only what they could
 structurally witness* — is implemented in `Polyphony.Visibility` and pinned by
@@ -70,6 +81,8 @@ Key modules:
 | `Polyphony.Director` / `Director.Decision` | Stage-2 judgment call + merged plan (§10) |
 | `Polyphony.Director.BeatPolicy` / `Fairness` | Beat-loop stopping rule; casting fairness (§10) |
 | `Polyphony.Director.Beat` | Beat-lifecycle aggregate — the §12 synchronization unit |
+| `Polyphony.Director.Runner` | Drives the beat loop: serial cast chain + `BeatPolicy` (§10) |
+| `Polyphony.LLM.Mock` | Lorem-ipsum provider — offline dev default, runs the whole loop |
 | `Polyphony.MembershipSet` | Pure interval fold — reference membership implementation |
 | `Polyphony.ReadModels.Membership` | Postgres interval read model (write path + queries) |
 | `Polyphony.Projectors.SceneMemberships` | Commanded projector wiring the two together |
@@ -141,6 +154,8 @@ models (and, later, pgvector embeddings).
 | `director/beat_policy_test.exs` | Depth cap, yield, membership-change truncation |
 | `director/fairness_test.exs` | Per-scene speak counts; least-spoken-first ordering |
 | `director/beat_test.exs` / `beat_integration_test.exs` | Beat lifecycle + `BeatClosed` split (§12), via pure funcs and real dispatch |
+| `director/runner_test.exs` | Full beat loop w/ Mock: serial cast, truncation, rejection→world event, depth-capped loop |
+| `llm/mock_test.exs` | Mock emits schema-valid TurnPacket/Decision; deterministic |
 
 ## Security note (toolchain constraint)
 
@@ -161,8 +176,6 @@ ReqLLM after a toolchain bump is a one-module change.
 
 ## What's next (build order, §15)
 
-- Director runtime glue: the process manager that chains serial cast jobs across
-  a beat and closes it (composes the tested pieces above).
 6. User ingestion + confirmation, then suggestion mode.
 7. Scene-close pipeline — per-character summaries, embeddings, arc extraction.
 8. Branching, re-rolls, client reconnection.

@@ -62,13 +62,18 @@ defmodule Polyphony.Director do
   # ── Stage 2: the judgment call ──────────────────────────────────────────────
 
   defp judgment(opts, arb) do
-    provider = Map.get(opts, :provider, Provider.default())
+    provider = Map.get(opts, :provider) || Provider.default()
     base = Map.get(opts, :messages, [])
     messages = base ++ [%{role: "user", content: forwarded_prompt(arb.forwarded)}]
 
+    # Forward provider-relevant opts (model, hints, cast/control hints for the
+    # Mock) while dropping the Director's own inputs. `response: :decision` tells
+    # a structure-aware provider which shape to emit; thinking is on for routing
+    # (§3).
     call_opts =
       opts
-      |> Map.take([:model, :max_tokens, :temperature, :respond_with])
+      |> Map.drop([:proposals, :options, :messages, :provider])
+      |> Map.put(:response, :decision)
       |> Map.put_new(:thinking, true)
       |> Enum.into([])
 

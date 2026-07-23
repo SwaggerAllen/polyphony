@@ -83,6 +83,18 @@ defmodule Polyphony.MembershipSet do
     end)
   end
 
+  @doc "All character ids that are members of `scene_id` at `beat`."
+  @spec members_at(t(), term(), integer()) :: [term()]
+  def members_at(%__MODULE__{intervals: intervals}, scene_id, beat) do
+    intervals
+    |> Enum.filter(fn i ->
+      i.scene_id == scene_id and i.entered_beat <= beat and
+        (is_nil(i.exited_beat) or i.exited_beat > beat)
+    end)
+    |> Enum.map(& &1.character_id)
+    |> Enum.uniq()
+  end
+
   @doc """
   Return a `member_at?/3` closure suitable for `Polyphony.Visibility`.
 

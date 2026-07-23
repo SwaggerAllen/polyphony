@@ -30,4 +30,13 @@ defmodule Polyphony.Commands do
     """
     defstruct [:scene_id, :character_id, :beat, :packet_id, :packet]
   end
+
+  defmodule RecordWorldEvent do
+    @moduledoc """
+    Author a Director world event into a scene (§10). Non-character occurrences
+    and in-fiction rejections ("the door is locked") land on the log this way,
+    visible to scene members at the beat.
+    """
+    defstruct [:scene_id, :beat, :content]
+  end
 end
