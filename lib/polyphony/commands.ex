@@ -1,0 +1,33 @@
+defmodule Polyphony.Commands do
+  @moduledoc """
+  Commands — requests to change state. A command is validated by an aggregate,
+  which either emits events or rejects it. Generation never happens here or in
+  the aggregate (rule 1); jobs *produce* these commands (rule 2).
+  """
+
+  defmodule OpenScene do
+    defstruct [:scene_id, :campaign_id, :location_id, :premise, :opened_beat]
+  end
+
+  defmodule CloseScene do
+    defstruct [:scene_id, :closed_beat]
+  end
+
+  defmodule EnterCharacter do
+    defstruct [:scene_id, :character_id, :beat]
+  end
+
+  defmodule ExitCharacter do
+    defstruct [:scene_id, :character_id, :beat]
+  end
+
+  defmodule CommitPacket do
+    @moduledoc """
+    Commit a character's `TurnPacket` into the scene. The aggregate decomposes
+    it into typed events sharing `beat` and `packet_id`. `packet_id` is derived
+    deterministically upstream `(branch, beat, character_id)` for idempotency
+    (§12), so a retried job commits once.
+    """
+    defstruct [:scene_id, :character_id, :beat, :packet_id, :packet]
+  end
+end

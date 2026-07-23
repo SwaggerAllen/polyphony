@@ -1,0 +1,51 @@
+defmodule Polyphony.MixProject do
+  use Mix.Project
+
+  def project do
+    [
+      app: :polyphony,
+      version: "0.1.0",
+      elixir: "~> 1.14",
+      elixirc_paths: elixirc_paths(Mix.env()),
+      start_permanent: Mix.env() == :prod,
+      aliases: aliases(),
+      deps: deps()
+    ]
+  end
+
+  # Run "mix help compile.app" to learn about applications.
+  def application do
+    [
+      extra_applications: [:logger],
+      mod: {Polyphony.Application, []}
+    ]
+  end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
+  defp deps do
+    [
+      # Event sourcing / CQRS
+      {:commanded, "~> 1.4"},
+      {:commanded_ecto_projections, "~> 1.4"},
+
+      # Persistence for read models (pgvector for scene/summary embeddings later).
+      # Versions pinned for Elixir 1.14 (the distro toolchain); newer postgrex
+      # requires 1.15+.
+      {:ecto_sql, "~> 3.11.0"},
+      {:postgrex, "~> 0.17.5"},
+      {:pgvector, "~> 0.3.0"},
+      {:jason, "~> 1.4"}
+    ]
+  end
+
+  defp aliases do
+    [
+      # Set up the read-model database from scratch.
+      setup: ["deps.get", "ecto.create", "ecto.migrate"],
+      "ecto.reset": ["ecto.drop", "ecto.create", "ecto.migrate"],
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"]
+    ]
+  end
+end
