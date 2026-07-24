@@ -57,20 +57,26 @@ There are **two runners**, sharing the same tested Director logic:
   beat 2 otto: "Dolore magna aliqua enim ad minim."
   ```
 
-## Front end (planned — §13)
+## Front end
 
-Not yet built. The spec names **Phoenix + Channels** in the stack (§2); §13
-specifies a transport-agnostic *contract* — a viewer-parameterized message
-stream (`event.committed`, `beat.opened/closed`, `generation.status`,
-`generation.failed`, `awaiting.user`, `parse.proposed`) with cursor replay
-(`global_seq`) for reconnection. **LiveView fits well.** The key discipline: the
-client push should come from a broadcaster subscribed to the *committed event
-log* (publishing the filtered `event.committed` to each viewer's `Phoenix.PubSub`
-topic), not from the Oban jobs directly. Routing through the log is what
-preserves the two §13 guarantees — per-viewer filtering via the same
-`visible_to?/2`, and reconnection-as-cursor-replay. The generation jobs' only job
-stays "produce commands"; committing a packet is exactly what will trigger the
-push.
+**Decision: LiveView** (active-session-first), with a `Phoenix.PubSub`
+broadcaster as the seam so a native/PWA client or a push-notification worker can
+be added later without touching the domain.
+
+The **broadcaster is built** (§13): `Polyphony.Broadcast.Publisher`, a Commanded
+event handler, publishes each committed scene event to **per-viewer PubSub
+topics**, filtered through the same `visible_to?/2` used for character contexts —
+so the transport can never leak more than the projection. A LiveView subscribes
+to `scene:<id>:omniscient` (the user) or `scene:<id>:character:<id>` (a second
+human); a reconnecting client catches up via `Broadcast.replay/4` (cursor). The
+publisher derives membership from the event stream, so it needs no Postgres.
+
+Verified end-to-end in dev — the omniscient user receives a character's thoughts
+*and* speech; another character's viewer receives only the speech.
+
+Still to layer on: the LiveView itself, beat framing (`beat.opened/closed` — once
+beat events carry their scene id), and, later, the notify-me-later path (a worker
+subscribed to the same topics turning `awaiting.user` into APNs/FCM pushes).
 
 The core guarantee — *a character's projection contains only what they could
 structurally witness* — is implemented in `Polyphony.Visibility` and pinned by
@@ -118,6 +124,7 @@ Key modules:
 | `Polyphony.LLM.Mock` | Lorem-ipsum provider — offline dev default, runs the whole loop |
 | `Polyphony.Ingest` / `Ingest.HeuristicSegmenter` | User prose → segments → `TurnPacket`; verbatim gate + OOC (§11) |
 | `Polyphony.Suggest` | 2–3 turn variants from the character's filtered view (§11) |
+| `Polyphony.Broadcast` / `Broadcast.Publisher` | Per-viewer filtered client stream over PubSub + cursor replay (§13) |
 | `Polyphony.MembershipSet` | Pure interval fold — reference membership implementation |
 | `Polyphony.ReadModels.Membership` | Postgres interval read model (write path + queries) |
 | `Polyphony.Projectors.SceneMemberships` | Commanded projector wiring the two together |
@@ -194,6 +201,8 @@ models (and, later, pgvector embeddings).
 | `jobs/oban_beat_test.exs` | Oban-driven loop (inline mode): serial chain, `BeatClosed`, guarantee holds, depth-capped loop |
 | `ingest_test.exs` | Verbatim integrity (rewrite/order rejected), heuristic segmentation, OOC split, self-state carry-forward |
 | `suggest_test.exs` | Variant count/distinctness, steer, and the filtered-view guard on suggestions |
+| `broadcast_test.exs` | Per-viewer fan-out (interior/whisper/scene/lifecycle), message shape, replay cursor |
+| `broadcast/publisher_test.exs` | End-to-end filtered publish over PubSub (omniscient vs character viewer) |
 
 ## Security note (toolchain constraint)
 

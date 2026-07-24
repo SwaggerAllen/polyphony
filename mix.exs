@@ -40,6 +40,10 @@ defmodule Polyphony.MixProject do
       # Job dispatch (§2): Postgres-backed, retries, concurrency control.
       {:oban, "~> 2.17"},
 
+      # Per-viewer client streaming (§13). Standalone PubSub — a LiveView (or a
+      # push-notification worker) subscribes to the filtered per-viewer topics.
+      {:phoenix_pubsub, "~> 2.1"},
+
       # NOTE: the DeepInfra adapter uses Erlang's built-in :httpc (see
       # Polyphony.LLM.DeepInfra) rather than Req. On this Elixir 1.14 toolchain
       # Req's HTTP/2 stack (finch/mint/hpax) forces packages that require 1.15+

@@ -8,8 +8,10 @@ defmodule Polyphony.Application do
       [
         Polyphony.Repo,
         Polyphony.Context.Store,
+        {Phoenix.PubSub, name: Polyphony.PubSub},
         {Oban, Application.fetch_env!(:polyphony, Oban)},
-        Polyphony.App
+        Polyphony.App,
+        Polyphony.Broadcast.Publisher
       ] ++ projectors()
 
     opts = [strategy: :one_for_one, name: Polyphony.Supervisor]
