@@ -8,6 +8,7 @@ defmodule Polyphony.Broadcast.PublisherTest do
 
   alias Polyphony.{App, Broadcast}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
+  alias Polyphony.Director.Commands.{OpenBeat, CloseBeat}
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
 
@@ -63,5 +64,19 @@ defmodule Polyphony.Broadcast.PublisherTest do
     assert "SpeechUttered" in otto
     refute "ThoughtOccurred" in otto
     refute "PrivateStateReported" in otto
+  end
+
+  test "beat framing reaches the omniscient viewer as beat.opened / beat.closed" do
+    scene = "pub-" <> Integer.to_string(System.unique_integer([:positive]))
+    ref = "#{scene}-b2"
+
+    Phoenix.PubSub.subscribe(Polyphony.PubSub, Broadcast.topic(scene, :omniscient))
+
+    :ok = App.dispatch(%OpenBeat{beat_ref: ref, scene_id: scene, beat: 2, cast: ["mira"]})
+    :ok = App.dispatch(%CloseBeat{beat_ref: ref})
+
+    types = collect() |> Enum.map(& &1.type)
+    assert "beat.opened" in types
+    assert "beat.closed" in types
   end
 end

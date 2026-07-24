@@ -86,7 +86,13 @@ defmodule Polyphony.Jobs.RunBeat do
     [first | rest] = resolved.cast
     cast_ids = Enum.map(resolved.cast, & &1.character_id)
 
-    :ok = App.dispatch(%OpenBeat{beat: BeatOps.beat_ref(scene_id, beat), cast: cast_ids})
+    :ok =
+      App.dispatch(%OpenBeat{
+        beat_ref: BeatOps.beat_ref(scene_id, beat),
+        scene_id: scene_id,
+        beat: beat,
+        cast: cast_ids
+      })
 
     args
     |> Map.merge(%{

@@ -16,7 +16,7 @@ defmodule Polyphony.Router do
   alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, CloseBeat}
 
   identify(Scene, by: :scene_id)
-  identify(Director.Beat, by: :beat)
+  identify(Director.Beat, by: :beat_ref)
 
   dispatch(
     [OpenScene, CloseScene, EnterCharacter, ExitCharacter, CommitPacket, RecordWorldEvent],

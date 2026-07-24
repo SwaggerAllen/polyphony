@@ -31,7 +31,10 @@ defmodule Polyphony.Broadcast do
     ActionTaken,
     DemeanorReported,
     CharacterEntered,
-    CharacterExited
+    CharacterExited,
+    BeatOpened,
+    BeatClosed,
+    PacketFailed
   }
 
   @type viewer :: :omniscient | {:character, term()}
@@ -49,6 +52,13 @@ defmodule Polyphony.Broadcast do
   @spec fan_out(term(), struct(), term(), [term()], Visibility.member_at?()) ::
           [{String.t(), map()}]
   def fan_out(scene_id, event, seq, roster, member_at?) do
+    case framing_message(event) do
+      nil -> fan_out_event(scene_id, event, seq, roster, member_at?)
+      framing -> [{topic(scene_id, :omniscient), framing}]
+    end
+  end
+
+  defp fan_out_event(scene_id, event, seq, roster, member_at?) do
     message = message(event, seq)
 
     [:omniscient | Enum.map(roster, &{:character, &1})]
@@ -58,6 +68,40 @@ defmodule Polyphony.Broadcast do
       {topic(scene_id, viewer), Map.put(message, :viewer, viewer_tag(viewer))}
     end)
   end
+
+  # Beat framing and generation failures are user/system-only pacing signals —
+  # not part of the authoritative `event.committed` cursor. They go to the
+  # omniscient topic and are re-derived (not replayed) on reconnect.
+  defp framing_message(%BeatOpened{} = e),
+    do: %{
+      type: "beat.opened",
+      viewer: "omniscient",
+      scene_id: e.scene_id,
+      beat: e.beat,
+      cast: e.cast
+    }
+
+  defp framing_message(%BeatClosed{} = e),
+    do: %{
+      type: "beat.closed",
+      viewer: "omniscient",
+      scene_id: e.scene_id,
+      beat: e.beat,
+      completed: e.completed,
+      failed: e.failed
+    }
+
+  defp framing_message(%PacketFailed{} = e),
+    do: %{
+      type: "generation.failed",
+      viewer: "omniscient",
+      scene_id: e.scene_id,
+      beat: e.beat,
+      character_id: e.character_id,
+      reason: e.reason
+    }
+
+  defp framing_message(_), do: nil
 
   @doc """
   The messages a reconnecting viewer should replay: every event on the scene

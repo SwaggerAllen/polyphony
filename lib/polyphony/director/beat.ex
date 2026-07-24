@@ -9,14 +9,17 @@ defmodule Polyphony.Director.Beat do
   failed}` — the one clean join point the Director subscribes to, carrying the
   failure list so it can route around a silent character next beat.
 
-  Late arrivals after close are rejected (§12): a packet landing in a later beat
-  breaks the causality model.
+  Identity is `beat_ref` (the aggregate's stream id, e.g. `"scene-b2"`); the
+  aggregate also holds `scene_id` and the integer `beat` so its events can carry
+  scene framing to the client. Late arrivals after close are rejected (§12).
   """
 
   alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, CloseBeat}
   alias Polyphony.Events.{BeatOpened, BeatClosed, PacketRecorded, PacketFailed}
 
-  defstruct beat: nil,
+  defstruct beat_ref: nil,
+            scene_id: nil,
+            beat: nil,
             status: :pending,
             cast: [],
             completed: MapSet.new(),
@@ -25,17 +28,17 @@ defmodule Polyphony.Director.Beat do
   # ── Commands ────────────────────────────────────────────────────────────────
 
   def execute(%__MODULE__{status: :pending}, %OpenBeat{} = c) do
-    %BeatOpened{beat: c.beat, cast: c.cast}
+    %BeatOpened{beat_ref: c.beat_ref, scene_id: c.scene_id, beat: c.beat, cast: c.cast}
   end
 
   def execute(%__MODULE__{}, %OpenBeat{}), do: {:error, :beat_already_opened}
 
-  def execute(%__MODULE__{status: :open} = s, %RecordPacket{character_id: id} = c) do
+  def execute(%__MODULE__{status: :open} = s, %RecordPacket{character_id: id}) do
     cond do
       id not in s.cast -> {:error, :not_in_cast}
       MapSet.member?(s.completed, id) -> []
       Map.has_key?(s.failed, id) -> {:error, :already_failed}
-      true -> %PacketRecorded{beat: c.beat, character_id: id}
+      true -> %PacketRecorded{beat_ref: s.beat_ref, character_id: id}
     end
   end
 
@@ -43,18 +46,33 @@ defmodule Polyphony.Director.Beat do
 
   def execute(%__MODULE__{status: :open} = s, %RecordFailure{character_id: id} = c) do
     cond do
-      id not in s.cast -> {:error, :not_in_cast}
-      MapSet.member?(s.completed, id) -> {:error, :already_completed}
-      Map.has_key?(s.failed, id) -> []
-      true -> %PacketFailed{beat: c.beat, character_id: id, reason: c.reason}
+      id not in s.cast ->
+        {:error, :not_in_cast}
+
+      MapSet.member?(s.completed, id) ->
+        {:error, :already_completed}
+
+      Map.has_key?(s.failed, id) ->
+        []
+
+      true ->
+        %PacketFailed{
+          beat_ref: s.beat_ref,
+          scene_id: s.scene_id,
+          beat: s.beat,
+          character_id: id,
+          reason: c.reason
+        }
     end
   end
 
   def execute(%__MODULE__{}, %RecordFailure{}), do: {:error, :beat_not_open}
 
-  def execute(%__MODULE__{status: :open} = s, %CloseBeat{} = c) do
+  def execute(%__MODULE__{status: :open} = s, %CloseBeat{}) do
     %BeatClosed{
-      beat: c.beat,
+      beat_ref: s.beat_ref,
+      scene_id: s.scene_id,
+      beat: s.beat,
       completed: s.completed |> MapSet.to_list() |> Enum.sort(),
       failed: s.failed |> Enum.map(fn {id, reason} -> %{character_id: id, reason: reason} end)
     }
@@ -65,7 +83,14 @@ defmodule Polyphony.Director.Beat do
   # ── State ───────────────────────────────────────────────────────────────────
 
   def apply(%__MODULE__{} = s, %BeatOpened{} = e),
-    do: %{s | status: :open, beat: e.beat, cast: e.cast}
+    do: %{
+      s
+      | status: :open,
+        beat_ref: e.beat_ref,
+        scene_id: e.scene_id,
+        beat: e.beat,
+        cast: e.cast
+    }
 
   def apply(%__MODULE__{} = s, %PacketRecorded{character_id: id}),
     do: %{s | completed: MapSet.put(s.completed, id)}

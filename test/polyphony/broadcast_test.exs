@@ -4,6 +4,7 @@ defmodule Polyphony.BroadcastTest do
 
   import Polyphony.Test.Scenario
   alias Polyphony.{Broadcast, MembershipSet}
+  alias Polyphony.Events.{BeatOpened, BeatClosed, PacketFailed}
 
   # a,b present in S1; c not.
   defp member_at? do
@@ -52,6 +53,50 @@ defmodule Polyphony.BroadcastTest do
     assert msg.seq == 9
     assert msg.kind == "SpeechUttered"
     assert msg.payload.content == "hi"
+  end
+
+  describe "beat framing → omniscient only" do
+    test "BeatOpened becomes a beat.opened framing message" do
+      e = %BeatOpened{beat_ref: "S1-b2", scene_id: "S1", beat: 2, cast: ["a", "b"]}
+      assert [{topic, msg}] = Broadcast.fan_out("S1", e, nil, ["a", "b"], member_at?())
+      assert topic == Broadcast.topic("S1", :omniscient)
+
+      assert msg == %{
+               type: "beat.opened",
+               viewer: "omniscient",
+               scene_id: "S1",
+               beat: 2,
+               cast: ["a", "b"]
+             }
+    end
+
+    test "BeatClosed becomes a beat.closed framing message carrying the failure list" do
+      e = %BeatClosed{
+        beat_ref: "S1-b2",
+        scene_id: "S1",
+        beat: 2,
+        completed: ["a"],
+        failed: [%{character_id: "b", reason: "timeout"}]
+      }
+
+      assert [{_topic, msg}] = Broadcast.fan_out("S1", e, nil, [], member_at?())
+      assert msg.type == "beat.closed"
+      assert msg.failed == [%{character_id: "b", reason: "timeout"}]
+    end
+
+    test "PacketFailed becomes a user-only generation.failed message" do
+      e = %PacketFailed{
+        beat_ref: "S1-b2",
+        scene_id: "S1",
+        beat: 2,
+        character_id: "mira",
+        reason: "refusal"
+      }
+
+      assert [{topic, msg}] = Broadcast.fan_out("S1", e, nil, ["mira"], member_at?())
+      assert topic == Broadcast.topic("S1", :omniscient)
+      assert msg.type == "generation.failed" and msg.character_id == "mira"
+    end
   end
 
   describe "replay (reconnection cursor)" do

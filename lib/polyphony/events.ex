@@ -118,9 +118,13 @@ defmodule Polyphony.Events do
   end
 
   defmodule BeatOpened do
-    @moduledoc "Pacing/structure. User & system only — never a character."
+    @moduledoc """
+    Pacing/structure. User & system only — never a character. `beat_ref` is the
+    beat aggregate's stream id; `beat` is the integer scene beat, and `scene_id`
+    ties the framing back to a scene so the client can show "a beat is starting".
+    """
     @derive Jason.Encoder
-    defstruct [:beat, :cast]
+    defstruct [:beat_ref, :scene_id, :beat, :cast]
   end
 
   defmodule BeatClosed do
@@ -130,7 +134,7 @@ defmodule Polyphony.Events do
     only.
     """
     @derive Jason.Encoder
-    defstruct [:beat, :completed, :failed]
+    defstruct [:beat_ref, :scene_id, :beat, :completed, :failed]
   end
 
   defmodule PacketRecorded do
@@ -139,16 +143,17 @@ defmodule Polyphony.Events do
     for the §12 synchronization unit; user & system only (default deny).
     """
     @derive Jason.Encoder
-    defstruct [:beat, :character_id]
+    defstruct [:beat_ref, :character_id]
   end
 
   defmodule PacketFailed do
     @moduledoc """
-    A character's generation failed within the beat. Internal beat-tracking; the
-    user-facing failure is `GenerationFailed`. User & system only (default deny).
+    A character's generation failed within the beat. Carries `scene_id` + `beat`
+    so it can surface to the user as `generation.failed` ("Mira didn't respond").
+    User & system only (default deny) — never any character.
     """
     @derive Jason.Encoder
-    defstruct [:beat, :character_id, :reason]
+    defstruct [:beat_ref, :scene_id, :beat, :character_id, :reason]
   end
 
   defmodule GenerationFailed do

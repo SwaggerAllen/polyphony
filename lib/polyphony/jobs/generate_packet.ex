@@ -115,7 +115,7 @@ defmodule Polyphony.Jobs.GeneratePacket do
         enqueue_cast(args, next, rest)
 
       _ ->
-        App.dispatch(%CloseBeat{beat: beat_ref})
+        App.dispatch(%CloseBeat{beat_ref: beat_ref})
         maybe_continue(args)
     end
 
@@ -123,16 +123,16 @@ defmodule Polyphony.Jobs.GeneratePacket do
   end
 
   defp record_outcome(beat_ref, _beat, character_id, :committed) do
-    App.dispatch(%RecordPacket{beat: beat_ref, character_id: character_id})
+    App.dispatch(%RecordPacket{beat_ref: beat_ref, character_id: character_id})
   end
 
   defp record_outcome(beat_ref, _beat, character_id, {kind, reason})
        when kind in [:failed, :cancelled] do
-    # Records the failure on the beat (§12). It rolls up into BeatClosed.failed,
-    # which is how the user-facing "Mira didn't respond" surfaces at the client;
+    # Records the failure on the beat (§12). PacketFailed carries scene_id + beat,
+    # so it surfaces to the user as generation.failed ("Mira didn't respond");
     # no character ever sees it.
     App.dispatch(%RecordFailure{
-      beat: beat_ref,
+      beat_ref: beat_ref,
       character_id: character_id,
       reason: inspect(reason)
     })

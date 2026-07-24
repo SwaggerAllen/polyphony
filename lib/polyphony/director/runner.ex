@@ -106,7 +106,14 @@ defmodule Polyphony.Director.Runner do
 
   defp generate_cast(cast, scene_id, beat, provider, opts) do
     cast_ids = Enum.map(cast, & &1.character_id)
-    :ok = App.dispatch(%OpenBeat{beat: beat_ref(scene_id, beat), cast: cast_ids})
+
+    :ok =
+      App.dispatch(%OpenBeat{
+        beat_ref: beat_ref(scene_id, beat),
+        scene_id: scene_id,
+        beat: beat,
+        cast: cast_ids
+      })
 
     {committed, failed} =
       Enum.reduce(cast, {[], []}, fn member, {c, f} ->
@@ -116,7 +123,7 @@ defmodule Polyphony.Director.Runner do
         end
       end)
 
-    :ok = App.dispatch(%CloseBeat{beat: beat_ref(scene_id, beat)})
+    :ok = App.dispatch(%CloseBeat{beat_ref: beat_ref(scene_id, beat)})
     {Enum.reverse(committed), Enum.reverse(failed)}
   end
 
@@ -144,7 +151,7 @@ defmodule Polyphony.Director.Runner do
             packet: packet
           })
 
-        :ok = App.dispatch(%RecordPacket{beat: beat_ref(scene_id, beat), character_id: id})
+        :ok = App.dispatch(%RecordPacket{beat_ref: beat_ref(scene_id, beat), character_id: id})
         {:ok, id}
 
       {:error, reason} ->
@@ -152,7 +159,7 @@ defmodule Polyphony.Director.Runner do
 
         :ok =
           App.dispatch(%RecordFailure{
-            beat: beat_ref(scene_id, beat),
+            beat_ref: beat_ref(scene_id, beat),
             character_id: id,
             reason: inspect(reason)
           })
