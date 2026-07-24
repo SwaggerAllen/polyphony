@@ -23,7 +23,8 @@ foundation; slice 3 adds real character generation behind a provider boundary:
 | 6 | **User's agent**: prose ingestion + confirmation, suggestion mode | ✅ implemented + tested |
 | 7 | **Scene-close pipeline**: per-character summaries (pgvector) + arc extraction | ✅ implemented + tested |
 | 8 | Client broadcaster (§13) | ✅ implemented + tested |
-| 9 | Branching, re-rolls; character/world authoring | ⬜ not started |
+| 9 | **Authoring**: character generation + field-level regeneration | ✅ implemented + tested |
+| — | Branching / re-rolls; the LiveView | ⬜ not started |
 
 Slice 5: the Director's decision-making is pure/stubbable logic (arbitration,
 the judgment-decision schema, beat-loop policy, fairness, the beat-lifecycle
@@ -137,6 +138,7 @@ Key modules:
 | `Polyphony.SceneClose` + `SceneClose.*` | Scene-close fan-out: N+1 filtered summaries, embeddings, arc extraction (§8, §10) |
 | `Polyphony.Jobs.SummarizeScene` / `ExtractArc` | Per-unit retryable scene-close jobs (transient→backoff, schema-invalid→cancel) |
 | `Polyphony.Failures` + `ReadModels.Failure` | User-facing terminal-failure log with retry + refusal edit-and-resubmit (§12) |
+| `Polyphony.Authoring.Studio` + `FieldStore` / `DraftSchema` | Character authoring: generate then field-level regenerate; metadata out of the schema (§15) |
 | `Polyphony.ReadModels.SceneSummary` / `ArcEntry` | Character-scoped pgvector summaries; proposed-arc authoring table |
 | `Polyphony.Context.PgvectorRetriever` | Fetches a character's own distant summaries at scene open — the memory gradient's live link |
 | `Polyphony.MembershipSet` | Pure interval fold — reference membership implementation |
@@ -224,6 +226,7 @@ models (and, later, pgvector embeddings).
 | `context/pgvector_retriever_test.exs` | Scene-open retrieval reads back a character's own summaries, scoped |
 | `scene_close/retries_test.exs` | §12 failure classification (transient/permanent) + per-unit job fan-out |
 | `failures_test.exs` / `failures/wiring_test.exs` | Record/broadcast/retry/edit-resubmit; a refusal records an editable failure |
+| `authoring/studio_test.exs` | Field-level regen: locked untouched, convergence, metadata-out-of-schema, feedback accrual |
 
 ## Security note (toolchain constraint)
 
@@ -244,6 +247,5 @@ ReqLLM after a toolchain bump is a one-module change.
 
 ## What's next (build order, §15)
 
-8. Branching, re-rolls, client reconnection.
-9. Character/world authoring with field-level regeneration.
-- The LiveView itself (the last frontend piece; backend is otherwise complete).
+- Branching / re-rolls (§7): a new stream with a parent pointer + fork beat.
+- The LiveView itself (the frontend). Backend is otherwise complete against §15.

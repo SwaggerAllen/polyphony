@@ -26,6 +26,8 @@ defmodule Polyphony.LLM.Mock do
       :decision -> {:ok, decision_json(opts)}
       :summary -> {:ok, summary_text(messages)}
       :arc -> {:ok, arc_json(messages)}
+      :sheet -> {:ok, sheet_json(messages)}
+      :field -> {:ok, summary_text(messages)}
       _ -> {:ok, turn_packet_json(messages)}
     end
   end
@@ -68,6 +70,18 @@ defmodule Polyphony.LLM.Mock do
         demeanor: lorem(seed + 2, 1),
         intention: lorem(seed + 3, 2)
       }
+    })
+  end
+
+  defp sheet_json(messages) do
+    seed = :erlang.phash2(messages)
+
+    Jason.encode!(%{
+      premise: capitalize(lorem(seed, 6)) <> ".",
+      appearance: capitalize(lorem(seed + 2, 5)) <> ".",
+      voice: lorem(seed + 4, 3),
+      temperament: lorem(seed + 6, 2),
+      backstory: capitalize(lorem(seed + 8, 8)) <> "."
     })
   end
 
