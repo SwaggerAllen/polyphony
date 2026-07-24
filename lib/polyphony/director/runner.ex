@@ -9,12 +9,17 @@ defmodule Polyphony.Director.Runner do
     2. Apply the plan: author world events, apply membership-changing actions.
     3. If membership changed, **truncate** — do not generate the cast; the beat is
        re-decided against the new membership (§10 beat truncation).
-    4. Otherwise open the beat, then generate the cast **serially** — each member's
-       context is rebuilt from the freshly re-read stream, so B conditions on A's
-       just-committed packet (§10 serial generation). Commit each, record it on the
-       beat; on failure, record the failure (the beat is not atomic, §12).
-    5. Close the beat (`BeatClosed{completed, failed}`), then consult
-       `BeatPolicy` to continue, truncate-and-re-decide, or yield to the user.
+    4. Otherwise declare the turn order (unless the user already did), open the
+       beat, and **walk the cast in that order** (§A1). Each slot is either
+       autonomous — generate serially, each member's context rebuilt from the
+       freshly re-read stream so B conditions on A's just-committed packet (§10) —
+       or **user-controlled**, where the walk yields (`{:awaiting_user, …}`) and the
+       caller resumes with `submit_user_turn/5` or `pass_turn/4`. A beat can yield
+       more than once. The declared order is authoritative, so a user reorder or
+       removal is honored.
+    5. Close the beat once every slot is terminal — committed, failed, or passed
+       (`BeatClosed{completed, failed, passed}`) — then consult `BeatPolicy` to
+       continue, truncate-and-re-decide, or yield to the user.
 
   This is a plain orchestrator, not a Commanded process manager, so it may call
   generation (rule 1 forbids that only inside aggregates/process managers). In
@@ -25,11 +30,20 @@ defmodule Polyphony.Director.Runner do
 
   require Logger
 
-  alias Polyphony.{App, Context, Generation, MembershipSet, Packets}
-  alias Polyphony.Commands.{CommitPacket, RecordWorldEvent, ExitCharacter, CloseScene}
+  alias Polyphony.{App, Context, Generation, MembershipSet, Packets, TurnOrder}
+
+  alias Polyphony.Commands.{
+    CommitPacket,
+    DeclareTurnOrder,
+    RecordWorldEvent,
+    ExitCharacter,
+    CloseScene
+  }
+
   alias Polyphony.Director
   alias Polyphony.Director.{BeatPolicy, Proposal}
-  alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, CloseBeat}
+  alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, RecordPass, CloseBeat}
+  alias Polyphony.Events.{PacketPassed, PacketFailed}
 
   @doc """
   Run beats until the Director yields or the depth cap is hit.
@@ -53,6 +67,11 @@ defmodule Polyphony.Director.Runner do
           :yield_to_user -> {:ok, Enum.reverse(acc)}
           _ -> do_run(opts, beat + 1, depth + 1, acc)
         end
+
+      # A user-controlled slot paused the beat (§A1): the loop stops here and the
+      # caller resumes via `submit_user_turn/5` or `pass_turn/4`.
+      {:awaiting_user, info} ->
+        {:awaiting_user, info, Enum.reverse(acc)}
 
       {:error, _} = err ->
         err
@@ -79,9 +98,57 @@ defmodule Polyphony.Director.Runner do
           {:ok, outcome(beat, resolved, [], [], true, depth, max_depth)}
 
         :unchanged ->
-          {committed, failed} = generate_cast(resolved.cast, scene_id, beat, provider, opts)
-          {:ok, outcome(beat, resolved, committed, failed, false, depth, max_depth)}
+          case walk_beat(scene_id, beat, resolved, provider, opts) do
+            {:closed, sets} ->
+              {:ok, outcome(beat, resolved, sets.committed, sets.failed, false, depth, max_depth)}
+
+            {:awaiting_user, character_id} ->
+              {:awaiting_user,
+               %{scene_id: scene_id, beat: beat, character_id: character_id, decision: resolved}}
+          end
       end
+    end
+  end
+
+  @doc """
+  Resume a beat that yielded, committing the user's packet for `character_id`, then
+  walking the rest of the cast (§A1). Returns `{:ok, sets}` when the beat closes or
+  `{:awaiting_user, info}` if a later slot is also user-controlled. `opts` needs the
+  same `:contexts`/`:provider` as `run_beat` (subsequent autonomous slots generate).
+  """
+  def submit_user_turn(scene_id, beat, character_id, packet, opts) do
+    :ok =
+      App.dispatch(%CommitPacket{
+        scene_id: scene_id,
+        character_id: character_id,
+        beat: beat,
+        packet_id: packet_id(scene_id, beat, character_id),
+        packet: packet
+      })
+
+    :ok =
+      App.dispatch(%RecordPacket{beat_ref: beat_ref(scene_id, beat), character_id: character_id})
+
+    resume(scene_id, beat, opts)
+  end
+
+  @doc "Resume a yielded beat with the user skipping `character_id`'s turn (§A1)."
+  def pass_turn(scene_id, beat, character_id, opts) do
+    :ok =
+      App.dispatch(%RecordPass{beat_ref: beat_ref(scene_id, beat), character_id: character_id})
+
+    resume(scene_id, beat, opts)
+  end
+
+  defp resume(scene_id, beat, opts) do
+    opts = Map.new(opts)
+
+    case advance(scene_id, beat, Map.get(opts, :provider), %{}, opts) do
+      {:closed, sets} ->
+        {:ok, Map.put(sets, :beat, beat)}
+
+      {:awaiting_user, char} ->
+        {:awaiting_user, %{scene_id: scene_id, beat: beat, character_id: char}}
     end
   end
 
@@ -100,48 +167,73 @@ defmodule Polyphony.Director.Runner do
     )
   end
 
-  # ── Serial cast generation (§10) ─────────────────────────────────────────────
+  # ── Serial cast walk with yields (§10, §A1) ──────────────────────────────────
 
-  defp generate_cast([], _scene_id, _beat, _provider, _opts), do: {[], []}
+  # Declare the turn order (unless the user already did), open the beat, then walk.
+  defp walk_beat(_scene_id, _beat, %{cast: []}, _provider, _opts),
+    do: {:closed, %{committed: [], failed: [], passed: []}}
 
-  defp generate_cast(cast, scene_id, beat, provider, opts) do
-    cast_ids = Enum.map(cast, & &1.character_id)
+  defp walk_beat(scene_id, beat, resolved, provider, opts) do
+    cast_ids = Enum.map(resolved.cast, & &1.character_id)
+    order = declared_or_default(scene_id, beat, cast_ids)
+    pacing = Map.new(resolved.cast, &{&1.character_id, Map.get(&1, :pacing_note)})
 
     :ok =
       App.dispatch(%OpenBeat{
         beat_ref: beat_ref(scene_id, beat),
         scene_id: scene_id,
         beat: beat,
-        cast: cast_ids
+        cast: order
       })
 
-    {committed, failed} =
-      Enum.reduce(cast, {[], []}, fn member, {c, f} ->
-        case generate_one(member, scene_id, beat, provider, opts) do
-          {:ok, id} -> {[id | c], f}
-          {:error, id, reason} -> {c, [{id, reason} | f]}
-        end
-      end)
-
-    :ok = App.dispatch(%CloseBeat{beat_ref: beat_ref(scene_id, beat)})
-    {Enum.reverse(committed), Enum.reverse(failed)}
+    advance(scene_id, beat, provider, pacing, Map.new(opts))
   end
 
-  defp generate_one(member, scene_id, beat, provider, opts) do
-    id = member.character_id
+  # Walk the declared order: generate autonomous slots serially; stop and yield at
+  # a user-controlled one; close when every slot is terminal (committed/failed/
+  # passed). Re-derives progress from the log each step, so it resumes after a yield
+  # without holding state.
+  defp advance(scene_id, beat, provider, pacing, opts) do
+    events = scene_id |> stored_events() |> Packets.canonical()
+    order = TurnOrder.for_beat(events, beat) || []
+    done = terminal_chars(scene_id, beat, events)
+
+    case Enum.find(order, &(&1 not in done)) do
+      nil ->
+        :ok = App.dispatch(%CloseBeat{beat_ref: beat_ref(scene_id, beat)})
+        {:closed, terminal_sets(scene_id, beat, events, order)}
+
+      character_id ->
+        if TurnOrder.user_controlled?(events, character_id) do
+          {:awaiting_user, character_id}
+        else
+          generate_one(
+            character_id,
+            Map.get(pacing, character_id),
+            scene_id,
+            beat,
+            provider,
+            opts
+          )
+
+          advance(scene_id, beat, provider, pacing, opts)
+        end
+    end
+  end
+
+  defp generate_one(id, pacing_note, scene_id, beat, provider, opts) do
     ctx = opts |> Map.fetch!(:contexts) |> Map.fetch!(id)
 
     # Re-read the stream so this member conditions on packets already committed
-    # this beat — the whole point of serial generation. Canonical view only, so a
+    # this beat — the point of serial generation. Canonical view only, so a
     # re-rolled packet never leaks back into a later cast member's context (§7).
     live = scene_id |> stored_events() |> Packets.canonical()
     members = members_now(scene_id, beat)
 
-    messages = Context.to_messages(ctx, live_events: live, members: members) ++ pacing(member)
+    messages =
+      Context.to_messages(ctx, live_events: live, members: members) ++ pacing(pacing_note)
 
-    gen_opts = provider_opts(provider)
-
-    case Generation.generate(messages, gen_opts) do
+    case Generation.generate(messages, provider_opts(provider)) do
       {:ok, packet} ->
         :ok =
           App.dispatch(%CommitPacket{
@@ -153,7 +245,6 @@ defmodule Polyphony.Director.Runner do
           })
 
         :ok = App.dispatch(%RecordPacket{beat_ref: beat_ref(scene_id, beat), character_id: id})
-        {:ok, id}
 
       {:error, reason} ->
         Logger.info("packet failed for #{id}@#{beat}: #{inspect(reason)}")
@@ -164,8 +255,51 @@ defmodule Polyphony.Director.Runner do
             character_id: id,
             reason: inspect(reason)
           })
+    end
+  end
 
-        {:error, id, reason}
+  # A cast member is terminal once committed (canonical packet), failed, or passed.
+  defp terminal_chars(scene_id, beat, events) do
+    committed = events |> Packets.beat_packets(beat) |> MapSet.new(fn {char, _} -> char end)
+    {passed, failed} = beat_terminals(scene_id, beat)
+    committed |> MapSet.union(passed) |> MapSet.union(failed)
+  end
+
+  defp terminal_sets(scene_id, beat, events, order) do
+    committed_set = events |> Packets.beat_packets(beat) |> MapSet.new(fn {char, _} -> char end)
+    committed = Enum.filter(order, &MapSet.member?(committed_set, &1))
+    beat_events = beat_events(scene_id, beat)
+
+    %{
+      committed: committed,
+      failed: for(%PacketFailed{character_id: c, reason: r} <- beat_events, do: {c, r}),
+      passed: for(%PacketPassed{character_id: c} <- beat_events, do: c)
+    }
+  end
+
+  defp beat_terminals(scene_id, beat) do
+    beat_events = beat_events(scene_id, beat)
+    passed = for %PacketPassed{character_id: c} <- beat_events, into: MapSet.new(), do: c
+    failed = for %PacketFailed{character_id: c} <- beat_events, into: MapSet.new(), do: c
+    {passed, failed}
+  end
+
+  defp beat_events(scene_id, beat) do
+    App |> Commanded.EventStore.stream_forward(beat_ref(scene_id, beat)) |> Enum.map(& &1.data)
+  rescue
+    _ -> []
+  end
+
+  defp declared_or_default(scene_id, beat, cast_ids) do
+    events = scene_id |> stored_events() |> Packets.canonical()
+
+    case TurnOrder.for_beat(events, beat) do
+      nil ->
+        :ok = App.dispatch(%DeclareTurnOrder{scene_id: scene_id, beat: beat, order: cast_ids})
+        cast_ids
+
+      declared ->
+        declared
     end
   end
 
@@ -240,7 +374,7 @@ defmodule Polyphony.Director.Runner do
   defp provider_opts(nil), do: []
   defp provider_opts(provider), do: [provider: provider]
 
-  defp pacing(%{pacing_note: note}) when is_binary(note) and note != "",
+  defp pacing(note) when is_binary(note) and note != "",
     do: [%{role: "user", content: "Direction: #{note}"}]
 
   defp pacing(_), do: []

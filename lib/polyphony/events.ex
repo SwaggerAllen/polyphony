@@ -62,6 +62,17 @@ defmodule Polyphony.Events do
       :audibility,
       :edited
     ]
+
+    # JSON serialization stringifies the `audibility` atom; re-atomize on decode so
+    # `Visibility`'s `%SpeechUttered{audibility: :private}` clause matches on events
+    # read back from the store. Without this a whisper read from the log would fall
+    # through to normal-speech visibility and leak to non-addressees.
+    defimpl Commanded.Serialization.JsonDecoder do
+      def decode(%SpeechUttered{audibility: a} = e) when is_binary(a),
+        do: %{e | audibility: String.to_existing_atom(a)}
+
+      def decode(e), do: e
+    end
   end
 
   defmodule ActionTaken do
@@ -127,6 +138,30 @@ defmodule Polyphony.Events do
     defstruct [:scene_id, :closed_beat]
   end
 
+  defmodule ControlModeSet do
+    @moduledoc """
+    Who drives a character (§A1, FS V1.7): `control` is `"autonomous"` (the
+    Director generates), `"user_controlled"` (the beat yields for a user packet),
+    or `"assisted"` (generated as a draft awaiting confirmation — the draft state
+    itself is §A2). Per-character, latest-wins; user & system only. Stored as a
+    string so it round-trips through the JSON event store unambiguously.
+    """
+    @derive Jason.Encoder
+    defstruct [:scene_id, :character_id, :control]
+  end
+
+  defmodule TurnOrderDeclared do
+    @moduledoc """
+    The explicit, user-settable turn order for a beat (§A1): `order` is the ordered
+    list of `character_id`s that act, and it is authoritative — the user can
+    reorder or **remove** a character by re-declaring. Latest-wins per beat. The
+    Director declares a default at beat open; a user override supersedes it. User &
+    system only.
+    """
+    @derive Jason.Encoder
+    defstruct [:scene_id, :beat, :order]
+  end
+
   defmodule SceneForked do
     @moduledoc """
     A deliberate branch (§7): this scene is a fork of `parent_scene_id`, taken at
@@ -174,7 +209,7 @@ defmodule Polyphony.Events do
     only.
     """
     @derive Jason.Encoder
-    defstruct [:beat_ref, :scene_id, :beat, :completed, :failed]
+    defstruct [:beat_ref, :scene_id, :beat, :completed, :failed, :passed]
   end
 
   defmodule PacketRecorded do
@@ -194,6 +229,17 @@ defmodule Polyphony.Events do
     """
     @derive Jason.Encoder
     defstruct [:beat_ref, :scene_id, :beat, :character_id, :reason]
+  end
+
+  defmodule PacketPassed do
+    @moduledoc """
+    A **user-controlled** cast member's yield resolved as a skip — the user chose
+    not to act this beat (§A1). A terminal beat state alongside committed/failed, so
+    a beat awaiting user input can still close once every slot is resolved. User &
+    system only.
+    """
+    @derive Jason.Encoder
+    defstruct [:beat_ref, :character_id]
   end
 
   defmodule GenerationFailed do

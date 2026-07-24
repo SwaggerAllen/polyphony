@@ -21,6 +21,8 @@ defmodule Polyphony.Scene do
     CommitPacket,
     SupersedePacket,
     ForkScene,
+    SetControlMode,
+    DeclareTurnOrder,
     RecordWorldEvent
   }
 
@@ -36,6 +38,8 @@ defmodule Polyphony.Scene do
     DemeanorReported,
     PacketSuperseded,
     SceneForked,
+    ControlModeSet,
+    TurnOrderDeclared,
     WorldEventOccurred
   }
 
@@ -167,6 +171,25 @@ defmodule Polyphony.Scene do
   end
 
   def execute(%__MODULE__{}, %ForkScene{}), do: {:error, :scene_already_exists}
+
+  # Control mode + turn order (§A1) are declarative facts on the scene log — the
+  # beat loop and re-roll read the latest of each. The aggregate just records them
+  # (latest-wins is a read-side concern); both require an open scene.
+  def execute(%__MODULE__{status: :open} = _s, %SetControlMode{} = c) do
+    %ControlModeSet{
+      scene_id: c.scene_id,
+      character_id: c.character_id,
+      control: to_string(c.control)
+    }
+  end
+
+  def execute(%__MODULE__{}, %SetControlMode{}), do: {:error, :scene_not_open}
+
+  def execute(%__MODULE__{status: :open} = _s, %DeclareTurnOrder{} = c) do
+    %TurnOrderDeclared{scene_id: c.scene_id, beat: c.beat, order: Enum.map(c.order, &to_string/1)}
+  end
+
+  def execute(%__MODULE__{}, %DeclareTurnOrder{}), do: {:error, :scene_not_open}
 
   # ── Packet decomposition (§6.4) ───────────────────────────────────────────
 

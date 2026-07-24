@@ -14,6 +14,11 @@ defmodule Polyphony.Director.Commands do
     defstruct [:beat_ref, :character_id, :reason]
   end
 
+  defmodule RecordPass do
+    @moduledoc "A user-controlled cast member skipped their yield (§A1) — a terminal beat state."
+    defstruct [:beat_ref, :character_id]
+  end
+
   defmodule CloseBeat do
     defstruct [:beat_ref]
   end

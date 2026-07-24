@@ -20,7 +20,7 @@ defmodule Polyphony.Reroll do
   separate mechanism (`{:error, :not_latest_beat}`).
   """
 
-  alias Polyphony.{App, Packets}
+  alias Polyphony.{App, Packets, TurnOrder}
   alias Polyphony.Commands.SupersedePacket
   alias Polyphony.Director.BeatOps
   alias Polyphony.Jobs.GeneratePacket
@@ -48,7 +48,7 @@ defmodule Polyphony.Reroll do
       # Supersede the whole tail first, so each regeneration conditions only on
       # the beat's head plus the replacements committed before it.
       Enum.each(plan, &supersede(scene_id, beat, &1))
-      results = Enum.map(plan, &regenerate(scene_id, beat, &1, opts))
+      results = Enum.map(plan, &replace(scene_id, beat, &1, raw, opts))
 
       {:ok, %{beat: beat, superseded: Enum.map(plan, & &1.superseded_id), results: results}}
     end
@@ -83,6 +83,17 @@ defmodule Polyphony.Reroll do
         attempt: member.attempt,
         reason: "reroll"
       })
+  end
+
+  # A user-controlled member's turn is theirs to write (§A1): it's superseded
+  # (it conditioned on the change) but never LLM-regenerated — the beat re-yields
+  # for them. Autonomous members regenerate.
+  defp replace(scene_id, beat, member, raw, opts) do
+    if TurnOrder.user_controlled?(raw, member.character_id) do
+      {member.character_id, :awaiting_user}
+    else
+      regenerate(scene_id, beat, member, opts)
+    end
   end
 
   # Reuse the one generation+commit unit. No `messages` in args, so it rebuilds

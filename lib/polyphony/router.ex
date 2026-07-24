@@ -12,10 +12,12 @@ defmodule Polyphony.Router do
     CommitPacket,
     SupersedePacket,
     ForkScene,
+    SetControlMode,
+    DeclareTurnOrder,
     RecordWorldEvent
   }
 
-  alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, CloseBeat}
+  alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, RecordPass, CloseBeat}
 
   identify(Scene, by: :scene_id)
   identify(Director.Beat, by: :beat_ref)
@@ -29,10 +31,12 @@ defmodule Polyphony.Router do
       CommitPacket,
       SupersedePacket,
       ForkScene,
+      SetControlMode,
+      DeclareTurnOrder,
       RecordWorldEvent
     ],
     to: Scene
   )
 
-  dispatch([OpenBeat, RecordPacket, RecordFailure, CloseBeat], to: Director.Beat)
+  dispatch([OpenBeat, RecordPacket, RecordFailure, RecordPass, CloseBeat], to: Director.Beat)
 end

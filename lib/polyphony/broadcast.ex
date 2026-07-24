@@ -111,7 +111,8 @@ defmodule Polyphony.Broadcast do
       scene_id: e.scene_id,
       beat: e.beat,
       completed: e.completed,
-      failed: e.failed
+      failed: e.failed,
+      passed: e.passed || []
     }
 
   defp framing_message(_), do: nil

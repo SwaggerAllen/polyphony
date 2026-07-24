@@ -14,8 +14,8 @@ defmodule Polyphony.Director.Beat do
   scene framing to the client. Late arrivals after close are rejected (§12).
   """
 
-  alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, CloseBeat}
-  alias Polyphony.Events.{BeatOpened, BeatClosed, PacketRecorded, PacketFailed}
+  alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, RecordPass, CloseBeat}
+  alias Polyphony.Events.{BeatOpened, BeatClosed, PacketRecorded, PacketFailed, PacketPassed}
 
   defstruct beat_ref: nil,
             scene_id: nil,
@@ -23,7 +23,8 @@ defmodule Polyphony.Director.Beat do
             status: :pending,
             cast: [],
             completed: MapSet.new(),
-            failed: %{}
+            failed: %{},
+            passed: MapSet.new()
 
   # ── Commands ────────────────────────────────────────────────────────────────
 
@@ -68,13 +69,26 @@ defmodule Polyphony.Director.Beat do
 
   def execute(%__MODULE__{}, %RecordFailure{}), do: {:error, :beat_not_open}
 
+  def execute(%__MODULE__{status: :open} = s, %RecordPass{character_id: id}) do
+    cond do
+      id not in s.cast -> {:error, :not_in_cast}
+      MapSet.member?(s.completed, id) -> {:error, :already_completed}
+      Map.has_key?(s.failed, id) -> {:error, :already_failed}
+      MapSet.member?(s.passed, id) -> []
+      true -> %PacketPassed{beat_ref: s.beat_ref, character_id: id}
+    end
+  end
+
+  def execute(%__MODULE__{}, %RecordPass{}), do: {:error, :beat_not_open}
+
   def execute(%__MODULE__{status: :open} = s, %CloseBeat{}) do
     %BeatClosed{
       beat_ref: s.beat_ref,
       scene_id: s.scene_id,
       beat: s.beat,
       completed: s.completed |> MapSet.to_list() |> Enum.sort(),
-      failed: s.failed |> Enum.map(fn {id, reason} -> %{character_id: id, reason: reason} end)
+      failed: s.failed |> Enum.map(fn {id, reason} -> %{character_id: id, reason: reason} end),
+      passed: s.passed |> MapSet.to_list() |> Enum.sort()
     }
   end
 
@@ -98,12 +112,21 @@ defmodule Polyphony.Director.Beat do
   def apply(%__MODULE__{} = s, %PacketFailed{character_id: id, reason: reason}),
     do: %{s | failed: Map.put(s.failed, id, reason)}
 
+  def apply(%__MODULE__{} = s, %PacketPassed{character_id: id}),
+    do: %{s | passed: MapSet.put(s.passed, id)}
+
   def apply(%__MODULE__{} = s, %BeatClosed{}), do: %{s | status: :closed}
 
   def apply(%__MODULE__{} = s, _e), do: s
 
-  @doc "Has every cast member reached a terminal state? (Used by the runner to close.)"
-  def settled?(%__MODULE__{cast: cast, completed: completed, failed: failed}) do
-    Enum.all?(cast, fn id -> MapSet.member?(completed, id) or Map.has_key?(failed, id) end)
+  @doc """
+  Has every cast member reached a terminal state? (Used by the runner to close.)
+  A user-controlled member counts once they commit (completed) or skip (passed) —
+  otherwise a beat awaiting user input could never close (§A1).
+  """
+  def settled?(%__MODULE__{cast: cast, completed: completed, failed: failed, passed: passed}) do
+    Enum.all?(cast, fn id ->
+      MapSet.member?(completed, id) or Map.has_key?(failed, id) or MapSet.member?(passed, id)
+    end)
   end
 end

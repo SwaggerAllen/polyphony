@@ -29,17 +29,20 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
 
 ## §A — Amendments (revise shipped behavior)
 
-- **A1 — Multiple yields per beat + user-stipulated turn order.** *(next)* The beat
-  loop assumes one user turn per beat and derives turn order implicitly (commit
-  order in re-roll; the Beat aggregate's `cast` otherwise). Rework:
-  - a serial walk over the cast where each slot is a generation *or a yield* — cast
-    members are `autonomous` / `assisted` (editable draft, see A2) / `user_controlled`
-    (yield); `BeatClosed` must count yields as terminal.
-  - **[planned addition #1]** make turn order an **explicit event** the user can set
-    (reorder, remove characters from a beat), superseding the Director's default.
-  - **re-roll reconciliation:** derive the tail from the declared order, not commit
-    order — the one place the static-order assumption lives today
-    (`Packets.beat_packets`).
+- **A1 — Multiple yields per beat + user-stipulated turn order.** ✅ **Done** (inline
+  runner). Explicit `TurnOrderDeclared` / `ControlModeSet` on the scene log (§A1);
+  the beat loop walks the declared order, generating autonomous slots and **yielding**
+  on user-controlled ones (`submit_user_turn`/`pass_turn` resume — a beat can yield
+  more than once); the Beat aggregate counts a `passed` slot as terminal; re-roll
+  reads control modes so it never regenerates a user's turn. Turn order is
+  authoritative — a user reorder or **removal** is honored. Also fixed a latent
+  round-trip bug found here: atom-valued event fields (`SpeechUttered.audibility`)
+  stringified through the JSON store, so a stored whisper leaked to non-addressees —
+  now re-atomized via a `JsonDecoder`.
+  - **Deferred:** wiring the same yield/resume into the **Oban** path
+    (`GeneratePacket` chain stops at a user slot, resumes on the user's commit) — the
+    inline runner is the tested path; the async path stays all-autonomous until then.
+    And **assisted** mode's editable draft, which is §A2.
 - **A2 — Pending/draft state before commit.** A `PacketDrafted` superseded by
   commit, for assisted mode and suggestion review. **Kept distinct** from
   `PacketSuperseded` (draft→commit is a different axis than committed→re-rolled).

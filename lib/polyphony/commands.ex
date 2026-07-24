@@ -57,6 +57,20 @@ defmodule Polyphony.Commands do
     defstruct [:scene_id, :parent_scene_id, :fork_beat, :label, :campaign_id, :prefix]
   end
 
+  defmodule SetControlMode do
+    @moduledoc "Set who drives a character (§A1): autonomous / user_controlled / assisted."
+    defstruct [:scene_id, :character_id, :control]
+  end
+
+  defmodule DeclareTurnOrder do
+    @moduledoc """
+    Declare a beat's turn order (§A1) — the ordered list of `character_id`s that
+    act. Authoritative and latest-wins; a user override supersedes the Director's
+    default, and omitting a character removes them from the beat.
+    """
+    defstruct [:scene_id, :beat, :order]
+  end
+
   defmodule RecordWorldEvent do
     @moduledoc """
     Author a Director world event into a scene (§10). Non-character occurrences
