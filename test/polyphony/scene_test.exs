@@ -15,7 +15,8 @@ defmodule Polyphony.SceneTest do
     EnterCharacter,
     ExitCharacter,
     CommitPacket,
-    SupersedePacket
+    SupersedePacket,
+    ForkScene
   }
 
   alias Polyphony.Events.{
@@ -28,7 +29,8 @@ defmodule Polyphony.SceneTest do
     ActionTaken,
     PrivateStateReported,
     DemeanorReported,
-    PacketSuperseded
+    PacketSuperseded,
+    SceneForked
   }
 
   # Fold a list of events into aggregate state, as Commanded would on replay.
@@ -276,6 +278,45 @@ defmodule Polyphony.SceneTest do
       }
 
       assert {:error, :scene_not_open} = Scene.execute(closed, cmd)
+    end
+  end
+
+  describe "forking (§7)" do
+    defp fork_prefix do
+      [
+        %SceneOpened{scene_id: "F1", opened_beat: 0},
+        %CharacterEntered{scene_id: "F1", character_id: "A", beat: 1}
+      ]
+    end
+
+    test "a fresh scene emits SceneForked ahead of the copied prefix" do
+      prefix = fork_prefix()
+
+      cmd = %ForkScene{
+        scene_id: "F1",
+        parent_scene_id: "S1",
+        fork_beat: 2,
+        label: "what if",
+        campaign_id: "c",
+        prefix: prefix
+      }
+
+      assert [%SceneForked{parent_scene_id: "S1", fork_beat: 2, label: "what if"} | ^prefix] =
+               Scene.execute(%Scene{}, cmd)
+    end
+
+    test "forking into a scene that already exists is rejected" do
+      cmd = %ForkScene{scene_id: "S1", parent_scene_id: "S0", fork_beat: 2, prefix: []}
+      assert {:error, :scene_already_exists} = Scene.execute(opened(), cmd)
+    end
+
+    test "applying a fork rebuilds an ordinary open scene with members and lineage" do
+      cmd = %ForkScene{scene_id: "F1", parent_scene_id: "S1", fork_beat: 2, prefix: fork_prefix()}
+      state = evolve(%Scene{}, Scene.execute(%Scene{}, cmd))
+
+      assert state.status == :open
+      assert state.forked_from == "S1"
+      assert MapSet.member?(state.members, "A")
     end
   end
 end

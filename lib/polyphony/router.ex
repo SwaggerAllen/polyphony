@@ -11,6 +11,7 @@ defmodule Polyphony.Router do
     ExitCharacter,
     CommitPacket,
     SupersedePacket,
+    ForkScene,
     RecordWorldEvent
   }
 
@@ -27,6 +28,7 @@ defmodule Polyphony.Router do
       ExitCharacter,
       CommitPacket,
       SupersedePacket,
+      ForkScene,
       RecordWorldEvent
     ],
     to: Scene

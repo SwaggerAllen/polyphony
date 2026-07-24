@@ -20,6 +20,7 @@ defmodule Polyphony.Scene do
     ExitCharacter,
     CommitPacket,
     SupersedePacket,
+    ForkScene,
     RecordWorldEvent
   }
 
@@ -34,6 +35,7 @@ defmodule Polyphony.Scene do
     PrivateStateReported,
     DemeanorReported,
     PacketSuperseded,
+    SceneForked,
     WorldEventOccurred
   }
 
@@ -47,7 +49,8 @@ defmodule Polyphony.Scene do
             location_id: nil,
             members: MapSet.new(),
             committed_packets: MapSet.new(),
-            superseded_packets: MapSet.new()
+            superseded_packets: MapSet.new(),
+            forked_from: nil
 
   # ── Command handlers ──────────────────────────────────────────────────────
 
@@ -145,6 +148,26 @@ defmodule Polyphony.Scene do
     end
   end
 
+  # Fork (§7): materialize a new scene stream from a rewritten parent prefix. Only
+  # valid on a fresh (pending) stream — a fork is a new scene, never a re-open. The
+  # prefix events were gathered and re-pointed by `Polyphony.Fork` (rule 1 keeps
+  # the cross-stream read out of the aggregate); we emit them verbatim after the
+  # `SceneForked` marker so replay rebuilds an ordinary open scene.
+  def execute(%__MODULE__{status: :pending}, %ForkScene{} = c) do
+    [
+      %SceneForked{
+        scene_id: c.scene_id,
+        parent_scene_id: c.parent_scene_id,
+        fork_beat: c.fork_beat,
+        label: c.label,
+        campaign_id: c.campaign_id
+      }
+      | c.prefix
+    ]
+  end
+
+  def execute(%__MODULE__{}, %ForkScene{}), do: {:error, :scene_already_exists}
+
   # ── Packet decomposition (§6.4) ───────────────────────────────────────────
 
   defp decompose(%CommitPacket{} = c) do
@@ -240,6 +263,10 @@ defmodule Polyphony.Scene do
 
   def apply(%__MODULE__{} = state, %PacketSuperseded{packet_id: id}) when is_binary(id) do
     %{state | superseded_packets: MapSet.put(state.superseded_packets, id)}
+  end
+
+  def apply(%__MODULE__{} = state, %SceneForked{parent_scene_id: parent}) do
+    %{state | forked_from: parent}
   end
 
   def apply(%__MODULE__{} = state, %{packet_id: id}) when is_binary(id) do

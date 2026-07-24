@@ -43,6 +43,20 @@ defmodule Polyphony.Commands do
     defstruct [:scene_id, :beat, :character_id, :packet_id, :attempt, :reason]
   end
 
+  defmodule ForkScene do
+    @moduledoc """
+    Create a deliberate branch (§7) as a new, independent scene stream.
+
+    `prefix` is a rewritten copy of the parent's **canonical** events through
+    `fork_beat` (scene id and packet ids re-pointed onto the new stream), gathered
+    by `Polyphony.Fork` — the aggregate never reads another stream (rule 1); the
+    orchestrator does that and hands the events in. The aggregate emits
+    `SceneForked` followed by that prefix, so the fork replays as an ordinary open
+    scene that every existing projection handles unchanged.
+    """
+    defstruct [:scene_id, :parent_scene_id, :fork_beat, :label, :campaign_id, :prefix]
+  end
+
   defmodule RecordWorldEvent do
     @moduledoc """
     Author a Director world event into a scene (§10). Non-character occurrences

@@ -122,6 +122,21 @@ defmodule Polyphony.Events do
     defstruct [:scene_id, :closed_beat]
   end
 
+  defmodule SceneForked do
+    @moduledoc """
+    A deliberate branch (§7): this scene is a fork of `parent_scene_id`, taken at
+    `fork_beat`. It is the first event on the forked scene's own stream, ahead of
+    a rewritten copy of the parent's canonical prefix — so a fork is a fully
+    independent scene stream, not a live pointer into the parent (copy-on-fork).
+
+    Distinct from a re-roll, which supersedes in place on the *same* stream and
+    emits no `SceneForked`. Pacing/structure — user & system only, default-deny to
+    characters like the rest of scene lifecycle.
+    """
+    @derive Jason.Encoder
+    defstruct [:scene_id, :parent_scene_id, :fork_beat, :label, :campaign_id]
+  end
+
   defmodule CharacterEntered do
     @moduledoc """
     A membership change. Visible to scene members at `beat` (they see who walked

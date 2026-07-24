@@ -24,7 +24,7 @@ defmodule Polyphony.Application do
   # Commanded dispatch to the Ecto sandbox.
   defp projectors do
     if Application.get_env(:polyphony, :start_projectors, true) do
-      [Polyphony.Projectors.SceneMemberships]
+      [Polyphony.Projectors.SceneMemberships, Polyphony.Projectors.SceneForks]
     else
       []
     end
