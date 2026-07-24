@@ -1,0 +1,50 @@
+# DigitalOcean App Platform spec — SCAFFOLD.
+#
+# Not yet deployable: it runs the Phoenix release, which doesn't exist until the
+# web layer + `mix release` (or a Dockerfile) land — see docs/deployment.md and
+# docs/roadmap.md. Once the release builds, uncomment `dockerfile_path` (or set a
+# buildpack), confirm `run_command`, then create the app once:
+#
+#     doctl apps create --spec .do/app.yaml
+#
+# and thereafter the deploy workflow keeps it in sync.
+
+name: polyphony
+region: nyc
+
+services:
+  - name: web
+    github:
+      repo: SwaggerAllen/polyphony
+      branch: main
+      deploy_on_push: false
+    # dockerfile_path: Dockerfile          # add when the release exists
+    run_command: bin/polyphony start        # Phoenix release entrypoint (once built)
+    http_port: 4000
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    health_check:
+      http_path: /
+    envs:
+      - key: SECRET_KEY_BASE
+        scope: RUN_TIME
+        type: SECRET
+      - key: DEEPINFRA_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: PHX_HOST
+        scope: RUN_TIME
+        value: ${APP_DOMAIN}
+      - key: POOL_SIZE
+        scope: RUN_TIME
+        value: "10"
+
+databases:
+  - name: db
+    engine: PG
+    version: "16"
+    # pgvector: enable once, after creation — `CREATE EXTENSION IF NOT EXISTS
+    # vector;` (the app's migration also runs this, so a release migrate suffices).
