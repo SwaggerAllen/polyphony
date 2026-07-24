@@ -15,7 +15,7 @@ defmodule Polyphony.Broadcast.Publisher do
     name: "broadcast_publisher",
     start_from: :current
 
-  alias Polyphony.{App, Broadcast, MembershipSet}
+  alias Polyphony.{App, Broadcast, MembershipSet, Packets}
 
   @pubsub Polyphony.PubSub
 
@@ -46,7 +46,10 @@ defmodule Polyphony.Broadcast.Publisher do
   end
 
   defp stored_events(scene_id) do
-    App |> Commanded.EventStore.stream_forward(scene_id) |> Enum.map(& &1.data)
+    App
+    |> Commanded.EventStore.stream_forward(scene_id)
+    |> Enum.map(& &1.data)
+    |> Packets.canonical()
   rescue
     _ -> []
   end

@@ -20,6 +20,7 @@ defmodule Polyphony.Test.Scenario do
     WorldEventOccurred,
     BeatOpened,
     BeatClosed,
+    PacketSuperseded,
     GenerationFailed
   }
 
@@ -40,8 +41,24 @@ defmodule Polyphony.Test.Scenario do
   def exited(scene, char, beat),
     do: %CharacterExited{scene_id: scene, character_id: char, beat: beat}
 
-  def thought(char, scene, beat, content),
-    do: %ThoughtOccurred{character_id: char, scene_id: scene, beat: beat, content: content}
+  def thought(char, scene, beat, content, opts \\ []),
+    do: %ThoughtOccurred{
+      character_id: char,
+      scene_id: scene,
+      beat: beat,
+      content: content,
+      packet_id: opts[:packet_id]
+    }
+
+  def superseded(scene, char, beat, packet_id, opts \\ []),
+    do: %PacketSuperseded{
+      scene_id: scene,
+      character_id: char,
+      beat: beat,
+      packet_id: packet_id,
+      attempt: opts[:attempt],
+      reason: opts[:reason]
+    }
 
   def private_state(char, scene, beat, opts \\ []),
     do: %PrivateStateReported{
@@ -58,12 +75,19 @@ defmodule Polyphony.Test.Scenario do
       scene_id: scene,
       beat: beat,
       content: content,
+      packet_id: opts[:packet_id],
       addressed_to: opts[:addressed_to] || [],
       audibility: opts[:audibility] || :normal
     }
 
-  def action(char, scene, beat, content),
-    do: %ActionTaken{character_id: char, scene_id: scene, beat: beat, content: content}
+  def action(char, scene, beat, content, opts \\ []),
+    do: %ActionTaken{
+      character_id: char,
+      scene_id: scene,
+      beat: beat,
+      content: content,
+      packet_id: opts[:packet_id]
+    }
 
   def demeanor(char, scene, beat, opts \\ []),
     do: %DemeanorReported{

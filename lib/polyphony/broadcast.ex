@@ -22,7 +22,7 @@ defmodule Polyphony.Broadcast do
   their scene id.
   """
 
-  alias Polyphony.Visibility
+  alias Polyphony.{Visibility, Packets}
 
   alias Polyphony.Events.{
     ThoughtOccurred,
@@ -33,7 +33,8 @@ defmodule Polyphony.Broadcast do
     CharacterEntered,
     CharacterExited,
     BeatOpened,
-    BeatClosed
+    BeatClosed,
+    PacketSuperseded
   }
 
   @type viewer :: :omniscient | {:character, term()}
@@ -50,6 +51,27 @@ defmodule Polyphony.Broadcast do
   """
   @spec fan_out(term(), struct(), term(), [term()], Visibility.member_at?()) ::
           [{String.t(), map()}]
+  def fan_out(scene_id, %PacketSuperseded{} = event, _seq, roster, member_at?) do
+    # A re-roll eviction (§7). Framing, not fiction — the payload is an opaque
+    # `packet_id` to drop — so it goes to every viewer who could have rendered the
+    # packet: its own character plus whoever was a member at the beat (the same
+    # reach as an action/demeanor), plus the omniscient user who triggered it.
+    message = %{
+      type: "packet.superseded",
+      scene_id: event.scene_id,
+      beat: event.beat,
+      character_id: event.character_id,
+      packet_id: event.packet_id
+    }
+
+    ([:omniscient, {:character, event.character_id}] ++
+       for(c <- roster, member_at?.(scene_id, c, event.beat), do: {:character, c}))
+    |> Enum.uniq()
+    |> Enum.map(fn viewer ->
+      {topic(scene_id, viewer), Map.put(message, :viewer, viewer_tag(viewer))}
+    end)
+  end
+
   def fan_out(scene_id, event, seq, roster, member_at?) do
     case framing_message(event) do
       nil -> fan_out_event(scene_id, event, seq, roster, member_at?)
@@ -101,11 +123,25 @@ defmodule Polyphony.Broadcast do
   """
   @spec replay([{term(), struct()}], viewer(), Visibility.member_at?(), term()) :: [map()]
   def replay(events, viewer, member_at?, from_seq) do
+    # Drop re-rolled packets and the markers themselves, so a reconnecting client
+    # replays only the canonical log (§7) — never a stale, superseded turn.
+    dead = events |> Enum.map(fn {_seq, event} -> event end) |> Packets.superseded_ids()
+
     events
+    |> Enum.reject(fn {_seq, event} -> replay_drop?(event, dead) end)
     |> Enum.filter(fn {seq, event} ->
       seq_after?(seq, from_seq) and Visibility.visible_to?(event, viewer, member_at?)
     end)
     |> Enum.map(fn {seq, event} -> Map.put(message(event, seq), :viewer, viewer_tag(viewer)) end)
+  end
+
+  defp replay_drop?(%PacketSuperseded{}, _dead), do: true
+
+  defp replay_drop?(event, dead) do
+    case Map.get(event, :packet_id) do
+      id when is_binary(id) -> MapSet.member?(dead, id)
+      _ -> false
+    end
   end
 
   @doc "The client message for a committed event (an `event.committed` payload)."

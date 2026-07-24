@@ -19,6 +19,7 @@ defmodule Polyphony.Scene do
     EnterCharacter,
     ExitCharacter,
     CommitPacket,
+    SupersedePacket,
     RecordWorldEvent
   }
 
@@ -32,6 +33,7 @@ defmodule Polyphony.Scene do
     ActionTaken,
     PrivateStateReported,
     DemeanorReported,
+    PacketSuperseded,
     WorldEventOccurred
   }
 
@@ -44,7 +46,8 @@ defmodule Polyphony.Scene do
             campaign_id: nil,
             location_id: nil,
             members: MapSet.new(),
-            committed_packets: MapSet.new()
+            committed_packets: MapSet.new(),
+            superseded_packets: MapSet.new()
 
   # ── Command handlers ──────────────────────────────────────────────────────
 
@@ -112,6 +115,33 @@ defmodule Polyphony.Scene do
 
       true ->
         decompose(c)
+    end
+  end
+
+  # Supersede a committed packet (§7 re-roll). Append-only: the original events
+  # stay; this only records that the packet is no longer canonical. Idempotent so
+  # a retried re-roll is a no-op, and it refuses to supersede a packet the scene
+  # never committed.
+  def execute(%__MODULE__{} = state, %SupersedePacket{} = c) do
+    cond do
+      c.packet_id != nil and MapSet.member?(state.superseded_packets, c.packet_id) ->
+        []
+
+      state.status != :open ->
+        {:error, :scene_not_open}
+
+      not MapSet.member?(state.committed_packets, c.packet_id) ->
+        {:error, :unknown_packet}
+
+      true ->
+        %PacketSuperseded{
+          scene_id: c.scene_id,
+          beat: c.beat,
+          character_id: c.character_id,
+          packet_id: c.packet_id,
+          attempt: c.attempt,
+          reason: c.reason
+        }
     end
   end
 
@@ -206,6 +236,10 @@ defmodule Polyphony.Scene do
 
   def apply(%__MODULE__{} = state, %CharacterExited{} = e) do
     %{state | members: MapSet.delete(state.members, e.character_id)}
+  end
+
+  def apply(%__MODULE__{} = state, %PacketSuperseded{packet_id: id}) when is_binary(id) do
+    %{state | superseded_packets: MapSet.put(state.superseded_packets, id)}
   end
 
   def apply(%__MODULE__{} = state, %{packet_id: id}) when is_binary(id) do

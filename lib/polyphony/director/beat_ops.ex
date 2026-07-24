@@ -9,7 +9,7 @@ defmodule Polyphony.Director.BeatOps do
   before the cast generates.
   """
 
-  alias Polyphony.{App, Context, MembershipSet}
+  alias Polyphony.{App, Context, MembershipSet, Packets}
   alias Polyphony.Context.Store
   alias Polyphony.Commands.{RecordWorldEvent, ExitCharacter, CloseScene}
   alias Polyphony.Director.Proposal
@@ -20,12 +20,40 @@ defmodule Polyphony.Director.BeatOps do
   @doc "Deterministic packet id `(scene, beat, character)` for idempotency (§12)."
   def packet_id(scene_id, beat, character_id), do: "#{scene_id}-#{beat}-#{character_id}"
 
+  @doc """
+  The packet id for re-roll attempt `n` of `(scene, beat, character)` (`n >= 1`).
+  The base attempt (`packet_id/3`) is unsuffixed; each re-roll adds `-r<n>`, so
+  every attempt is a distinct, addressable packet (§7, §12).
+  """
+  def reroll_packet_id(scene_id, beat, character_id, attempt) when attempt >= 1,
+    do: "#{packet_id(scene_id, beat, character_id)}-r#{attempt}"
+
+  @doc "How many packet attempts already exist for `(scene, beat, character)` — canonical + superseded."
+  def attempt_count(events, scene_id, beat, character_id) do
+    base = packet_id(scene_id, beat, character_id)
+
+    for(
+      e <- events,
+      id = Map.get(e, :packet_id),
+      is_binary(id),
+      attempt_of?(id, base),
+      into: MapSet.new(),
+      do: id
+    )
+    |> MapSet.size()
+  end
+
+  defp attempt_of?(id, base), do: id == base or String.starts_with?(id, base <> "-r")
+
   @doc "All events on a scene's stream (empty if the stream doesn't exist yet)."
   def stored_events(scene_id) do
     App |> Commanded.EventStore.stream_forward(scene_id) |> Enum.map(& &1.data)
   rescue
     _ -> []
   end
+
+  @doc "The canonical view of a scene's stream — re-rolled packets filtered out (§7)."
+  def canonical_events(scene_id), do: scene_id |> stored_events() |> Packets.canonical()
 
   @doc "Character ids present in the scene at `beat`, derived from the log."
   def members_now(scene_id, beat) do
@@ -41,7 +69,9 @@ defmodule Polyphony.Director.BeatOps do
   Falls back to a minimal seed if no context is cached.
   """
   def messages_for(scene_id, beat, character_id, pacing_note \\ nil) do
-    live = stored_events(scene_id)
+    # Condition on the canonical log so a re-rolled packet never re-enters a
+    # later cast member's context (§7).
+    live = canonical_events(scene_id)
     members = members_now(scene_id, beat)
 
     base =

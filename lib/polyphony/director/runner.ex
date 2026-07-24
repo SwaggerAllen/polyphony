@@ -25,7 +25,7 @@ defmodule Polyphony.Director.Runner do
 
   require Logger
 
-  alias Polyphony.{App, Context, Generation, MembershipSet}
+  alias Polyphony.{App, Context, Generation, MembershipSet, Packets}
   alias Polyphony.Commands.{CommitPacket, RecordWorldEvent, ExitCharacter, CloseScene}
   alias Polyphony.Director
   alias Polyphony.Director.{BeatPolicy, Proposal}
@@ -132,8 +132,9 @@ defmodule Polyphony.Director.Runner do
     ctx = opts |> Map.fetch!(:contexts) |> Map.fetch!(id)
 
     # Re-read the stream so this member conditions on packets already committed
-    # this beat — the whole point of serial generation.
-    live = stored_events(scene_id)
+    # this beat — the whole point of serial generation. Canonical view only, so a
+    # re-rolled packet never leaks back into a later cast member's context (§7).
+    live = scene_id |> stored_events() |> Packets.canonical()
     members = members_now(scene_id, beat)
 
     messages = Context.to_messages(ctx, live_events: live, members: members) ++ pacing(member)

@@ -85,6 +85,38 @@ defmodule Polyphony.BroadcastTest do
     end
   end
 
+  describe "re-roll eviction framing (§7)" do
+    test "packet.superseded reaches the omniscient user, the packet's owner, and members at the beat" do
+      e = superseded("S1", "a", 2, "S1-2-a", attempt: 1)
+      pairs = Broadcast.fan_out("S1", e, nil, ["a", "b", "c"], member_at?())
+
+      # a is the owner; a and b are members at beat 2; c is not a member.
+      assert viewers(pairs) == ["character:a", "character:b", "omniscient"]
+
+      assert [{_topic, msg} | _] = pairs
+      assert msg.type == "packet.superseded"
+      assert msg.packet_id == "S1-2-a"
+      assert msg.character_id == "a"
+    end
+
+    test "a reconnecting client never replays a superseded packet" do
+      events = [
+        {1, thought("a", "S1", 2, "first take", packet_id: "S1-2-a")},
+        {2, speech("a", "S1", 2, "first line", packet_id: "S1-2-a")},
+        {3, superseded("S1", "a", 2, "S1-2-a", attempt: 1)},
+        {4, thought("a", "S1", 2, "second take", packet_id: "S1-2-a-r1")}
+      ]
+
+      msgs = Broadcast.replay(events, :omniscient, member_at?(), 0)
+      contents = Enum.map(msgs, &Map.get(&1.payload, :content))
+
+      assert "second take" in contents
+      refute "first take" in contents
+      refute "first line" in contents
+      refute Enum.any?(msgs, &(&1.kind == "PacketSuperseded"))
+    end
+  end
+
   describe "replay (reconnection cursor)" do
     test "returns only events past the cursor that are visible to the viewer" do
       events = [

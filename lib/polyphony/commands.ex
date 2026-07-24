@@ -31,6 +31,18 @@ defmodule Polyphony.Commands do
     defstruct [:scene_id, :character_id, :beat, :packet_id, :packet]
   end
 
+  defmodule SupersedePacket do
+    @moduledoc """
+    Mark a committed packet no longer canonical (§7 re-roll). Emitted by the
+    re-roll orchestrator for the re-rolled packet and every packet later in the
+    beat's cast order, before their replacements are committed. Append-only
+    correction (rule 6): the aggregate records the supersession, it never mutates
+    or drops the original events. `attempt` is the re-roll index of the
+    replacement packet.
+    """
+    defstruct [:scene_id, :beat, :character_id, :packet_id, :attempt, :reason]
+  end
+
   defmodule RecordWorldEvent do
     @moduledoc """
     Author a Director world event into a scene (§10). Non-character occurrences

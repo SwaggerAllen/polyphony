@@ -30,7 +30,7 @@ defmodule Polyphony.SceneClose do
 
   require Logger
 
-  alias Polyphony.{App, Repo}
+  alias Polyphony.{App, Repo, Packets}
   alias Polyphony.SceneClose.{Summarizer, ArcExtractor, Embedder}
   alias Polyphony.ReadModels.{SceneSummary, ArcEntry}
   alias Polyphony.Events.CharacterEntered
@@ -177,8 +177,12 @@ defmodule Polyphony.SceneClose do
     |> Enum.uniq()
   end
 
+  # Canonical view only: re-rolled packets are never summarized or mined for arcs.
   defp stored_events(scene_id) do
-    App |> Commanded.EventStore.stream_forward(scene_id) |> Enum.map(& &1.data)
+    App
+    |> Commanded.EventStore.stream_forward(scene_id)
+    |> Enum.map(& &1.data)
+    |> Packets.canonical()
   rescue
     _ -> []
   end

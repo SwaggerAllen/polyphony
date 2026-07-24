@@ -14,7 +14,8 @@ defmodule Polyphony.SceneTest do
     CloseScene,
     EnterCharacter,
     ExitCharacter,
-    CommitPacket
+    CommitPacket,
+    SupersedePacket
   }
 
   alias Polyphony.Events.{
@@ -26,7 +27,8 @@ defmodule Polyphony.SceneTest do
     SpeechUttered,
     ActionTaken,
     PrivateStateReported,
-    DemeanorReported
+    DemeanorReported,
+    PacketSuperseded
   }
 
   # Fold a list of events into aggregate state, as Commanded would on replay.
@@ -186,6 +188,94 @@ defmodule Polyphony.SceneTest do
       state_after = evolve(member_state(), first)
 
       assert [] = Scene.execute(state_after, cmd)
+    end
+  end
+
+  describe "supersession (§7 re-roll)" do
+    # A member state with one committed packet, ready to be superseded.
+    defp committed_state do
+      cmd = %CommitPacket{
+        scene_id: "S1",
+        character_id: "A",
+        beat: 2,
+        packet_id: "p-1",
+        packet: packet()
+      }
+
+      evolve(member_state(), Scene.execute(member_state(), cmd))
+    end
+
+    test "superseding a committed packet emits PacketSuperseded (append, not mutation)" do
+      cmd = %SupersedePacket{
+        scene_id: "S1",
+        character_id: "A",
+        beat: 2,
+        packet_id: "p-1",
+        attempt: 1,
+        reason: "reroll"
+      }
+
+      assert %PacketSuperseded{packet_id: "p-1", attempt: 1, character_id: "A"} =
+               Scene.execute(committed_state(), cmd)
+    end
+
+    test "the original committed events are untouched — supersession only records the marker" do
+      before = committed_state()
+
+      cmd = %SupersedePacket{
+        scene_id: "S1",
+        character_id: "A",
+        beat: 2,
+        packet_id: "p-1",
+        attempt: 1
+      }
+
+      after_state = evolve(before, [Scene.execute(before, cmd)])
+
+      # The packet stays 'committed' (immutability, rule 6); it is *also* marked
+      # superseded, which is what the projection filter keys off.
+      assert MapSet.member?(after_state.committed_packets, "p-1")
+      assert MapSet.member?(after_state.superseded_packets, "p-1")
+    end
+
+    test "superseding a packet the scene never committed is rejected" do
+      cmd = %SupersedePacket{
+        scene_id: "S1",
+        character_id: "A",
+        beat: 2,
+        packet_id: "ghost",
+        attempt: 1
+      }
+
+      assert {:error, :unknown_packet} = Scene.execute(committed_state(), cmd)
+    end
+
+    test "a duplicate supersede is an idempotent no-op (§12)" do
+      cmd = %SupersedePacket{
+        scene_id: "S1",
+        character_id: "A",
+        beat: 2,
+        packet_id: "p-1",
+        attempt: 1
+      }
+
+      state_after = evolve(committed_state(), [Scene.execute(committed_state(), cmd)])
+
+      assert [] = Scene.execute(state_after, cmd)
+    end
+
+    test "supersession is refused once the scene is closed" do
+      closed = evolve(committed_state(), [%SceneClosed{scene_id: "S1", closed_beat: 9}])
+
+      cmd = %SupersedePacket{
+        scene_id: "S1",
+        character_id: "A",
+        beat: 2,
+        packet_id: "p-1",
+        attempt: 1
+      }
+
+      assert {:error, :scene_not_open} = Scene.execute(closed, cmd)
     end
   end
 end

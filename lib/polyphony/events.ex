@@ -3,7 +3,11 @@ defmodule Polyphony.Events do
   The event catalog (§7).
 
   Events are **immutable facts** in the log — the single source of truth.
-  Corrections are new events; re-rolls fork the branch (foundational rule 6).
+  Corrections are new events (foundational rule 6). A **re-roll** never mutates:
+  it appends `PacketSuperseded` markers that drop the beat's tail from every
+  projection, then commits fresh packets in their place (§7, §12). A deliberate
+  *fork* is a separate mechanism (its own branch/stream) and shares no code with
+  re-rolls.
 
   Field conventions shared across the character-emitted events:
 
@@ -78,6 +82,22 @@ defmodule Polyphony.Events do
       :position,
       :attending_to
     ]
+  end
+
+  defmodule PacketSuperseded do
+    @moduledoc """
+    A previously-committed packet is no longer canonical (§7 re-roll, §12). The
+    user re-rolled a turn in the latest beat, so this packet — and every packet
+    later in the same beat's cast order — is dropped and regenerated in place.
+
+    This is an **append**, not a mutation (rule 6): the superseded packet's events
+    stay in the log for history, but every projection filters them out, keyed off
+    `packet_id`. `attempt` records which re-roll produced the *replacement* (the
+    superseded packet's own attempt is one less). Pacing/structure — user & system
+    only, never a character: a re-roll is out-of-world.
+    """
+    @derive Jason.Encoder
+    defstruct [:scene_id, :beat, :character_id, :packet_id, :attempt, :reason]
   end
 
   defmodule WorldEventOccurred do

@@ -10,6 +10,7 @@ defmodule Polyphony.Router do
     EnterCharacter,
     ExitCharacter,
     CommitPacket,
+    SupersedePacket,
     RecordWorldEvent
   }
 
@@ -19,7 +20,15 @@ defmodule Polyphony.Router do
   identify(Director.Beat, by: :beat_ref)
 
   dispatch(
-    [OpenScene, CloseScene, EnterCharacter, ExitCharacter, CommitPacket, RecordWorldEvent],
+    [
+      OpenScene,
+      CloseScene,
+      EnterCharacter,
+      ExitCharacter,
+      CommitPacket,
+      SupersedePacket,
+      RecordWorldEvent
+    ],
     to: Scene
   )
 
