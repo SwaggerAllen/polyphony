@@ -15,7 +15,10 @@ defmodule Polyphony.ContextTest do
   defmodule SpyRetriever do
     @behaviour Polyphony.Context.Retriever
     def rank_facts(f, _p, _o), do: bump(:facts) && f
-    def rank_summaries(s, _p, _o), do: bump(:summaries) && s
+
+    def fetch_summaries(_scope, _p, opts),
+      do: bump(:summaries) && Keyword.get(opts, :summaries, [])
+
     defp bump(k), do: Process.put({:spy, k}, (Process.get({:spy, k}) || 0) + 1) || true
   end
 

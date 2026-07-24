@@ -80,10 +80,13 @@ defmodule Polyphony.Context do
       |> budget_scenes(Map.get(opts, :scene_token_budget, @default_scene_token_budget))
 
     retrieved_summaries =
-      retriever.rank_summaries(
-        Map.get(opts, :distant_summaries, []),
+      retriever.fetch_summaries(
+        %{character_id: character_id, scene_id: scene_id},
         premise || "",
-        limit: Map.get(opts, :summary_limit)
+        limit: Map.get(opts, :summary_limit),
+        summaries: Map.get(opts, :distant_summaries, []),
+        repo: Map.get(opts, :repo),
+        embedder: Map.get(opts, :embedder)
       )
       # Dedup (§9): a scene included verbatim must not also appear as a summary.
       |> Enum.reject(&(&1.scene_id in verbatim_scene_ids))
