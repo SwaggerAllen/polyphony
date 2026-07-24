@@ -5,6 +5,10 @@ import Config
 config :polyphony,
   ecto_repos: [Polyphony.Repo]
 
+# Register the pgvector Postgrex extension so `Pgvector.Ecto.Vector` columns
+# (scene/summary embeddings, §8) round-trip. Per-env DB settings merge on top.
+config :polyphony, Polyphony.Repo, types: Polyphony.PostgrexTypes
+
 # Commanded application configuration. We default to the in-memory event store
 # adapter so the domain core is runnable and testable without provisioning the
 # EventStore Postgres schema. Swapping to the persistent adapter is a config

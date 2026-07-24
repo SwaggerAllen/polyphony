@@ -24,11 +24,30 @@ defmodule Polyphony.LLM.Mock do
   def complete(messages, opts \\ []) do
     case Keyword.get(opts, :response, :turn_packet) do
       :decision -> {:ok, decision_json(opts)}
+      :summary -> {:ok, summary_text(messages)}
+      :arc -> {:ok, arc_json(messages)}
       _ -> {:ok, turn_packet_json(messages)}
     end
   end
 
   # ── Lorem generators ─────────────────────────────────────────────────────────
+
+  # A plain-text lorem summary (not JSON) — the summarizer takes the raw text.
+  defp summary_text(messages) do
+    seed = :erlang.phash2(messages)
+    capitalize(lorem(seed, 10)) <> "."
+  end
+
+  # A lorem arc-extraction result: a couple of proposed discoveries.
+  defp arc_json(messages) do
+    seed = :erlang.phash2(messages)
+
+    Jason.encode!(%{
+      entries: [
+        %{kind: "discovery", statement: capitalize(lorem(seed, 5)) <> ".", sheet_field: nil}
+      ]
+    })
+  end
 
   defp turn_packet_json(messages) do
     seed = :erlang.phash2(messages)

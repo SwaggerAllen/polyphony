@@ -21,7 +21,9 @@ foundation; slice 3 adds real character generation behind a provider boundary:
 | 4 | **Context assembler** (stable→volatile prefix caching) + authored layer | ✅ implemented + tested |
 | 5 | **Director**: arbitration, judgment, beat loop + lifecycle + **runner** | ✅ implemented + tested |
 | 6 | **User's agent**: prose ingestion + confirmation, suggestion mode | ✅ implemented + tested |
-| 7+ | Scene-close pipeline, branching, client, … | ⬜ not started |
+| 7 | **Scene-close pipeline**: per-character summaries (pgvector) + arc extraction | ✅ implemented + tested |
+| 8 | Client broadcaster (§13) | ✅ implemented + tested |
+| 9 | Branching, re-rolls; character/world authoring | ⬜ not started |
 
 Slice 5: the Director's decision-making is pure/stubbable logic (arbitration,
 the judgment-decision schema, beat-loop policy, fairness, the beat-lifecycle
@@ -125,6 +127,8 @@ Key modules:
 | `Polyphony.Ingest` / `Ingest.HeuristicSegmenter` | User prose → segments → `TurnPacket`; verbatim gate + OOC (§11) |
 | `Polyphony.Suggest` | 2–3 turn variants from the character's filtered view (§11) |
 | `Polyphony.Broadcast` / `Broadcast.Publisher` | Per-viewer filtered client stream over PubSub + cursor replay (§13) |
+| `Polyphony.SceneClose` + `SceneClose.*` | Scene-close fan-out: N+1 filtered summaries, embeddings, arc extraction (§8, §10) |
+| `Polyphony.ReadModels.SceneSummary` / `ArcEntry` | Character-scoped pgvector summaries; proposed-arc authoring table |
 | `Polyphony.MembershipSet` | Pure interval fold — reference membership implementation |
 | `Polyphony.ReadModels.Membership` | Postgres interval read model (write path + queries) |
 | `Polyphony.Projectors.SceneMemberships` | Commanded projector wiring the two together |
@@ -202,7 +206,11 @@ models (and, later, pgvector embeddings).
 | `ingest_test.exs` | Verbatim integrity (rewrite/order rejected), heuristic segmentation, OOC split, self-state carry-forward |
 | `suggest_test.exs` | Variant count/distinctness, steer, and the filtered-view guard on suggestions |
 | `broadcast_test.exs` | Per-viewer fan-out (interior/whisper/scene/lifecycle), message shape, replay cursor |
-| `broadcast/publisher_test.exs` | End-to-end filtered publish over PubSub (omniscient vs character viewer) |
+| `broadcast/publisher_test.exs` | End-to-end filtered publish over PubSub (omniscient vs character viewer) + beat framing |
+| `read_models/scene_summary_test.exs` | pgvector store + character-scoped search (never another viewer's summary) |
+| `scene_close/summarizer_test.exs` | N+1 summaries from each viewer's filtered transcript (leak guard) |
+| `scene_close/arc_extractor_test.exs` | Proposed-only arc entries, filtered, schema-validated |
+| `scene_close_test.exs` | Full fan-out: 3 summaries stored scoped, arc proposals, best-effort degradation |
 
 ## Security note (toolchain constraint)
 
@@ -223,6 +231,8 @@ ReqLLM after a toolchain bump is a one-module change.
 
 ## What's next (build order, §15)
 
-7. Scene-close pipeline — per-character summaries, embeddings, arc extraction.
+- Wire the memory gradient: a pgvector-backed `Context.Retriever` so scene-open
+  retrieval (slice 4) consumes the per-character summaries slice 7 produces.
 8. Branching, re-rolls, client reconnection.
 9. Character/world authoring with field-level regeneration.
+- The LiveView itself (the last frontend piece; backend is otherwise complete).
