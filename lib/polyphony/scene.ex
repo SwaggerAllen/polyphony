@@ -186,7 +186,8 @@ defmodule Polyphony.Scene do
       beat: c.beat,
       packet_id: c.packet_id,
       seq: m.seq,
-      content: m.content
+      content: m.content,
+      edited: c.edited
     }
   end
 
@@ -199,7 +200,8 @@ defmodule Polyphony.Scene do
       seq: m.seq,
       content: m.content,
       addressed_to: m.addressed_to || [],
-      audibility: m.audibility || :normal
+      audibility: m.audibility || :normal,
+      edited: c.edited
     }
   end
 
@@ -210,7 +212,8 @@ defmodule Polyphony.Scene do
       beat: c.beat,
       packet_id: c.packet_id,
       seq: m.seq,
-      content: m.content
+      content: m.content,
+      edited: c.edited
     }
   end
 

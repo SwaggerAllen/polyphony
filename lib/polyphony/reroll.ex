@@ -42,7 +42,7 @@ defmodule Polyphony.Reroll do
     canonical = Packets.canonical(raw)
 
     with :ok <- ensure_latest_beat(canonical, beat),
-         {:ok, tail} <- tail_from(canonical, beat, character_id) do
+         {:ok, tail} <- Packets.beat_tail(canonical, beat, character_id) do
       plan = Enum.map(tail, &plan_member(scene_id, beat, &1, raw))
 
       # Supersede the whole tail first, so each regeneration conditions only on
@@ -57,7 +57,7 @@ defmodule Polyphony.Reroll do
   # ── Planning ──────────────────────────────────────────────────────────────
 
   defp plan_member(scene_id, beat, {character_id, superseded_id}, raw) do
-    attempt = BeatOps.attempt_count(raw, scene_id, beat, character_id)
+    attempt = BeatOps.next_attempt(raw, scene_id, beat, character_id)
 
     %{
       character_id: character_id,
@@ -69,15 +69,6 @@ defmodule Polyphony.Reroll do
 
   defp ensure_latest_beat(canonical, beat) do
     if Packets.latest_beat(canonical) == beat, do: :ok, else: {:error, :not_latest_beat}
-  end
-
-  defp tail_from(canonical, beat, character_id) do
-    cast = Packets.beat_packets(canonical, beat)
-
-    case Enum.split_while(cast, fn {char, _} -> char != character_id end) do
-      {_head, []} -> {:error, :packet_not_found}
-      {_head, tail} -> {:ok, tail}
-    end
   end
 
   # ── Supersede + regenerate ────────────────────────────────────────────────

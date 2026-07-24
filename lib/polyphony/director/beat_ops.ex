@@ -28,22 +28,41 @@ defmodule Polyphony.Director.BeatOps do
   def reroll_packet_id(scene_id, beat, character_id, attempt) when attempt >= 1,
     do: "#{packet_id(scene_id, beat, character_id)}-r#{attempt}"
 
-  @doc "How many packet attempts already exist for `(scene, beat, character)` — canonical + superseded."
-  def attempt_count(events, scene_id, beat, character_id) do
+  @doc """
+  The next re-roll attempt index for `(scene, beat, character)` — one past the
+  highest attempt already seen, so it stays collision-free even when earlier
+  attempts are absent (a fork copies only the canonical take, not superseded
+  ones, so counting would re-use a live id). `1` when only the base attempt
+  exists; `0` when the packet doesn't exist yet.
+  """
+  def next_attempt(events, scene_id, beat, character_id) do
     base = packet_id(scene_id, beat, character_id)
 
-    for(
-      e <- events,
-      id = Map.get(e, :packet_id),
-      is_binary(id),
-      attempt_of?(id, base),
-      into: MapSet.new(),
-      do: id
-    )
-    |> MapSet.size()
+    indices =
+      for e <- events,
+          id = Map.get(e, :packet_id),
+          is_binary(id),
+          attempt_of?(id, base),
+          do: attempt_index(id, base)
+
+    case indices do
+      [] -> 0
+      xs -> Enum.max(xs) + 1
+    end
   end
 
   defp attempt_of?(id, base), do: id == base or String.starts_with?(id, base <> "-r")
+
+  defp attempt_index(id, base) do
+    if id == base do
+      0
+    else
+      case Integer.parse(String.replace_prefix(id, base <> "-r", "")) do
+        {n, ""} -> n
+        _ -> 0
+      end
+    end
+  end
 
   @doc "All events on a scene's stream (empty if the stream doesn't exist yet)."
   def stored_events(scene_id) do

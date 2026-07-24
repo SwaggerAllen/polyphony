@@ -28,7 +28,7 @@ defmodule Polyphony.Commands do
     deterministically upstream `(branch, beat, character_id)` for idempotency
     (§12), so a retried job commits once.
     """
-    defstruct [:scene_id, :character_id, :beat, :packet_id, :packet]
+    defstruct [:scene_id, :character_id, :beat, :packet_id, :packet, :edited]
   end
 
   defmodule SupersedePacket do

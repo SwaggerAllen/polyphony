@@ -24,9 +24,13 @@ defmodule Polyphony.Events do
   """
 
   defmodule ThoughtOccurred do
-    @moduledoc "Interior monologue. Visible to `character_id` only."
+    @moduledoc """
+    Interior monologue. Visible to `character_id` only. `edited: true` marks a
+    user-authored correction (§A4) — the move was hand-edited rather than
+    generated, so a client can flag it.
+    """
     @derive Jason.Encoder
-    defstruct [:character_id, :scene_id, :beat, :packet_id, :seq, :content]
+    defstruct [:character_id, :scene_id, :beat, :packet_id, :seq, :content, :edited]
   end
 
   defmodule PrivateStateReported do
@@ -55,14 +59,15 @@ defmodule Polyphony.Events do
       :seq,
       :content,
       :addressed_to,
-      :audibility
+      :audibility,
+      :edited
     ]
   end
 
   defmodule ActionTaken do
-    @moduledoc "A physical action. Visible to scene members at `beat`."
+    @moduledoc "A physical action. Visible to scene members at `beat`. `edited` per §A4."
     @derive Jason.Encoder
-    defstruct [:character_id, :scene_id, :beat, :packet_id, :seq, :content]
+    defstruct [:character_id, :scene_id, :beat, :packet_id, :seq, :content, :edited]
   end
 
   defmodule DemeanorReported do

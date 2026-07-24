@@ -63,6 +63,21 @@ defmodule Polyphony.Packets do
     |> Enum.uniq()
   end
 
+  @doc """
+  The beat's cast from `character_id` to the end, as `{character_id, packet_id}`
+  in serial order — the packets a re-roll or an invalidating edit of that turn
+  makes stale (everything that conditioned on it). `{:error, :packet_not_found}`
+  if the character has no packet in the beat. `events` should be `canonical/1`.
+  """
+  @spec beat_tail([struct()], term(), term()) ::
+          {:ok, [{term(), String.t()}]} | {:error, :packet_not_found}
+  def beat_tail(events, beat, character_id) do
+    case Enum.split_while(beat_packets(events, beat), fn {char, _} -> char != character_id end) do
+      {_head, []} -> {:error, :packet_not_found}
+      {_head, tail} -> {:ok, tail}
+    end
+  end
+
   @doc "The highest beat with a canonical packet, or nil. `events` should be `canonical/1`."
   @spec latest_beat([struct()]) :: term() | nil
   def latest_beat(events) do
