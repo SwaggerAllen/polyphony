@@ -30,7 +30,7 @@ defmodule Polyphony.Director.Runner do
 
   require Logger
 
-  alias Polyphony.{App, Context, Generation, MembershipSet, Packets, TurnOrder}
+  alias Polyphony.{App, Context, Drafts, Generation, MembershipSet, Packets, TurnOrder}
 
   alias Polyphony.Commands.{
     CommitPacket,
@@ -68,10 +68,14 @@ defmodule Polyphony.Director.Runner do
           _ -> do_run(opts, beat + 1, depth + 1, acc)
         end
 
-      # A user-controlled slot paused the beat (§A1): the loop stops here and the
-      # caller resumes via `submit_user_turn/5` or `pass_turn/4`.
+      # A user-controlled (§A1) or assisted (§A2) slot paused the beat: the loop
+      # stops here and the caller resumes via submit_user_turn/pass_turn or
+      # accept_draft/discard_draft.
       {:awaiting_user, info} ->
         {:awaiting_user, info, Enum.reverse(acc)}
+
+      {:awaiting_draft, info} ->
+        {:awaiting_draft, info, Enum.reverse(acc)}
 
       {:error, _} = err ->
         err
@@ -105,6 +109,9 @@ defmodule Polyphony.Director.Runner do
             {:awaiting_user, character_id} ->
               {:awaiting_user,
                %{scene_id: scene_id, beat: beat, character_id: character_id, decision: resolved}}
+
+            {:awaiting_draft, info} ->
+              {:awaiting_draft, Map.put(info, :decision, resolved)}
           end
       end
     end
@@ -140,6 +147,50 @@ defmodule Polyphony.Director.Runner do
     resume(scene_id, beat, opts)
   end
 
+  @doc """
+  Accept the pending draft for an **assisted** slot (§A2): commit it, then walk the
+  rest of the beat. Edit first with `Polyphony.Drafts.edit/3` for accept-and-edit.
+  """
+  def accept_draft(draft_id, opts) do
+    opts = Map.new(opts)
+
+    case Drafts.accept(draft_id, repo: Map.get(opts, :repo, Polyphony.Repo)) do
+      {:ok, %{scene_id: scene_id, beat: beat, character_id: character_id}} ->
+        :ok =
+          App.dispatch(%RecordPacket{
+            beat_ref: beat_ref(scene_id, beat),
+            character_id: character_id
+          })
+
+        resume(scene_id, beat, opts)
+
+      error ->
+        error
+    end
+  end
+
+  @doc "Discard the pending draft for an assisted slot — the character passes this beat (§A2)."
+  def discard_draft(draft_id, opts) do
+    opts = Map.new(opts)
+    repo = Map.get(opts, :repo, Polyphony.Repo)
+
+    case Drafts.get(draft_id, repo: repo) do
+      nil ->
+        {:error, :not_found}
+
+      row ->
+        Drafts.discard(draft_id, repo: repo)
+
+        :ok =
+          App.dispatch(%RecordPass{
+            beat_ref: beat_ref(row.scene_id, row.beat),
+            character_id: row.character_id
+          })
+
+        resume(row.scene_id, row.beat, opts)
+    end
+  end
+
   defp resume(scene_id, beat, opts) do
     opts = Map.new(opts)
 
@@ -149,6 +200,9 @@ defmodule Polyphony.Director.Runner do
 
       {:awaiting_user, char} ->
         {:awaiting_user, %{scene_id: scene_id, beat: beat, character_id: char}}
+
+      {:awaiting_draft, info} ->
+        {:awaiting_draft, info}
     end
   end
 
@@ -204,19 +258,41 @@ defmodule Polyphony.Director.Runner do
         {:closed, terminal_sets(scene_id, beat, events, order)}
 
       character_id ->
-        if TurnOrder.user_controlled?(events, character_id) do
-          {:awaiting_user, character_id}
-        else
-          generate_one(
-            character_id,
-            Map.get(pacing, character_id),
-            scene_id,
-            beat,
-            provider,
-            opts
-          )
+        case TurnOrder.control_mode(events, character_id) do
+          "user_controlled" ->
+            {:awaiting_user, character_id}
 
-          advance(scene_id, beat, provider, pacing, opts)
+          "assisted" ->
+            # Generate, but present it as a draft to confirm rather than committing
+            # (§A2). A failed generation just records the failure and the walk moves
+            # on (the beat is not atomic, §12).
+            case generate_draft(
+                   character_id,
+                   Map.get(pacing, character_id),
+                   scene_id,
+                   beat,
+                   provider,
+                   opts
+                 ) do
+              {:ok, draft} ->
+                {:awaiting_draft,
+                 %{scene_id: scene_id, beat: beat, character_id: character_id, draft_id: draft.id}}
+
+              :error ->
+                advance(scene_id, beat, provider, pacing, opts)
+            end
+
+          _autonomous ->
+            generate_one(
+              character_id,
+              Map.get(pacing, character_id),
+              scene_id,
+              beat,
+              provider,
+              opts
+            )
+
+            advance(scene_id, beat, provider, pacing, opts)
         end
     end
   end
@@ -257,6 +333,38 @@ defmodule Polyphony.Director.Runner do
           })
     end
   end
+
+  # Assisted (§A2): generate the same way, but store the result as a pending draft
+  # instead of committing. `{:ok, draft}` to yield for confirmation, `:error` (with
+  # the failure recorded) so the walk continues.
+  defp generate_draft(id, pacing_note, scene_id, beat, provider, opts) do
+    ctx = opts |> Map.fetch!(:contexts) |> Map.fetch!(id)
+    live = scene_id |> stored_events() |> Packets.canonical()
+    members = members_now(scene_id, beat)
+
+    messages =
+      Context.to_messages(ctx, live_events: live, members: members) ++ pacing(pacing_note)
+
+    case Generation.generate(messages, provider_opts(provider)) do
+      {:ok, packet} ->
+        {:ok,
+         Drafts.draft(scene_id, id, beat, packet, source: "assisted", repo: draft_repo(opts))}
+
+      {:error, reason} ->
+        Logger.info("assisted draft failed for #{id}@#{beat}: #{inspect(reason)}")
+
+        :ok =
+          App.dispatch(%RecordFailure{
+            beat_ref: beat_ref(scene_id, beat),
+            character_id: id,
+            reason: inspect(reason)
+          })
+
+        :error
+    end
+  end
+
+  defp draft_repo(opts), do: Map.get(opts, :repo, Polyphony.Repo)
 
   # A cast member is terminal once committed (canonical packet), failed, or passed.
   defp terminal_chars(scene_id, beat, events) do

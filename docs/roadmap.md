@@ -43,10 +43,16 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
     (`GeneratePacket` chain stops at a user slot, resumes on the user's commit) — the
     inline runner is the tested path; the async path stays all-autonomous until then.
     And **assisted** mode's editable draft, which is §A2.
-- **A2 — Pending/draft state before commit.** A `PacketDrafted` superseded by
-  commit, for assisted mode and suggestion review. **Kept distinct** from
-  `PacketSuperseded` (draft→commit is a different axis than committed→re-rolled).
-  Drafts must never reach `visible_to?`.
+- **A2 — Pending/draft state before commit.** ✅ **Done.** `Polyphony.Drafts` +
+  `ReadModels.PacketDraft` — a pending-draft store kept **off the fiction log**
+  entirely (like `Failures`), so a draft structurally can't reach `visible_to?`
+  until accepted, at which point it's an ordinary `CommitPacket` (`edited: true` if
+  the user edited it). Serves both **assisted** mode — wired into the A1 walk as
+  generate-then-yield (`accept_draft`/`discard_draft` resume) — and **suggestion**
+  mode (the composer's candidates are drafts with `source: "suggestion"`). Packet
+  stored losslessly as an Erlang term; `draft.ready` broadcast to omniscient.
+  - **Deferred:** same as A1 — the Oban async path stays all-autonomous (no
+    assisted/user yields) until that wiring lands.
 - **A3 — Boundaries × conditional-arc evaluation.** *(heavy)* Add `boundaries` to
   `CharacterSheet` (`:open`/`:conditional`/`:closed` + condition + on_pressure).
   Conditional boundaries are evaluated against canon arc by the Director (a cached
