@@ -6,7 +6,10 @@ character sees a **filtered projection** of that log — dramatic irony is a
 structural property of the data, not a prompt instruction.
 
 > Full design rationale lives in the design brief. This README covers what is
-> **implemented so far** and how to run it.
+> **implemented so far** and how to run it. See also
+> [`docs/architecture.md`](docs/architecture.md) (how it's built),
+> [`docs/roadmap.md`](docs/roadmap.md) (what's next), and
+> [`CLAUDE.md`](CLAUDE.md) (working in the repo).
 
 ## Status
 
@@ -24,7 +27,12 @@ foundation; slice 3 adds real character generation behind a provider boundary:
 | 7 | **Scene-close pipeline**: per-character summaries (pgvector) + arc extraction | ✅ implemented + tested |
 | 8 | Client broadcaster (§13) | ✅ implemented + tested |
 | 9 | **Authoring**: character generation + field-level regeneration | ✅ implemented + tested |
-| — | Branching / re-rolls; the LiveView | ⬜ not started |
+| 10 | **Branching family** (§7, §A4): re-rolls, forks, edits | ✅ implemented + tested |
+| — | The LiveView (frontend) | ⬜ not started |
+
+Slice 10: re-rolls (in-beat supersession), forks (copy-on-fork streams), and edits
+(corrections with the downstream-validity choice) — one supersede-and-recommit
+primitive, three operations. See [`docs/architecture.md`](docs/architecture.md) §9.
 
 Slice 5: the Director's decision-making is pure/stubbable logic (arbitration,
 the judgment-decision schema, beat-loop policy, fairness, the beat-lifecycle
@@ -180,7 +188,7 @@ Requires **Elixir 1.14+**, **Erlang/OTP 25+**, and **PostgreSQL 16 with
 #   a 'postgres'/'postgres' role, and (per database): CREATE EXTENSION vector;
 
 mix setup          # deps.get + ecto.create + ecto.migrate
-mix test           # 56 tests, no LLM, no network
+mix test           # full suite, no LLM, no network
 ```
 
 To point the live provider at DeepInfra, set `DEEPINFRA_API_KEY` (and optionally
@@ -245,7 +253,10 @@ rather than Req: Req's HTTP/2 stack (`hpax`) requires 1.15+ and carries its own
 advisory. The provider behaviour keeps the HTTP client swappable, so moving to
 ReqLLM after a toolchain bump is a one-module change.
 
-## What's next (build order, §15)
+## What's next
 
-- Branching / re-rolls (§7): a new stream with a parent pointer + fork beat.
-- The LiveView itself (the frontend). Backend is otherwise complete against §15.
+The branching family (§7, §A4) is now in. Remaining work is tracked in
+[`docs/roadmap.md`](docs/roadmap.md): the frontend-derived backend amendments
+(§A — multiple yields per beat, boundaries, content layers), the net-new surfaces
+(§B — ownership/publish, auth, admin/moderation), cross-cutting data handling (§C),
+and the LiveView frontend itself.

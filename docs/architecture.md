@@ -1,0 +1,243 @@
+# Polyphony — Architecture
+
+How the system is built and why. Companion to the design brief (cited as §n) and
+the frontend spec. For day-to-day commands and invariants see `../CLAUDE.md`; for
+what's planned see `roadmap.md`.
+
+---
+
+## 1. The core idea
+
+One agent per character, plus a world agent (the **Director**). The **event log is
+the single source of truth**. Each character sees only a **filtered projection** of
+that log — the events they could structurally have witnessed. Dramatic irony (a
+character furious inside but composed outside; a secret one party holds) is
+therefore a property of *the data and its projection*, not a prompt instruction and
+not something a model can accidentally reveal.
+
+The load-bearing module is `Polyphony.Visibility`: `visible_to?/3` decides whether
+one event reaches one viewer, and `project/3` filters a stream. The **same
+predicate** drives character conditioning contexts *and* the client broadcaster, so
+the transport can never leak more than the projection.
+
+## 2. Foundational rules (§4)
+
+1. **No LLM inside an aggregate.** Aggregates are pure and replayed by Commanded;
+   generation lives in Oban jobs that *produce commands*.
+2. **Jobs produce commands.** Generation → `CommitPacket` (etc.); the aggregate
+   validates.
+3. **Default-deny visibility.** An event with no `visible_to?` clause is invisible
+   to characters.
+4. **Knowledge is never self-reported.** Membership/visibility are projections over
+   the log.
+5. **Serial generation within a beat.** Each cast member conditions on everything
+   committed before them.
+6. **Events are immutable.** Corrections are new events. A **re-roll** supersedes in
+   place (append-only `PacketSuperseded`); a **fork** starts a new stream.
+
+## 3. Event sourcing with Commanded
+
+- `Polyphony.App` is the Commanded application (write side). `Polyphony.Router`
+  routes commands to aggregates by identity.
+- **Two aggregate/stream families:**
+  - **Scene** (`identify(Scene, by: :scene_id)`) — the fiction: lifecycle,
+    membership, committed packets, supersession, forks.
+  - **Director.Beat** (`identify(Director.Beat, by: :beat_ref)`) — the §12
+    synchronization unit: an ordered cast opens, each member reports terminal
+    (committed/failed), the beat closes with `BeatClosed{completed, failed}`.
+- The **event store is Commanded's in-memory adapter** (config-only swap to the
+  persistent EventStore adapter). Postgres backs only the Ecto **read models**.
+- `Polyphony.Events` is the catalog; every event derives `Jason.Encoder`.
+
+### Event catalog shape
+
+- **Character moves** (decomposed from a `TurnPacket`, sharing `beat` + `packet_id`,
+  §6.4): `ThoughtOccurred`, `SpeechUttered`, `ActionTaken`, `PrivateStateReported`,
+  `DemeanorReported`. The split of `PrivateStateReported` (felt/intended, self-only)
+  from `DemeanorReported` (observable, members-at-beat) *is* the irony at the state
+  layer. The three move events carry an `edited` flag (§A4).
+- **World/lifecycle:** `WorldEventOccurred`, `SceneOpened`, `SceneClosed`,
+  `CharacterEntered`, `CharacterExited`.
+- **Beat framing** (on the beat stream): `BeatOpened`, `BeatClosed`,
+  `PacketRecorded`, `PacketFailed`.
+- **Branching family:** `PacketSuperseded` (re-roll/edit eviction),
+  `SceneForked` (fork lineage).
+- **Scene-close/authoring:** `ArcEntryProposed`, `ArcEntryAccepted`,
+  `GenerationFailed`.
+
+## 4. The Scene aggregate
+
+`Polyphony.Scene` owns lifecycle and membership (the facts that change what everyone
+can witness), and decomposes a committed `TurnPacket` into typed move events (§6.4).
+State it folds: `members`, `committed_packets` (idempotency), `superseded_packets`
+(canonical filter), `forked_from`.
+
+- **Idempotency (§12):** a `CommitPacket` whose `packet_id` is already committed is a
+  no-op — a job that crashed after the API call but before recording completion
+  re-runs and commits exactly once.
+- **Supersession (§7):** `SupersedePacket` appends a `PacketSuperseded` marker
+  (never mutates); guarded to committed, non-superseded packets on an open scene.
+- **Fork (§7):** `ForkScene` emits `SceneForked` followed by a rewritten copy of the
+  parent's canonical prefix — only valid on a fresh (`:pending`) stream.
+
+## 5. Visibility & the canonical filter
+
+`Polyphony.Visibility.visible_to?/3`:
+
+- interior (`ThoughtOccurred`, `PrivateStateReported`) → the owning character only;
+- private speech (whispers) → speaker + `addressed_to` only;
+- observable (`SpeechUttered` normal, `ActionTaken`, `DemeanorReported`,
+  `WorldEventOccurred`, membership) → members at the event's beat;
+- everything else → default-deny to characters; omniscient sees all.
+
+`Polyphony.Packets.canonical/1` sits *before* visibility on every fiction-bearing
+read: it drops packets named by `PacketSuperseded` markers (and the markers
+themselves), so a re-rolled or edited-away turn disappears from every projection at
+once — even omniscient. Applied at the four stream-read sites (`Director.BeatOps`,
+`Director.Runner`, `Broadcast.Publisher`, `SceneClose`) and in `Broadcast.replay`.
+
+## 6. Membership read model
+
+Two implementations that must agree:
+
+- `Polyphony.MembershipSet` — pure interval fold from the event stream (reference).
+- `Polyphony.ReadModels.Membership` + `Projectors.SceneMemberships` — Postgres
+  half-open `[entered, exited)` interval index (materialized twin).
+
+Parity across an exhaustive `(scene, char, beat)` grid is pinned by a test — this is
+the exact seam where irony would leak if the two disagreed.
+
+## 7. Generation path
+
+```
+Oban job (rule 1)  ──▶  Provider.complete  ──▶  Generation.generate
+   (GeneratePacket)         (adapter §2)         parse → validate → classify
+        │                                              │
+        └───────────── dispatch CommitPacket ──────────┘  → Scene aggregate → events
+```
+
+- **Provider boundary** (`Polyphony.LLM.Provider` behaviour): `DeepInfra` (real,
+  `:httpc`), `Mock` (offline lorem, dev default), `Stub` (tests). A `:response` hint
+  selects the schema (`:turn_packet`, `:decision`, `:summary`, `:arc`, `:sheet`,
+  `:field`).
+- **Structured output** (`Generation` + `Generation.PacketSchema`): parse JSON,
+  validate against the §6.4 changeset (move cap, speech-only fields), and **classify
+  failures** for the §12 table — refusal (editable), transport (retryable),
+  schema-invalid (cancel).
+- **Context assembler** (`Polyphony.Context` + `Context.SceneContext`): a
+  **stable → volatile** prefix. The stable half (world rules, sheet, resident facts,
+  retrieved distant summaries) is frozen at scene open — that frozen prefix is the
+  cache unit (§9). Live scene history is appended below it, canonical-filtered.
+- `Context.Store` (ETS) holds materialized contexts for job-side lookup, so the
+  frozen prefix isn't re-serialized through Oban args.
+- `Context.PgvectorRetriever` fetches a character's own distant summaries at scene
+  open — the memory gradient's live link.
+
+## 8. The Director & the beat loop (§10)
+
+Two-stage arbitration, then a serial cast:
+
+1. `Director.Arbitration` (Stage 1, mechanical): auto-accept trivial proposals,
+   auto-reject impossible ones, forward novel ones; builds option sets.
+2. `Director` + `Director.Decision` (Stage 2, one judgment call): casts the beat,
+   sets pacing, rules on forwarded proposals, chooses control (`continue` /
+   `yield_to_user`). Rejections become `WorldEventOccurred` ("she reaches for the
+   door; it's locked").
+3. `Director.BeatPolicy` / `Fairness`: depth cap, truncation on membership change,
+   least-spoken-first casting.
+
+**Two runners over the same tested logic:**
+
+- `Director.Runner` — inline/synchronous; offline demos and tests.
+- **Oban-driven** (`Jobs.RunBeat` + self-chaining `Jobs.GeneratePacket`) — the
+  production path. `RunBeat` makes the judgment call, opens the beat, enqueues the
+  first cast member; each `GeneratePacket` generates, commits, records itself on the
+  beat, enqueues the next — serial ordering falls out of enqueue-on-completion. The
+  last closes the beat and enqueues the next `RunBeat`. Shared plumbing lives in
+  `Director.BeatOps`.
+
+> Note (planned, §A1 + roadmap): the loop currently assumes **one user turn per
+> beat** and derives turn order implicitly. Multiple yields per beat and
+> user-stipulated turn order (an explicit turn-order event) are the next amendment.
+
+## 9. The branching family — one primitive, three operations
+
+All three are the same **supersede-and-recommit** primitive; they differ only in
+what the replacement is and whether they cross to a new stream.
+
+| Operation | Module | Replacement | Stream |
+|---|---|---|---|
+| **Re-roll** | `Polyphony.Reroll` | LLM-regenerated | same (in-beat) |
+| **Edit** | `Polyphony.Edit` | user-authored corrected packet | same (`:valid`) or fork (`:invalid`) |
+| **Fork** | `Polyphony.Fork` | — (copies the prefix) | new |
+
+- **Re-roll (§7, §12):** bounded to the **latest beat**. Re-rolling `C_k` supersedes
+  `C_k` and its in-beat tail (everything that conditioned on it), then regenerates
+  the tail serially by reusing `Jobs.GeneratePacket` wholesale (same commit path, same
+  refusal→heavy-model retry). Touching an earlier beat is a fork, not a re-roll
+  (`:not_latest_beat`).
+- **Edit (§A4):** a user-authored re-commit with `edited: true`. `:valid` supersedes
+  just that packet in place (any beat), timeline intact. `:invalid` forks through the
+  edit beat (preserving the original), then supersedes the edited packet + its in-beat
+  tail on the branch — the user's downstream-validity choice, because only they know
+  whether the change invalidated later turns.
+- **Fork (§7):** copy-on-fork. `Fork.fork/3` copies the parent's *canonical* prefix
+  through the fork beat, re-points `scene_id`/`packet_id` onto a fresh stream, and
+  emits `SceneForked` + the prefix. The fork is then an ordinary open scene — every
+  projection handles it unchanged, and it's fully isolated (editing/re-rolling either
+  side can't bleed into the other). Lineage lands in the `scene_forks` read model
+  (`Projectors.SceneForks`) for the branch navigator.
+
+## 10. Ingestion & suggestion (§11)
+
+- `Polyphony.Ingest` (+ `HeuristicSegmenter`): user prose → segments → `TurnPacket`,
+  with a **verbatim integrity gate** (rewriting/reordering the user's words is
+  rejected) and OOC routing (`[OOC: …]` → the Director, not a character move).
+- `Polyphony.Suggest`: 2–3 candidate turn packets generated **from the acting
+  character's filtered view** — suggestions can't leak what the character can't see.
+
+## 11. Client broadcaster (§13)
+
+`Polyphony.Broadcast` (pure fan-out) + `Broadcast.Publisher` (Commanded handler).
+Each committed scene event publishes to **per-viewer PubSub topics**
+(`scene:<id>:omniscient`, `scene:<id>:character:<id>`), filtered through the same
+`visible_to?/3`. Framing (`beat.opened/closed`, `packet.superseded`) is
+user/system-only and not part of the `event.committed` cursor. Reconnecting clients
+catch up via `Broadcast.replay/4`, which self-filters superseded packets. The
+publisher derives membership from the stream, so it needs no Postgres (safe under the
+test sandbox).
+
+## 12. Scene close (§8, §10)
+
+`Polyphony.SceneClose` fans out on close into per-unit **retryable Oban jobs**
+(`Jobs.SummarizeScene`, `Jobs.ExtractArc`): an omniscient summary plus one
+**per-character summary from that viewer's filtered stream** (`Summarizer`),
+embedded (pgvector) and stored scoped by character (`ReadModels.SceneSummary`); and
+per-participant **arc extraction** (`ArcExtractor` → `:proposed` `ReadModels.ArcEntry`
+for review). It **degrades rather than blocks** — a failed unit leaves that one
+summary/arc missing; scene entry never waits on it.
+
+## 13. Failures (§12)
+
+`Polyphony.Failures` + `ReadModels.Failure`: terminal generation failures become
+user-facing read-model rows broadcast as `generation.failed` with a `failure_id` and
+affordances — **retry** (re-enqueue the exact work) and, for a refusal,
+**edit-and-resubmit** (`retry_edited/2`). Never reaches a character; in-world they
+simply didn't speak.
+
+## 14. Authoring (§5–6, §15)
+
+`Polyphony.Authoring.*`: `WorldBible`, `CharacterSheet`, `ArcEntry`,
+`EffectiveSheet` (canon revisions override, discoveries union, in beat order). The
+`Studio` generates a full sheet on the heavy model, then regenerates **field by
+field** — locked fields are never touched and accepted/locked fields *are* the
+context, so refinement converges. Workflow metadata (status/feedback/provenance)
+lives in `FieldStore`, deliberately **out of** the generation schema
+(`DraftSchema`) so the model generates character, not workflow.
+
+## 15. Deployment posture (planned)
+
+Target: DigitalOcean App Platform with managed Postgres (+ pgvector), migrations on
+deploy, `DEEPINFRA_API_KEY` + model-routing via env. Needs the Phoenix web layer and
+a release config first — see the roadmap. Swapping the in-memory event store for the
+persistent EventStore adapter is a config change.
