@@ -9,15 +9,16 @@ defmodule Polyphony.Jobs.RunBeat do
     2. Author world events; apply membership-changing actions.
     3. If membership changed → **truncate**: enqueue the next `RunBeat` (re-decide
        against the new membership) unless the depth cap is hit.
-    4. Else open the beat and enqueue the **first** cast member's `GeneratePacket`
-       with the remaining cast; that chain generates the cast serially, closes the
-       beat, and enqueues the next `RunBeat` per `BeatPolicy`.
+    4. Else declare the turn order (unless the user set one), open the beat, and
+       hand to `Director.BeatDriver.advance/3` — the async walk that enqueues the
+       first slot, or pauses for a user-controlled/assisted one (§A1/§A2).
     5. An empty cast means yield — nothing is enqueued, and the loop rests until
        the user acts.
 
-  This is the durable, distributed sibling of `Director.Runner`: same tested
-  pure pieces, but each generation is its own retried job and the serial ordering
-  falls out of the enqueue-next-on-completion chain.
+  This is the durable, distributed sibling of `Director.Runner`: the walk decision
+  is shared (`Director.BeatWalk`), so the two can't diverge; only the *acting*
+  differs — each generation is its own retried job, and serial ordering falls out
+  of enqueue-next-on-completion.
   """
   use Oban.Worker, queue: :director, max_attempts: 3
 
@@ -25,9 +26,8 @@ defmodule Polyphony.Jobs.RunBeat do
 
   alias Polyphony.App
   alias Polyphony.Director
-  alias Polyphony.Director.{BeatOps, BeatPolicy, Proposal}
+  alias Polyphony.Director.{BeatDriver, BeatOps, BeatPolicy, Proposal}
   alias Polyphony.Director.Commands.OpenBeat
-  alias Polyphony.Jobs.GeneratePacket
 
   @doc "Kick off (or resume) the beat loop for a scene."
   def enqueue(args) do
@@ -83,32 +83,26 @@ defmodule Polyphony.Jobs.RunBeat do
   end
 
   defp drive(:unchanged, resolved, args, scene_id, beat, depth, max_depth) do
-    [first | rest] = resolved.cast
+    # Declare the turn order (unless the user already set one), open the beat, and
+    # hand off to the walk — it enqueues the first slot, or pauses for a
+    # user-controlled/assisted one (§A1/§A2).
     cast_ids = Enum.map(resolved.cast, & &1.character_id)
+    order = BeatOps.declare_turn_order(scene_id, beat, cast_ids)
 
     :ok =
       App.dispatch(%OpenBeat{
         beat_ref: BeatOps.beat_ref(scene_id, beat),
         scene_id: scene_id,
         beat: beat,
-        cast: cast_ids
+        cast: order
       })
 
-    args
-    |> Map.merge(%{
-      "chain" => true,
-      "beat_ref" => BeatOps.beat_ref(scene_id, beat),
-      "character_id" => first.character_id,
-      "packet_id" => BeatOps.packet_id(scene_id, beat, first.character_id),
-      "pacing_note" => first.pacing_note,
-      "remaining" =>
-        Enum.map(rest, &%{"character_id" => &1.character_id, "pacing_note" => &1.pacing_note}),
-      "control" => to_string(resolved.control),
-      "depth" => depth,
-      "max_depth" => max_depth
-    })
-    |> GeneratePacket.new()
-    |> Oban.insert!()
+    BeatDriver.advance(scene_id, beat,
+      provider: args["provider"],
+      depth: depth,
+      max_depth: max_depth,
+      control: resolved.control
+    )
   end
 
   # ── Args ─────────────────────────────────────────────────────────────────────

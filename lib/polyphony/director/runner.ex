@@ -31,17 +31,9 @@ defmodule Polyphony.Director.Runner do
   require Logger
 
   alias Polyphony.{App, Context, Drafts, Generation, MembershipSet, Packets, TurnOrder}
-
-  alias Polyphony.Commands.{
-    CommitPacket,
-    DeclareTurnOrder,
-    RecordWorldEvent,
-    ExitCharacter,
-    CloseScene
-  }
-
+  alias Polyphony.Commands.{CommitPacket, RecordWorldEvent, ExitCharacter, CloseScene}
   alias Polyphony.Director
-  alias Polyphony.Director.{BeatPolicy, Proposal}
+  alias Polyphony.Director.{BeatOps, BeatPolicy, BeatWalk, Proposal}
   alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, RecordPass, CloseBeat}
   alias Polyphony.Events.{PacketPassed, PacketFailed}
 
@@ -229,7 +221,7 @@ defmodule Polyphony.Director.Runner do
 
   defp walk_beat(scene_id, beat, resolved, provider, opts) do
     cast_ids = Enum.map(resolved.cast, & &1.character_id)
-    order = declared_or_default(scene_id, beat, cast_ids)
+    order = BeatOps.declare_turn_order(scene_id, beat, cast_ids)
     pacing = Map.new(resolved.cast, &{&1.character_id, Map.get(&1, :pacing_note)})
 
     :ok =
@@ -248,52 +240,37 @@ defmodule Polyphony.Director.Runner do
   # passed). Re-derives progress from the log each step, so it resumes after a yield
   # without holding state.
   defp advance(scene_id, beat, provider, pacing, opts) do
-    events = scene_id |> stored_events() |> Packets.canonical()
-    order = TurnOrder.for_beat(events, beat) || []
-    done = terminal_chars(scene_id, beat, events)
-
-    case Enum.find(order, &(&1 not in done)) do
-      nil ->
+    case BeatWalk.next(scene_id, beat) do
+      :settled ->
         :ok = App.dispatch(%CloseBeat{beat_ref: beat_ref(scene_id, beat)})
-        {:closed, terminal_sets(scene_id, beat, events, order)}
+        {:closed, terminal_sets(scene_id, beat)}
 
-      character_id ->
-        case TurnOrder.control_mode(events, character_id) do
-          "user_controlled" ->
-            {:awaiting_user, character_id}
+      {:user_controlled, character_id} ->
+        {:awaiting_user, character_id}
 
-          "assisted" ->
-            # Generate, but present it as a draft to confirm rather than committing
-            # (§A2). A failed generation just records the failure and the walk moves
-            # on (the beat is not atomic, §12).
-            case generate_draft(
-                   character_id,
-                   Map.get(pacing, character_id),
-                   scene_id,
-                   beat,
-                   provider,
-                   opts
-                 ) do
-              {:ok, draft} ->
-                {:awaiting_draft,
-                 %{scene_id: scene_id, beat: beat, character_id: character_id, draft_id: draft.id}}
+      {:assisted, character_id} ->
+        # Generate, but present it as a draft to confirm rather than committing
+        # (§A2). A failed generation just records the failure and the walk moves on
+        # (the beat is not atomic, §12).
+        case generate_draft(
+               character_id,
+               Map.get(pacing, character_id),
+               scene_id,
+               beat,
+               provider,
+               opts
+             ) do
+          {:ok, draft} ->
+            {:awaiting_draft,
+             %{scene_id: scene_id, beat: beat, character_id: character_id, draft_id: draft.id}}
 
-              :error ->
-                advance(scene_id, beat, provider, pacing, opts)
-            end
-
-          _autonomous ->
-            generate_one(
-              character_id,
-              Map.get(pacing, character_id),
-              scene_id,
-              beat,
-              provider,
-              opts
-            )
-
+          :error ->
             advance(scene_id, beat, provider, pacing, opts)
         end
+
+      {:autonomous, character_id} ->
+        generate_one(character_id, Map.get(pacing, character_id), scene_id, beat, provider, opts)
+        advance(scene_id, beat, provider, pacing, opts)
     end
   end
 
@@ -366,49 +343,19 @@ defmodule Polyphony.Director.Runner do
 
   defp draft_repo(opts), do: Map.get(opts, :repo, Polyphony.Repo)
 
-  # A cast member is terminal once committed (canonical packet), failed, or passed.
-  defp terminal_chars(scene_id, beat, events) do
-    committed = events |> Packets.beat_packets(beat) |> MapSet.new(fn {char, _} -> char end)
-    {passed, failed} = beat_terminals(scene_id, beat)
-    committed |> MapSet.union(passed) |> MapSet.union(failed)
-  end
-
-  defp terminal_sets(scene_id, beat, events, order) do
+  # The committed (in declared order) / failed / passed lists for the closed beat's
+  # outcome. Progress is read from the log — canonical scene stream + beat stream.
+  defp terminal_sets(scene_id, beat) do
+    events = scene_id |> stored_events() |> Packets.canonical()
+    order = TurnOrder.for_beat(events, beat) || []
     committed_set = events |> Packets.beat_packets(beat) |> MapSet.new(fn {char, _} -> char end)
-    committed = Enum.filter(order, &MapSet.member?(committed_set, &1))
-    beat_events = beat_events(scene_id, beat)
+    beat_events = BeatOps.beat_events(scene_id, beat)
 
     %{
-      committed: committed,
+      committed: Enum.filter(order, &MapSet.member?(committed_set, &1)),
       failed: for(%PacketFailed{character_id: c, reason: r} <- beat_events, do: {c, r}),
       passed: for(%PacketPassed{character_id: c} <- beat_events, do: c)
     }
-  end
-
-  defp beat_terminals(scene_id, beat) do
-    beat_events = beat_events(scene_id, beat)
-    passed = for %PacketPassed{character_id: c} <- beat_events, into: MapSet.new(), do: c
-    failed = for %PacketFailed{character_id: c} <- beat_events, into: MapSet.new(), do: c
-    {passed, failed}
-  end
-
-  defp beat_events(scene_id, beat) do
-    App |> Commanded.EventStore.stream_forward(beat_ref(scene_id, beat)) |> Enum.map(& &1.data)
-  rescue
-    _ -> []
-  end
-
-  defp declared_or_default(scene_id, beat, cast_ids) do
-    events = scene_id |> stored_events() |> Packets.canonical()
-
-    case TurnOrder.for_beat(events, beat) do
-      nil ->
-        :ok = App.dispatch(%DeclareTurnOrder{scene_id: scene_id, beat: beat, order: cast_ids})
-        cast_ids
-
-      declared ->
-        declared
-    end
   end
 
   # ── Membership-changing actions → truncation ─────────────────────────────────

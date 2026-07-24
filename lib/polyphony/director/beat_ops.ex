@@ -74,6 +74,37 @@ defmodule Polyphony.Director.BeatOps do
   @doc "The canonical view of a scene's stream — re-rolled packets filtered out (§7)."
   def canonical_events(scene_id), do: scene_id |> stored_events() |> Packets.canonical()
 
+  @doc "Events on a beat's own aggregate stream (`beat_ref`), empty if it hasn't opened."
+  def beat_events(scene_id, beat) do
+    App |> Commanded.EventStore.stream_forward(beat_ref(scene_id, beat)) |> Enum.map(& &1.data)
+  rescue
+    _ -> []
+  end
+
+  @doc """
+  The turn order for a beat (§A1): the user's declaration if one exists, otherwise
+  the given default cast — which is recorded as a `TurnOrderDeclared` so re-roll and
+  the walk read a single source of truth. Returns the ordered `character_id`s.
+  """
+  def declare_turn_order(scene_id, beat, default_cast_ids) do
+    events = canonical_events(scene_id)
+
+    case Polyphony.TurnOrder.for_beat(events, beat) do
+      nil ->
+        :ok =
+          App.dispatch(%Polyphony.Commands.DeclareTurnOrder{
+            scene_id: scene_id,
+            beat: beat,
+            order: default_cast_ids
+          })
+
+        default_cast_ids
+
+      declared ->
+        declared
+    end
+  end
+
   @doc "Character ids present in the scene at `beat`, derived from the log."
   def members_now(scene_id, beat) do
     scene_id

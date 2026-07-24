@@ -38,11 +38,9 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   authoritative — a user reorder or **removal** is honored. Also fixed a latent
   round-trip bug found here: atom-valued event fields (`SpeechUttered.audibility`)
   stringified through the JSON store, so a stored whisper leaked to non-addressees —
-  now re-atomized via a `JsonDecoder`.
-  - **Deferred:** wiring the same yield/resume into the **Oban** path
-    (`GeneratePacket` chain stops at a user slot, resumes on the user's commit) — the
-    inline runner is the tested path; the async path stays all-autonomous until then.
-    And **assisted** mode's editable draft, which is §A2.
+  now re-atomized via a `JsonDecoder`. The **Oban async path** honors control modes
+  too (`Director.BeatDriver`), sharing the walk *decision* (`Director.BeatWalk`) with
+  the inline runner so the two can't diverge.
 - **A2 — Pending/draft state before commit.** ✅ **Done.** `Polyphony.Drafts` +
   `ReadModels.PacketDraft` — a pending-draft store kept **off the fiction log**
   entirely (like `Failures`), so a draft structurally can't reach `visible_to?`
@@ -51,8 +49,8 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   generate-then-yield (`accept_draft`/`discard_draft` resume) — and **suggestion**
   mode (the composer's candidates are drafts with `source: "suggestion"`). Packet
   stored losslessly as an Erlang term; `draft.ready` broadcast to omniscient.
-  - **Deferred:** same as A1 — the Oban async path stays all-autonomous (no
-    assisted/user yields) until that wiring lands.
+  Works on **both** loops — inline (`Runner.accept_draft`) and Oban async
+  (`BeatDriver.accept_draft`).
 - **A3 — Boundaries × conditional-arc evaluation.** *(heavy)* Add `boundaries` to
   `CharacterSheet` (`:open`/`:conditional`/`:closed` + condition + on_pressure).
   Conditional boundaries are evaluated against canon arc by the Director (a cached

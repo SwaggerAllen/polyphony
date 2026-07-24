@@ -13,18 +13,21 @@ defmodule Polyphony.Jobs.GeneratePacket do
   records completion re-runs, regenerates, and the aggregate commits exactly once
   (§12 idempotency).
 
-  ## Two modes
+  ## Modes
 
   * **Standalone** — args carry `messages` (or fall back to a seed). The job
     returns an Oban result reflecting the outcome (`:ok`, `{:cancel, …}`,
-    `{:error, …}`), used for a one-off generation.
+    `{:error, …}`), used for a one-off generation (e.g. a `Failures` retry).
 
-  * **Chained** (the beat loop) — args carry `chain: true`, a `beat_ref`, and the
-    `remaining` cast. The job records the packet on the beat, then enqueues the
-    next cast member serially, or, when the cast is exhausted, closes the beat and
-    enqueues the next `RunBeat` per `BeatPolicy`. A failed character is recorded
-    and the chain continues — the beat is not atomic and a silent character is
-    survivable (§12), so a chained job returns `:ok` even on a generation failure.
+  * **Chained** (the beat loop) — `chain: true`. An **autonomous** slot generates,
+    commits, records the packet on the beat, then hands to `BeatDriver.advance/3`,
+    which re-derives the next slot from the log and enqueues it (or pauses/closes).
+    An **assisted** slot (`draft: true`) generates a **pending draft** and stops —
+    the beat waits for the user to accept/discard (§A2). Serial ordering falls out
+    of enqueue-next-on-completion; a failed character is recorded and the walk
+    continues — the beat is not atomic (§12), so a chained job returns `:ok` even on
+    a generation failure. The walk decision itself lives in `Director.BeatWalk`, so
+    this path can't diverge from the inline `Director.Runner`.
 
   Failure handling maps to the §12 table: a refusal retries once on the heavy
   model (model-swap, not backoff), then fails; other errors are transport/schema
@@ -34,27 +37,28 @@ defmodule Polyphony.Jobs.GeneratePacket do
 
   require Logger
 
-  alias Polyphony.{App, Generation, Failures}
+  alias Polyphony.{App, Drafts, Generation, Failures}
   alias Polyphony.Commands.CommitPacket
-  alias Polyphony.Director.BeatOps
-  alias Polyphony.Director.BeatPolicy
-  alias Polyphony.Director.Commands.{RecordPacket, RecordFailure, CloseBeat}
-  alias Polyphony.Jobs.RunBeat
+  alias Polyphony.Director.{BeatOps, BeatDriver, BeatPolicy}
+  alias Polyphony.Director.Commands.{RecordPacket, RecordFailure}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
+    cond do
+      # Chained assisted slot (§A2): generate a draft and pause for confirmation.
+      args["chain"] && args["draft"] -> run_draft(args)
+      # Chained autonomous slot (§A1): generate, commit, then walk the beat on.
+      args["chain"] -> run_autonomous(args)
+      # One-off (Failures retry, a single re-generation): map the outcome to Oban.
+      true -> run_standalone(args)
+    end
+  end
+
+  defp run_standalone(args) do
     %{"scene_id" => scene_id, "character_id" => character_id, "beat" => beat} = args
     packet_id = args["packet_id"] || BeatOps.packet_id(scene_id, beat, character_id)
-
-    messages =
-      args["messages"] || BeatOps.messages_for(scene_id, beat, character_id, args["pacing_note"])
-
-    opts = gen_opts(args)
-    result = commit_turn(messages, {scene_id, character_id, beat, packet_id}, opts)
-
-    if args["chain"],
-      do: continue_chain(args, character_id, result, messages),
-      else: standalone(result)
+    messages = messages_for(args)
+    standalone(commit_turn(messages, {scene_id, character_id, beat, packet_id}, gen_opts(args)))
   end
 
   # ── Generation + commit (shared by both modes) ───────────────────────────────
@@ -106,25 +110,67 @@ defmodule Polyphony.Jobs.GeneratePacket do
   defp standalone({:cancelled, reason}), do: {:cancel, reason}
   defp standalone({:failed, reason}), do: {:error, reason}
 
-  # ── Chained mode: beat bookkeeping + serial handoff ──────────────────────────
+  # ── Chained mode: generate one slot, then walk the beat on (§A1/§A2) ──────────
 
-  defp continue_chain(args, character_id, result, messages) do
-    beat_ref = args["beat_ref"]
-    record_outcome(beat_ref, character_id, result)
+  defp run_autonomous(args) do
+    %{"scene_id" => scene_id, "character_id" => character_id, "beat" => beat} = args
+    packet_id = args["packet_id"] || BeatOps.packet_id(scene_id, beat, character_id)
+    messages = messages_for(args)
+    result = commit_turn(messages, {scene_id, character_id, beat, packet_id}, gen_opts(args))
+
+    record_outcome(args["beat_ref"], character_id, result)
 
     if match?({k, _} when k in [:failed, :cancelled], result),
       do: record_failure(args, character_id, result, messages)
 
-    case args["remaining"] do
-      [next | rest] ->
-        enqueue_cast(args, next, rest)
-
-      _ ->
-        App.dispatch(%CloseBeat{beat_ref: beat_ref})
-        maybe_continue(args)
-    end
-
+    # Re-derive the next slot from the log and act — enqueue the next autonomous
+    # generation, pause for a user/assisted slot, or close the beat.
+    BeatDriver.advance(scene_id, beat, forward_ctx(args))
     :ok
+  end
+
+  # Assisted (§A2): generate, store a pending draft (draft.ready broadcast), and
+  # STOP — the beat waits for the user to accept/discard, which resumes the walk. A
+  # failed generation records the failure and the walk moves on.
+  defp run_draft(args) do
+    %{"scene_id" => scene_id, "character_id" => character_id, "beat" => beat} = args
+
+    case Generation.generate(messages_for(args), gen_opts(args)) do
+      {:ok, packet} ->
+        Drafts.draft(scene_id, character_id, beat, packet, source: "assisted")
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("assisted draft failed for #{character_id}@#{beat}: #{inspect(reason)}")
+
+        App.dispatch(%RecordFailure{
+          beat_ref: args["beat_ref"],
+          character_id: character_id,
+          reason: inspect(reason)
+        })
+
+        BeatDriver.advance(scene_id, beat, forward_ctx(args))
+        :ok
+    end
+  end
+
+  defp messages_for(args) do
+    args["messages"] ||
+      BeatOps.messages_for(
+        args["scene_id"],
+        args["beat"],
+        args["character_id"],
+        args["pacing_note"]
+      )
+  end
+
+  defp forward_ctx(args) do
+    [
+      provider: args["provider"],
+      depth: args["depth"] || 0,
+      max_depth: args["max_depth"] || BeatPolicy.default_max_depth(),
+      control: parse_control(args["control"])
+    ]
   end
 
   defp record_outcome(beat_ref, character_id, :committed) do
@@ -165,45 +211,6 @@ defmodule Polyphony.Jobs.GeneratePacket do
         "provider" => args["provider"]
       }
     )
-  end
-
-  defp enqueue_cast(args, %{"character_id" => id} = member, rest) do
-    args
-    |> Map.merge(%{
-      "character_id" => id,
-      "packet_id" => BeatOps.packet_id(args["scene_id"], args["beat"], id),
-      "pacing_note" => member["pacing_note"],
-      "remaining" => rest,
-      "messages" => nil
-    })
-    |> __MODULE__.new()
-    |> Oban.insert!()
-  end
-
-  defp maybe_continue(args) do
-    next =
-      BeatPolicy.next(%{
-        depth: args["depth"] || 0,
-        control: parse_control(args["control"]),
-        membership_changed: false,
-        max_depth: args["max_depth"] || BeatPolicy.default_max_depth()
-      })
-
-    if next == :continue do
-      args
-      |> Map.merge(%{"beat" => args["beat"] + 1, "depth" => (args["depth"] || 0) + 1})
-      |> Map.drop([
-        "character_id",
-        "packet_id",
-        "remaining",
-        "beat_ref",
-        "chain",
-        "pacing_note",
-        "messages"
-      ])
-      |> RunBeat.new()
-      |> Oban.insert!()
-    end
   end
 
   defp parse_control("continue"), do: :continue
