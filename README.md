@@ -128,6 +128,7 @@ Key modules:
 | `Polyphony.Suggest` | 2–3 turn variants from the character's filtered view (§11) |
 | `Polyphony.Broadcast` / `Broadcast.Publisher` | Per-viewer filtered client stream over PubSub + cursor replay (§13) |
 | `Polyphony.SceneClose` + `SceneClose.*` | Scene-close fan-out: N+1 filtered summaries, embeddings, arc extraction (§8, §10) |
+| `Polyphony.Jobs.SummarizeScene` / `ExtractArc` | Per-unit retryable scene-close jobs (transient→backoff, schema-invalid→cancel) |
 | `Polyphony.ReadModels.SceneSummary` / `ArcEntry` | Character-scoped pgvector summaries; proposed-arc authoring table |
 | `Polyphony.Context.PgvectorRetriever` | Fetches a character's own distant summaries at scene open — the memory gradient's live link |
 | `Polyphony.MembershipSet` | Pure interval fold — reference membership implementation |
@@ -213,6 +214,7 @@ models (and, later, pgvector embeddings).
 | `scene_close/arc_extractor_test.exs` | Proposed-only arc entries, filtered, schema-validated |
 | `scene_close_test.exs` | Full fan-out: 3 summaries stored scoped, arc proposals, best-effort degradation |
 | `context/pgvector_retriever_test.exs` | Scene-open retrieval reads back a character's own summaries, scoped |
+| `scene_close/retries_test.exs` | §12 failure classification (transient/permanent) + per-unit job fan-out |
 
 ## Security note (toolchain constraint)
 
@@ -233,9 +235,6 @@ ReqLLM after a toolchain bump is a one-module change.
 
 ## What's next (build order, §15)
 
-- Scene-close **retries**: make each summary/extraction a small Oban job (§10) so
-  transient failures back off and retry, while still degrading on exhaustion.
-  Currently `SceneClose.run/2` degrades without retrying.
 8. Branching, re-rolls, client reconnection.
 9. Character/world authoring with field-level regeneration.
 - The LiveView itself (the last frontend piece; backend is otherwise complete).

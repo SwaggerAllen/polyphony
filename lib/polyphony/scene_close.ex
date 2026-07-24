@@ -10,10 +10,22 @@ defmodule Polyphony.SceneClose do
     * **Arc extraction** per participant (`ArcExtractor`) — proposed durable
       changes stored for review (`ReadModels.ArcEntry`, §6.2).
 
-  **Degrades rather than fails (§12).** Each summary/extraction is best-effort: a
-  failed one is logged and skipped, never aborting the pipeline, and scene entry
-  must not block on this — a missing summary just falls back to the character's
-  filtered verbatim scene, which is already in the log.
+  ## Two ways to run it
+
+  * `enqueue/2` — the production path (§10 "all Oban jobs"). Each summary and each
+    participant's extraction is its own job (`Jobs.SummarizeScene`,
+    `Jobs.ExtractArc`), so a **transient** failure backs off and retries per job,
+    and a job that exhausts its attempts just leaves that one summary/arc missing.
+  * `run/2` — the synchronous, best-effort path for offline/tests: same units,
+    but failures are logged and skipped rather than retried.
+
+  Either way it **degrades rather than fails (§12)** — scene entry never blocks on
+  this, and a missing summary falls back to the character's filtered verbatim
+  scene, which is already in the log.
+
+  The per-unit functions (`summarize_viewer/3`, `extract_participant/3`) classify
+  failures for the §12 table: summaries are transient (retry); a schema-invalid
+  arc is permanent (cancel, don't loop); provider/transport errors retry.
   """
 
   require Logger
@@ -22,76 +34,139 @@ defmodule Polyphony.SceneClose do
   alias Polyphony.SceneClose.{Summarizer, ArcExtractor, Embedder}
   alias Polyphony.ReadModels.{SceneSummary, ArcEntry}
   alias Polyphony.Events.CharacterEntered
+  alias Polyphony.Jobs.{SummarizeScene, ExtractArc}
+
+  # ── Production path: fan out into retryable Oban jobs ─────────────────────────
 
   @doc """
-  Run the pipeline for `scene_id`. Options: `:provider`, `:embedder`, `:repo`.
-  Returns `{:ok, %{participants:, summaries:, arc_entries:}}`.
+  Enqueue the scene-close fan-out as individual Oban jobs (one per summary, one
+  per participant's arc extraction). Options `:provider`/`:embedder` accept a
+  module (passed to the jobs as a name). Returns the job counts.
+  """
+  @spec enqueue(term(), keyword()) :: {:ok, map()}
+  def enqueue(scene_id, opts \\ []) do
+    events = stored_events(scene_id)
+    participants = participants(events)
+    provider = mod_name(Keyword.get(opts, :provider))
+    embedder = mod_name(Keyword.get(opts, :embedder))
+
+    for key <- [SceneSummary.omniscient_key() | participants] do
+      %{"scene_id" => scene_id, "viewer" => key, "provider" => provider, "embedder" => embedder}
+      |> SummarizeScene.new()
+      |> Oban.insert!()
+    end
+
+    for id <- participants do
+      %{"scene_id" => scene_id, "character_id" => id, "provider" => provider}
+      |> ExtractArc.new()
+      |> Oban.insert!()
+    end
+
+    {:ok,
+     %{
+       participants: participants,
+       summary_jobs: length(participants) + 1,
+       arc_jobs: length(participants)
+     }}
+  end
+
+  # ── Synchronous best-effort path ─────────────────────────────────────────────
+
+  @doc """
+  Run the pipeline inline (no retries). Options: `:provider`, `:embedder`,
+  `:repo`. Returns `{:ok, %{participants:, summaries:, arc_entries:}}`.
   """
   @spec run(term(), keyword()) :: {:ok, map()}
   def run(scene_id, opts \\ []) do
-    repo = Keyword.get(opts, :repo, Repo)
-    embedder = Keyword.get(opts, :embedder, Embedder.default())
-    events = stored_events(scene_id)
-    participants = participants(events)
+    participants = scene_id |> stored_events() |> participants()
 
     summaries =
-      [:omniscient | Enum.map(participants, &{:character, &1})]
-      |> Enum.map(&summarize_and_store(&1, scene_id, events, repo, embedder, opts))
+      [SceneSummary.omniscient_key() | participants]
+      |> Enum.map(&summarize_viewer(scene_id, viewer_from_key(&1), opts))
       |> Enum.count(&(&1 == :ok))
 
-    arc_count =
+    arc_entries =
       participants
-      |> Enum.map(&extract_and_store(&1, scene_id, events, repo, opts))
+      |> Enum.map(fn id ->
+        case extract_participant(scene_id, id, opts) do
+          {:ok, n} -> n
+          other -> log_degrade("arc", id, other)
+        end
+      end)
       |> Enum.sum()
 
-    {:ok, %{participants: participants, summaries: summaries, arc_entries: arc_count}}
+    {:ok, %{participants: participants, summaries: summaries, arc_entries: arc_entries}}
   end
 
-  # ── Summaries ────────────────────────────────────────────────────────────────
+  # ── Per-unit work (called by both paths) ─────────────────────────────────────
 
-  defp summarize_and_store(viewer, scene_id, events, repo, embedder, opts) do
-    key = viewer_key(viewer)
+  @doc """
+  Produce, embed, and store one viewer's summary. `:ok`, or `{:error, reason}`
+  (transient — worth retrying).
+  """
+  @spec summarize_viewer(term(), :omniscient | {:character, term()}, keyword()) ::
+          :ok | {:error, term()}
+  def summarize_viewer(scene_id, viewer, opts) do
+    repo = Keyword.get(opts, :repo) || Repo
+    embedder = Keyword.get(opts, :embedder) || Embedder.default()
+    events = stored_events(scene_id)
 
     with {:ok, text} <- Summarizer.summarize(events, viewer, opts),
          {:ok, embedding} <- embedder.embed(text) do
-      SceneSummary.put(repo, scene_id, key, text, embedding)
+      SceneSummary.put(repo, scene_id, viewer_key(viewer), text, embedding)
       :ok
     else
-      other ->
-        Logger.warning(
-          "scene-close summary failed for #{key}@#{inspect(scene_id)}: #{inspect(other)}"
-        )
-
-        :error
+      {:error, reason} -> {:error, reason}
+      other -> {:error, other}
     end
   rescue
-    e ->
-      Logger.warning("scene-close summary crashed for #{viewer_key(viewer)}: #{inspect(e)}")
-      :error
+    e -> {:error, e}
+  end
+
+  @doc """
+  Extract and store one participant's proposed arc entries. `{:ok, count}`,
+  `{:cancel, reason}` for a permanent (schema-invalid) failure — don't loop — or
+  `{:error, reason}` for a transient one — retry.
+  """
+  @spec extract_participant(term(), term(), keyword()) ::
+          {:ok, non_neg_integer()} | {:cancel, term()} | {:error, term()}
+  def extract_participant(scene_id, character_id, opts) do
+    repo = Keyword.get(opts, :repo) || Repo
+    events = stored_events(scene_id)
+
+    case ArcExtractor.extract(events, character_id, Keyword.put(opts, :source_scene_id, scene_id)) do
+      {:ok, entries} ->
+        Enum.each(entries, &ArcEntry.put(repo, &1, character_id))
+        {:ok, length(entries)}
+
+      {:error, :invalid_arc} ->
+        {:cancel, :invalid_arc}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  rescue
+    e -> {:error, e}
+  end
+
+  # ── Helpers ──────────────────────────────────────────────────────────────────
+
+  @doc "Turn a stored viewer key back into a viewer value."
+  def viewer_from_key(key) do
+    if key == SceneSummary.omniscient_key(), do: :omniscient, else: {:character, key}
   end
 
   defp viewer_key(:omniscient), do: SceneSummary.omniscient_key()
   defp viewer_key({:character, id}), do: to_string(id)
 
-  # ── Arc extraction ───────────────────────────────────────────────────────────
-
-  defp extract_and_store(character_id, scene_id, events, repo, opts) do
-    case ArcExtractor.extract(events, character_id, Keyword.put(opts, :source_scene_id, scene_id)) do
-      {:ok, entries} ->
-        Enum.each(entries, &ArcEntry.put(repo, &1, character_id))
-        length(entries)
-
-      other ->
-        Logger.warning("arc extraction failed for #{character_id}: #{inspect(other)}")
-        0
-    end
-  rescue
-    e ->
-      Logger.warning("arc extraction crashed for #{character_id}: #{inspect(e)}")
-      0
+  defp log_degrade(kind, id, result) do
+    Logger.warning("scene-close #{kind} degraded for #{inspect(id)}: #{inspect(result)}")
+    0
   end
 
-  # ── Helpers ──────────────────────────────────────────────────────────────────
+  defp mod_name(nil), do: nil
+  defp mod_name(mod) when is_atom(mod), do: to_string(mod)
+  defp mod_name(str) when is_binary(str), do: str
 
   defp participants(events) do
     events

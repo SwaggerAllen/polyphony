@@ -34,7 +34,7 @@ config :polyphony, Polyphony.App,
 # (foundational rule 1) — so a job produces commands.
 config :polyphony, Oban,
   repo: Polyphony.Repo,
-  queues: [generation: 5, director: 2],
+  queues: [generation: 5, director: 2, scene_close: 3],
   plugins: [{Oban.Plugins.Pruner, max_age: 60 * 60}]
 
 # LLM provider config (§2, §3). DeepInfra direct by default; the workhorse MoE
