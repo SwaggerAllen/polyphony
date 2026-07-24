@@ -26,8 +26,7 @@ defmodule Polyphony.Jobs.GeneratePacket do
     the beat waits for the user to accept/discard (§A2). Serial ordering falls out
     of enqueue-next-on-completion; a failed character is recorded and the walk
     continues — the beat is not atomic (§12), so a chained job returns `:ok` even on
-    a generation failure. The walk decision itself lives in `Director.BeatWalk`, so
-    this path can't diverge from the inline `Director.Runner`.
+    a generation failure. The walk decision itself lives in `Director.BeatWalk`.
 
   Failure handling maps to the §12 table: a refusal retries once on the heavy
   model (model-swap, not backoff), then fails; other errors are transport/schema

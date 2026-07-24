@@ -1,13 +1,11 @@
 defmodule Polyphony.Director.BeatWalk do
   @moduledoc """
-  The shared beat-walk **decision** (§A1/§A2): given a scene and beat, what is the
-  next slot that needs action, and how is it driven?
+  The beat-walk **decision** (§A1/§A2): given a scene and beat, what is the next
+  slot that needs action, and how is it driven?
 
-  Both beat loops consult this — the inline `Director.Runner` and the Oban-driven
-  `Director.BeatDriver` — so there is exactly one place that knows the walk rules
-  (declared order, terminal slots, control modes). The two differ only in how they
-  *act* on the answer: the inline runner generates synchronously and returns; the
-  Oban path enqueues a job or pauses. Neither re-implements the decision.
+  Kept separate from the acting so the walk rules (declared order, terminal slots,
+  control modes) live in one pure place that `Director.BeatDriver` consults and
+  that is testable in isolation from the job machinery.
 
   Progress is re-derived from the log every call — committed packets (canonical
   scene stream) plus passed/failed (beat stream) — so the walk resumes after a

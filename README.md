@@ -36,37 +36,26 @@ primitive, three operations. See [`docs/architecture.md`](docs/architecture.md) 
 
 Slice 5: the Director's decision-making is pure/stubbable logic (arbitration,
 the judgment-decision schema, beat-loop policy, fairness, the beat-lifecycle
-aggregate), and `Director.Runner` drives the actual beat loop — decide → apply
-plan → serial cast generation → close beat → repeat under `BeatPolicy`, with
-truncation on membership change. The whole loop runs offline against the
-lorem-ipsum `LLM.Mock` provider (the dev default), so `mix run` produces a real
-scene with no network:
+aggregate). The beat loop is **Oban-driven** (`Jobs.RunBeat` + self-chaining
+`Jobs.GeneratePacket`), with the walk *decision* in `Director.BeatWalk` and the
+async *acting* in `Director.BeatDriver`. `RunBeat` makes the one judgment call,
+declares the turn order, and opens the beat; the walk generates each **autonomous**
+slot (committing, recording on the beat, enqueuing the next — so serial ordering
+falls out of enqueue-next-on-completion) and **pauses** for a **user-controlled**
+or **assisted** slot (§A1/§A2). The last slot closes the beat and enqueues the next
+`RunBeat` per `BeatPolicy`, with truncation on membership change. Each character's
+frozen context comes from `Context.Store` (ETS), never job args.
+
+The whole loop runs offline against the lorem-ipsum `LLM.Mock` provider (the dev
+default); tests drive it synchronously via `Oban.Testing.with_testing_mode(:inline,
+…)`, no network:
 
 ```
-(mira thinks: Eiusmod tempor incididunt.)
-mira: "Magna aliqua enim ad minim veniam."
-(otto thinks: Tempor incididunt ut.)
-otto: "Aliqua enim ad minim veniam lorem."
+beat 1 mira: "Enim ad minim veniam lorem ipsum."
+beat 1 otto: "Lorem ipsum dolor sit amet consectetur."
+beat 2 mira: "Consectetur adipiscing elit sed do eiusmod."
+beat 2 otto: "Dolore magna aliqua enim ad minim."
 ```
-
-There are **two runners**, sharing the same tested Director logic:
-
-- `Director.Runner` — inline/synchronous, for offline demos and tests.
-- **Oban-driven** (`Jobs.RunBeat` + self-chaining `Jobs.GeneratePacket`) — the
-  production path. `RunBeat` makes the one judgment call, opens the beat, and
-  enqueues the first cast member; each `GeneratePacket` generates, commits,
-  records itself on the beat, then enqueues the next cast member — so serial
-  ordering falls out of enqueue-next-on-completion. The last one closes the beat
-  and enqueues the next `RunBeat` per `BeatPolicy`. Each character's frozen
-  context is fetched from `Context.Store` (ETS) rather than serialized through
-  job args. Verified against the **real async queues** in dev:
-
-  ```
-  beat 1 mira: "Enim ad minim veniam lorem ipsum."
-  beat 1 otto: "Lorem ipsum dolor sit amet consectetur."
-  beat 2 mira: "Consectetur adipiscing elit sed do eiusmod."
-  beat 2 otto: "Dolore magna aliqua enim ad minim."
-  ```
 
 ## Front end
 
@@ -136,8 +125,8 @@ Key modules:
 | `Polyphony.Director` / `Director.Decision` | Stage-2 judgment call + merged plan (§10) |
 | `Polyphony.Director.BeatPolicy` / `Fairness` | Beat-loop stopping rule; casting fairness (§10) |
 | `Polyphony.Director.Beat` | Beat-lifecycle aggregate — the §12 synchronization unit |
-| `Polyphony.Director.Runner` | Inline beat loop: serial cast chain + `BeatPolicy` (§10) |
-| `Polyphony.Jobs.RunBeat` / `GeneratePacket` | Oban-driven beat loop (production path); shared `Director.BeatOps` |
+| `Polyphony.Director.BeatWalk` / `BeatDriver` | The beat walk: shared decision (next slot + mode) + the Oban-driven acting (§A1/§A2) |
+| `Polyphony.Jobs.RunBeat` / `GeneratePacket` | The Oban beat loop; shared plumbing in `Director.BeatOps` |
 | `Polyphony.Context.Store` | ETS cache of materialized contexts for job-side lookup |
 | `Polyphony.LLM.Mock` | Lorem-ipsum provider — offline dev default, runs the whole loop |
 | `Polyphony.Ingest` / `Ingest.HeuristicSegmenter` | User prose → segments → `TurnPacket`; verbatim gate + OOC (§11) |

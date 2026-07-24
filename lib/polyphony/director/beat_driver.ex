@@ -1,8 +1,8 @@
 defmodule Polyphony.Director.BeatDriver do
   @moduledoc """
-  The Oban-driven beat walk (§A1/§A2) — the async counterpart to the inline
-  `Director.Runner`. Both consult `Director.BeatWalk` for the *decision* (next
-  actionable slot); this module *acts* on it in the durable/distributed way:
+  The beat walk (§A1/§A2) — the Oban-driven beat loop. It consults
+  `Director.BeatWalk` for the *decision* (next actionable slot) and *acts* on it in
+  the durable/distributed way:
 
     * **autonomous** → enqueue a `GeneratePacket` (which generates, commits, and
       calls `advance/3` again — serial ordering falls out of the chain);
@@ -17,6 +17,9 @@ defmodule Polyphony.Director.BeatDriver do
   on. Because progress is re-derived from the log, a pause needs no stored
   cursor. (A beat resumed by the user closes yielding to the user unless the caller
   passes an explicit `:control` — the sane default when a human is in the loop.)
+
+  In tests the whole loop runs synchronously under
+  `Oban.Testing.with_testing_mode(:inline, …)`, offline against the Mock provider.
   """
 
   require Logger

@@ -15,10 +15,10 @@ defmodule Polyphony.Jobs.RunBeat do
     5. An empty cast means yield — nothing is enqueued, and the loop rests until
        the user acts.
 
-  This is the durable, distributed sibling of `Director.Runner`: the walk decision
-  is shared (`Director.BeatWalk`), so the two can't diverge; only the *acting*
-  differs — each generation is its own retried job, and serial ordering falls out
-  of enqueue-next-on-completion.
+  The beat loop is durable and distributed: the walk decision is a pure function
+  (`Director.BeatWalk`), and each generation is its own retried job, so serial
+  ordering falls out of enqueue-next-on-completion. Tests drive it synchronously
+  under `Oban.Testing.with_testing_mode(:inline, …)`.
   """
   use Oban.Worker, queue: :director, max_attempts: 3
 

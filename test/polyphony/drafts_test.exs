@@ -8,7 +8,6 @@ defmodule Polyphony.DraftsTest do
 
   alias Polyphony.{App, Repo, Context, Drafts, Packets, Suggest}
   alias Polyphony.LLM.Mock
-  alias Polyphony.Director.Runner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Events.ThoughtOccurred
@@ -114,81 +113,8 @@ defmodule Polyphony.DraftsTest do
     end
   end
 
-  describe "assisted control mode in the beat walk (§A1 + §A2)" do
-    defp setup_scene(members) do
-      scene = open_scene(members)
-
-      contexts =
-        Map.new(members, fn m ->
-          sheet = %CharacterSheet{name: m, premise: "#{m} here.", voice: "plain"}
-
-          {m,
-           Context.materialize(scene_id: scene, character_id: m, sheet: sheet, premise: "A room.")}
-        end)
-
-      {scene, contexts}
-    end
-
-    test "an assisted slot generates a draft and yields; accept commits and walks on" do
-      {scene, contexts} = setup_scene(["alice", "bram", "cara"])
-
-      :ok =
-        App.dispatch(%Polyphony.Commands.SetControlMode{
-          scene_id: scene,
-          character_id: "bram",
-          control: "assisted"
-        })
-
-      :ok =
-        App.dispatch(%Polyphony.Commands.DeclareTurnOrder{
-          scene_id: scene,
-          beat: 2,
-          order: ["alice", "bram", "cara"]
-        })
-
-      opts = %{contexts: contexts, provider: Mock, repo: Repo}
-
-      assert {:awaiting_draft, %{character_id: "bram", draft_id: draft_id}} =
-               Runner.run_beat(Map.put(opts, :scene_id, scene) |> Map.put(:beat, 2))
-
-      # Alice generated (before the draft); bram is only a pending draft, not a fact.
-      assert thought_chars(scene) == ["alice"]
-      assert [%{character_id: "bram"}] = Drafts.list_open(scene, repo: Repo)
-
-      # Accept bram's draft → it commits, and the walk continues to cara → closes.
-      assert {:ok, %{committed: committed}} = Runner.accept_draft(draft_id, opts)
-      assert Enum.sort(committed) == ["alice", "bram", "cara"]
-      assert Enum.sort(thought_chars(scene)) == ["alice", "bram", "cara"]
-    end
-
-    test "discarding an assisted draft passes that slot and closes the beat" do
-      {scene, contexts} = setup_scene(["alice", "bram"])
-
-      :ok =
-        App.dispatch(%Polyphony.Commands.SetControlMode{
-          scene_id: scene,
-          character_id: "bram",
-          control: "assisted"
-        })
-
-      :ok =
-        App.dispatch(%Polyphony.Commands.DeclareTurnOrder{
-          scene_id: scene,
-          beat: 2,
-          order: ["alice", "bram"]
-        })
-
-      opts = %{contexts: contexts, provider: Mock, repo: Repo}
-
-      assert {:awaiting_draft, %{draft_id: draft_id}} =
-               Runner.run_beat(Map.merge(opts, %{scene_id: scene, beat: 2}))
-
-      assert {:ok, %{passed: passed}} = Runner.discard_draft(draft_id, opts)
-      assert "bram" in passed
-      # bram never committed; only alice acted.
-      assert thought_chars(scene) == ["alice"]
-    end
-  end
+  # Assisted mode *in the beat walk* (generate → draft → accept/discard resumes the
+  # loop) is exercised end-to-end on the Oban path — see `Jobs.ObanControlTest`.
 
   test "suggestion variants are the same pending mechanism (source: suggestion)" do
     scene = open_scene(["mira"])

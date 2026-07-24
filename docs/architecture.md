@@ -146,19 +146,19 @@ Two-stage arbitration, then a serial cast:
 3. `Director.BeatPolicy` / `Fairness`: depth cap, truncation on membership change,
    least-spoken-first casting.
 
-**Two runners over the same tested logic:**
+**One beat loop, Oban-driven.** `Jobs.RunBeat` + self-chaining `Jobs.GeneratePacket`
+do the work; the *decision* (next actionable slot + its control mode) is a pure
+function in `Director.BeatWalk`, and the *acting* is `Director.BeatDriver`. `RunBeat`
+makes the judgment call, declares the turn order (§A1), and opens the beat; the walk
+generates each **autonomous** slot (commit, record, enqueue next — serial ordering
+falls out of enqueue-on-completion) and **pauses** for a **user-controlled** or
+**assisted** slot, resuming via `BeatDriver.submit_user_turn`/`pass_turn`/
+`accept_draft`/`discard_draft`. The last slot closes the beat and enqueues the next
+`RunBeat`. Progress is re-derived from the log each step, so a pause needs no stored
+cursor. Shared plumbing lives in `Director.BeatOps`.
 
-- `Director.Runner` — inline/synchronous; offline demos and tests.
-- **Oban-driven** (`Jobs.RunBeat` + self-chaining `Jobs.GeneratePacket`) — the
-  production path. `RunBeat` makes the judgment call, opens the beat, enqueues the
-  first cast member; each `GeneratePacket` generates, commits, records itself on the
-  beat, enqueues the next — serial ordering falls out of enqueue-on-completion. The
-  last closes the beat and enqueues the next `RunBeat`. Shared plumbing lives in
-  `Director.BeatOps`.
-
-> Note (planned, §A1 + roadmap): the loop currently assumes **one user turn per
-> beat** and derives turn order implicitly. Multiple yields per beat and
-> user-stipulated turn order (an explicit turn-order event) are the next amendment.
+Tests drive the loop synchronously with `Oban.Testing.with_testing_mode(:inline, …)`
+against the Mock provider — the same code path production runs, just inline.
 
 ## 9. The branching family — one primitive, three operations
 

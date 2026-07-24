@@ -12,7 +12,14 @@ defmodule Polyphony.Jobs.ObanBeatTest do
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Jobs.RunBeat
-  alias Polyphony.Events.{ThoughtOccurred, SpeechUttered, BeatClosed}
+
+  alias Polyphony.Events.{
+    ThoughtOccurred,
+    SpeechUttered,
+    BeatClosed,
+    CharacterExited,
+    WorldEventOccurred
+  }
 
   @mock "Elixir.Polyphony.LLM.Mock"
 
@@ -70,6 +77,45 @@ defmodule Polyphony.Jobs.ObanBeatTest do
 
     assert Enum.any?(otto_view, &match?(%SpeechUttered{speaker_id: "mira"}, &1))
     refute Enum.any?(otto_view, &match?(%ThoughtOccurred{character_id: "mira"}, &1))
+  end
+
+  test "an accepted exit truncates the beat: the cast does not generate" do
+    scene = setup_scene(["mira", "otto"])
+
+    Oban.Testing.with_testing_mode(:inline, fn ->
+      RunBeat.enqueue(%{
+        "scene_id" => scene,
+        "beat" => 2,
+        "provider" => @mock,
+        "max_depth" => 1,
+        "proposals" => [%{"actor_id" => "mira", "type" => "exit", "target" => "gate"}],
+        "options" => %{"exits" => ["gate"], "entities" => []}
+      })
+    end)
+
+    # The exit was applied (membership change) and the beat truncated — no packets.
+    assert Enum.any?(stored(scene), &match?(%CharacterExited{character_id: "mira"}, &1))
+    refute Enum.any?(stored(scene), &match?(%ThoughtOccurred{beat: 2}, &1))
+  end
+
+  test "a rejected proposal surfaces as an in-fiction world event" do
+    scene = setup_scene(["mira"])
+
+    Oban.Testing.with_testing_mode(:inline, fn ->
+      RunBeat.enqueue(%{
+        "scene_id" => scene,
+        "beat" => 2,
+        "provider" => @mock,
+        "max_depth" => 1,
+        # "chimney" is not a valid exit (only "gate" is) → arbitration rejects it.
+        "proposals" => [%{"actor_id" => "mira", "type" => "exit", "target" => "chimney"}],
+        "options" => %{"exits" => ["gate"], "entities" => []}
+      })
+    end)
+
+    assert Enum.any?(stored(scene), fn e ->
+             match?(%WorldEventOccurred{}, e) and e.content =~ "chimney"
+           end)
   end
 
   test "the chain re-enqueues RunBeat and loops to the depth cap" do

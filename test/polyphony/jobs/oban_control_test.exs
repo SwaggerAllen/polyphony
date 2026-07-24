@@ -2,9 +2,9 @@ defmodule Polyphony.Jobs.ObanControlTest do
   @moduledoc """
   Control modes on the **Oban async path** (§A1/§A2): the durable beat loop honors
   the declared turn order, generates autonomous slots through the job chain, and
-  **pauses** on a user-controlled or assisted slot — resuming via `BeatDriver`.
-  Shares the walk decision (`BeatWalk`) with the inline runner, so the two can't
-  diverge. Run in Oban's `:inline` mode with the Mock provider.
+  **pauses** on a user-controlled or assisted slot — resuming via `BeatDriver`. The
+  walk decision lives in the pure `BeatWalk`. Run in Oban's `:inline` mode with the
+  Mock provider.
   """
   use ExUnit.Case, async: false
 
@@ -98,6 +98,45 @@ defmodule Polyphony.Jobs.ObanControlTest do
     assert Enum.sort(thought_chars(scene)) == ["alice", "bram", "cara"]
 
     assert %BeatClosed{completed: ["alice", "bram", "cara"]} =
+             Enum.find(stored("#{scene}-b2"), &match?(%BeatClosed{}, &1))
+  end
+
+  test "two user-controlled slots pause twice; a pass settles the beat" do
+    scene = setup_scene(["alice", "bram", "cara"])
+
+    :ok =
+      App.dispatch(%SetControlMode{
+        scene_id: scene,
+        character_id: "alice",
+        control: "user_controlled"
+      })
+
+    :ok =
+      App.dispatch(%SetControlMode{
+        scene_id: scene,
+        character_id: "cara",
+        control: "user_controlled"
+      })
+
+    :ok =
+      App.dispatch(%DeclareTurnOrder{scene_id: scene, beat: 2, order: ["alice", "bram", "cara"]})
+
+    # First slot is user-controlled → immediate pause, nothing generated.
+    inline(fn -> RunBeat.enqueue(%{"scene_id" => scene, "beat" => 2, "provider" => @mock}) end)
+    assert thought_chars(scene) == []
+
+    # User writes alice → bram (autonomous) generates → pauses again for cara.
+    inline(fn ->
+      BeatDriver.submit_user_turn(scene, 2, "alice", user_packet("alice"), provider: @mock)
+    end)
+
+    assert Enum.sort(thought_chars(scene)) == ["alice", "bram"]
+    refute Enum.any?(stored("#{scene}-b2"), &match?(%BeatClosed{}, &1))
+
+    # User skips cara → the beat settles and closes.
+    inline(fn -> BeatDriver.pass_turn(scene, 2, "cara", provider: @mock) end)
+
+    assert %BeatClosed{passed: ["cara"]} =
              Enum.find(stored("#{scene}-b2"), &match?(%BeatClosed{}, &1))
   end
 

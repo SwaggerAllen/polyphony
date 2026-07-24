@@ -49,7 +49,7 @@ Breaking any of these silently breaks the core guarantee. Guard them in review.
 3. **Canonical reads (rule 6 / §7).** Every read that feeds fiction to anyone —
    character conditioning, the broadcaster, scene-close — must go through
    `Polyphony.Packets.canonical/1` so re-rolled/superseded packets never reappear.
-   The four stream-read sites (`BeatOps`, `Runner`, `Broadcast.Publisher`,
+   The stream-read sites (`BeatOps.messages_for`, `Broadcast.Publisher`,
    `SceneClose`) already do; any new one must too.
 4. **Membership at the event's beat, not "now".** `member_at?(scene, char, beat)`
    with half-open intervals `[entered, exited)`. `MembershipSet` (pure) and
