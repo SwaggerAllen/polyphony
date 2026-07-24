@@ -34,7 +34,7 @@ defmodule Polyphony.Jobs.GeneratePacket do
 
   require Logger
 
-  alias Polyphony.{App, Generation}
+  alias Polyphony.{App, Generation, Failures}
   alias Polyphony.Commands.CommitPacket
   alias Polyphony.Director.BeatOps
   alias Polyphony.Director.BeatPolicy
@@ -52,7 +52,9 @@ defmodule Polyphony.Jobs.GeneratePacket do
     opts = gen_opts(args)
     result = commit_turn(messages, {scene_id, character_id, beat, packet_id}, opts)
 
-    if args["chain"], do: continue_chain(args, character_id, result), else: standalone(result)
+    if args["chain"],
+      do: continue_chain(args, character_id, result, messages),
+      else: standalone(result)
   end
 
   # ── Generation + commit (shared by both modes) ───────────────────────────────
@@ -106,9 +108,12 @@ defmodule Polyphony.Jobs.GeneratePacket do
 
   # ── Chained mode: beat bookkeeping + serial handoff ──────────────────────────
 
-  defp continue_chain(args, character_id, result) do
+  defp continue_chain(args, character_id, result, messages) do
     beat_ref = args["beat_ref"]
-    record_outcome(beat_ref, args["beat"], character_id, result)
+    record_outcome(beat_ref, character_id, result)
+
+    if match?({k, _} when k in [:failed, :cancelled], result),
+      do: record_failure(args, character_id, result, messages)
 
     case args["remaining"] do
       [next | rest] ->
@@ -122,20 +127,44 @@ defmodule Polyphony.Jobs.GeneratePacket do
     :ok
   end
 
-  defp record_outcome(beat_ref, _beat, character_id, :committed) do
+  defp record_outcome(beat_ref, character_id, :committed) do
     App.dispatch(%RecordPacket{beat_ref: beat_ref, character_id: character_id})
   end
 
-  defp record_outcome(beat_ref, _beat, character_id, {kind, reason})
+  defp record_outcome(beat_ref, character_id, {kind, reason})
        when kind in [:failed, :cancelled] do
-    # Records the failure on the beat (§12). PacketFailed carries scene_id + beat,
-    # so it surfaces to the user as generation.failed ("Mira didn't respond");
-    # no character ever sees it.
+    # Records the failure on the beat (§12) — it rolls up into BeatClosed.failed.
     App.dispatch(%RecordFailure{
       beat_ref: beat_ref,
       character_id: character_id,
       reason: inspect(reason)
     })
+  end
+
+  # Surface the terminal failure to the user with a retry (and, for a refusal, an
+  # edit-and-resubmit) affordance. The stored args re-run this one packet
+  # standalone (no chain), idempotent on packet_id.
+  defp record_failure(args, character_id, {kind, reason}, messages) do
+    refusal? = kind == :cancelled and match?({:refusal, _}, reason)
+
+    Failures.record(
+      worker: __MODULE__,
+      scene_id: args["scene_id"],
+      beat: args["beat"],
+      subject: character_id,
+      operation: :packet,
+      kind: if(refusal?, do: :refusal, else: :transport),
+      reason: inspect(reason),
+      editable: refusal?,
+      args: %{
+        "scene_id" => args["scene_id"],
+        "character_id" => character_id,
+        "beat" => args["beat"],
+        "packet_id" => BeatOps.packet_id(args["scene_id"], args["beat"], character_id),
+        "messages" => messages,
+        "provider" => args["provider"]
+      }
+    )
   end
 
   defp enqueue_cast(args, %{"character_id" => id} = member, rest) do

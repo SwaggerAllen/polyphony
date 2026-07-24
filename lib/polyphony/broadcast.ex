@@ -33,8 +33,7 @@ defmodule Polyphony.Broadcast do
     CharacterEntered,
     CharacterExited,
     BeatOpened,
-    BeatClosed,
-    PacketFailed
+    BeatClosed
   }
 
   @type viewer :: :omniscient | {:character, term()}
@@ -69,9 +68,11 @@ defmodule Polyphony.Broadcast do
     end)
   end
 
-  # Beat framing and generation failures are user/system-only pacing signals —
-  # not part of the authoritative `event.committed` cursor. They go to the
-  # omniscient topic and are re-derived (not replayed) on reconnect.
+  # Beat framing is a user/system-only pacing signal — not part of the
+  # authoritative `event.committed` cursor. It goes to the omniscient topic and
+  # is re-derived (not replayed) on reconnect. (Generation failures are owned by
+  # `Polyphony.Failures`, which broadcasts `generation.failed` with a retry
+  # affordance and a `failure_id`.)
   defp framing_message(%BeatOpened{} = e),
     do: %{
       type: "beat.opened",
@@ -89,16 +90,6 @@ defmodule Polyphony.Broadcast do
       beat: e.beat,
       completed: e.completed,
       failed: e.failed
-    }
-
-  defp framing_message(%PacketFailed{} = e),
-    do: %{
-      type: "generation.failed",
-      viewer: "omniscient",
-      scene_id: e.scene_id,
-      beat: e.beat,
-      character_id: e.character_id,
-      reason: e.reason
     }
 
   defp framing_message(_), do: nil

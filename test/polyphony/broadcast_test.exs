@@ -4,7 +4,7 @@ defmodule Polyphony.BroadcastTest do
 
   import Polyphony.Test.Scenario
   alias Polyphony.{Broadcast, MembershipSet}
-  alias Polyphony.Events.{BeatOpened, BeatClosed, PacketFailed}
+  alias Polyphony.Events.{BeatOpened, BeatClosed}
 
   # a,b present in S1; c not.
   defp member_at? do
@@ -82,20 +82,6 @@ defmodule Polyphony.BroadcastTest do
       assert [{_topic, msg}] = Broadcast.fan_out("S1", e, nil, [], member_at?())
       assert msg.type == "beat.closed"
       assert msg.failed == [%{character_id: "b", reason: "timeout"}]
-    end
-
-    test "PacketFailed becomes a user-only generation.failed message" do
-      e = %PacketFailed{
-        beat_ref: "S1-b2",
-        scene_id: "S1",
-        beat: 2,
-        character_id: "mira",
-        reason: "refusal"
-      }
-
-      assert [{topic, msg}] = Broadcast.fan_out("S1", e, nil, ["mira"], member_at?())
-      assert topic == Broadcast.topic("S1", :omniscient)
-      assert msg.type == "generation.failed" and msg.character_id == "mira"
     end
   end
 

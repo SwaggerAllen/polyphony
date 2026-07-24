@@ -9,11 +9,13 @@ defmodule Polyphony.Jobs.ExtractArc do
   """
   use Oban.Worker, queue: :scene_close, max_attempts: 3
 
-  alias Polyphony.SceneClose
+  alias Polyphony.{SceneClose, Failures}
   alias Polyphony.Director.BeatOps
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"scene_id" => scene_id, "character_id" => character_id} = args}) do
+  def perform(
+        %Oban.Job{args: %{"scene_id" => scene_id, "character_id" => character_id} = args} = job
+      ) do
     opts =
       case BeatOps.resolve_provider(args["provider"]) do
         nil -> []
@@ -21,9 +23,32 @@ defmodule Polyphony.Jobs.ExtractArc do
       end
 
     case SceneClose.extract_participant(scene_id, character_id, opts) do
-      {:ok, _n} -> :ok
-      {:cancel, reason} -> {:cancel, reason}
-      {:error, reason} -> {:error, reason}
+      {:ok, _n} ->
+        :ok
+
+      {:cancel, reason} ->
+        # Schema-invalid: permanent. Surface it (retryable, not editable).
+        record(job, scene_id, character_id, :schema, reason, args)
+        {:cancel, reason}
+
+      {:error, reason} = err ->
+        if job.attempt >= job.max_attempts,
+          do: record(job, scene_id, character_id, :transport, reason, args)
+
+        err
     end
+  end
+
+  defp record(_job, scene_id, character_id, kind, reason, args) do
+    Failures.record(
+      worker: __MODULE__,
+      scene_id: scene_id,
+      subject: character_id,
+      operation: :arc,
+      kind: kind,
+      reason: inspect(reason),
+      editable: false,
+      args: args
+    )
   end
 end

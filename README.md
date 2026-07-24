@@ -76,9 +76,16 @@ publisher derives membership from the event stream, so it needs no Postgres.
 Verified end-to-end in dev — the omniscient user receives a character's thoughts
 *and* speech; another character's viewer receives only the speech.
 
-Still to layer on: the LiveView itself, beat framing (`beat.opened/closed` — once
-beat events carry their scene id), and, later, the notify-me-later path (a worker
-subscribed to the same topics turning `awaiting.user` into APNs/FCM pushes).
+Beat framing (`beat.opened/closed`) and user-facing failures are wired:
+`Polyphony.Failures` broadcasts `generation.failed` with a `failure_id`, `kind`,
+and `retryable`/`editable` flags — the LiveView shows a **retry** button (and, for
+a refusal, an **edit-and-resubmit** field). On reconnect the client loads open
+failures via `Failures.list_open/1` (they're read-model rows, not part of the
+event cursor).
+
+Still to layer on: the LiveView itself, and, later, the notify-me-later path (a
+worker subscribed to the same topics turning `awaiting.user` into APNs/FCM
+pushes).
 
 The core guarantee — *a character's projection contains only what they could
 structurally witness* — is implemented in `Polyphony.Visibility` and pinned by
@@ -129,6 +136,7 @@ Key modules:
 | `Polyphony.Broadcast` / `Broadcast.Publisher` | Per-viewer filtered client stream over PubSub + cursor replay (§13) |
 | `Polyphony.SceneClose` + `SceneClose.*` | Scene-close fan-out: N+1 filtered summaries, embeddings, arc extraction (§8, §10) |
 | `Polyphony.Jobs.SummarizeScene` / `ExtractArc` | Per-unit retryable scene-close jobs (transient→backoff, schema-invalid→cancel) |
+| `Polyphony.Failures` + `ReadModels.Failure` | User-facing terminal-failure log with retry + refusal edit-and-resubmit (§12) |
 | `Polyphony.ReadModels.SceneSummary` / `ArcEntry` | Character-scoped pgvector summaries; proposed-arc authoring table |
 | `Polyphony.Context.PgvectorRetriever` | Fetches a character's own distant summaries at scene open — the memory gradient's live link |
 | `Polyphony.MembershipSet` | Pure interval fold — reference membership implementation |
@@ -215,6 +223,7 @@ models (and, later, pgvector embeddings).
 | `scene_close_test.exs` | Full fan-out: 3 summaries stored scoped, arc proposals, best-effort degradation |
 | `context/pgvector_retriever_test.exs` | Scene-open retrieval reads back a character's own summaries, scoped |
 | `scene_close/retries_test.exs` | §12 failure classification (transient/permanent) + per-unit job fan-out |
+| `failures_test.exs` / `failures/wiring_test.exs` | Record/broadcast/retry/edit-resubmit; a refusal records an editable failure |
 
 ## Security note (toolchain constraint)
 
