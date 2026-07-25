@@ -67,4 +67,23 @@ config :polyphony, PolyphonyWeb.Endpoint,
 
 config :phoenix, :json_library, Jason
 
+# Asset build tooling. esbuild bundles the JS (resolving `phoenix` /
+# `phoenix_live_view` from deps via NODE_PATH); Tailwind builds the CSS. Both run
+# as standalone binaries — no Node.js toolchain required.
+config :esbuild,
+  version: "0.21.5",
+  polyphony: [
+    args:
+      ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
+    cd: Path.expand("../assets", __DIR__),
+    env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
+  ]
+
+config :tailwind,
+  version: "3.4.3",
+  polyphony: [
+    args: ~w(--input=css/app.css --output=../priv/static/assets/app.css),
+    cd: Path.expand("../assets", __DIR__)
+  ]
+
 import_config "#{config_env()}.exs"

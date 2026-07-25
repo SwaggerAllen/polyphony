@@ -19,7 +19,10 @@ config :polyphony, PolyphonyWeb.Endpoint,
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
-  watchers: [],
+  watchers: [
+    esbuild: {Esbuild, :install_and_run, [:polyphony, ~w(--sourcemap=inline --watch)]},
+    tailwind: {Tailwind, :install_and_run, [:polyphony, ~w(--watch)]}
+  ],
   live_reload: [
     patterns: [
       ~r"priv/static/.*(js|css|png|jpeg|jpg|gif|svg)$",

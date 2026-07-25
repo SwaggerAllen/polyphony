@@ -55,6 +55,14 @@ defmodule Polyphony.MixProject do
       {:plug_cowboy, "~> 2.7"},
       {:lazy_html, ">= 0.1.0", only: :test},
 
+      # Asset pipeline: esbuild bundles assets/js/app.js (importing the phoenix /
+      # phoenix_live_view JS shipped in deps), Tailwind builds assets/css/app.css.
+      # Both are standalone binaries fetched by `mix assets.setup` — no Node.js.
+      # The built outputs (priv/static/assets/app.{js,css}) are committed so the
+      # app compiles and serves offline with no mandatory build step.
+      {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
+      {:tailwind, "~> 0.2", runtime: Mix.env() == :dev},
+
       # NOTE: the DeepInfra adapter uses Erlang's built-in :httpc (see
       # Polyphony.LLM.DeepInfra) rather than Req — a zero-dependency choice made
       # under the old Elixir 1.14 toolchain. The provider behaviour keeps the HTTP
@@ -67,10 +75,21 @@ defmodule Polyphony.MixProject do
 
   defp aliases do
     [
-      # Set up the read-model database from scratch.
-      setup: ["deps.get", "ecto.create", "ecto.migrate"],
+      # Set up the read-model database and asset tooling from scratch.
+      setup: ["deps.get", "assets.setup", "ecto.create", "ecto.migrate"],
       "ecto.reset": ["ecto.drop", "ecto.create", "ecto.migrate"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"]
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+
+      # Asset tasks. `assets.setup` fetches the esbuild/tailwind binaries;
+      # `assets.build` produces the dev bundles; `assets.deploy` is the minified
+      # + digested prod build.
+      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
+      "assets.build": ["tailwind polyphony", "esbuild polyphony"],
+      "assets.deploy": [
+        "tailwind polyphony --minify",
+        "esbuild polyphony --minify",
+        "phx.digest"
+      ]
     ]
   end
 end

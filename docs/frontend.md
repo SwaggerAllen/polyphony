@@ -10,10 +10,11 @@ doesn't.
 
 ```bash
 mix deps.get
+mix assets.setup                      # fetch esbuild + tailwind binaries (once)
 pg_ctlcluster 16 main start           # Postgres must be up (read models)
 MIX_ENV=dev mix ecto.create
 MIX_ENV=dev mix ecto.migrate
-mix phx.server                        # http://localhost:4000
+mix phx.server                        # http://localhost:4000 (watches + rebuilds assets)
 ```
 
 Dev runs fully offline: the LLM is `Polyphony.LLM.Mock` (deterministic lorem), and email
@@ -28,10 +29,14 @@ superadmin.
   not Bandit — Phoenix 1.8 defaults to Bandit but Cowboy is fully supported and already
   wired here. LiveView 1.2's test DOM backend is `lazy_html` (a precompiled NIF), not
   Floki, so that's the only test-only web dep.
-- **No asset build step.** The prebuilt `phoenix.min.js` / `phoenix_live_view.min.js`
-  (IIFE globals) are **vendored** under `priv/static/assets/vendor/`, with a hand-written
-  `app.js` (LiveSocket + an autoscroll hook) and `app.css` (mobile-first, dark). There is
-  no esbuild/tailwind, so it builds with no binary download — offline and in CI.
+- **Real asset pipeline, committed outputs.** Source lives in `assets/` — `js/app.js`
+  (LiveSocket + an autoscroll hook, importing `phoenix`/`phoenix_live_view` from `deps/`)
+  and `css/app.css` (Tailwind base/utilities + the mobile-first dark design system).
+  esbuild bundles the JS and Tailwind builds the CSS via standalone binaries (no Node.js),
+  fetched by `mix assets.setup`. The **built outputs** (`priv/static/assets/app.{js,css}`)
+  are committed, so the app still compiles and serves with no build step — offline and in
+  CI. Rebuild after touching `assets/` with `mix assets.build` (or run `mix phx.server`,
+  which watches). `mix assets.deploy` is the minified + digested prod build.
 - **Auth is transport only** (`PolyphonyWeb.Auth`). The domain (`Accounts`) already
   decides who may do what; the web layer signs a `Phoenix.Token`, verifies it, and stores
   the user id in the session. `on_mount` hooks (`require_authed` / `require_admin`) gate
