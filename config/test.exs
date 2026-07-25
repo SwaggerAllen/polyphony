@@ -26,4 +26,31 @@ config :polyphony, PolyphonyWeb.Endpoint,
   secret_key_base: "test-only-secret-key-base-0000000000000000000000000000000000000000000000",
   server: false
 
+# Persistent event store config for `Polyphony.PersistentEventStoreTest` only.
+# Inert during the normal suite (nothing starts `Polyphony.EventStore` — the app
+# runs on the in-memory adapter); that one test starts `Polyphony.PersistentApp`,
+# which uses these to exercise the prod event-store path against a dedicated
+# `eventstore_test` schema in the test database.
+test_db = "polyphony_test#{System.get_env("MIX_TEST_PARTITION")}"
+
+config :polyphony, Polyphony.EventStore,
+  serializer: Commanded.Serialization.JsonSerializer,
+  column_data_type: "jsonb",
+  schema: "eventstore_test",
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: test_db,
+  pool_size: 2
+
+config :polyphony, event_stores: [Polyphony.EventStore]
+
+config :polyphony, Polyphony.PersistentApp,
+  event_store: [
+    adapter: Commanded.EventStore.Adapters.EventStore,
+    event_store: Polyphony.EventStore
+  ],
+  pubsub: :local,
+  registry: :local
+
 config :logger, level: :warning
