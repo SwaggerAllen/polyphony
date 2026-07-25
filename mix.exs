@@ -57,6 +57,9 @@ defmodule Polyphony.MixProject do
       {:plug_cowboy, "~> 2.7"},
       # Pin Plug to the last line supporting Elixir 1.14 — 1.19+ requires 1.15+.
       {:plug, "~> 1.16.1", override: true},
+      # LiveView test DOM parsing. Pinned to a line that supports Elixir 1.14
+      # (0.37+ requires 1.15+).
+      {:floki, "~> 0.36.0", only: :test},
 
       # NOTE: the DeepInfra adapter uses Erlang's built-in :httpc (see
       # Polyphony.LLM.DeepInfra) rather than Req. On this Elixir 1.14 toolchain

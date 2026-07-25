@@ -82,7 +82,10 @@ defmodule PolyphonyWeb.Auth do
     if socket.assigns.current_user do
       {:cont, socket}
     else
-      {:halt, socket |> LiveView.put_flash(:error, "Please sign in.") |> LiveView.redirect(to: ~p"/login")}
+      {:halt,
+       socket
+       |> LiveView.put_flash(:error, "Please sign in.")
+       |> LiveView.redirect(to: ~p"/login")}
     end
   end
 
@@ -93,7 +96,8 @@ defmodule PolyphonyWeb.Auth do
     if user && Roles.admin?(role_atom(user.role)) do
       {:cont, socket}
     else
-      {:halt, socket |> LiveView.put_flash(:error, "Admins only.") |> LiveView.redirect(to: ~p"/")}
+      {:halt,
+       socket |> LiveView.put_flash(:error, "Admins only.") |> LiveView.redirect(to: ~p"/")}
     end
   end
 
