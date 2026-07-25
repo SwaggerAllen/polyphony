@@ -44,6 +44,20 @@ defmodule Polyphony.MixProject do
       # push-notification worker) subscribes to the filtered per-viewer topics.
       {:phoenix_pubsub, "~> 2.1"},
 
+      # Web layer (LiveView frontend). Phoenix 1.7 / LiveView 0.20 are the last
+      # lines supporting the Elixir 1.14 toolchain (1.8 needs 1.15+). The server is
+      # Cowboy, not Bandit: Bandit's HTTP/2 stack pulls `hpax`, which requires Elixir
+      # 1.15+ and fails to compile here (the same 1.15 wall the README notes for Req).
+      # Assets are vendored (no esbuild/tailwind binary download) — see
+      # priv/static/assets and the root layout.
+      {:phoenix, "~> 1.7.14"},
+      {:phoenix_html, "~> 4.1"},
+      {:phoenix_live_view, "~> 0.20.17"},
+      {:phoenix_live_reload, "~> 1.5", only: :dev},
+      {:plug_cowboy, "~> 2.7"},
+      # Pin Plug to the last line supporting Elixir 1.14 — 1.19+ requires 1.15+.
+      {:plug, "~> 1.16.1", override: true},
+
       # NOTE: the DeepInfra adapter uses Erlang's built-in :httpc (see
       # Polyphony.LLM.DeepInfra) rather than Req. On this Elixir 1.14 toolchain
       # Req's HTTP/2 stack (finch/mint/hpax) forces packages that require 1.15+

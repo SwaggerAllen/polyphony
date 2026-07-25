@@ -13,7 +13,7 @@ defmodule Polyphony.Notifications.Prefs do
 
   alias Polyphony.Repo
 
-  @types ~w(report_alert owner_warning subscription comment_reply)a
+  @types ~w(report_alert owner_warning magic_link subscription comment_reply)a
 
   schema "notification_prefs" do
     field(:user_id, :id)

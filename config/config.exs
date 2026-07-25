@@ -55,4 +55,16 @@ config :polyphony, :llm,
 # logging adapter until a real email adapter is configured. Tests override locally.
 config :polyphony, :moderation_notifier, Polyphony.Notifications.ModerationNotifier
 
+# Web endpoint (LiveView frontend). secret_key_base is a fixed dev/test value here
+# and overridden from the environment in prod (runtime.exs).
+config :polyphony, PolyphonyWeb.Endpoint,
+  url: [host: "localhost"],
+  adapter: Phoenix.Endpoint.Cowboy2Adapter,
+  render_errors: [formats: [html: PolyphonyWeb.ErrorHTML], layout: false],
+  pubsub_server: Polyphony.PubSub,
+  live_view: [signing_salt: "polyphonyLVsalt01"],
+  secret_key_base: "dev-only-secret-key-base-please-override-in-prod-0000000000000000000000"
+
+config :phoenix, :json_library, Jason
+
 import_config "#{config_env()}.exs"

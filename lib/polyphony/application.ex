@@ -11,7 +11,9 @@ defmodule Polyphony.Application do
         {Phoenix.PubSub, name: Polyphony.PubSub},
         {Oban, Application.fetch_env!(:polyphony, Oban)},
         Polyphony.App,
-        Polyphony.Broadcast.Publisher
+        Polyphony.Broadcast.Publisher,
+        PolyphonyWeb.Telemetry,
+        PolyphonyWeb.Endpoint
       ] ++ projectors()
 
     opts = [strategy: :one_for_one, name: Polyphony.Supervisor]

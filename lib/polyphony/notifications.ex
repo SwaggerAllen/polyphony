@@ -96,6 +96,10 @@ defmodule Polyphony.Notifications do
     {"A note from the moderation team", to_string(payload[:message])}
   end
 
+  defp render(:magic_link, payload) do
+    {"Your Polyphony sign-in link", "Sign in: #{payload[:url]}"}
+  end
+
   defp render(type, _payload), do: {"Notification: #{type}", ""}
 
   defp resolve(%User{id: id, email: email}, _opts), do: {id, email}

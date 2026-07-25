@@ -20,4 +20,10 @@ config :polyphony, start_projectors: false
 # Deterministic, network-free provider for tests.
 config :polyphony, :llm, provider: Polyphony.LLM.Stub
 
+# Endpoint runs without a listening server in tests; LiveView tests drive it in-process.
+config :polyphony, PolyphonyWeb.Endpoint,
+  http: [ip: {127, 0, 0, 1}, port: 4002],
+  secret_key_base: "test-only-secret-key-base-0000000000000000000000000000000000000000000000",
+  server: false
+
 config :logger, level: :warning
