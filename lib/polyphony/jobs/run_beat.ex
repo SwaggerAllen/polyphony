@@ -111,7 +111,7 @@ defmodule Polyphony.Jobs.RunBeat do
     [
       proposals: parse_proposals(args["proposals"]),
       options: parse_options(args["options"]),
-      messages: [%{role: "system", content: "You are the Director. Cast and pace the scene."}],
+      messages: [%{role: "system", content: director_system_message(args)}],
       scene_id: scene_id,
       beat: beat,
       provider: BeatOps.resolve_provider(args["provider"]),
@@ -119,6 +119,21 @@ defmodule Polyphony.Jobs.RunBeat do
       control_hint: parse_control(args["control_hint"])
     ]
   end
+
+  # The Director is told the effective content register too (§A5) — governance is a
+  # context-assembly input for the Director, same as for the cast. `content_register`
+  # rides the args (category strings), computed once at scene open by the caller.
+  @doc false
+  def director_system_message(args) do
+    base = "You are the Director. Cast and pace the scene."
+
+    case Polyphony.Content.render_register(Polyphony.Content.cast_categories(register_arg(args))) do
+      nil -> base
+      line -> base <> "\n\n" <> line
+    end
+  end
+
+  defp register_arg(args), do: args["content_register"] || []
 
   defp next_beat_args(args, scene_id, beat, depth) do
     args

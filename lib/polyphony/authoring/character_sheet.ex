@@ -49,16 +49,24 @@ defmodule Polyphony.Authoring.CharacterSheet do
         composition with the arc layer is what makes slow burn mechanically real —
         the boundary holds until the story earns it, not a prompt hint the model
         forgets.
+
+    `category` (§A5) is an **optional** link to a content-governance bucket
+    (`:sexual | :graphic_violence | :other`). It does not conflate the layers — the
+    boundary is still pure characterization (stance, condition, on_pressure). The
+    category only lets the campaign ceiling *cap* this boundary: a boundary in a
+    category the campaign disabled is forced closed at assembly (`Polyphony.Content`).
+    A pure-characterization boundary leaves it `nil` and the register never touches it.
     """
     @derive Jason.Encoder
-    defstruct [:topic, :stance, :condition, :on_pressure]
+    defstruct [:topic, :stance, :condition, :on_pressure, :category]
 
     @type stance :: :open | :conditional | :closed
     @type t :: %__MODULE__{
             topic: String.t(),
             stance: stance(),
             condition: String.t() | nil,
-            on_pressure: String.t() | nil
+            on_pressure: String.t() | nil,
+            category: Polyphony.Content.category() | nil
           }
   end
 

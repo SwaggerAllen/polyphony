@@ -26,6 +26,8 @@ defmodule Polyphony.Context do
 
   alias Polyphony.Authoring.{WorldBible, CharacterSheet, BoundaryGate}
   alias Polyphony.Authoring.CharacterSheet.Boundary
+  alias Polyphony.Content
+  alias Polyphony.Content.CampaignConfig
   alias Polyphony.Context.{SceneContext, StaticRetriever}
   alias Polyphony.Visibility
 
@@ -62,11 +64,20 @@ defmodule Polyphony.Context do
     retriever = Map.get(opts, :retriever, StaticRetriever)
     bible = Map.get(opts, :world_bible)
 
-    # Boundaries (§A3): resolve conditional gates against canon arc **here**, at
-    # scene open — arc only changes at scene close, so the resolved state is stable
-    # for the scene and frozen into the prefix, re-derived when the next scene opens.
+    # Content register (§A5): the effective governance register, floor ∩ campaign,
+    # computed here so it both frames the prefix and caps the boundary layer below.
+    content_config = Map.get(opts, :content_config, %CampaignConfig{})
+    register = Content.register(content_config, attested: Map.get(opts, :content_attested, true))
+
+    # Boundaries (§A3 × §A5): first cap each boundary by the register (a category the
+    # campaign disabled is forced closed — the ceiling overrides an :open stance),
+    # then resolve conditional gates against canon arc **here**, at scene open — arc
+    # only changes at scene close, so the resolved state is stable for the scene and
+    # frozen into the prefix, re-derived when the next scene opens.
     resolved_boundaries =
-      BoundaryGate.resolve(sheet.boundaries, Map.get(opts, :arc_entries, []),
+      sheet.boundaries
+      |> Enum.map(&Content.gate_boundary(&1, register))
+      |> BoundaryGate.resolve(Map.get(opts, :arc_entries, []),
         evaluator: Map.get(opts, :boundary_evaluator),
         provider: Map.get(opts, :provider),
         model: Map.get(opts, :boundary_model)
@@ -106,6 +117,7 @@ defmodule Polyphony.Context do
       [
         render_bible(bible),
         render_sheet(sheet),
+        Content.render_register(register),
         render_boundaries(resolved_boundaries),
         render_facts("Always-resident facts", core_facts),
         render_facts("Facts relevant to this scene", retrieved_facts),

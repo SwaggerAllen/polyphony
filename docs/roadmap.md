@@ -60,9 +60,18 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   and `Context.materialize` renders the resolved state **in character** — a refusal is
   generated as a scene beat, never a post-generation filter.
 - **A4 — Editing.** ✅ **Done.**
-- **A5 — Three nested content layers.** App-wide 18+ floor / per-campaign content
-  config / per-character boundaries — enforced as nesting (narrower restricts within
-  broader, never expands), kept conceptually separate in data and logic.
+- **A5 — Three nested content layers.** ✅ **Done.** `Polyphony.Content` governs three
+  layers: `Content.Floor` (app-wide 18+ ceiling, non-configurable — attested ⇒ all
+  categories, else none), `Content.CampaignConfig` (per-campaign `adult_content` master
+  toggle gating sexual / graphic-violence / other sub-toggles), and per-character
+  boundaries (§A3). `Content.register/2` is the nesting intersection `floor ∩ campaign`:
+  a narrower layer restricts within a broader one and **never expands past it** (campaign
+  off ⇒ no adult content regardless of any `:open` boundary). Enforced twice — at authoring
+  (`constrain_boundary/2`, FS §V8a) and at context assembly (`gate_boundary/2` forces a
+  disabled-category boundary closed *before* `BoundaryGate.resolve`, and the register is
+  rendered into what both the Director and characters are told). Layers 2 and 3 stay
+  conceptually separate: a boundary's optional `:category` is only the link that lets the
+  ceiling cap it — a `nil`-category boundary is pure characterization the register never touches.
 
 ---
 
