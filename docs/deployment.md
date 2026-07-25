@@ -74,6 +74,13 @@ without a code change:
    migration runs `CREATE EXTENSION IF NOT EXISTS vector;`, so the release-time
    migrate is enough. (If your cluster's role can't create extensions, enable it once
    from the DO console first.)
+4. **Database SSL** (handled automatically). DO's managed Postgres requires SSL and
+   hands you a `DATABASE_URL` ending in `?sslmode=require`. `config/runtime.exs`
+   strips that query param (Postgrex ignores it and the eventstore parser rejects it)
+   and enables SSL on both the Repo and the event store with `verify: :verify_none`
+   (encrypted, cert not pinned). To verify DO's cert, download its CA and set
+   `DATABASE_SSL_CACERTFILE` to the path; set `DATABASE_SSL=false` only for a
+   non-SSL/local database.
 
 ## Migrations & the event store on deploy
 
