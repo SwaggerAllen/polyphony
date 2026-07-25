@@ -129,9 +129,13 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   B3's admin report alert, is wired through it: `Notifications.ModerationNotifier` (the default
   `moderation_notifier`) fans a report out to every admin, `force:`d past prefs since it is
   safety work. *Deferred to the web/auth layer:* the real email adapter and the preferences UI.
-- **B5 — Cost caps / circuit breaker + per-user accounting.** Per-user spend
-  ledger (billing-ready); per-day/per-campaign ceilings; soft warning + hard stop
-  that pauses generation.
+- **B5 — Cost caps / circuit breaker + per-user accounting.** ✅ **Done.** `Polyphony.Costs`
+  over an append-only `cost_ledger` (billing-ready micro-cent units, per user + per campaign).
+  `check/3` evaluates a rolling per-day cap and a lifetime per-campaign cap → `:ok` / `{:warn,…}`
+  at the soft threshold / `{:stop,…}` past a ceiling; `allow?/3` is the circuit breaker the
+  generation path consults so a stuck Director loop can't run unbounded. Caps from opts → config
+  → defaults. *Deferred:* wiring `record/2` into the live generation path and the resume/raise-cap
+  UI (the breaker + ledger are here).
 - **B6 — Export.** Campaign transcript (markdown, omniscient) + JSON (event log +
   pinned deps); **per-perspective export** (the filtered projection as a character);
   sheet/bible JSON; offered in library + delete-confirmation.
