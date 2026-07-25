@@ -55,7 +55,9 @@ defmodule Polyphony.NotificationsTest do
       u = user("user", "alice")
 
       assert {:ok, notif} =
-               Notifications.deliver(u, :owner_warning, %{message: "hi"}, transport: TestTransport)
+               Notifications.deliver(u, :owner_warning, %{message: "hi"},
+                 transport: TestTransport
+               )
 
       assert notif.status == "sent"
       assert notif.recipient_id == u.id
@@ -68,7 +70,9 @@ defmodule Polyphony.NotificationsTest do
       u = user("user", "bob")
 
       assert {:error, :smtp_down} =
-               Notifications.deliver(u, :owner_warning, %{message: "hi"}, transport: FailTransport)
+               Notifications.deliver(u, :owner_warning, %{message: "hi"},
+                 transport: FailTransport
+               )
 
       assert [%{status: "failed"}] = Notifications.history(u.id)
     end
