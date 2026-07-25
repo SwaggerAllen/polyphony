@@ -191,10 +191,10 @@ Because content is stored unencrypted and the operator is a data controller:
 1. **User-stipulated turn order + character removal per beat** → folded into **A1**
    (explicit turn-order event; re-roll reads declared order).
 2. **CLAUDE.md / architecture.md / this roadmap** → ✅ done.
-3. **DigitalOcean App Platform deploy + setup doc** (DO managed Postgres + pgvector,
-   migrations on deploy, DeepInfra integration + `DEEPINFRA_API_KEY`/model routing).
-   Late milestone — needs the Phoenix web layer + release config first. The DeepInfra
-   adapter already exists.
+3. **DigitalOcean App Platform deploy + setup doc** → ✅ done. OTP release +
+   Dockerfile, `.do/app.yaml` (PRE_DEPLOY migrate job + web service), persistent event
+   store in a dedicated `eventstore` schema on the managed Postgres, DeepInfra via
+   `DEEPINFRA_API_KEY`/model routing. See `docs/deployment.md`.
 4. **First-user auto-admin + `superadmin` role** → folded into **B2/B3**.
 5. **Invite-only sign-up (single-use links)** → folded into **B2**.
 
@@ -202,8 +202,9 @@ Because content is stored unencrypted and the operator is a data controller:
 
 ## Frontend (LiveView) — FS view inventory
 
-✅ **Done (core).** Phoenix 1.7 + LiveView 0.20 on the Elixir 1.14 toolchain (Cowboy,
-not Bandit; assets **vendored** — no esbuild/tailwind, builds offline). Principles held:
+✅ **Done (core).** Phoenix 1.8 + LiveView 1.2 on OTP 27 / Elixir 1.17 (Cowboy, not
+Bandit; a real esbuild + Tailwind build whose outputs are committed, so it still
+serves with no build step). Principles held:
 every event-rendering view is viewer-parameterized through `visible_to?` (the Play view
 switches omniscient ↔ any character, and a whisper is silently absent for a bystander —
 covered by a LiveView test); committed packets only; three distinct waiting states;
@@ -248,8 +249,9 @@ multi-beat play.
 3. **B3** — admin/moderation, before enabling public browsing.
 4. **B5–B9** — additive, by priority; B7 is cheap and high-value.
 5. **B4 / B6** — notifications path + export.
-6. **Frontend (LiveView)** — layered on the per-viewer broadcaster seam.
-7. **Deployment** — DO App Platform + setup doc, once the web layer exists.
+6. **Frontend (LiveView)** — ✅ layered on the per-viewer broadcaster seam.
+7. **Deployment** — ✅ OTP release + Dockerfile + DO App Platform, persistent event
+   store (`docs/deployment.md`).
 
 ---
 ---

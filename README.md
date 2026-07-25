@@ -28,7 +28,8 @@ foundation; slice 3 adds real character generation behind a provider boundary:
 | 8 | Client broadcaster (§13) | ✅ implemented + tested |
 | 9 | **Authoring**: character generation + field-level regeneration | ✅ implemented + tested |
 | 10 | **Branching family** (§7, §A4): re-rolls, forks, edits | ✅ implemented + tested |
-| — | The LiveView (frontend) | ⬜ not started |
+| 11 | **LiveView frontend** (Phoenix 1.8 / LiveView 1.2, viewer-parameterized Play) | ✅ implemented + tested |
+| 12 | **Deployment**: OTP release + Dockerfile + DO App Platform, persistent event store | ✅ wired + verified |
 
 Slice 10: re-rolls (in-beat supersession), forks (copy-on-fork streams), and edits
 (corrections with the downstream-validity choice) — one supersede-and-recommit
@@ -81,8 +82,15 @@ a refusal, an **edit-and-resubmit** field). On reconnect the client loads open
 failures via `Failures.list_open/1` (they're read-model rows, not part of the
 event cursor).
 
-Still to layer on: the LiveView itself, and, later, the notify-me-later path (a
-worker subscribed to the same topics turning `awaiting.user` into APNs/FCM
+The **LiveView is built** (`PolyphonyWeb`, Phoenix 1.8 / LiveView 1.2): auth
+(magic-link, dev-surfaced), the Owner-scoped Library, campaign setup, and the core
+**Play** view — a viewer-parameterized transcript (omniscient or as any character)
+subscribed to the broadcaster, with the composer committing packets and three
+distinct waiting states. The whisper-visibility guarantee is pinned by a LiveView
+test. See [`docs/frontend.md`](docs/frontend.md).
+
+Still to layer on later: a few deferred inspector views, and the notify-me-later
+path (a worker subscribed to the same topics turning `awaiting.user` into APNs/FCM
 pushes).
 
 The core guarantee — *a character's projection contains only what they could
@@ -169,25 +177,31 @@ event scenario through both and compares an exhaustive `(scene, char, beat)` gri
 
 ## Running it
 
-Requires **Elixir 1.14+**, **Erlang/OTP 25+**, and **PostgreSQL 16 with
-`pgvector`**.
+Requires **Elixir 1.17 / Erlang OTP 27** and **PostgreSQL 16 with `pgvector`**.
+(In Claude Code on the web, a `SessionStart` hook installs that toolchain
+automatically — see `docs/frontend.md` and the note below.)
 
 ```bash
 # One-time Postgres setup (adjust to your environment):
 #   a 'postgres'/'postgres' role, and (per database): CREATE EXTENSION vector;
 
-mix setup          # deps.get + ecto.create + ecto.migrate
+mix setup          # deps.get + assets.setup + ecto.create + ecto.migrate
 mix test           # full suite, no LLM, no network
+mix phx.server     # the LiveView at http://localhost:4000 (dev)
 ```
 
-To point the live provider at DeepInfra, set `DEEPINFRA_API_KEY` (and optionally
-override `config :polyphony, :llm`).
+`mix setup` fetches deps and the esbuild/tailwind binaries (`assets.setup`) and
+sets up the read-model DB. To point the live provider at DeepInfra, set
+`DEEPINFRA_API_KEY` (and optionally override `config :polyphony, :llm`).
 
-The event store currently uses Commanded's **in-memory adapter** so the domain
-core is runnable and testable without provisioning the EventStore Postgres
-schema. Switching to the persistent adapter is a config-only change — see the
-commented block in `config/config.exs`. Postgres is used only for the read
-models (and, later, pgvector embeddings).
+**Event store.** In dev and test the event store uses Commanded's **in-memory
+adapter**, so the domain core runs and the whole suite passes offline with no
+event-store schema to provision. In **prod** it uses the persistent EventStore
+adapter (`Polyphony.EventStore`), so the event log — the single source of truth —
+survives restarts; its tables live in a dedicated `eventstore` schema alongside
+the read models in the same managed Postgres. The adapter is chosen by environment
+in `config/config.exs`; the aggregates are identical either way. See
+[`docs/deployment.md`](docs/deployment.md).
 
 ## Test layout
 
@@ -225,27 +239,43 @@ models (and, later, pgvector embeddings).
 | `failures_test.exs` / `failures/wiring_test.exs` | Record/broadcast/retry/edit-resubmit; a refusal records an editable failure |
 | `authoring/studio_test.exs` | Field-level regen: locked untouched, convergence, metadata-out-of-schema, feedback accrual |
 
-## Security note (toolchain constraint)
+## Toolchain notes
 
-The build environment provides Elixir **1.14**, which caps `postgrex` at
-`0.17.5`. That version carries advisory **GHSA-r73h-97w8-m54h** (SQL injection
-via channel name in `Postgrex.Notifications.listen/3` / `unlisten/3`). **This app
-does not use `Postgrex.Notifications`** — Commanded runs on the in-memory pubsub
-and all database access is via parameterized Ecto queries — so the vulnerable
-code path is never exercised. The remediation is to move to Elixir 1.15+ (which
-unlocks patched `postgrex` ≥ 0.20 and the newer `ecto_sql`/`commanded` lines)
-once the toolchain allows it; the version pins in `mix.exs` are marked
-accordingly.
+The project targets **Elixir 1.17 / OTP 27**. In Claude Code on the web the base
+image ships Elixir 1.14 / OTP 25, so a `SessionStart` hook
+(`.claude/hooks/session-start.sh`) installs the modern toolchain into `/opt` and
+puts it on `PATH`; it short-circuits (no-op) once the base image itself is current,
+and runs asynchronously so it rarely costs startup time.
 
-The same 1.14 cap is why the DeepInfra adapter uses Erlang's built-in `:httpc`
-rather than Req: Req's HTTP/2 stack (`hpax`) requires 1.15+ and carries its own
-advisory. The provider behaviour keeps the HTTP client swappable, so moving to
-ReqLLM after a toolchain bump is a one-module change.
+Two legacy version pins remain in `mix.exs` from the old 1.14 days:
+`ecto_sql ~> 3.11.0` and `postgrex ~> 0.17.5`. The pinned `postgrex 0.17.5` carries
+advisory **GHSA-r73h-97w8-m54h** (SQL injection via channel name in
+`Postgrex.Notifications.listen/3` / `unlisten/3`). **This app never calls
+`Postgrex.Notifications`** — the domain event notifications go through the
+`eventstore` library's own listener and all app queries are parameterized Ecto — so
+the vulnerable path isn't exercised. Bumping these pins to patched lines is now
+unblocked on the modern toolchain and is a tracked cleanup.
+
+Relatedly, the DeepInfra adapter uses Erlang's built-in `:httpc` rather than Req —
+a zero-dependency choice from the 1.14 era. The provider behaviour keeps the HTTP
+client swappable, so moving to ReqLLM on the modern toolchain is a one-module
+change.
+
+## Deployment
+
+Polyphony ships as a self-contained OTP release. The repo `Dockerfile` builds it
+(assets digested via esbuild/tailwind), and `.do/app.yaml` describes a DigitalOcean
+App Platform app: a `PRE_DEPLOY` job runs migrations + event-store setup
+(`bin/migrate`), then the web service boots (`bin/server`). One managed Postgres 16
+cluster backs both the read models (`public` schema) and the persistent event store
+(`eventstore` schema). Set `SECRET_KEY_BASE`, `DEEPINFRA_API_KEY`, and `PHX_HOST`;
+`DATABASE_URL` is injected by the managed database. Full walkthrough in
+[`docs/deployment.md`](docs/deployment.md).
 
 ## What's next
 
-The branching family (§7, §A4) is now in. Remaining work is tracked in
-[`docs/roadmap.md`](docs/roadmap.md): the frontend-derived backend amendments
-(§A — multiple yields per beat, boundaries, content layers), the net-new surfaces
-(§B — ownership/publish, auth, admin/moderation), cross-cutting data handling (§C),
-and the LiveView frontend itself.
+The frontend and deployment path are now in. Remaining work is tracked in
+[`docs/roadmap.md`](docs/roadmap.md): the post-v1 tiers (deferred inspector views,
+the notify-me-later push worker, richer authoring), plus the standing cleanups
+(bump the legacy `postgrex`/`ecto_sql` pins now that the toolchain allows it,
+optional move to ReqLLM).

@@ -45,8 +45,13 @@ the transport can never leak more than the projection.
   - **Director.Beat** (`identify(Director.Beat, by: :beat_ref)`) — the §12
     synchronization unit: an ordered cast opens, each member reports terminal
     (committed/failed), the beat closes with `BeatClosed{completed, failed}`.
-- The **event store is Commanded's in-memory adapter** (config-only swap to the
-  persistent EventStore adapter). Postgres backs only the Ecto **read models**.
+- The **event store adapter is chosen by environment** (`config/config.exs`): dev
+  and test use Commanded's **in-memory adapter** (so the domain runs offline and the
+  suite needs no event-store schema); **prod** uses the persistent EventStore adapter
+  (`Polyphony.EventStore`), which stores events as JSONB in a dedicated `eventstore`
+  schema in the same managed Postgres that backs the read models (`public`). The
+  aggregates are identical either way. Postgres otherwise backs only the Ecto **read
+  models**.
 - `Polyphony.Events` is the catalog; every event derives `Jason.Encoder`.
 
 ### Event catalog shape
@@ -340,10 +345,10 @@ real email touches only config, never the moderation or notification logic.
 ## 19. Web layer — Phoenix LiveView (frontend)
 
 `PolyphonyWeb` is a thin LiveView layer over the domain — no business logic; it
-surfaces the contexts and enforces nothing they don't. Phoenix 1.7 / LiveView 0.20
-on Cowboy (the Elixir 1.14 toolchain rules out Bandit's hpax and Plug 1.19+; assets
-are **vendored**, no bundler). See `docs/frontend.md` for running it and the sandbox
-header caveats.
+surfaces the contexts and enforces nothing they don't. Phoenix 1.8 / LiveView 1.2 on
+Cowboy (OTP 27 / Elixir 1.17), with a real esbuild + Tailwind asset build whose
+outputs are committed so it still serves with no build step. See `docs/frontend.md`
+for running it.
 
 Three things connect it to the guarantees the backend protects:
 
@@ -360,9 +365,12 @@ Three things connect it to the guarantees the backend protects:
   `Owner.of(current_user)` (§15), never a raw user id — the seam that keeps org
   support a bolt-on.
 
-## 20. Deployment posture (planned)
+## 20. Deployment posture
 
-Target: DigitalOcean App Platform with managed Postgres (+ pgvector), migrations on
-deploy, `DEEPINFRA_API_KEY` + model-routing via env. Needs the Phoenix web layer and
-a release config first — see the roadmap. Swapping the in-memory event store for the
-persistent EventStore adapter is a config change.
+Polyphony ships as a self-contained OTP release (`mix release`), built by the repo
+`Dockerfile` and deployed to **DigitalOcean App Platform** via `.do/app.yaml`. A
+`PRE_DEPLOY` job runs `Polyphony.Release.migrate/0` (read-model migrations + creation
+of the `eventstore` schema and tables), then the web service boots. One managed
+Postgres 16 cluster backs both the read models (`public`) and the persistent event
+store (`eventstore` schema); `DEEPINFRA_API_KEY` + model routing come from env. The
+full walkthrough is in `docs/deployment.md`.

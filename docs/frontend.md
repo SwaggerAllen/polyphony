@@ -49,19 +49,14 @@ superadmin.
   wasn't part of is silently absent. That is `Polyphony.Visibility.project/2` — the same
   filter play runs on — and a LiveView test pins it end-to-end.
 
-## Sandbox caveat (not an issue in CI / prod)
+## Toolchain note
 
-This development container's OTP install is **stripped of its include headers**. Two
-builds need them:
-
-- Phoenix's `phx.gen.cert` mix task extracts records from
-  `public_key/include/OTP-PUB-KEY.hrl` (a generated file, absent here). It is stubbed in
-  `deps/` locally — the task is a dev cert generator we never call.
-- Floki's HTML lexer compiles a leex `.xrl`, which needs
-  `parsetools/include/leexinc.hrl`. That header is fetched into the install locally.
-
-A normal OTP install (`erlef/setup-beam` in CI, the release image in prod) ships both
-headers, so neither workaround is needed there and neither is committed.
+The frontend runs on **Elixir 1.17 / OTP 27**, installed by the `SessionStart` hook
+in Claude Code on the web (or by an updated base image). OTP 27 ships its include
+headers, so the old workarounds this section used to describe — a stubbed
+`phx.gen.cert` and a hand-fetched `leexinc.hrl` for Floki's lexer — are gone. The
+test DOM backend is now `lazy_html` (LiveView 1.2's default), which has no leex
+dependency at all.
 
 ## Deferred views
 

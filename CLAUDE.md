@@ -11,26 +11,37 @@ source of truth, and each character sees a **filtered projection** of it.
 **Dramatic irony is structural** — a property of the data (`Polyphony.Visibility`),
 never a prompt instruction. That guarantee is the thing to protect above all else.
 
-Backend-first: the whole domain runs and is tested offline, with no Phoenix web
-layer yet. The frontend (LiveView) is future work — see the roadmap.
+Backend-first, but the LiveView frontend (`PolyphonyWeb`, Phoenix 1.8 / LiveView
+1.2) is now built on top, and the app is deployable as an OTP release to
+DigitalOcean App Platform. The whole domain still runs and is tested offline. See
+`docs/frontend.md` and `docs/deployment.md`.
 
 ## Commands
 
 ```bash
 mix deps.get
+mix assets.setup             # fetch the esbuild + tailwind binaries (once)
 mix test                     # full suite; the alias migrates the test DB first
 mix test test/polyphony/foo_test.exs   # one file
 mix format                   # always run before committing
 mix compile --warnings-as-errors       # must stay clean
 mix run -e "…"               # exercise the loop offline against LLM.Mock
-mix phx.server               # the LiveView frontend at :4000 (see docs/frontend.md)
+mix assets.build             # rebuild priv/static/assets/app.{js,css} after touching assets/
+mix phx.server               # the LiveView frontend at :4000 (watches + rebuilds assets)
 ```
 
 The frontend (`PolyphonyWeb`) is a thin Phoenix LiveView layer; `mix phx.server`
-needs the dev DB (`MIX_ENV=dev mix ecto.create && mix ecto.migrate` once). Assets are
-**vendored** — no bundler/build step. **This sandbox's OTP is stripped of include
-headers**, so Floki (test) and Phoenix's cert task need the local header workarounds
-in `docs/frontend.md`; CI/prod OTP ship them.
+needs the dev DB (`MIX_ENV=dev mix ecto.create && mix ecto.migrate` once). Assets go
+through a **real esbuild + tailwind build** (source in `assets/`), but the built
+outputs `priv/static/assets/app.{js,css}` are **committed**, so the app compiles and
+serves with no build step — CI has an asset-drift guard that rebuilds and fails on
+divergence.
+
+**Toolchain: Elixir 1.17 / OTP 27.** In Claude Code on the web the base image is
+1.14 / OTP 25; the `SessionStart` hook (`.claude/hooks/session-start.sh`) installs
+the modern toolchain into `/opt` (and no-ops once the base is current). Because OTP
+27 ships its include headers, the old Floki/leex and cert-task header workarounds
+are gone — the suite uses `lazy_html` (LiveView 1.2's DOM backend), not Floki.
 
 **Postgres must be running for the suite.** In this environment it starts down;
 bring it up with:
@@ -40,8 +51,11 @@ pg_ctlcluster 16 main start
 ```
 
 The read models need it (and `CREATE EXTENSION vector` per DB — already set up).
-The **event store is Commanded's in-memory adapter**, so the domain core itself
-needs no Postgres; only the Ecto read models do.
+In **dev/test the event store is Commanded's in-memory adapter**, so the domain core
+needs no Postgres for the log; only the Ecto read models do. In **prod** the event
+store is persistent (`Polyphony.EventStore`, an `eventstore` schema in the same DB) —
+the adapter is chosen by env in `config/config.exs`. Don't add event-store
+provisioning to the test path.
 
 ## Non-negotiable invariants
 
@@ -94,9 +108,10 @@ for it.
 
 ## Environment gotchas
 
-- **Elixir 1.14 toolchain.** Pins: `ecto_sql ~> 3.11.0`, `postgrex ~> 0.17.5`. The
-  DeepInfra adapter uses Erlang `:httpc`, not Req (Req needs 1.15+). See the README
-  security note.
+- **Elixir 1.17 / OTP 27** (via the SessionStart hook; see Commands above). Two
+  legacy pins linger from the 1.14 era — `ecto_sql ~> 3.11.0`, `postgrex ~> 0.17.5` —
+  and the DeepInfra adapter still uses Erlang `:httpc` rather than Req. All three are
+  now bumpable and tracked as cleanup; see the README "Toolchain notes".
 - **No egress to DeepInfra** in the sandbox. Everything runs on `Polyphony.LLM.Mock`
   (deterministic lorem via `:erlang.phash2`, offline) or `LLM.Stub` (tests). Never
   rely on `Math.random`/`Date` — determinism matters for replay.
