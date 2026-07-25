@@ -65,8 +65,12 @@ defmodule Polyphony.Library do
   @doc "Fetch a row (payload still encoded — use `payload/1`), or nil."
   def get(id, opts \\ []), do: LibraryEntry.get(repo(opts), id)
 
-  @doc "Every entry owned by `owner_id`."
-  def list_for_owner(owner_id, opts \\ []), do: LibraryEntry.list_for_owner(repo(opts), owner_id)
+  @doc """
+  Every entry owned by `owner_id` — excludes archived/soft-deleted by default;
+  `include_archived: true` / `include_deleted: true` opt in (§B9).
+  """
+  def list_for_owner(owner_id, opts \\ []),
+    do: LibraryEntry.list_for_owner(repo(opts), owner_id, opts)
 
   @doc "Public, browsable entries of a kind."
   def list_public(kind, opts \\ []), do: LibraryEntry.list_public(repo(opts), to_string(kind))
@@ -114,6 +118,72 @@ defmodule Polyphony.Library do
       row ->
         {:ok,
          LibraryEntry.update(repo, row, %{payload: encode(new_payload), version: row.version + 1})}
+    end
+  end
+
+  # ── Soft-delete (§B9) ─────────────────────────────────────────────────────────
+
+  @doc "Archive an entry — hidden from default lists, fully recoverable."
+  def archive(id, opts \\ []), do: stamp(id, :archived_at, now(opts), opts)
+
+  @doc "Un-archive an entry, restoring it to default lists."
+  def unarchive(id, opts \\ []), do: stamp(id, :archived_at, nil, opts)
+
+  @doc """
+  Soft-delete an entry (recoverable within the recovery window before a purge). If
+  it was **published** (public/unlisted), the snapshot is resolved first — the entry
+  is unpublished to `private` (tombstone), since an external consumer must not keep
+  resolving deleted content. Forks are independent copies and are never touched.
+  """
+  def soft_delete(id, opts \\ []) do
+    repo = repo(opts)
+
+    case LibraryEntry.get(repo, id) do
+      nil ->
+        {:error, :not_found}
+
+      row ->
+        changes = %{deleted_at: now(opts)}
+        # Resolve a published snapshot: unpublish so it stops being reachable.
+        changes =
+          if row.visibility in ["public", "unlisted"],
+            do: Map.put(changes, :visibility, "private"),
+            else: changes
+
+        {:ok, LibraryEntry.update(repo, row, changes)}
+    end
+  end
+
+  @doc "Restore a soft-deleted (or archived) entry within the recovery window."
+  def restore(id, opts \\ []) do
+    repo = repo(opts)
+
+    case LibraryEntry.get(repo, id) do
+      nil -> {:error, :not_found}
+      row -> {:ok, LibraryEntry.update(repo, row, %{deleted_at: nil, archived_at: nil})}
+    end
+  end
+
+  @doc "Hard-purge an entry — irreversible, after the recovery window / explicit confirm."
+  def purge(id, opts \\ []) do
+    repo = repo(opts)
+
+    case LibraryEntry.get(repo, id) do
+      nil -> {:error, :not_found}
+      row -> {:ok, repo.delete!(row)}
+    end
+  end
+
+  @doc "Is this entry live (neither archived nor soft-deleted)?"
+  def live?(%LibraryEntry{archived_at: nil, deleted_at: nil}), do: true
+  def live?(%LibraryEntry{}), do: false
+
+  defp stamp(id, field, value, opts) do
+    repo = repo(opts)
+
+    case LibraryEntry.get(repo, id) do
+      nil -> {:error, :not_found}
+      row -> {:ok, LibraryEntry.update(repo, row, %{field => value})}
     end
   end
 
@@ -250,6 +320,12 @@ defmodule Polyphony.Library do
 
   defp token_for("unlisted"), do: gen_token()
   defp token_for(_visibility), do: nil
+
+  defp now(opts),
+    do:
+      Keyword.get_lazy(opts, :now, fn ->
+        NaiveDateTime.truncate(NaiveDateTime.utc_now(), :microsecond)
+      end)
 
   # A share token is read-model state (never event-sourced/replayed), so a strong
   # random token is appropriate here — unlike aggregate logic, this isn't replayed.

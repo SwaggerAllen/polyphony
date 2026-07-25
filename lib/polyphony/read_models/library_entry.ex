@@ -27,6 +27,10 @@ defmodule Polyphony.ReadModels.LibraryEntry do
     field(:derived_from_version, :integer)
     field(:frozen, :boolean, default: false)
     field(:payload, :binary)
+    # Soft-delete (§B9): archived hides from default lists; deleted is the
+    # recoverable delete before a purge.
+    field(:archived_at, :naive_datetime_usec)
+    field(:deleted_at, :naive_datetime_usec)
     timestamps(type: :naive_datetime_usec)
   end
 
@@ -37,29 +41,45 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   def update(repo, %__MODULE__{} = row, changes),
     do: row |> Ecto.Changeset.change(changes) |> repo.update!()
 
-  @doc "Every entry owned by `owner_id`, newest first."
-  def list_for_owner(repo, owner_id) do
+  @doc """
+  Every entry owned by `owner_id`, newest first. Excludes soft-deleted and archived
+  entries by default (§B9); `include_archived: true` / `include_deleted: true` opt in.
+  """
+  def list_for_owner(repo, owner_id, opts \\ []) do
     oid = to_string(owner_id)
 
-    repo.all(from(e in __MODULE__, where: e.owner_id == ^oid, order_by: [desc: e.inserted_at]))
+    from(e in __MODULE__, where: e.owner_id == ^oid, order_by: [desc: e.inserted_at])
+    |> visible(opts)
+    |> repo.all()
   end
 
-  @doc "Public entries of a `kind` — the browsable/searchable set."
+  @doc "Public, browsable entries of a `kind` — never soft-deleted or archived."
   def list_public(repo, kind) do
     k = to_string(kind)
 
-    repo.all(
-      from(e in __MODULE__,
-        where: e.kind == ^k and e.visibility == "public",
-        order_by: [desc: e.inserted_at]
-      )
+    from(e in __MODULE__,
+      where: e.kind == ^k and e.visibility == "public",
+      order_by: [desc: e.inserted_at]
     )
+    |> visible([])
+    |> repo.all()
   end
 
-  @doc "The unlisted entry matching a share token, or nil."
+  @doc "The unlisted, live entry matching a share token, or nil (a deleted one is gone)."
   def get_by_share_token(repo, token) when is_binary(token) do
-    repo.one(from(e in __MODULE__, where: e.share_token == ^token))
+    repo.one(from(e in __MODULE__, where: e.share_token == ^token and is_nil(e.deleted_at)))
   end
 
   def get_by_share_token(_repo, _), do: nil
+
+  # Default-hide soft-deleted and archived rows; callers opt in explicitly.
+  defp visible(query, opts) do
+    query
+    |> then(fn q ->
+      if opts[:include_deleted], do: q, else: from(e in q, where: is_nil(e.deleted_at))
+    end)
+    |> then(fn q ->
+      if opts[:include_archived], do: q, else: from(e in q, where: is_nil(e.archived_at))
+    end)
+  end
 end

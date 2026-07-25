@@ -156,8 +156,13 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   `accept/1` is the review gate → `:full`. Casting a non-`:full` character is refused by
   §B7 (`:stub_needs_promotion` / `:needs_promotion`). Mirrors locations' `origin: :discovered`.
   *Deferred:* the inline-create + promotion-review UI, and Director `:novel`-proposal stub creation.
-- **B9 — Soft-delete.** Archive (recoverable) vs delete (confirmed, recovery
-  window); published-content deletion resolves the snapshot; forks survive.
+- **B9 — Soft-delete.** ✅ **Done.** `Library` gains `archived_at` / `deleted_at`: `archive`
+  hides from default lists (recoverable), `soft_delete` is a recoverable tombstone that
+  **unpublishes** published content (visibility → private, resolving the snapshot), `restore`
+  brings either back within the window, and `purge` is the hard, final delete. Owner/public lists
+  exclude archived + deleted by default (`include_archived:` / `include_deleted:` opt in). Forks
+  are independent copies — deleting/purging a published source never cascades to them. *Deferred:*
+  the scheduled recovery-window auto-purge job and the delete-confirmation UI.
 
 ---
 
