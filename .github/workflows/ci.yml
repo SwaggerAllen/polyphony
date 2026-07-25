@@ -35,8 +35,8 @@ jobs:
 
       - uses: erlef/setup-beam@v1
         with:
-          otp-version: "25"
-          elixir-version: "1.14"
+          otp-version: "27.3"
+          elixir-version: "1.17.3-otp-27"
 
       - name: Cache deps and build
         uses: actions/cache@v4
@@ -50,6 +50,17 @@ jobs:
       - run: mix deps.get
       - run: mix format --check-formatted
       - run: mix compile --warnings-as-errors
+
+      # Verify the committed asset bundles (priv/static/assets/app.{js,css}) are
+      # in sync with their source under assets/. Fetches the esbuild/tailwind
+      # binaries, rebuilds, and fails if the tracked outputs drift — so a change
+      # to assets/ can't land without its rebuilt bundle.
+      - run: mix assets.setup
+      - run: mix assets.build
+      - name: Assets are up to date
+        run: git diff --exit-code priv/static/assets/app.css priv/static/assets/app.js
+
       # The `test` alias creates + migrates the test DB (the migration enables
-      # pgvector), then runs the suite. Offline: Mock/Stub providers, no network.
+      # pgvector), then runs the suite. The LLM path stays offline (Mock/Stub
+      # providers); only hex/npm/github fetches touch the network.
       - run: mix test
