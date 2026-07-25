@@ -68,7 +68,7 @@ without a code change:
    | `DEEPINFRA_MODEL_HEAVY` | real heavy model id (replace the spec placeholder) |
    | `DATABASE_URL` | injected from the managed db (`${db.DATABASE_URL}`) |
    | `PHX_HOST` | injected app domain (`${APP_DOMAIN}`) |
-   | `POOL_SIZE` / `EVENT_STORE_POOL_SIZE` | connection pools (defaults 10 / 5) |
+   | `POOL_SIZE` / `EVENT_STORE_POOL_SIZE` | DB connection pools (spec: 5 / 2 — see budget below) |
 
 3. **pgvector.** DO's managed Postgres 16 ships `pgvector`, and the read-model
    migration runs `CREATE EXTENSION IF NOT EXISTS vector;`, so the release-time
@@ -94,6 +94,26 @@ The PRE_DEPLOY job runs `bin/migrate`, which calls `Polyphony.Release.migrate/0`
 Both steps are **idempotent**, so it is safe on every deploy. This is the only place
 the event store schema is provisioned; the web service then boots with the
 persistent adapter (`config/config.exs` selects it in prod).
+
+## Database connection budget
+
+DO's **dev-tier** managed Postgres caps total connections low (~20, with a few
+reserved for the superuser role). The app must fit under that cap or queries fail
+with `FATAL 53300 (too_many_connections) ... reserved for roles with the SUPERUSER
+attribute` — which surfaces as a 500 on any page that touches the DB (e.g. `/signup`
+querying the account count) while DB-free pages still render.
+
+The connection consumers, per running instance:
+
+- `POOL_SIZE` — the read-model Repo pool (spec default **5**).
+- `EVENT_STORE_POOL_SIZE` — the event store pool (spec default **2**).
+- a couple more for the eventstore's `LISTEN` notifier and Oban's notifier.
+
+That's ~10 connections per instance. Watch two multipliers: a rolling deploy runs
+the **old and new instance together** briefly (2×), and `instance_count > 1`
+multiplies further. If you raise `instance_count`, add traffic, or want bigger
+pools, move off the dev DB to a plan with a higher connection limit and raise
+`POOL_SIZE` accordingly.
 
 ## First smoke test after deploy
 
