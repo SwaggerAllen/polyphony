@@ -163,6 +163,17 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   exclude archived + deleted by default (`include_archived:` / `include_deleted:` opt in). Forks
   are independent copies — deleting/purging a published source never cascades to them. *Deferred:*
   the scheduled recovery-window auto-purge job and the delete-confirmation UI.
+- **B10 — Authored plot triggers & scripted events.** ⬜ **Planned — not yet designed.** Worlds
+  and campaigns need author-defined **triggers → events** so plot points can be baked in — e.g.
+  "when the party reaches the ruins, the messenger arrives," "on beat N / when condition X holds,
+  fire world event Y." The **Director must know about them**: evaluate trigger conditions during
+  the beat loop and fire the scripted event as an ordinary world event (subject to default-deny
+  visibility like anything else — scripted beats can carry dramatic irony too). Needs a place in
+  the World Bible / campaign model to store them and an **authoring UI** (none exists yet).
+  *Open questions:* the condition language (beat-count / state-predicate / location-entry /
+  arc-milestone?); one-shot vs. repeatable; copy-on-fork behavior of a fired vs. unfired trigger;
+  author-visible vs. player-hidden. Keep triggers **pure/declarative** so aggregates stay
+  LLM-free (rule 1) — the Director *decides* to fire, a job *generates* any prose.
 
 ---
 
@@ -356,6 +367,15 @@ variable, which is what the harness needs to measure.
   it measures slope, not altitude, and is blind to slow uniform drift.
 - **Memory-quality tuning surface** — expose/tune the retrieval-vs-recency gradient from the
   design brief. Belongs here because it's a quality knob whose effect you can now *measure*.
+- **Character authoring guidelines / boundary defaults** — a reviewable set of **default authoring
+  guidelines** applied at character creation, a sibling to the style object (*in addition to or as
+  part of the writing-style artifact*). E.g. *every character has explicit romantic & sexual
+  boundaries*; *every character has a threshold at which they'd betray their ideals/principles*.
+  Ships as **reviewable defaults** the author accepts or overrides, so characters aren't flat and
+  safety-relevant boundaries are never left implicit. Composes like a style object
+  (ownable/forkable), feeds the Director/generation as conditioning, and cross-links the
+  consent/safety model (§B2) and the moderation surface (Tier 2). Not yet designed — the value is
+  the *reviewable default set*, not any one rule.
 
 ### Tier 1.5 — BYO-endpoint (capability + economics gate)
 
@@ -424,6 +444,8 @@ external inputs (legal advice, a first customer).
 
 - **Kids-with-guardians mode** (§P7) — forks the data-*handling* regime.
 - **Organizations / enterprise** (§P8) — forks the data-*ownership* regime.
+- **Novelization / export-to-novel** (§P11) — a new *output* product: publish a finished campaign
+  as a novel. New monetization stream (self-publishing). Late; not yet designed.
 
 ---
 
@@ -709,6 +731,35 @@ indirection makes the separation structural rather than a scatter of checks.
   (pricing surface); 30-day multiplayer trial, not a permanent free game; BYO/PAYG for the heavy
   tail; "active = recently generated" idle-transition serving engagement + cost + billing-lapse.
 - **Two separate products on the engine:** kids mode (forks data-handling), org/enterprise (forks
-  data-ownership). The only v1 hygiene either needs is **owner-as-indirection**.
+  data-ownership). The only v1 hygiene either needs is **owner-as-indirection**. (A third, later
+  separate product — **novelization**, §P11 — forks the *output*, not a data regime.)
 - **Biggest single v1 ask from this doc:** preserve the seams in §P2 — especially owner-indirection
   — so none of the above is a rewrite.
+
+---
+
+## P11. Novelization / export-to-novel (separate product; late)
+
+Take a **published campaign** and package it as a **novel** — a genuinely new *output* product on
+the same engine, and a new monetization stream (self-publishing to Amazon/KDP and the like). Late;
+not yet designed. Captured here so the design notes aren't lost.
+
+The pipeline is much more than a transcript dump:
+
+- **Cut low-progress turns.** The round-robin beat pattern produces character turns that don't
+  advance the scene much; novelization revises scenes to **drop or compress** them.
+- **Reorganize into prose.** Reflow the turn-by-turn structure into **paragraphs** — text
+  organization *outside* the round-robin pattern — with **light editing** so it reads as smooth
+  prose, not logged moves.
+- **Revision propagation (the hard part).** Novelization needs **revision inputs**: change an
+  event in one place and every reference to it elsewhere must change too. That means **walking the
+  character and world arcs** so narrative and causality stay consistent across the whole book —
+  the same **supersede-and-recommit + canonical-read + arc** machinery v1 already has, applied at
+  book scope rather than beat scope. *Don't rebuild these primitives — reuse them.*
+
+*Why it fits Tier 4+:* own pipeline, own review surface, independently monetizable, and it leans
+entirely on existing engine primitives. *Open questions:* how much editing is automated vs.
+author-in-the-loop; **POV/narrator** handling (does the book narrate from one character's filtered
+projection, or omniscient? — this is the visibility model resurfacing as a craft choice);
+chapter/scene segmentation; export format (EPUB/DOCX) and the KDP path; and rights/attribution for
+forked or collaborative campaigns before anything is sold.
