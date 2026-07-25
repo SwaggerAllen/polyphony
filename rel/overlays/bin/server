@@ -1,0 +1,4 @@
+#!/bin/sh
+# Boot the Phoenix release (the endpoint serves because prod sets server: true).
+cd -P -- "$(dirname -- "$0")"
+exec ./polyphony start

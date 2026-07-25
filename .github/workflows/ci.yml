@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: format · compile · test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # pgvector image so `CREATE EXTENSION vector` (run by our migration) works.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      MIX_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3"
+          elixir-version: "1.17.3-otp-27"
+
+      - name: Cache deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - run: mix deps.get
+      - run: mix format --check-formatted
+      - run: mix compile --warnings-as-errors
+
+      # Verify the committed asset bundles (priv/static/assets/app.{js,css}) are
+      # in sync with their source under assets/. Fetches the esbuild/tailwind
+      # binaries, rebuilds, and fails if the tracked outputs drift — so a change
+      # to assets/ can't land without its rebuilt bundle.
+      - run: mix assets.setup
+      - run: mix assets.build
+      - name: Assets are up to date
+        run: git diff --exit-code priv/static/assets/app.css priv/static/assets/app.js
+
+      # The `test` alias creates + migrates the test DB (the migration enables
+      # pgvector), then runs the suite. The LLM path stays offline (Mock/Stub
+      # providers); only hex/npm/github fetches touch the network.
+      - run: mix test

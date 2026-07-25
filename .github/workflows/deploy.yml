@@ -1,0 +1,34 @@
+name: Deploy (DigitalOcean App Platform)
+
+# CD to DigitalOcean App Platform. Gated to manual dispatch and version tags so it
+# never fires on ordinary pushes.
+#
+# Deploys the Phoenix release built by the repo Dockerfile and described in
+# `.do/app.yaml` (a PRE_DEPLOY job migrates, then the web service boots). Create the
+# app once with `doctl apps create --spec .do/app.yaml`, set DO_APP_ID, and this
+# workflow keeps it in sync on each dispatch/tag. See docs/deployment.md.
+#
+# Required repo secrets:
+#   DIGITALOCEAN_ACCESS_TOKEN  — a DO API token with App Platform write access
+#   DO_APP_ID                  — the app id (after `doctl apps create --spec .do/app.yaml`)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Push app spec and deploy
+        run: doctl apps update "${{ secrets.DO_APP_ID }}" --spec .do/app.yaml --wait

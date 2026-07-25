@@ -1,0 +1,91 @@
+# DigitalOcean App Platform spec for Polyphony.
+#
+# Deploys the Phoenix release built by the repo Dockerfile: a PRE_DEPLOY job runs
+# migrations + event-store setup, then the web service boots. Create the app once:
+#
+#     doctl apps create --spec .do/app.yaml
+#
+# then set DO_APP_ID (the new id) and thereafter `deploy.yml` keeps it in sync.
+# See docs/deployment.md.
+
+name: polyphony
+region: nyc
+
+services:
+  - name: web
+    dockerfile_path: Dockerfile
+    github:
+      repo: SwaggerAllen/polyphony
+      branch: main
+      deploy_on_push: false
+    run_command: bin/server
+    http_port: 4000
+    instance_size_slug: basic-xs
+    instance_count: 1
+    health_check:
+      http_path: /
+      initial_delay_seconds: 30
+    envs:
+      - key: SECRET_KEY_BASE
+        scope: RUN_TIME
+        type: SECRET
+      - key: DEEPINFRA_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      # Real DeepInfra model ids — the config/config.exs defaults are placeholders.
+      # DEEPINFRA_MODEL is the workhorse (every turn); DEEPINFRA_MODEL_HEAVY is
+      # reserved for character/world generation. Set both before the first run.
+      - key: DEEPINFRA_MODEL
+        scope: RUN_TIME
+        value: "REPLACE_WITH_REAL_DEEPINFRA_MODEL"
+      - key: DEEPINFRA_MODEL_HEAVY
+        scope: RUN_TIME
+        value: "REPLACE_WITH_REAL_DEEPINFRA_MODEL"
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: PHX_HOST
+        scope: RUN_TIME
+        value: ${APP_DOMAIN}
+      - key: POOL_SIZE
+        scope: RUN_TIME
+        value: "10"
+      - key: EVENT_STORE_POOL_SIZE
+        scope: RUN_TIME
+        value: "5"
+
+# Runs once before each deployment goes live: read-model migrations + creation of
+# the event store's `eventstore` schema and tables. Idempotent.
+jobs:
+  - name: migrate
+    kind: PRE_DEPLOY
+    dockerfile_path: Dockerfile
+    github:
+      repo: SwaggerAllen/polyphony
+      branch: main
+      deploy_on_push: false
+    run_command: bin/migrate
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    envs:
+      - key: SECRET_KEY_BASE
+        scope: RUN_TIME
+        type: SECRET
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: POOL_SIZE
+        scope: RUN_TIME
+        value: "2"
+      - key: EVENT_STORE_POOL_SIZE
+        scope: RUN_TIME
+        value: "2"
+
+databases:
+  - name: db
+    engine: PG
+    version: "16"
+    # pgvector: the read-model migration runs `CREATE EXTENSION IF NOT EXISTS
+    # vector;`. DO's managed Postgres 16 ships pgvector and the default admin role
+    # can create it, so a release-time migrate is enough. The event store lives in
+    # the same cluster under a dedicated `eventstore` schema (created by migrate).
