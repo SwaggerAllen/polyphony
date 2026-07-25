@@ -27,11 +27,15 @@ defmodule Polyphony.SceneControl do
           :ok | {:error, term()}
   def add_character(scene_id, character_id, beat, opts \\ []) do
     case Keyword.get(opts, :status, :full) do
+      :full ->
+        App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: character_id, beat: beat})
+
       :stub ->
         {:error, :stub_needs_promotion}
 
-      _full ->
-        App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: character_id, beat: beat})
+      # A :proposed (promoted but unaccepted) character is not usable yet either.
+      _other ->
+        {:error, :needs_promotion}
     end
   end
 

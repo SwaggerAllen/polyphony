@@ -80,8 +80,14 @@ defmodule Polyphony.Authoring.CharacterSheet do
             initial_knowledge: [],
             facts: [],
             relationships: [],
-            boundaries: []
+            boundaries: [],
+            # §B8: `:stub` is a name + one-line `role` + inbound `relationships`, with no
+            # generated sheet yet; promotion fills the sheet and gates it `:proposed`
+            # before it becomes `:full` (mirrors locations' `origin: :discovered`).
+            status: :full,
+            role: nil
 
+  @type status :: :stub | :proposed | :full
   @type t :: %__MODULE__{}
 
   @doc "The facts flagged always-resident (§6.1)."

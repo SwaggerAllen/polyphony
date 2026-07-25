@@ -149,9 +149,13 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   `:stub` is refused (`{:error, :stub_needs_promotion}`) until promoted (§B8). `continue/3` is
   the empty user turn — kicks a beat run with no committed packet so the Director casts and
   proceeds (`:enqueue` injectable for tests). *Deferred:* the UI buttons.
-- **B8 — Character stubs.** `status: :stub | :full`, promotion generates a full sheet
-  behind a `:proposed` review gate; casting a stub prompts promotion (mirrors
-  locations' `origin: :discovered`).
+- **B8 — Character stubs.** ✅ **Done.** `CharacterSheet` gains `status: :stub | :proposed |
+  :full` + a one-line `role`. `Polyphony.Authoring.Stub`: `new/3` makes a stub (name + role +
+  inbound relationships, no sheet); `promote/2` generates a full sheet from the stub + context
+  and gates it `:proposed` (pluggable `:generator`, default the LLM, so it runs offline);
+  `accept/1` is the review gate → `:full`. Casting a non-`:full` character is refused by
+  §B7 (`:stub_needs_promotion` / `:needs_promotion`). Mirrors locations' `origin: :discovered`.
+  *Deferred:* the inline-create + promotion-review UI, and Director `:novel`-proposal stub creation.
 - **B9 — Soft-delete.** Archive (recoverable) vs delete (confirmed, recovery
   window); published-content deletion resolves the snapshot; forks survive.
 
