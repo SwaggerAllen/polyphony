@@ -202,17 +202,22 @@ Because content is stored unencrypted and the operator is a data controller:
 
 ## Frontend (LiveView) — FS view inventory
 
-Not started. V1 Play + a debug drawer is the minimum viable frontend (everything
-through backend slice 6 is exercisable from it). Principles: every event-rendering
-view is viewer-parameterized through `visible_to?`; occlusion is silent in
-production; render committed packets, never tokens; three distinct waiting states;
-mobile-first.
+✅ **Done (core).** Phoenix 1.7 + LiveView 0.20 on the Elixir 1.14 toolchain (Cowboy,
+not Bandit; assets **vendored** — no esbuild/tailwind, builds offline). Principles held:
+every event-rendering view is viewer-parameterized through `visible_to?` (the Play view
+switches omniscient ↔ any character, and a whisper is silently absent for a bystander —
+covered by a LiveView test); committed packets only; three distinct waiting states;
+mobile-first. Auth is magic-link (no passwords) over the §B4 notification path; the session
+carries only the user id; ownership everywhere flows through `Polyphony.Owner`. See
+`docs/frontend.md` for how to run it.
 
-V1 Play · V2 Scene Index & Branch Navigator · V3 Character Inspector · V4 Sheet
-Editor · V5 Arc Review · V6 World Bible Editor · V7 Location Graph · V8 Campaign
-Setup · V9 Library · V10 Settings & Cost · V11 Auth · V12 Account & Profile ·
-V13 Admin & Moderation. Prompt-template editor (V10.1) uses `solid` (sandboxed
-Liquid).
+Built: **V1 Play**, **V4 Sheet Editor** (+ stub promote/accept), **V5 Arc Review**, **V6
+World Bible Editor**, **V8 Campaign Setup** + Campaign overview, **V9 Library** + public
+Browse + unlisted Share, **V10/V12 Settings/Account/Cost**, **V11 Auth**, **V13 Admin &
+Moderation**. *Deferred:* V2 Scene Index & Branch Navigator, V3 Character Inspector, V7
+Location Graph, and the V10.1 prompt-template editor (`solid`/sandboxed Liquid) — plus the
+autonomous-Director "Continue" is wired best-effort and wants a hardening pass under real
+multi-beat play.
 
 ---
 

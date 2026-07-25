@@ -337,7 +337,30 @@ the B3 `Notifier` behaviour by fanning a new report out to every admin via
 `notify_admins/3`, `force:`d past preferences because it is safety work. Swapping in
 real email touches only config, never the moderation or notification logic.
 
-## 19. Deployment posture (planned)
+## 19. Web layer — Phoenix LiveView (frontend)
+
+`PolyphonyWeb` is a thin LiveView layer over the domain — no business logic; it
+surfaces the contexts and enforces nothing they don't. Phoenix 1.7 / LiveView 0.20
+on Cowboy (the Elixir 1.14 toolchain rules out Bandit's hpax and Plug 1.19+; assets
+are **vendored**, no bundler). See `docs/frontend.md` for running it and the sandbox
+header caveats.
+
+Three things connect it to the guarantees the backend protects:
+
+- **Viewer-parameterized rendering.** The Play view (`PlayLive`) renders a scene as
+  `Broadcast.replay`/`Visibility.project` for a chosen viewer — omniscient or any
+  character — and streams live off the §13 per-viewer broadcaster. A whisper a viewer
+  wasn't part of is silently absent; a LiveView test pins that end-to-end, so the
+  dramatic-irony guarantee holds *through the UI*, not just in the domain.
+- **Auth is transport only** (`PolyphonyWeb.Auth`): a magic-link `Phoenix.Token`
+  delivered through the §B4 notification path, verified into a session that carries
+  only the user id. `on_mount` hooks gate the authed/admin live sessions; the domain
+  (`Accounts`) still decides every permission.
+- **Ownership through `Owner`.** Every library read/write is scoped by
+  `Owner.of(current_user)` (§15), never a raw user id — the seam that keeps org
+  support a bolt-on.
+
+## 20. Deployment posture (planned)
 
 Target: DigitalOcean App Platform with managed Postgres (+ pgvector), migrations on
 deploy, `DEEPINFRA_API_KEY` + model-routing via env. Needs the Phoenix web layer and

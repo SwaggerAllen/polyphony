@@ -23,7 +23,14 @@ mix test test/polyphony/foo_test.exs   # one file
 mix format                   # always run before committing
 mix compile --warnings-as-errors       # must stay clean
 mix run -e "…"               # exercise the loop offline against LLM.Mock
+mix phx.server               # the LiveView frontend at :4000 (see docs/frontend.md)
 ```
+
+The frontend (`PolyphonyWeb`) is a thin Phoenix LiveView layer; `mix phx.server`
+needs the dev DB (`MIX_ENV=dev mix ecto.create && mix ecto.migrate` once). Assets are
+**vendored** — no bundler/build step. **This sandbox's OTP is stripped of include
+headers**, so Floki (test) and Phoenix's cert task need the local header workarounds
+in `docs/frontend.md`; CI/prod OTP ship them.
 
 **Postgres must be running for the suite.** In this environment it starts down;
 bring it up with:
