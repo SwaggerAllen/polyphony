@@ -40,6 +40,11 @@ defmodule Polyphony.Accounts do
 
   def count(opts \\ []), do: repo(opts).aggregate(User, :count, :id)
 
+  @doc "Every admin-or-above account (the report-alert recipients, §B4)."
+  @spec list_admins(keyword()) :: [User.t()]
+  def list_admins(opts \\ []),
+    do: repo(opts).all(from(u in User, where: u.role in ["admin", "superadmin"]))
+
   @doc "Has this account attested 18+? Its presence is the content floor (§A5)."
   @spec adult_attested?(User.t()) :: boolean()
   def adult_attested?(%User{attested_adult_at: at}), do: not is_nil(at)

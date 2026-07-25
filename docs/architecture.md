@@ -312,7 +312,24 @@ suspend — are all admin-gated and audited. Suspension and the review flag live
 account (`Accounts.suspended?/1`, `flagged_for_review?/1`); the login gate itself is
 the web layer's.
 
-## 18. Deployment posture (planned)
+## 18. Notifications (§B4)
+
+`Polyphony.Notifications` is the (deliberately minimal) sending path. A delivery
+flows: resolve the recipient (a `%User{}`, id, or email) → check `Prefs` unless
+`force:` → render a subject/body for the type → hand to the pluggable `Transport` →
+record a `Notification` row with its status (`sent` / `skipped_opt_out` / `failed`).
+Transport is **email only** in v1 and defaults to a logging adapter, so the whole
+path runs and is tested offline with no egress; a real email adapter is a config
+swap. Preferences are an **opt-out** stub surface — a row exists only for a type a
+user turned off — present so deferred subscription types have a home.
+
+v1 has exactly one live trigger, and it closes the loop from §17:
+`Notifications.ModerationNotifier` (the configured `moderation_notifier`) implements
+the B3 `Notifier` behaviour by fanning a new report out to every admin via
+`notify_admins/3`, `force:`d past preferences because it is safety work. Swapping in
+real email touches only config, never the moderation or notification logic.
+
+## 19. Deployment posture (planned)
 
 Target: DigitalOcean App Platform with managed Postgres (+ pgvector), migrations on
 deploy, `DEEPINFRA_API_KEY` + model-routing via env. Needs the Phoenix web layer and

@@ -121,8 +121,14 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   just the item), dismiss, warn, suspend — all gated + audited. Accounts gain `suspended_at` /
   `flagged_for_review_at` with predicates. *Deferred to the web/auth layer:* HTTP admin surface
   and the login suspension gate (the state + predicate are here).
-- **B4 — Notification infrastructure (minimal).** Build the sending path + prefs
-  surface (mostly stubs); v1's one live trigger is admin report alerts. Email only.
+- **B4 — Notification infrastructure (minimal).** ✅ **Done.** `Polyphony.Notifications` is
+  the sending path: resolve recipient → check `Prefs` (unless `force:`) → render per type →
+  hand to a pluggable `Transport` (email only; default logs, real email a config swap) →
+  record a `Notification` row with status. Preferences are an **opt-out** stub surface
+  (`Prefs.wants?/set`, a small type catalog; only `:report_alert` live). The one live trigger,
+  B3's admin report alert, is wired through it: `Notifications.ModerationNotifier` (the default
+  `moderation_notifier`) fans a report out to every admin, `force:`d past prefs since it is
+  safety work. *Deferred to the web/auth layer:* the real email adapter and the preferences UI.
 - **B5 — Cost caps / circuit breaker + per-user accounting.** Per-user spend
   ledger (billing-ready); per-day/per-campaign ceilings; soft warning + hard stop
   that pauses generation.

@@ -50,4 +50,9 @@ config :polyphony, :llm,
     heavy: "Qwen/Qwen3.5-397B-A17B"
   }
 
+# Moderation → notification wiring (§B3 → §B4): route the one live notification wire
+# (admin report alerts) through the sending path. Email transport defaults to the
+# logging adapter until a real email adapter is configured. Tests override locally.
+config :polyphony, :moderation_notifier, Polyphony.Notifications.ModerationNotifier
+
 import_config "#{config_env()}.exs"
