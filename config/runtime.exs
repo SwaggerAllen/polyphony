@@ -20,17 +20,38 @@ if config_env() == :prod do
   database_url = System.get_env("DATABASE_URL") || raise("DATABASE_URL is not set")
   pool_size = String.to_integer(System.get_env("POOL_SIZE") || "10")
 
-  config :polyphony, Polyphony.Repo,
-    url: database_url,
-    pool_size: pool_size
+  # DO's managed Postgres requires SSL and hands you a URL ending in
+  # `?sslmode=require`. Postgrex silently ignores that query param (so it would
+  # connect unencrypted and get rejected), and the eventstore URL parser rejects it
+  # outright — so strip the query string and enable SSL explicitly on both. Set
+  # DATABASE_SSL=false to opt out (e.g. a local/non-SSL Postgres).
+  database_url = database_url |> String.split("?") |> hd()
+  database_ssl? = System.get_env("DATABASE_SSL") != "false"
+
+  # `verify_none` encrypts without pinning DO's CA. To verify the server cert,
+  # download DO's CA and set DATABASE_SSL_CACERTFILE to its path.
+  ssl_opts =
+    case System.get_env("DATABASE_SSL_CACERTFILE") do
+      nil -> [verify: :verify_none]
+      path -> [verify: :verify_peer, cacertfile: path]
+    end
+
+  db_ssl = if database_ssl?, do: [ssl: true, ssl_opts: ssl_opts], else: []
+
+  config :polyphony,
+         Polyphony.Repo,
+         [url: database_url, pool_size: pool_size] ++ db_ssl
 
   # The persistent event store shares the managed Postgres cluster with the read
   # models (same DATABASE_URL), isolated in its own `eventstore` schema (set in
   # config/prod.exs). A separate, smaller connection pool keeps event appends from
   # contending with read-model queries.
-  config :polyphony, Polyphony.EventStore,
-    url: database_url,
-    pool_size: String.to_integer(System.get_env("EVENT_STORE_POOL_SIZE") || "5")
+  config :polyphony,
+         Polyphony.EventStore,
+         [
+           url: database_url,
+           pool_size: String.to_integer(System.get_env("EVENT_STORE_POOL_SIZE") || "5")
+         ] ++ db_ssl
 
   # LLM provider (DeepInfra in prod). The connection + model are env-driven so a
   # deployment can be pointed at real DeepInfra models without a code change —
