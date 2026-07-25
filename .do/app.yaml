@@ -1,30 +1,30 @@
-# DigitalOcean App Platform spec — SCAFFOLD.
+# DigitalOcean App Platform spec for Polyphony.
 #
-# Not yet deployable: it runs the Phoenix release, which doesn't exist until the
-# web layer + `mix release` (or a Dockerfile) land — see docs/deployment.md and
-# docs/roadmap.md. Once the release builds, uncomment `dockerfile_path` (or set a
-# buildpack), confirm `run_command`, then create the app once:
+# Deploys the Phoenix release built by the repo Dockerfile: a PRE_DEPLOY job runs
+# migrations + event-store setup, then the web service boots. Create the app once:
 #
 #     doctl apps create --spec .do/app.yaml
 #
-# and thereafter the deploy workflow keeps it in sync.
+# then set DO_APP_ID (the new id) and thereafter `deploy.yml` keeps it in sync.
+# See docs/deployment.md.
 
 name: polyphony
 region: nyc
 
 services:
   - name: web
+    dockerfile_path: Dockerfile
     github:
       repo: SwaggerAllen/polyphony
       branch: main
       deploy_on_push: false
-    # dockerfile_path: Dockerfile          # add when the release exists
-    run_command: bin/polyphony start        # Phoenix release entrypoint (once built)
+    run_command: bin/server
     http_port: 4000
-    instance_size_slug: basic-xxs
+    instance_size_slug: basic-xs
     instance_count: 1
     health_check:
       http_path: /
+      initial_delay_seconds: 30
     envs:
       - key: SECRET_KEY_BASE
         scope: RUN_TIME
@@ -41,10 +41,42 @@ services:
       - key: POOL_SIZE
         scope: RUN_TIME
         value: "10"
+      - key: EVENT_STORE_POOL_SIZE
+        scope: RUN_TIME
+        value: "5"
+
+# Runs once before each deployment goes live: read-model migrations + creation of
+# the event store's `eventstore` schema and tables. Idempotent.
+jobs:
+  - name: migrate
+    kind: PRE_DEPLOY
+    dockerfile_path: Dockerfile
+    github:
+      repo: SwaggerAllen/polyphony
+      branch: main
+      deploy_on_push: false
+    run_command: bin/migrate
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    envs:
+      - key: SECRET_KEY_BASE
+        scope: RUN_TIME
+        type: SECRET
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: POOL_SIZE
+        scope: RUN_TIME
+        value: "2"
+      - key: EVENT_STORE_POOL_SIZE
+        scope: RUN_TIME
+        value: "2"
 
 databases:
   - name: db
     engine: PG
     version: "16"
-    # pgvector: enable once, after creation — `CREATE EXTENSION IF NOT EXISTS
-    # vector;` (the app's migration also runs this, so a release migrate suffices).
+    # pgvector: the read-model migration runs `CREATE EXTENSION IF NOT EXISTS
+    # vector;`. DO's managed Postgres 16 ships pgvector and the default admin role
+    # can create it, so a release-time migrate is enough. The event store lives in
+    # the same cluster under a dedicated `eventstore` schema (created by migrate).
