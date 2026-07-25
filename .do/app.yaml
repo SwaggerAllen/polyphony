@@ -32,6 +32,15 @@ services:
       - key: DEEPINFRA_API_KEY
         scope: RUN_TIME
         type: SECRET
+      # Real DeepInfra model ids — the config/config.exs defaults are placeholders.
+      # DEEPINFRA_MODEL is the workhorse (every turn); DEEPINFRA_MODEL_HEAVY is
+      # reserved for character/world generation. Set both before the first run.
+      - key: DEEPINFRA_MODEL
+        scope: RUN_TIME
+        value: "REPLACE_WITH_REAL_DEEPINFRA_MODEL"
+      - key: DEEPINFRA_MODEL_HEAVY
+        scope: RUN_TIME
+        value: "REPLACE_WITH_REAL_DEEPINFRA_MODEL"
       - key: DATABASE_URL
         scope: RUN_TIME
         value: ${db.DATABASE_URL}

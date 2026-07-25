@@ -31,4 +31,27 @@ if config_env() == :prod do
   config :polyphony, Polyphony.EventStore,
     url: database_url,
     pool_size: String.to_integer(System.get_env("EVENT_STORE_POOL_SIZE") || "5")
+
+  # LLM provider (DeepInfra in prod). The connection + model are env-driven so a
+  # deployment can be pointed at real DeepInfra models without a code change —
+  # ⚠ the model ids in config/config.exs are PLACEHOLDERS; set DEEPINFRA_MODEL
+  # (and DEEPINFRA_MODEL_HEAVY) to real DeepInfra model ids. Env overrides the
+  # compile-time defaults; unset keys fall back to config/config.exs.
+  llm = Application.get_env(:polyphony, :llm, [])
+  deepinfra = Keyword.get(llm, :deepinfra, [])
+  models = Keyword.get(llm, :models, %{})
+
+  workhorse = System.get_env("DEEPINFRA_MODEL") || deepinfra[:model] || models[:workhorse]
+  heavy = System.get_env("DEEPINFRA_MODEL_HEAVY") || models[:heavy] || workhorse
+
+  config :polyphony, :llm,
+    provider: Polyphony.LLM.DeepInfra,
+    deepinfra: [
+      base_url:
+        System.get_env("DEEPINFRA_BASE_URL") || deepinfra[:base_url] ||
+          "https://api.deepinfra.com",
+      api_key: System.get_env("DEEPINFRA_API_KEY"),
+      model: workhorse
+    ],
+    models: %{workhorse: workhorse, heavy: heavy}
 end

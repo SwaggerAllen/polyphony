@@ -116,6 +116,10 @@ for it.
 - **No egress to DeepInfra** in the sandbox. Everything runs on `Polyphony.LLM.Mock`
   (deterministic lorem via `:erlang.phash2`, offline) or `LLM.Stub` (tests). Never
   rely on `Math.random`/`Date` — determinism matters for replay.
+- **DeepInfra model ids in `config/config.exs` are placeholders.** Prod uses DeepInfra
+  (dev/test don't), and the `:llm` config is env-driven at runtime — set real ids via
+  `DEEPINFRA_MODEL` / `DEEPINFRA_MODEL_HEAVY` (+ `DEEPINFRA_API_KEY`). A deploy 404s on
+  the first generation until they're real. See `docs/deployment.md`.
 - **Projectors are off in tests** (`config :polyphony, start_projectors: false`).
   Read-model tests drive the SQL directly; integration tests derive membership from
   the stored stream via `MembershipSet`. Don't write tests that assume a live

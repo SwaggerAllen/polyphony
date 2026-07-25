@@ -44,6 +44,11 @@ config :polyphony, Oban,
 
 # LLM provider config (§2, §3). DeepInfra direct by default; the workhorse MoE
 # on the volume path, the heavy model reserved for character/world generation.
+#
+# ⚠ PLACEHOLDER MODEL IDS. The strings below are illustrative, not verified
+# against DeepInfra's live catalog — a deploy will 404 until they're real. In
+# prod, set them from env (DEEPINFRA_MODEL / DEEPINFRA_MODEL_HEAVY, see
+# config/runtime.exs) rather than editing here; dev/test never call DeepInfra.
 config :polyphony, :llm,
   provider: Polyphony.LLM.DeepInfra,
   deepinfra: [

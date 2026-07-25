@@ -29,15 +29,21 @@ self-contained OTP release built by the repo `Dockerfile`; CI/CD lives in
 ## DeepInfra integration
 
 Generation goes through the provider boundary (`Polyphony.LLM.Provider`); the live
-adapter is `Polyphony.LLM.DeepInfra` (Erlang `:httpc`). Configure via
-`config :polyphony, :llm` (see `config/config.exs`):
+adapter is `Polyphony.LLM.DeepInfra` (Erlang `:httpc`). In prod the whole `:llm`
+config is env-driven (`config/runtime.exs`), so you configure it from App Platform
+without a code change:
 
-- `provider: Polyphony.LLM.DeepInfra`
-- `deepinfra: [base_url: "https://api.deepinfra.com", model: <workhorse>]`
-- `models: %{workhorse: …, heavy: …}` — the workhorse MoE on the volume path, the
-  heavy model reserved for character/world generation and the refusal model-swap.
+- **`DEEPINFRA_API_KEY`** — secret; the adapter sends it as the bearer token.
+- **`DEEPINFRA_MODEL`** — the **workhorse** model, used on every turn.
+- **`DEEPINFRA_MODEL_HEAVY`** — reserved for character/world generation and the
+  refusal model-swap (falls back to the workhorse if unset).
+- `DEEPINFRA_BASE_URL` — optional; defaults to `https://api.deepinfra.com`.
 
-Set **`DEEPINFRA_API_KEY`** as an App Platform secret. Nothing else leaves the box.
+> ⚠ **The model ids in `config/config.exs` are placeholders** (illustrative Qwen
+> strings), so a deploy that doesn't set `DEEPINFRA_MODEL` will 404 on the first
+> generation. Look up the exact model ids in your DeepInfra dashboard and set the
+> two env vars before the first run. Everything else stays offline — nothing but
+> the DeepInfra call leaves the box.
 
 ## First deploy
 
@@ -58,6 +64,8 @@ Set **`DEEPINFRA_API_KEY`** as an App Platform secret. Nothing else leaves the b
    |-----|--------|
    | `SECRET_KEY_BASE` | `mix phx.gen.secret` (64 bytes) |
    | `DEEPINFRA_API_KEY` | your DeepInfra key |
+   | `DEEPINFRA_MODEL` | real workhorse model id (replace the spec placeholder) |
+   | `DEEPINFRA_MODEL_HEAVY` | real heavy model id (replace the spec placeholder) |
    | `DATABASE_URL` | injected from the managed db (`${db.DATABASE_URL}`) |
    | `PHX_HOST` | injected app domain (`${APP_DOMAIN}`) |
    | `POOL_SIZE` / `EVENT_STORE_POOL_SIZE` | connection pools (defaults 10 / 5) |
@@ -79,6 +87,31 @@ The PRE_DEPLOY job runs `bin/migrate`, which calls `Polyphony.Release.migrate/0`
 Both steps are **idempotent**, so it is safe on every deploy. This is the only place
 the event store schema is provisioned; the web service then boots with the
 persistent adapter (`config/config.exs` selects it in prod).
+
+## First smoke test after deploy
+
+Once the app is live, confirm the whole stack — auth, DB, event store, and real
+generation — end to end:
+
+1. **App is up.** Open `https://<app-domain>/` — the home page renders (health check
+   is green in the DO dashboard). If it's down, check the `migrate` job logs first
+   (a failed migration blocks the deploy).
+2. **Sign up → superadmin.** Sign up with your email. In prod the magic link is
+   emailed (dev surfaces it on the page); the **first account becomes superadmin**.
+   Signing in proves the session + `users` read model.
+3. **Author a character + world.** Create a world bible and a character from the
+   Library. Character/world generation uses the **heavy** model — a good first
+   exercise of `DEEPINFRA_MODEL_HEAVY`.
+4. **Run a scene.** Start a campaign, open a scene, send a turn, and hit **Continue
+   (Director)** to let the autonomous cast take a beat. Real prose = the workhorse
+   model, the Oban beat loop, and the persistent event store all working.
+5. **If generation fails**, it surfaces in the UI as a retryable/editable failure
+   (the `Failures` subsystem) rather than a crash. The usual first cause is a wrong
+   **model id** (DeepInfra 404) — fix `DEEPINFRA_MODEL` / `DEEPINFRA_MODEL_HEAVY`
+   and retry. Check the runtime logs for the DeepInfra response body.
+6. **Persistence check.** Redeploy (or restart the app) and confirm the scene is
+   still there — that's the persistent event store surviving a restart, the whole
+   reason prod isn't on the in-memory adapter.
 
 ## Ongoing deploys (CD)
 
