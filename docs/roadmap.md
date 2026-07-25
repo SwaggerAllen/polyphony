@@ -136,9 +136,12 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   generation path consults so a stuck Director loop can't run unbounded. Caps from opts → config
   → defaults. *Deferred:* wiring `record/2` into the live generation path and the resume/raise-cap
   UI (the breaker + ledger are here).
-- **B6 — Export.** Campaign transcript (markdown, omniscient) + JSON (event log +
-  pinned deps); **per-perspective export** (the filtered projection as a character);
-  sheet/bible JSON; offered in library + delete-confirmation.
+- **B6 — Export.** ✅ **Done.** `Polyphony.Export` (pure): `transcript/3` renders a scene's
+  events to markdown, omniscient by default or **as a character** — the per-perspective export,
+  which is just `Visibility.project/2`, so a character export structurally can't leak a whisper
+  they weren't part of. `json/2` is the structured archive (omniscient log + pinned deps = the
+  frozen snapshot); `entity_json/2` exports a sheet/bible. *Deferred:* the library/delete-confirm
+  UI hooks that offer these.
 - **B7 — Manual scene control + Continue.** Direct add/remove character
   (`CharacterEntered`/`Exited`, author lever, at beat boundary); Continue = empty
   user turn. Cheap, high-value.
