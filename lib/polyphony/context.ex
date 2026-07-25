@@ -24,7 +24,8 @@ defmodule Polyphony.Context do
       the live events, so the cached portion cannot drift turn to turn.
   """
 
-  alias Polyphony.Authoring.{WorldBible, CharacterSheet}
+  alias Polyphony.Authoring.{WorldBible, CharacterSheet, BoundaryGate}
+  alias Polyphony.Authoring.CharacterSheet.Boundary
   alias Polyphony.Context.{SceneContext, StaticRetriever}
   alias Polyphony.Visibility
 
@@ -61,6 +62,16 @@ defmodule Polyphony.Context do
     retriever = Map.get(opts, :retriever, StaticRetriever)
     bible = Map.get(opts, :world_bible)
 
+    # Boundaries (§A3): resolve conditional gates against canon arc **here**, at
+    # scene open — arc only changes at scene close, so the resolved state is stable
+    # for the scene and frozen into the prefix, re-derived when the next scene opens.
+    resolved_boundaries =
+      BoundaryGate.resolve(sheet.boundaries, Map.get(opts, :arc_entries, []),
+        evaluator: Map.get(opts, :boundary_evaluator),
+        provider: Map.get(opts, :provider),
+        model: Map.get(opts, :boundary_model)
+      )
+
     core_facts = CharacterSheet.core_facts(sheet)
 
     retrieved_facts =
@@ -95,6 +106,7 @@ defmodule Polyphony.Context do
       [
         render_bible(bible),
         render_sheet(sheet),
+        render_boundaries(resolved_boundaries),
         render_facts("Always-resident facts", core_facts),
         render_facts("Facts relevant to this scene", retrieved_facts),
         render_summaries(retrieved_summaries),
@@ -227,6 +239,38 @@ defmodule Polyphony.Context do
   defp render_relationships(rels) do
     "Relationships:\n" <> bullets(Enum.map(rels, fn r -> "#{r.target}: #{r.descriptor}" end))
   end
+
+  # Boundaries (§A3) — the resolved gate state, framed **in character** so a refusal
+  # is generated as a scene beat, not enforced as a filter (§V4.6).
+  defp render_boundaries([]), do: nil
+
+  defp render_boundaries(resolved) do
+    "Your boundaries (a refusal here is you being yourself — a scene beat, not a rule):\n" <>
+      bullets(Enum.map(resolved, &boundary_line/1))
+  end
+
+  defp boundary_line(%{boundary: %Boundary{stance: :open, topic: t}}),
+    do: "#{t}: you are open to this."
+
+  defp boundary_line(%{boundary: %Boundary{stance: :closed, topic: t, on_pressure: p}}),
+    do: "#{t}: a hard line — you will not.#{on_pressure(p)}"
+
+  defp boundary_line(%{
+         boundary: %Boundary{stance: :conditional, topic: t, condition: c},
+         released: true
+       }),
+       do: "#{t}: you held back until #{c}; that has happened, so you are open to it now."
+
+  defp boundary_line(%{
+         boundary: %Boundary{stance: :conditional, topic: t, condition: c, on_pressure: p},
+         released: false
+       }),
+       do: "#{t}: you will not — not until #{c}, and that has not happened.#{on_pressure(p)}"
+
+  defp boundary_line(%{boundary: %Boundary{topic: t}}), do: "#{t}: you hold back here."
+
+  defp on_pressure(p) when p in [nil, ""], do: ""
+  defp on_pressure(p), do: " When pushed: #{p}"
 
   defp render_facts(_label, []), do: nil
   defp render_facts(label, facts), do: "#{label}:\n" <> bullets(Enum.map(facts, & &1.statement))

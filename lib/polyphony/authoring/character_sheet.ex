@@ -35,6 +35,33 @@ defmodule Polyphony.Authoring.CharacterSheet do
     defstruct [:target, :descriptor]
   end
 
+  defmodule Boundary do
+    @moduledoc """
+    A characterization limit (§A3, FS V4.6) — how the character holds a `topic`
+    (romance, violence, betrayal…). **Not a content filter:** a boundary produces a
+    refusal *in the character's voice*, generated like any other beat, never a
+    post-generation block. `on_pressure` is the in-character reaction when pushed.
+
+      * `:open`        — no gate.
+      * `:closed`      — a hard line; refusal in character.
+      * `:conditional` — held until `condition` is met by the campaign's canon arc,
+        which the Director evaluates (`Polyphony.Authoring.BoundaryGate`). Its
+        composition with the arc layer is what makes slow burn mechanically real —
+        the boundary holds until the story earns it, not a prompt hint the model
+        forgets.
+    """
+    @derive Jason.Encoder
+    defstruct [:topic, :stance, :condition, :on_pressure]
+
+    @type stance :: :open | :conditional | :closed
+    @type t :: %__MODULE__{
+            topic: String.t(),
+            stance: stance(),
+            condition: String.t() | nil,
+            on_pressure: String.t() | nil
+          }
+  end
+
   @derive Jason.Encoder
   defstruct name: nil,
             premise: nil,
@@ -44,7 +71,8 @@ defmodule Polyphony.Authoring.CharacterSheet do
             backstory: nil,
             initial_knowledge: [],
             facts: [],
-            relationships: []
+            relationships: [],
+            boundaries: []
 
   @type t :: %__MODULE__{}
 

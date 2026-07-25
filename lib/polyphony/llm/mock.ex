@@ -28,6 +28,7 @@ defmodule Polyphony.LLM.Mock do
       :arc -> {:ok, arc_json(messages)}
       :sheet -> {:ok, sheet_json(messages)}
       :field -> {:ok, summary_text(messages)}
+      :gate -> {:ok, gate_answer(messages)}
       _ -> {:ok, turn_packet_json(messages)}
     end
   end
@@ -91,6 +92,10 @@ defmodule Polyphony.LLM.Mock do
 
     Jason.encode!(%{control: control, cast: cast, world_events: [], proposal_rulings: []})
   end
+
+  # A deterministic boundary-gate judgment (§A3): yes/no by hash, so a dev run
+  # exercises both released and gated conditionals.
+  defp gate_answer(messages), do: if(rem(:erlang.phash2(messages), 2) == 0, do: "yes", else: "no")
 
   # ── Deterministic lorem helpers ──────────────────────────────────────────────
 

@@ -51,11 +51,14 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   stored losslessly as an Erlang term; `draft.ready` broadcast to omniscient.
   Works on **both** loops — inline (`Runner.accept_draft`) and Oban async
   (`BeatDriver.accept_draft`).
-- **A3 — Boundaries × conditional-arc evaluation.** *(heavy)* Add `boundaries` to
-  `CharacterSheet` (`:open`/`:conditional`/`:closed` + condition + on_pressure).
-  Conditional boundaries are evaluated against canon arc by the Director (a cached
-  judgment, re-run only when arc changes); the resolved gate state joins the volatile
-  context. A boundary refusal is **in-character generation, not a filter**.
+- **A3 — Boundaries × conditional-arc evaluation.** ✅ **Done.** `boundaries` on
+  `CharacterSheet` (`:open`/`:conditional`/`:closed` + condition + on_pressure);
+  `Authoring.BoundaryGate` resolves each against the **canon arc** — `:open` released,
+  `:closed` held, `:conditional` judged by a pluggable `Evaluator` (default `LLMEvaluator`,
+  **fails closed** so an unjudgeable condition leaves the character guarded). The gate is
+  evaluated at **scene open** and frozen into the prefix (arc only changes at scene close),
+  and `Context.materialize` renders the resolved state **in character** — a refusal is
+  generated as a scene beat, never a post-generation filter.
 - **A4 — Editing.** ✅ **Done.**
 - **A5 — Three nested content layers.** App-wide 18+ floor / per-campaign content
   config / per-character boundaries — enforced as nesting (narrower restricts within
