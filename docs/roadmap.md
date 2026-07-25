@@ -142,9 +142,13 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   they weren't part of. `json/2` is the structured archive (omniscient log + pinned deps = the
   frozen snapshot); `entity_json/2` exports a sheet/bible. *Deferred:* the library/delete-confirm
   UI hooks that offer these.
-- **B7 — Manual scene control + Continue.** Direct add/remove character
-  (`CharacterEntered`/`Exited`, author lever, at beat boundary); Continue = empty
-  user turn. Cheap, high-value.
+- **B7 — Manual scene control + Continue.** ✅ **Done.** `Polyphony.SceneControl`:
+  `add_character` / `remove_character` emit `CharacterEntered` / `CharacterExited` directly
+  (author lever, bypassing Director casting), effective at the given beat boundary — the
+  half-open `[entered, exited)` interval already guarantees no mid-packet change. Adding a
+  `:stub` is refused (`{:error, :stub_needs_promotion}`) until promoted (§B8). `continue/3` is
+  the empty user turn — kicks a beat run with no committed packet so the Director casts and
+  proceeds (`:enqueue` injectable for tests). *Deferred:* the UI buttons.
 - **B8 — Character stubs.** `status: :stub | :full`, promotion generates a full sheet
   behind a `:proposed` review gate; casting a stub prompts promotion (mirrors
   locations' `origin: :discovered`).
