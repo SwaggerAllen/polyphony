@@ -64,6 +64,11 @@ services:
       - key: SHOW_ERROR_DETAILS
         scope: RUN_TIME
         value: "true"
+      # Migrate + set up the event store on boot, so the schema is guaranteed
+      # present even if the pre-deploy migrate job below doesn't run. Idempotent.
+      - key: MIGRATE_ON_BOOT
+        scope: RUN_TIME
+        value: "true"
 
 # Runs once before each deployment goes live: read-model migrations + creation of
 # the event store's `eventstore` schema and tables. Idempotent.

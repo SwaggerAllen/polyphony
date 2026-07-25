@@ -82,6 +82,11 @@ config :phoenix, :json_library, Jason
 # bring-up. Dev shows the richer Plug.Debugger page instead (debug_errors: true).
 config :polyphony, :show_error_details, false
 
+# Run migrations + event-store setup at boot (Polyphony.Application). Off by
+# default; prod turns it on from MIGRATE_ON_BOOT (runtime.exs) so the schema is
+# self-healing regardless of the pre-deploy migrate job. dev/test manage their own.
+config :polyphony, :migrate_on_boot, false
+
 # Asset build tooling. esbuild bundles the JS (resolving `phoenix` /
 # `phoenix_live_view` from deps via NODE_PATH); Tailwind builds the CSS. Both run
 # as standalone binaries — no Node.js toolchain required.
