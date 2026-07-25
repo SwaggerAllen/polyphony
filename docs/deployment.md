@@ -96,6 +96,16 @@ Both steps are **idempotent**, so it is safe on every deploy. This is the only p
 the event store schema is provisioned; the web service then boots with the
 persistent adapter (`config/config.exs` selects it in prod).
 
+**Belt-and-suspenders: migrate on boot.** Because a pre-deploy job that silently
+fails leaves the app up with missing tables (you'll see `relation "users" does not
+exist`), the web service **also** runs `Polyphony.Release.migrate/0` at startup when
+`MIGRATE_ON_BOOT=true` (the spec default) — before it serves. It's the same
+idempotent call, guarded by Ecto's migration lock, so the schema is guaranteed
+present on every boot regardless of the job. Set `MIGRATE_ON_BOOT=false` to rely
+solely on the pre-deploy job (e.g. to keep boots fast once you run many instances).
+If you ever need to run it by hand, open the web component's console and run
+`bin/migrate`.
+
 ## Database connection budget
 
 DO's **dev-tier** managed Postgres caps total connections low (~20, with a few

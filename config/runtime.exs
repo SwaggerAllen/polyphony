@@ -72,6 +72,13 @@ if config_env() == :prod do
          :show_error_details,
          System.get_env("SHOW_ERROR_DETAILS", "true") in ~w(true 1)
 
+  # Migrate + set up the event store on boot so the schema is guaranteed present,
+  # independent of the pre-deploy migrate job. Idempotent. Set MIGRATE_ON_BOOT=false
+  # to rely solely on the pre-deploy job (e.g. to keep boots fast at scale).
+  config :polyphony,
+         :migrate_on_boot,
+         System.get_env("MIGRATE_ON_BOOT", "true") in ~w(true 1)
+
   config :polyphony, :llm,
     provider: Polyphony.LLM.DeepInfra,
     deepinfra: [
