@@ -71,7 +71,11 @@ defmodule Polyphony.MixProject do
       {:phoenix_live_view, "~> 1.0"},
       {:phoenix_live_reload, "~> 1.5", only: :dev},
       {:plug_cowboy, "~> 2.7"},
+      {:phoenix_ecto, "~> 4.5"},
       {:lazy_html, ">= 0.1.0", only: :test},
+      # Real-browser end-to-end tests (tagged :feature, excluded by default) —
+      # drives Chromium over a live LiveSocket. See test/polyphony_web/features.
+      {:wallaby, "~> 0.30", runtime: false, only: :test},
 
       # Asset pipeline: esbuild bundles assets/js/app.js (importing the phoenix /
       # phoenix_live_view JS shipped in deps), Tailwind builds assets/css/app.css.

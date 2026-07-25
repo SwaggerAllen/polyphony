@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Install a chromedriver matching the locally installed Chromium, for the Wallaby
+# feature tests (`mix test --only feature`).
+#
+# The sandbox ships a Playwright Chromium but a chromedriver whose major version
+# doesn't match it, which chromedriver refuses to drive. This downloads the
+# matching Chrome-for-Testing chromedriver into /opt/chromedriver/bin (the path
+# config/test.exs falls back to). Override the browser with WALLABY_CHROME_BINARY.
+set -euo pipefail
+
+CHROME="${WALLABY_CHROME_BINARY:-$(ls /opt/pw-browsers/chromium-*/chrome-linux/chrome 2>/dev/null | head -1 || true)}"
+if [ -z "${CHROME}" ] || [ ! -x "${CHROME}" ]; then
+  echo "error: no Chromium found (set WALLABY_CHROME_BINARY)" >&2
+  exit 1
+fi
+
+MAJOR="$("${CHROME}" --version 2>/dev/null | grep -oE '[0-9]+' | head -1)"
+echo "Chromium major version: ${MAJOR} (${CHROME})"
+
+DEST="/opt/chromedriver/bin"
+if [ -x "${DEST}/chromedriver" ] \
+   && "${DEST}/chromedriver" --version 2>/dev/null | grep -qE "ChromeDriver ${MAJOR}\."; then
+  echo "chromedriver ${MAJOR} already installed at ${DEST}/chromedriver"
+  exit 0
+fi
+
+# Pick the newest Chrome-for-Testing build for this major that has a linux64 driver.
+URL="$(curl -fsSL 'https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json' \
+  | MAJOR="${MAJOR}" python3 -c '
+import sys, json, os
+major = os.environ["MAJOR"]
+data = json.load(sys.stdin)
+cands = [
+    dl["url"]
+    for v in data["versions"] if v["version"].startswith(major + ".")
+    for dl in v.get("downloads", {}).get("chromedriver", [])
+    if dl["platform"] == "linux64"
+]
+print(cands[-1] if cands else "")
+')"
+
+if [ -z "${URL}" ]; then
+  echo "error: no Chrome-for-Testing chromedriver found for major ${MAJOR}" >&2
+  exit 1
+fi
+
+echo "Downloading ${URL}"
+TMP="$(mktemp -d)"
+curl -fsSL "${URL}" -o "${TMP}/cd.zip"
+unzip -qo "${TMP}/cd.zip" -d "${TMP}"
+mkdir -p "${DEST}"
+cp "${TMP}/chromedriver-linux64/chromedriver" "${DEST}/chromedriver"
+chmod +x "${DEST}/chromedriver"
+rm -rf "${TMP}"
+
+echo "Installed: $("${DEST}/chromedriver" --version | head -1)"
+echo "Path: ${DEST}/chromedriver"

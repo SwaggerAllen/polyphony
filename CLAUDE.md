@@ -23,6 +23,7 @@ mix deps.get
 mix assets.setup             # fetch the esbuild + tailwind binaries (once)
 mix test                     # full suite; the alias migrates the test DB first
 mix test test/polyphony/foo_test.exs   # one file
+mix test --only feature      # real-browser (Wallaby) E2E; excluded by default, needs a browser
 mix format                   # always run before committing
 mix compile --warnings-as-errors       # must stay clean
 mix run -e "…"               # exercise the loop offline against LLM.Mock

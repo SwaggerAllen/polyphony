@@ -58,6 +58,32 @@ headers, so the old workarounds this section used to describe — a stubbed
 test DOM backend is now `lazy_html` (LiveView 1.2's default), which has no leex
 dependency at all.
 
+## Testing tiers
+
+Three layers, cheapest first:
+
+1. **`Phoenix.LiveViewTest`** (`test/polyphony_web/live/`) — in-process, no browser:
+   router → auth → mount → contexts → domain → rendered HTML. The whisper-visibility
+   guarantee is pinned here. Runs in the default `mix test`.
+2. **Persistent event-store E2E** (`test/polyphony/persistent_event_store_test.exs`) —
+   dispatches through the *production* EventStore adapter against Postgres and reads
+   the stream back, so prod event-store wiring is covered in CI. Tagged
+   `:event_store`, runs in the default suite (`async: false`).
+3. **Real-browser feature test** (`test/polyphony_web/features/`, Wallaby) — drives
+   Chromium over a live LiveSocket WebSocket, exercising the actual JS bundle and the
+   guarantee through two viewers. Tagged `:feature` and **excluded from the default
+   run** (the fast suite and the CI unit job need no browser). Run locally with:
+
+   ```bash
+   bin/setup-chromedriver        # installs a chromedriver matching the local Chromium
+   mix test --only feature
+   ```
+
+   `config/test.exs` auto-detects the Chromium binary and driver (override with
+   `WALLABY_CHROME_BINARY` / `WALLABY_CHROMEDRIVER`). The endpoint serves in test and
+   the `Phoenix.Ecto.SQL.Sandbox` plug lets the browser share the test's DB
+   connection.
+
 ## Deferred views
 
 V2 Scene Index & Branch Navigator, V3 Character Inspector, V7 Location Graph, and the

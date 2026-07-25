@@ -25,6 +25,12 @@ defmodule PolyphonyWeb.Endpoint do
     plug(Phoenix.CodeReloader)
   end
 
+  # In test, let a Wallaby browser request check out the test's sandboxed DB
+  # connection (via metadata in the user-agent). Compiled out everywhere else.
+  if Application.compile_env(:polyphony, :sql_sandbox) do
+    plug(Phoenix.Ecto.SQL.Sandbox)
+  end
+
   plug(Plug.RequestId)
   plug(Plug.Telemetry, event_prefix: [:phoenix, :endpoint])
 

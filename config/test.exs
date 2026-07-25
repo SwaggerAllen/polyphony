@@ -20,11 +20,45 @@ config :polyphony, start_projectors: false
 # Deterministic, network-free provider for tests.
 config :polyphony, :llm, provider: Polyphony.LLM.Stub
 
-# Endpoint runs without a listening server in tests; LiveView tests drive it in-process.
+# The endpoint serves in tests so the Wallaby feature tests can drive it over a
+# real browser; the in-process LiveView/Conn tests ignore the listener. The SQL
+# sandbox plug (enabled below) lets a browser request share the test's sandboxed
+# DB connection.
 config :polyphony, PolyphonyWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
   secret_key_base: "test-only-secret-key-base-0000000000000000000000000000000000000000000000",
-  server: false
+  server: true
+
+# Real-browser feature tests (Wallaby). Tagged :feature and excluded from the
+# default run (see test/test_helper.exs); run them with `mix test --only feature`.
+# Chromedriver/Chromium paths default to the SessionStart-provisioned locations and
+# can be overridden by env for other machines.
+config :polyphony, :sql_sandbox, true
+
+# Locate the browser + driver: env overrides win, else auto-detect the
+# SessionStart-provisioned Chromium (glob tolerates the build-number suffix) and a
+# `chromedriver` on PATH. `bin/setup-chromedriver` installs a matching driver.
+chrome_binary =
+  System.get_env("WALLABY_CHROME_BINARY") ||
+    Path.wildcard("/opt/pw-browsers/chromium-*/chrome-linux/chrome") |> List.first()
+
+chromedriver_path =
+  System.get_env("WALLABY_CHROMEDRIVER") ||
+    Enum.find(["/opt/chromedriver/bin/chromedriver"], &File.exists?/1) ||
+    System.find_executable("chromedriver") ||
+    "/opt/chromedriver/bin/chromedriver"
+
+config :wallaby,
+  otp_app: :polyphony,
+  base_url: "http://localhost:4002",
+  # Don't echo the browser's LiveView console logs into test output.
+  js_logger: false,
+  driver: Wallaby.Chrome,
+  chromedriver: [
+    path: chromedriver_path,
+    binary: chrome_binary,
+    headless: true
+  ]
 
 # Persistent event store config for `Polyphony.PersistentEventStoreTest` only.
 # Inert during the normal suite (nothing starts `Polyphony.EventStore` — the app
