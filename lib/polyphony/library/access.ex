@@ -34,13 +34,20 @@ defmodule Polyphony.Library.Access do
 
   # ── Rules ───────────────────────────────────────────────────────────────────
 
-  # Ownership: a nil actor (anonymous) never matches, so anonymous can neither write
-  # nor read-as-owner. Only a present actor equal to the entry's owner qualifies.
-  defp owner?(%{owner_id: owner_id}, %{actor_id: actor_id}) do
-    not is_nil(actor_id) and to_string(actor_id) == to_string(owner_id)
+  # Ownership: a nil actor (anonymous) never matches. A **user**-owned entry is owned
+  # by the actor whose id equals `owner_id`. An org-owned entry (`owner_type` other
+  # than "user") is intentionally NOT ownable by a bare actor here — org membership
+  # resolves through a permission layer that is a deliberate later addition (§P8), so
+  # this default-denies rather than guessing.
+  defp owner?(%{owner_id: owner_id} = entry, %{actor_id: actor_id}) do
+    user_owned?(entry) and not is_nil(actor_id) and to_string(actor_id) == to_string(owner_id)
   end
 
   defp owner?(_entry, _viewer), do: false
+
+  # Absent owner_type (e.g. a hand-built struct in a test) defaults to user-owned.
+  defp user_owned?(%{owner_type: type}) when not is_nil(type), do: to_string(type) == "user"
+  defp user_owned?(_entry), do: true
 
   # Non-owner read: gated purely by visibility + token, default-deny.
   defp visibility_allows_read?(%{visibility: visibility} = entry, viewer) do

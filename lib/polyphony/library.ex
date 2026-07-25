@@ -28,6 +28,7 @@ defmodule Polyphony.Library do
   """
 
   alias Polyphony.Repo
+  alias Polyphony.Owner
   alias Polyphony.ReadModels.LibraryEntry
   alias Polyphony.Library.Snapshot
 
@@ -39,8 +40,9 @@ defmodule Polyphony.Library do
   # ── Persistence ─────────────────────────────────────────────────────────────
 
   @doc """
-  Store a new owned entry. `attrs`: `:owner_id`, `:kind`, `:payload` (a domain
-  struct/map), plus optional `:visibility` (default `"private"`), `:frozen`,
+  Store a new owned entry. `attrs`: `:owner` (a `%Owner{}`, a `%User{}`, or a bare id
+  coerced to a user) — or the legacy `:owner_id` — plus `:kind`, `:payload` (a domain
+  struct/map), and optional `:visibility` (default `"private"`), `:frozen`,
   `:derived_from_id`, `:derived_from_version`, `:version` (default 1). A `:unlisted`
   entry is given a fresh share token automatically.
   """
@@ -48,9 +50,11 @@ defmodule Polyphony.Library do
     repo = repo(opts)
     attrs = Map.new(attrs)
     visibility = to_string(Map.get(attrs, :visibility, "private"))
+    owner = Owner.coerce(Map.get(attrs, :owner) || Map.fetch!(attrs, :owner_id))
 
     LibraryEntry.put(repo, %{
-      owner_id: to_string(Map.fetch!(attrs, :owner_id)),
+      owner_type: Owner.type_string(owner),
+      owner_id: Owner.id(owner),
       kind: to_string(Map.fetch!(attrs, :kind)),
       visibility: visibility,
       share_token: Map.get(attrs, :share_token) || token_for(visibility),
@@ -66,11 +70,14 @@ defmodule Polyphony.Library do
   def get(id, opts \\ []), do: LibraryEntry.get(repo(opts), id)
 
   @doc """
-  Every entry owned by `owner_id` — excludes archived/soft-deleted by default;
-  `include_archived: true` / `include_deleted: true` opt in (§B9).
+  Every entry owned by `owner` (a `%Owner{}`, `%User{}`, or bare id) — excludes
+  archived/soft-deleted by default; `include_archived: true` / `include_deleted: true`
+  opt in (§B9).
   """
-  def list_for_owner(owner_id, opts \\ []),
-    do: LibraryEntry.list_for_owner(repo(opts), owner_id, opts)
+  def list_for_owner(owner, opts \\ []) do
+    owner = Owner.coerce(owner)
+    LibraryEntry.list_for_owner(repo(opts), Owner.type_string(owner), Owner.id(owner), opts)
+  end
 
   @doc "Public, browsable entries of a kind."
   def list_public(kind, opts \\ []), do: LibraryEntry.list_public(repo(opts), to_string(kind))

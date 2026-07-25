@@ -18,6 +18,9 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   import Ecto.Query
 
   schema "library_entries" do
+    # Owner indirection (§P2/§P8): `owner_type` + `owner_id` together identify the
+    # owner; today always a user, shaped so it can become an org without a migration.
+    field(:owner_type, :string, default: "user")
     field(:owner_id, :string)
     field(:kind, :string)
     field(:visibility, :string, default: "private")
@@ -42,13 +45,18 @@ defmodule Polyphony.ReadModels.LibraryEntry do
     do: row |> Ecto.Changeset.change(changes) |> repo.update!()
 
   @doc """
-  Every entry owned by `owner_id`, newest first. Excludes soft-deleted and archived
-  entries by default (§B9); `include_archived: true` / `include_deleted: true` opt in.
+  Every entry owned by `{owner_type, owner_id}`, newest first. Excludes soft-deleted
+  and archived entries by default (§B9); `include_archived: true` / `include_deleted:
+  true` opt in.
   """
-  def list_for_owner(repo, owner_id, opts \\ []) do
+  def list_for_owner(repo, owner_type, owner_id, opts \\ []) do
+    ot = to_string(owner_type)
     oid = to_string(owner_id)
 
-    from(e in __MODULE__, where: e.owner_id == ^oid, order_by: [desc: e.inserted_at])
+    from(e in __MODULE__,
+      where: e.owner_type == ^ot and e.owner_id == ^oid,
+      order_by: [desc: e.inserted_at]
+    )
     |> visible(opts)
     |> repo.all()
   end

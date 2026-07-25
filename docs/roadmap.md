@@ -296,11 +296,14 @@ feature becomes a rewrite instead of an addition.**
   character is structurally what a second human occupies.
 - **Provider/model adapter boundary** (already in v1) → BYO-endpoint. Keep generation behind an
   OpenAI-compatible contract that can be made per-user.
-- **Owner as an indirection, not a hardcoded `user_id`.** ⚠ **This one needs deliberate attention
-  in v1.** Every owned entity (campaign, sheet, bible, template override, published snapshot)
-  should reference its owner through something that could later become polymorphic (user *or*
-  org). If `user_id` is stamped directly on every table and query, org/enterprise support becomes
-  a schema-wide migration. One indirection now keeps it a bolt-on.
+- **Owner as an indirection, not a hardcoded `user_id`.** ✅ **Done in v1** (ahead of the
+  frontend, so the UI's ownership/authz is written against the seam the first time). `Polyphony.Owner`
+  is a `{type, id}` value; `Library` stores `owner_type` + `owner_id` and its API takes an `Owner`
+  / `%User{}` / bare id (coerced to `:user`, the v1 default). `Library.Access` owns *user*-owned
+  entries by actor match and **default-denies** an org-typed entry — org membership resolves
+  through a permission layer that stays a deliberate later addition (§P8). Only content ownership
+  is polymorphic; actor/reporter/recipient references stay user-shaped. Adding orgs is now "add an
+  owner type + a permission layer," not a schema-wide migration.
 - **Notification infrastructure** (stubbed in v1 for admin alerts) → subscriptions, digests.
 - **Resolution as an interface** (design decision, not yet built) → TTRPG systems. When dice are
   built, build a resolution *interface* (intent + state + difficulty → outcome + degree) with the
@@ -641,11 +644,12 @@ answer to all of these.
 - Contrast with kids mode: **kids mode forks data-*handling*; org mode forks data-*ownership*.**
   Different seams, both fork §C of the backend.
 
-### The one cheap v1 hygiene item (see §P2)
+### The one cheap v1 hygiene item (see §P2) — ✅ done
 
-**Owner must be an indirection, not a hardcoded `user_id`.** Currently always a user, but shaped
-so it could become polymorphic (user *or* org). Then org support is "add an owner type + a
-permission layer," not a schema-wide migration.
+**Owner is now an indirection, not a hardcoded `user_id`.** `Polyphony.Owner` (`{type, id}`) +
+`library_entries.owner_type` are in place; ownership is always a user in v1 but shaped to become
+polymorphic. Org support is now "add an `:org` owner type + a permission layer," not a schema-wide
+migration.
 
 ### The enterprise suite (build with the first real customer, not speculatively)
 
