@@ -23,10 +23,11 @@ superadmin.
 
 ## Design choices worth knowing
 
-- **Toolchain pins.** Phoenix 1.7 / LiveView 0.20 are the last lines that support the
-  Elixir 1.14 toolchain (1.8 needs 1.15+). The server is **Cowboy**, not Bandit —
-  Bandit's HTTP/2 stack pulls `hpax`, which requires 1.15+. `plug` is pinned to `~> 1.16`
-  and `floki` (test only) to `~> 0.36` for the same reason.
+- **Modern toolchain.** Phoenix 1.8 / LiveView 1.2 on OTP 27 / Elixir 1.17 (installed by
+  the SessionStart hook, or the base image once it's updated). The server is **Cowboy**,
+  not Bandit — Phoenix 1.8 defaults to Bandit but Cowboy is fully supported and already
+  wired here. LiveView 1.2's test DOM backend is `lazy_html` (a precompiled NIF), not
+  Floki, so that's the only test-only web dep.
 - **No asset build step.** The prebuilt `phoenix.min.js` / `phoenix_live_view.min.js`
   (IIFE globals) are **vendored** under `priv/static/assets/vendor/`, with a hand-written
   `app.js` (LiveSocket + an autoscroll hook) and `app.css` (mobile-first, dark). There is

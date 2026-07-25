@@ -85,7 +85,7 @@ defmodule PolyphonyWeb.LibraryLive do
       </div>
 
       <div class="row" style="margin-top:.5rem;gap:.4rem;">
-        <form phx-change="visibility">
+        <form id={"vis-#{e.id}"} phx-change="visibility">
           <input type="hidden" name="eid" value={e.id} />
           <select name="visibility" style="width:auto;">
             <option value="private" selected={e.visibility == "private"}>Private</option>
