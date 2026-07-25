@@ -5,14 +5,17 @@
 # assembled release — no Elixir/Mix, no build tools.
 #
 # Base images pin Elixir 1.17.3 / Erlang-OTP 27 on Debian bookworm to match the
-# project toolchain. Bump ARGs together when upgrading.
-
+# project toolchain. The builder tag must be a real published hexpm/elixir tag
+# (the erlang + debian-date suffixes are specific — check Docker Hub before
+# bumping). The runner uses the floating `debian:bookworm-slim` so it doesn't pin a
+# date; the release bundles its own ERTS from the builder, so the runner only needs
+# matching system libs.
 ARG ELIXIR_VERSION=1.17.3
-ARG OTP_VERSION=27.3.4
-ARG DEBIAN_VERSION=bookworm-20250630-slim
+ARG OTP_VERSION=27.3.4.14
+ARG DEBIAN_DATE=bookworm-20260713
 
-ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
-ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
+ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_DATE}-slim"
+ARG RUNNER_IMAGE="debian:bookworm-slim"
 
 # ── Builder ───────────────────────────────────────────────────────────────────
 FROM ${BUILDER_IMAGE} AS builder
@@ -56,7 +59,7 @@ RUN mix release
 FROM ${RUNNER_IMAGE} AS runner
 
 RUN apt-get update -y \
-  && apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates \
+  && apt-get install -y libstdc++6 openssl libncurses6 locales ca-certificates \
   && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Set the runtime locale to UTF-8 (OTP warns otherwise; also correct for text).
