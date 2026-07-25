@@ -9,7 +9,21 @@ defmodule Polyphony.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      releases: releases()
+    ]
+  end
+
+  # Production release (built by the Dockerfile). `bin/polyphony start` boots the
+  # app; `bin/polyphony eval "Polyphony.Release.migrate()"` runs migrations +
+  # event-store setup before deploy (see docs/deployment.md).
+  defp releases do
+    [
+      polyphony: [
+        version: "0.1.0",
+        include_executables_for: [:unix],
+        applications: [runtime_tools: :permanent]
+      ]
     ]
   end
 

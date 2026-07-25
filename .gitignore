@@ -13,10 +13,10 @@ erl_crash.dump
 # Environment
 .env
 
-# Digested assets from `mix assets.deploy` (phx.digest). The undigested build
-# outputs priv/static/assets/app.{js,css} ARE committed so the app serves with
-# no build step; only the digested copies + manifest are generated artifacts.
-/priv/static/assets/*-*.css
-/priv/static/assets/*-*.js
-/priv/static/assets/*.gz
+# Digested assets from `mix assets.deploy` (phx.digest), generated at release
+# build time. The undigested build outputs priv/static/assets/app.{js,css} (and
+# favicon.ico / robots.txt) ARE committed so the app serves with no build step;
+# only the hashed copies, gzips, and manifest are generated artifacts.
+/priv/static/**/*-[0-9a-f]*.*
+/priv/static/**/*.gz
 /priv/static/cache_manifest.json

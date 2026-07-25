@@ -1,0 +1,22 @@
+# Keep the build context small and the image clean.
+_build/
+deps/
+.git/
+.github/
+.elixir_ls/
+
+# Test + doc material not needed to build the release.
+test/
+docs/
+*.md
+.formatter.exs
+
+# Local/editor cruft.
+.env
+erl_crash.dump
+priv/static/cache_manifest.json
+priv/static/**/*-[0-9a-f]*.*
+priv/static/**/*.gz
+
+# The Claude session tooling.
+.claude/
