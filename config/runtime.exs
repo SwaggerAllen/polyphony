@@ -15,7 +15,18 @@ if config_env() == :prod do
     secret_key_base: secret_key_base,
     server: true
 
+  database_url = System.get_env("DATABASE_URL") || raise("DATABASE_URL is not set")
+  pool_size = String.to_integer(System.get_env("POOL_SIZE") || "10")
+
   config :polyphony, Polyphony.Repo,
-    url: System.get_env("DATABASE_URL") || raise("DATABASE_URL is not set"),
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
+    url: database_url,
+    pool_size: pool_size
+
+  # The persistent event store shares the managed Postgres cluster with the read
+  # models (same DATABASE_URL), isolated in its own `eventstore` schema (set in
+  # config/prod.exs). A separate, smaller connection pool keeps event appends from
+  # contending with read-model queries.
+  config :polyphony, Polyphony.EventStore,
+    url: database_url,
+    pool_size: String.to_integer(System.get_env("EVENT_STORE_POOL_SIZE") || "5")
 end

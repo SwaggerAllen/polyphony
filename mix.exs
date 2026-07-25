@@ -29,6 +29,10 @@ defmodule Polyphony.MixProject do
       # Event sourcing / CQRS
       {:commanded, "~> 1.4"},
       {:commanded_ecto_projections, "~> 1.4"},
+      # Persistent event store adapter — used in prod only (dev/test run on
+      # Commanded's in-memory adapter). Pulls the `eventstore` library, which
+      # keeps its tables in a dedicated Postgres schema (see config/prod.exs).
+      {:commanded_eventstore_adapter, "~> 1.4"},
 
       # Persistence for read models (pgvector for scene/summary embeddings later).
       # These lower bounds were chosen for the original Elixir 1.14 toolchain and

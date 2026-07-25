@@ -9,24 +9,29 @@ config :polyphony,
 # (scene/summary embeddings, §8) round-trip. Per-env DB settings merge on top.
 config :polyphony, Polyphony.Repo, types: Polyphony.PostgrexTypes
 
-# Commanded application configuration. We default to the in-memory event store
-# adapter so the domain core is runnable and testable without provisioning the
-# EventStore Postgres schema. Swapping to the persistent adapter is a config
-# change only:
-#
-#     config :polyphony, Polyphony.App,
-#       event_store: [
-#         adapter: Commanded.EventStore.Adapters.EventStore,
-#         event_store: Polyphony.EventStore
-#       ]
-#
-# (see §2 "Commanded + EventStore" — the boundary is intentionally kept thin so
-# the persistent store can slot in without touching the aggregates.)
+# Commanded application configuration. The event store adapter is chosen per
+# environment: dev/test run on the **in-memory** adapter (no Postgres schema to
+# provision — the domain core stays offline and the whole suite runs against it),
+# while **prod** uses the persistent EventStore adapter so the event log (the
+# single source of truth) survives restarts and deploys. The aggregates are
+# identical either way — §2 keeps the store boundary thin on purpose. The prod
+# EventStore's connection + schema are configured in config/prod.exs and
+# config/runtime.exs.
+event_store_adapter =
+  if config_env() == :prod do
+    [
+      adapter: Commanded.EventStore.Adapters.EventStore,
+      event_store: Polyphony.EventStore
+    ]
+  else
+    [
+      adapter: Commanded.EventStore.Adapters.InMemory,
+      serializer: Commanded.Serialization.JsonSerializer
+    ]
+  end
+
 config :polyphony, Polyphony.App,
-  event_store: [
-    adapter: Commanded.EventStore.Adapters.InMemory,
-    serializer: Commanded.Serialization.JsonSerializer
-  ],
+  event_store: event_store_adapter,
   pubsub: :local,
   registry: :local
 
