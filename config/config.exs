@@ -77,6 +77,11 @@ config :polyphony, PolyphonyWeb.Endpoint,
 
 config :phoenix, :json_library, Jason
 
+# Show the full exception + stacktrace on 5xx error pages (PolyphonyWeb.ErrorHTML).
+# Off by default; prod turns it on from SHOW_ERROR_DETAILS (runtime.exs) during
+# bring-up. Dev shows the richer Plug.Debugger page instead (debug_errors: true).
+config :polyphony, :show_error_details, false
+
 # Asset build tooling. esbuild bundles the JS (resolving `phoenix` /
 # `phoenix_live_view` from deps via NODE_PATH); Tailwind builds the CSS. Both run
 # as standalone binaries — no Node.js toolchain required.

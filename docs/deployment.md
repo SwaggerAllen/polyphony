@@ -69,6 +69,7 @@ without a code change:
    | `DATABASE_URL` | injected from the managed db (`${db.DATABASE_URL}`) |
    | `PHX_HOST` | injected app domain (`${APP_DOMAIN}`) |
    | `POOL_SIZE` / `EVENT_STORE_POOL_SIZE` | DB connection pools (spec: 5 / 2 — see budget below) |
+   | `SHOW_ERROR_DETAILS` | `true` shows the full exception + stacktrace on 5xx pages (bring-up); set `false` before going public |
 
 3. **pgvector.** DO's managed Postgres 16 ships `pgvector`, and the read-model
    migration runs `CREATE EXTENSION IF NOT EXISTS vector;`, so the release-time
@@ -136,6 +137,9 @@ generation — end to end:
    (the `Failures` subsystem) rather than a crash. The usual first cause is a wrong
    **model id** (DeepInfra 404) — fix `DEEPINFRA_MODEL` / `DEEPINFRA_MODEL_HEAVY`
    and retry. Check the runtime logs for the DeepInfra response body.
+   - **Unexpected 500s** (with `SHOW_ERROR_DETAILS=true`) now render the full
+     exception + stacktrace in the browser, plus a request id — so you rarely need
+     the logs during bring-up. Turn the flag off before opening the app publicly.
 6. **Persistence check.** Redeploy (or restart the app) and confirm the scene is
    still there — that's the persistent event store surviving a restart, the whole
    reason prod isn't on the in-memory adapter.
