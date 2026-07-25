@@ -235,7 +235,36 @@ context, so refinement converges. Workflow metadata (status/feedback/provenance)
 lives in `FieldStore`, deliberately **out of** the generation schema
 (`DraftSchema`) so the model generates character, not workflow.
 
-## 15. Deployment posture (planned)
+## 15. Ownership, publishing & forks (§B1)
+
+`Polyphony.Library` is the ownership layer over authored entities — character
+sheets, world bibles, campaigns, prompt-template overrides — in `library_entries`.
+**Arc is not owned here**; it is campaign-scoped and travels *inside* a published
+campaign. Two axes are deliberately independent: **visibility** (`private` /
+`unlisted` / `public`) and **live/frozen** (references the owner's working set vs.
+embeds pinned copies). Publishing implies freeze, but they stay separate properties.
+
+Access is the pure, default-deny `Library.Access` predicate — the same discipline
+`Visibility` applies to fiction: public reads for anyone (signed-out included),
+unlisted needs the matching share token, private is owner-only, and **any write
+requires auth + ownership** (a `nil` actor never writes). It operates on plain
+structs, so it is tested without a database.
+
+`Library.Snapshot` is the publish freeze: a self-contained copy embedding pinned
+bible + sheet **versions** and a **canon-only** arc clipped to the published beat
+(`include_proposed:` opts the proposed tail in). `omniscient_log/1` routes a scene's
+events through `Visibility.project(_, :omniscient)`, so a published campaign exposes
+the omniscient story — private thoughts, whispers, both arcs — never a raw firehose.
+
+Copy-on-write mirrors the fork family (§9): `instantiate_character` copies a **sheet
+only**, version-pinned; `fork_campaign` copies a whole published campaign *including
+its arc snapshot* and re-owns the embedded bible + characters as new private,
+fully-editable entries. Every derived entry keeps a `derived_from` (id + version)
+pointer for attribution, and nothing locks forked content — everything is editable,
+including private fields. HTTP/token plumbing and real `owner_id`s arrive with the
+web/auth layer (B2); the domain core here is complete and tested offline.
+
+## 16. Deployment posture (planned)
 
 Target: DigitalOcean App Platform with managed Postgres (+ pgvector), migrations on
 deploy, `DEEPINFRA_API_KEY` + model-routing via env. Needs the Phoenix web layer and

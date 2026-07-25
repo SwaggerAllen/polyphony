@@ -77,11 +77,21 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
 
 ## §B — Additions (net-new surfaces)
 
-- **B1 — Ownership, visibility, publish snapshot.** Owned entities + `:private` /
-  `:unlisted` / `:public`; publish = self-contained frozen copy (pinned sheet/bible
-  versions + frozen arc snapshot, canon-only by default); copy-on-fork/instantiate
-  (fork = instantiate a whole campaign's embedded contents); `derived_from`
-  attribution. Large; gates public features.
+- **B1 — Ownership, visibility, publish snapshot.** ✅ **Done (core).** `Polyphony.Library`
+  owns authored entities (`character` / `world_bible` / `campaign` / `template_override`) in
+  `library_entries`, with two independent axes: **visibility** (`:private` default / `:unlisted`
+  share-token / `:public`) and **live/frozen**. Access is the pure default-deny
+  `Library.Access` predicate (public reads for anyone incl. signed-out, unlisted needs the
+  matching token, private is owner-only; **any write requires auth + ownership**).
+  `Library.Snapshot` is the self-contained frozen copy — pinned bible + sheet versions +
+  **canon-only arc** clipped to the published beat (`include_proposed:` opts the tail in), and
+  `omniscient_log/1` guarantees the published view is the omniscient projection. Publishing
+  freezes; `instantiate_character` copies the **sheet only**, version-pinned; `fork_campaign`
+  copies the whole campaign incl. the arc snapshot and re-owns the embedded bible + characters
+  as new private, fully-editable copies (`derived_from` attribution throughout). *Deferred to
+  when the web/auth layer lands:* HTTP/token plumbing and wiring `owner_id` to real accounts
+  (B2), and embedding full scene logs into published campaigns (the omniscient projection is
+  ready; only the bulk copy is deferred).
 - **B2 — Auth, identity, consent.** Magic-link (email, no passwords) + numeric-code
   fallback; username (required at first sign-in, never expose email); 18+
   attestation (logged); versioned consent records.
