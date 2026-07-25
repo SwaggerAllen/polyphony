@@ -44,6 +44,28 @@ defmodule Polyphony.Accounts do
   @spec adult_attested?(User.t()) :: boolean()
   def adult_attested?(%User{attested_adult_at: at}), do: not is_nil(at)
 
+  @doc "Is this account suspended? (Login gate lives in the web layer; this is the state.)"
+  @spec suspended?(User.t()) :: boolean()
+  def suspended?(%User{suspended_at: at}), do: not is_nil(at)
+
+  @doc "Is this account flagged for review (e.g. by an absolute-line takedown, §B3)?"
+  @spec flagged_for_review?(User.t()) :: boolean()
+  def flagged_for_review?(%User{flagged_for_review_at: at}), do: not is_nil(at)
+
+  @doc """
+  Moderation state transitions on an account. Authorization is the **caller's**
+  responsibility (`Polyphony.Moderation` gates + audits these); these are plain
+  identity-state writes, kept here because `Accounts` owns the user record.
+  """
+  def suspend(%User{} = user, opts \\ []),
+    do: repo(opts).update!(Ecto.Changeset.change(user, suspended_at: now(opts)))
+
+  def reinstate(%User{} = user, opts \\ []),
+    do: repo(opts).update!(Ecto.Changeset.change(user, suspended_at: nil))
+
+  def flag_for_review(%User{} = user, opts \\ []),
+    do: repo(opts).update!(Ecto.Changeset.change(user, flagged_for_review_at: now(opts)))
+
   # ── Sign-up ─────────────────────────────────────────────────────────────────
 
   @doc """

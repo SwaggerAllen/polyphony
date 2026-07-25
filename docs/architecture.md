@@ -287,7 +287,32 @@ promote a user to admin; only the superadmin may demote. Invites mirror this:
 `create_invite/2` is admin-gated and each redeems exactly once. Real `owner_id`s for
 §B1 fall out of this once the web layer authenticates a session.
 
-## 17. Deployment posture (planned)
+## 17. Moderation — reporting, admin authz, audit (§B3)
+
+`Polyphony.Moderation` sits on the roles (§16) and ownership (§15) layers. Two
+guarantees hold across every function and are what the tests hammer:
+
+- **Server-side authorization, never UI-only.** Each resolution action runs through
+  one `with_admin/6` gate: a non-admin caller gets `{:error, :forbidden}` and **no
+  side effect** — no state change and, critically, no audit row for an action that
+  never happened.
+- **Audited and attributed.** Each *successful* admin action writes exactly one
+  `AuditLog` row — the append-only admin trail — and **any access to user content**
+  (`content_access`, the §C reactive grant a report unlocks) is logged there too, so
+  proactive/reactive access is always accountable.
+
+Filing a report is a *user* action (an authenticated `%User{}` reporter); its reason
+categories lead with the two absolute lines (CSAM, real-person sexual content,
+`Report.absolute_line?/1`). A new report fires the admin alert through the pluggable
+`Notifier` — the one live notification wire in v1, defaulting to a logging adapter
+that B4 swaps for real email without touching moderation logic. Resolution actions —
+take down (unpublish via `Library`, reason recorded for the owner; an absolute-line
+takedown also **flags the owning account**, not just the item), dismiss, warn,
+suspend — are all admin-gated and audited. Suspension and the review flag live on the
+account (`Accounts.suspended?/1`, `flagged_for_review?/1`); the login gate itself is
+the web layer's.
+
+## 18. Deployment posture (planned)
 
 Target: DigitalOcean App Platform with managed Postgres (+ pgvector), migrations on
 deploy, `DEEPINFRA_API_KEY` + model-routing via env. Needs the Phoenix web layer and

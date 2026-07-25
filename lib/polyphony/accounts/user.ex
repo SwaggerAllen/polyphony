@@ -23,6 +23,10 @@ defmodule Polyphony.Accounts.User do
     field(:role, :string, default: "user")
     field(:attested_adult_at, :naive_datetime_usec)
     field(:username_changed_at, :naive_datetime_usec)
+    # Moderation state (§B3): suspension gates login; a review flag is raised by an
+    # absolute-line takedown against this account's content.
+    field(:suspended_at, :naive_datetime_usec)
+    field(:flagged_for_review_at, :naive_datetime_usec)
     timestamps(type: :naive_datetime_usec)
   end
 

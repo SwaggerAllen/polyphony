@@ -109,9 +109,18 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   - *Deferred to the web/auth layer:* magic-link email delivery + numeric-code fallback,
     sessions with sliding renewal (transport). The domain that decides *who may do what* is
     complete and tested; only the login channel is deferred.
-- **B3 — Admin, moderation, reporting.** Server-side admin authz + audit log; report
-  table (CSAM / real-person lines first); admin email alert per report; takedown /
-  dismiss / warn / suspend; absolute-line takedown flags the account.
+- **B3 — Admin, moderation, reporting.** ✅ **Done (domain core).** `Polyphony.Moderation`
+  + `Moderation.{Report, AuditLog, Notifier}`. Two standing guarantees, tested hardest:
+  **every admin action is server-side authorized** (a non-admin gets `:forbidden` with *no*
+  side effect — no state change, no audit row) and **every successful admin action is audited
+  and attributed** (one `AuditLog` row each, especially `content_access`). Reports (reporter
+  auth required; reason categories lead with the CSAM / real-person-sexual absolute lines) fire
+  the admin alert through a pluggable `Notifier` (the one live wire; real email is B4).
+  Resolution actions — view-in-context (the §C reactive-access grant, audited), take down
+  (unpublish + reason recorded, and an **absolute-line takedown flags the owning account**, not
+  just the item), dismiss, warn, suspend — all gated + audited. Accounts gain `suspended_at` /
+  `flagged_for_review_at` with predicates. *Deferred to the web/auth layer:* HTTP admin surface
+  and the login suspension gate (the state + predicate are here).
 - **B4 — Notification infrastructure (minimal).** Build the sending path + prefs
   surface (mostly stubs); v1's one live trigger is admin report alerts. Email only.
 - **B5 — Cost caps / circuit breaker + per-user accounting.** Per-user spend
