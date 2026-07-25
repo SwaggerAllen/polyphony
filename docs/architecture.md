@@ -264,7 +264,30 @@ pointer for attribution, and nothing locks forked content — everything is edit
 including private fields. HTTP/token plumbing and real `owner_id`s arrive with the
 web/auth layer (B2); the domain core here is complete and tested offline.
 
-## 16. Deployment posture (planned)
+## 16. Accounts — identity, roles, invites, consent (§B2)
+
+`Polyphony.Accounts` is the account domain the ownership layer (§15) attributes
+entities to. It is the **offline-testable core of auth** — everything that decides
+*who may do what*; magic-link login tokens, sessions with sliding renewal, and the
+numeric-code fallback are transport that belongs with the web layer.
+
+Sign-up (`register/2`) is a single gated path enforcing three preconditions in
+order: an **18+ attestation** (logged; its presence is the §A5 content floor, read
+via `adult_attested?/1`), a **valid single-use invite** (the very first account
+bypasses and bootstraps as `superadmin`), and acceptance of the **current consent**
+documents. `Accounts.Consent` holds the current versions as the source of truth and
+logs acceptance append-only, so `needs_reconsent?/2` re-prompts when a document's
+version is bumped.
+
+Roles (`Accounts.Roles`) are pure and default-deny: `:user` < `:admin` <
+`:superadmin`. The first sign-up is the sole superadmin — pinned by a partial unique
+index (`one_superadmin`) so even a race can't mint a second — and it is un-demotable
+(even by itself) and never assignable by promotion. Admins and the superadmin may
+promote a user to admin; only the superadmin may demote. Invites mirror this:
+`create_invite/2` is admin-gated and each redeems exactly once. Real `owner_id`s for
+§B1 fall out of this once the web layer authenticates a session.
+
+## 17. Deployment posture (planned)
 
 Target: DigitalOcean App Platform with managed Postgres (+ pgvector), migrations on
 deploy, `DEEPINFRA_API_KEY` + model-routing via env. Needs the Phoenix web layer and

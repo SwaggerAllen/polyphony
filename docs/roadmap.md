@@ -92,15 +92,23 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   when the web/auth layer lands:* HTTP/token plumbing and wiring `owner_id` to real accounts
   (B2), and embedding full scene logs into published campaigns (the omniscient projection is
   ready; only the bulk copy is deferred).
-- **B2 — Auth, identity, consent.** Magic-link (email, no passwords) + numeric-code
-  fallback; username (required at first sign-in, never expose email); 18+
-  attestation (logged); versioned consent records.
-  - **[planned addition #4]** roles `user` / `admin` / **`superadmin`**: first
-    sign-up → superadmin; admins can promote to admin; superadmin promotes/demotes
-    admins and is itself un-demotable.
-  - **[planned addition #5]** **invite-only sign-up** — single-use invite links
-    (admin-generated) gate account creation; the first user bypasses. Free tier /
-    subscription tiers become a future addition.
+- **B2 — Auth, identity, consent.** ✅ **Done (domain core).** `Polyphony.Accounts` +
+  `Accounts.{User, Invite, Consent, Roles}`: identity (unique username distinct from
+  auth-only email; profile fields; rate-limited username changes), a gated `register/2`
+  enforcing all three sign-up preconditions offline — 18+ attestation (logged; the §A5
+  content floor via `adult_attested?/1`), a valid single-use invite (first account
+  bypasses), and current consent — plus versioned append-only consent with
+  `needs_reconsent?/2` re-prompting on a version bump.
+  - **[planned addition #4]** ✅ roles `user` / `admin` / **`superadmin`**: first sign-up
+    → superadmin (pinned to a singleton by a partial unique index); pure `Roles`
+    authorization — admins/superadmin promote to admin, superadmin alone demotes, and the
+    superadmin is un-demotable (even by itself) and never assignable.
+  - **[planned addition #5]** ✅ **invite-only sign-up** — `create_invite/2` is admin-gated,
+    invites are single-use, and the first user bypasses. Free / subscription tiers remain a
+    future addition.
+  - *Deferred to the web/auth layer:* magic-link email delivery + numeric-code fallback,
+    sessions with sliding renewal (transport). The domain that decides *who may do what* is
+    complete and tested; only the login channel is deferred.
 - **B3 — Admin, moderation, reporting.** Server-side admin authz + audit log; report
   table (CSAM / real-person lines first); admin email alert per report; takedown /
   dismiss / warn / suspend; absolute-line takedown flags the account.
