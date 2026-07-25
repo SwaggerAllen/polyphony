@@ -71,6 +71,16 @@ defmodule Polyphony.Accounts do
   def flag_for_review(%User{} = user, opts \\ []),
     do: repo(opts).update!(Ecto.Changeset.change(user, flagged_for_review_at: now(opts)))
 
+  @doc "Has this account opted out of proactive analysis (§C)? Reactive access ignores this."
+  @spec proactive_opted_out?(User.t()) :: boolean()
+  def proactive_opted_out?(%User{proactive_opt_out_at: at}), do: not is_nil(at)
+
+  @doc "Set/clear the account's proactive-analysis opt-out (§C)."
+  def set_proactive_opt_out(%User{} = user, opted_out?, opts \\ []) do
+    at = if opted_out?, do: now(opts), else: nil
+    repo(opts).update!(Ecto.Changeset.change(user, proactive_opt_out_at: at))
+  end
+
   # ── Sign-up ─────────────────────────────────────────────────────────────────
 
   @doc """

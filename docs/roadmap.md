@@ -166,19 +166,23 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
 
 ---
 
-## §C — Cross-cutting data-handling
+## §C — Cross-cutting data-handling ✅ **Done (backend)**
 
 Because content is stored unencrypted and the operator is a data controller:
 
-- **Reactive vs proactive access split** — a report grants full-account visibility
-  (logged/attributed, reachable only via the report); proactive analysis is
-  opt-out-able at account + campaign level and **must not** be enforced against
-  report-triggered investigation.
-- **Opt-out flags enforced at the data layer** (query time), not just UI.
-- **Retention & deletion** with real windows and limits (published forks survive,
-  backups, legal holds).
-- **Admin audit log** persisted, covering all content access.
-- **Consent versioning** persisted, tied to policy versions.
+- **Reactive vs proactive access split** ✅ — `Polyphony.DataAccess` enforces it at the
+  data layer: `proactive_eligible?/3` / `proactive_scope/2` exclude an opted-out account
+  *or* campaign from proactive scanning at query time, while `reactive_access/3` (a report
+  grant) is a documented pass-through to B3's audited access that **never** consults the
+  opt-out — a reported user cannot opt out of being investigated. Tested by the asymmetry:
+  an opted-out account is dropped from proactive scope yet still reachable via a report.
+- **Opt-out flags enforced at the data layer** ✅ — account opt-out on the user,
+  per-campaign in `CampaignDataPrefs`, both applied in queries (`proactively_opted_out_user_ids/1`
+  gives a scanner its exclusion set), not just UI.
+- **Retention & deletion** ✅ (§B9) — real archive/soft-delete/restore/purge windows; forks
+  survive. (Backups / legal holds remain ops concerns.)
+- **Admin audit log** ✅ persisted (§B3), covering all content access (`content_access`).
+- **Consent versioning** ✅ persisted (§B2), tied to policy versions.
 
 ---
 

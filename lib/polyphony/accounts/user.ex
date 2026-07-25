@@ -27,6 +27,8 @@ defmodule Polyphony.Accounts.User do
     # absolute-line takedown against this account's content.
     field(:suspended_at, :naive_datetime_usec)
     field(:flagged_for_review_at, :naive_datetime_usec)
+    # §C: account-level opt-out from proactive analysis (reactive/report access ignores it).
+    field(:proactive_opt_out_at, :naive_datetime_usec)
     timestamps(type: :naive_datetime_usec)
   end
 
