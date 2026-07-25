@@ -47,12 +47,23 @@ services:
       - key: PHX_HOST
         scope: RUN_TIME
         value: ${APP_DOMAIN}
+      # DB connection budget. DO's dev-tier Postgres caps connections low (~20,
+      # minus superuser-reserved). Repo + event-store pools + the eventstore/Oban
+      # LISTEN connections must fit under it, or queries fail with
+      # too_many_connections. These sizes suit a dev DB; raise them (and/or the DB
+      # plan) as traffic and instance_count grow.
       - key: POOL_SIZE
         scope: RUN_TIME
-        value: "10"
+        value: "5"
       - key: EVENT_STORE_POOL_SIZE
         scope: RUN_TIME
-        value: "5"
+        value: "2"
+      # Shows the full exception + stacktrace on 5xx error pages. Handy during
+      # bring-up; set to "false" before the app is public (stacktraces leak
+      # internals).
+      - key: SHOW_ERROR_DETAILS
+        scope: RUN_TIME
+        value: "true"
 
 # Runs once before each deployment goes live: read-model migrations + creation of
 # the event store's `eventstore` schema and tables. Idempotent.

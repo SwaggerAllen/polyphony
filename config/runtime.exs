@@ -65,6 +65,13 @@ if config_env() == :prod do
   workhorse = System.get_env("DEEPINFRA_MODEL") || deepinfra[:model] || models[:workhorse]
   heavy = System.get_env("DEEPINFRA_MODEL_HEAVY") || models[:heavy] || workhorse
 
+  # Surface full exception + stacktrace on 5xx pages during bring-up. Defaults on;
+  # set SHOW_ERROR_DETAILS=false before the app is public (stacktraces leak
+  # internals). See PolyphonyWeb.ErrorHTML.
+  config :polyphony,
+         :show_error_details,
+         System.get_env("SHOW_ERROR_DETAILS", "true") in ~w(true 1)
+
   config :polyphony, :llm,
     provider: Polyphony.LLM.DeepInfra,
     deepinfra: [
