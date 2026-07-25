@@ -24,7 +24,12 @@ services:
     instance_count: 1
     health_check:
       http_path: /
-      initial_delay_seconds: 30
+      # Generous window: migrate-on-boot runs before the endpoint serves, and on a
+      # constrained DB it may retry through a connection crunch. Don't kill the
+      # instance mid-migration.
+      initial_delay_seconds: 90
+      period_seconds: 15
+      failure_threshold: 12
     envs:
       - key: SECRET_KEY_BASE
         scope: RUN_TIME
