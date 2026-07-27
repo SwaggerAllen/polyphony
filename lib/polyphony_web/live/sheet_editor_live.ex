@@ -7,8 +7,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
   """
   use PolyphonyWeb, :live_view
 
-  alias Polyphony.Library
+  alias Polyphony.{Library, Owner}
   alias Polyphony.Authoring.{CharacterSheet, Stub, WorldBible}
+  alias Polyphony.Authoring.CharacterSheet.Relationship
   alias PolyphonyWeb.AutofillControls
 
   @fields ~w(name premise appearance voice temperament backstory)
@@ -34,7 +35,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
          world_entries: worlds,
          worlds: world_options(worlds),
          world_id: world_id,
-         world_context: world_context_for(worlds, world_id)
+         world_context: world_context_for(worlds, world_id),
+         relationships: sheet.relationships || [],
+         char_names: other_character_names(socket.assigns.current_user, entry.id)
        )}
     else
       {:ok, socket |> put_flash(:error, "Character not found.") |> redirect(to: ~p"/library")}
@@ -57,7 +60,14 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   def handle_event("save", params, socket) do
     safe(socket, fn ->
+      %{current_user: user, entry: %{id: id}} = socket.assigns
       d = Map.merge(socket.assigns.draft, Map.take(params, @fields))
+      rels = socket.assigns.relationships
+
+      # Any relationship target that isn't an existing character becomes a stub, so
+      # you can seed a web of connections before every character is authored.
+      existing = other_character_names(user, id)
+      stubbed = seed_stubs(rels, existing, d["name"], Owner.of(user))
 
       sheet = %CharacterSheet{
         socket.assigns.sheet
@@ -67,16 +77,49 @@ defmodule PolyphonyWeb.SheetEditorLive do
           voice: d["voice"],
           temperament: d["temperament"],
           backstory: d["backstory"],
-          world_bible_id: world_id_int(socket.assigns.world_id)
+          world_bible_id: world_id_int(socket.assigns.world_id),
+          relationships: rels
       }
 
-      {:ok, entry} = Library.update_payload(socket.assigns.entry.id, sheet)
+      {:ok, entry} = Library.update_payload(id, sheet)
 
       # Inline confirmation (see the Save button) rather than a top-of-page flash,
       # which is off-screen on mobile after a scroll down the form.
-      {:noreply,
-       assign(socket, entry: entry, sheet: sheet, draft: draft_from_sheet(sheet), saved: true)}
+      socket =
+        assign(socket,
+          entry: entry,
+          sheet: sheet,
+          draft: draft_from_sheet(sheet),
+          char_names: other_character_names(user, id),
+          saved: true
+        )
+
+      {:noreply, maybe_flash_stubs(socket, stubbed)}
     end)
+  end
+
+  def handle_event("add_relationship", %{"target" => target} = params, socket) do
+    safe(socket, fn ->
+      case String.trim(target) do
+        "" ->
+          {:noreply, put_flash(socket, :error, "Give the related character a name.")}
+
+        name ->
+          rel = %Relationship{target: name, descriptor: String.trim(params["descriptor"] || "")}
+
+          {:noreply,
+           socket
+           |> assign(relationships: socket.assigns.relationships ++ [rel], saved: false)}
+      end
+    end)
+  end
+
+  def handle_event("remove_relationship", %{"index" => i}, socket) do
+    idx = String.to_integer(i)
+
+    {:noreply,
+     socket
+     |> assign(relationships: List.delete_at(socket.assigns.relationships, idx), saved: false)}
   end
 
   def handle_event("generate_all", %{"brief" => brief}, socket) do
@@ -148,6 +191,58 @@ defmodule PolyphonyWeb.SheetEditorLive do
   defp world_id_int(""), do: nil
   defp world_id_int(nil), do: nil
   defp world_id_int(id) when is_binary(id), do: String.to_integer(id)
+
+  # The owner's other characters' names (for the relationship datalist / the
+  # existing-vs-stub decision) — excludes this character.
+  defp other_character_names(user, exclude_id) do
+    user
+    |> Library.list_for_owner()
+    |> Enum.filter(&(&1.kind == "character" and &1.id != exclude_id))
+    |> Enum.map(&char_name/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp char_name(entry) do
+    case Library.payload(entry) do
+      %{name: n} when is_binary(n) and n != "" -> n
+      _ -> nil
+    end
+  end
+
+  # Create a stub character for every relationship target that isn't already an
+  # existing character (case-insensitive) or this character itself. Each stub records
+  # the inbound relationship(s) that gave rise to it, seeding its later promotion.
+  # Returns the names actually stubbed.
+  defp seed_stubs(relationships, existing_names, self_name, owner) do
+    existing = MapSet.new(existing_names, &String.downcase/1)
+    self_down = String.downcase(self_name || "")
+
+    relationships
+    |> Enum.map(& &1.target)
+    |> Enum.uniq()
+    |> Enum.reject(fn t ->
+      t == "" or String.downcase(t) == self_down or MapSet.member?(existing, String.downcase(t))
+    end)
+    |> Enum.map(fn target ->
+      inbound =
+        for r <- relationships,
+            r.target == target,
+            do: %Relationship{target: self_name, descriptor: r.descriptor}
+
+      Library.put(%{
+        owner: owner,
+        kind: "character",
+        payload: Stub.new(target, "", relationships: inbound)
+      })
+
+      target
+    end)
+  end
+
+  defp maybe_flash_stubs(socket, []), do: socket
+
+  defp maybe_flash_stubs(socket, names),
+    do: put_flash(socket, :info, "Stubbed new character(s): #{Enum.join(names, ", ")}.")
 
   defp load_worlds(user) do
     user |> Library.list_for_owner() |> Enum.filter(&(&1.kind == "world_bible"))
@@ -258,9 +353,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
         <.field_label field="appearance" label="Appearance" generating={@generating} />
         <textarea name="appearance"><%= @draft["appearance"] %></textarea>
         <.field_label field="voice" label="Voice" generating={@generating} />
-        <input type="text" name="voice" value={@draft["voice"]} />
+        <textarea name="voice"><%= @draft["voice"] %></textarea>
         <.field_label field="temperament" label="Temperament" generating={@generating} />
-        <input type="text" name="temperament" value={@draft["temperament"]} />
+        <textarea name="temperament"><%= @draft["temperament"] %></textarea>
         <.field_label field="backstory" label="Backstory" generating={@generating} />
         <textarea name="backstory"><%= @draft["backstory"] %></textarea>
         <br /><br />
@@ -271,6 +366,44 @@ defmodule PolyphonyWeb.SheetEditorLive do
           <a class="btn ghost" href={~p"/library"}>Back to library</a>
         </div>
       </form>
+    </div>
+
+    <div class="card">
+      <h3>Relationships</h3>
+      <p class="dim">
+        How this character regards others. Pick an existing character or type a new name —
+        a new name becomes a <strong>stub</strong> character (flesh it out later), created when you Save.
+      </p>
+
+      <div :if={@relationships == []} class="faint">No relationships yet.</div>
+      <ul class="rel-list">
+        <li :for={{r, i} <- Enum.with_index(@relationships)} class="row rel-item">
+          <span>→ <strong><%= r.target %></strong><span :if={r.descriptor not in [nil, ""]}> — <%= r.descriptor %></span></span>
+          <span class="spacer"></span>
+          <button
+            type="button"
+            class="btn danger sm"
+            phx-click="remove_relationship"
+            phx-value-index={i}
+          >
+            Remove
+          </button>
+        </li>
+      </ul>
+
+      <form id="rel-form" phx-submit="add_relationship" class="row rel-add">
+        <input type="text" name="target" list="char-names" placeholder="Character name…" autocomplete="off" />
+        <input
+          type="text"
+          name="descriptor"
+          placeholder="how they regard them (e.g. estranged mentor)"
+          style="flex:1;"
+        />
+        <button class="btn" type="submit">Add</button>
+      </form>
+      <datalist id="char-names">
+        <option :for={n <- @char_names} value={n}></option>
+      </datalist>
     </div>
     """
   end

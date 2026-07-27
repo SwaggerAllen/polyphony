@@ -1011,6 +1011,23 @@ input:focus, textarea:focus, select:focus {
   font-weight: 600;
 }
 
+.rel-list {
+  list-style: none;
+  padding: 0;
+  margin: .5rem 0;
+}
+
+.rel-item {
+  padding: .35rem 0;
+  border-bottom: 1px solid var(--border);
+  gap: .5rem;
+}
+
+.rel-add {
+  gap: .5rem;
+  margin-top: .5rem;
+}
+
 .list-empty {
   color: var(--fg-faint);
   padding: 2rem 1rem;
