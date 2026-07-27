@@ -59,9 +59,9 @@ defmodule Polyphony.Authoring.Autofill do
     current = stringify(current)
     specs = fields(kind)
     messages = all_messages(kind, brief, current, specs, opts[:world])
-    call = [response: :autofill, fields: Enum.map(specs, &elem(&1, 0)), model: model(opts)]
+    call = [response: :autofill, fields: Enum.map(specs, &elem(&1, 0))]
 
-    with {:ok, text} <- provider(opts).complete(messages, call ++ passthrough(opts)),
+    with {:ok, text} <- Polyphony.LLM.call(messages, call ++ meter_opts(opts)),
          {:ok, data} <- decode_object(text) do
       values =
         for {name, type, _g} <- specs, present?(v = Map.get(data, name)), into: %{} do
@@ -88,9 +88,9 @@ defmodule Polyphony.Authoring.Autofill do
 
       {^field, type, guidance} ->
         messages = field_messages(kind, field, type, guidance, current, opts[:world])
-        call = [response: :field, model: model(opts)]
+        call = [response: :field]
 
-        with {:ok, text} <- provider(opts).complete(messages, call ++ passthrough(opts)) do
+        with {:ok, text} <- Polyphony.LLM.call(messages, call ++ meter_opts(opts)) do
           {:ok, normalize(type, text)}
         end
     end
@@ -289,9 +289,12 @@ defmodule Polyphony.Authoring.Autofill do
   defp blank_to_dash(""), do: "(no brief — invent something evocative)"
   defp blank_to_dash(text), do: text
 
-  defp passthrough(opts), do: Keyword.take(opts, [:respond_with])
-
-  defp provider(opts), do: Keyword.get(opts, :provider) || Provider.default()
+  # Options handed to the metered LLM call: the provider + heavy model, usage
+  # attribution (user/campaign/kind), and the test `:respond_with` passthrough.
+  defp meter_opts(opts) do
+    [provider: Keyword.get(opts, :provider) || Provider.default(), model: model(opts)] ++
+      Keyword.take(opts, [:respond_with, :user_id, :campaign_id, :usage_kind])
+  end
 
   defp model(opts) do
     Keyword.get(opts, :model) ||

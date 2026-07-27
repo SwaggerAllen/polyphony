@@ -60,6 +60,12 @@ config :polyphony, :llm,
     heavy: "Qwen/Qwen3.5-397B-A17B"
   }
 
+# Spend accounting (§B5). `micro_cents_per_1k_tokens` sets the estimated cost rate
+# every metered LLM call (`Polyphony.LLM`) books into the ledger; the caps guard
+# runaway generation (see `Polyphony.Costs` for the defaults). Placeholder rate —
+# tune once real per-model pricing is wired.
+config :polyphony, :costs, micro_cents_per_1k_tokens: 100
+
 # Moderation → notification wiring (§B3 → §B4): route the one live notification wire
 # (admin report alerts) through the sending path. Email transport defaults to the
 # logging adapter until a real email adapter is configured. Tests override locally.

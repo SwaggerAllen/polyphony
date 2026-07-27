@@ -39,7 +39,11 @@ defmodule Polyphony.Authoring.Studio do
       %{role: "user", content: seed}
     ]
 
-    with {:ok, text} <- provider.complete(messages, call_opts(opts, :sheet, model)),
+    with {:ok, text} <-
+           Polyphony.LLM.call(
+             messages,
+             [provider: provider] ++ call_opts(opts, :sheet, model) ++ attribution(opts)
+           ),
          {:ok, data} <- Jason.decode(text),
          {:ok, values} <- DraftSchema.parse(data) do
       hash = prompt_hash(messages)
@@ -82,7 +86,11 @@ defmodule Polyphony.Authoring.Studio do
     feedback = (current && current.feedback) || []
     messages = regen_messages(field, others, feedback)
 
-    with {:ok, value} <- provider.complete(messages, call_opts(opts, :field, model)) do
+    with {:ok, value} <-
+           Polyphony.LLM.call(
+             messages,
+             [provider: provider] ++ call_opts(opts, :field, model) ++ attribution(opts)
+           ) do
       row =
         FieldStore.put(repo, subject_id, field, String.trim(value),
           model: model,
@@ -155,6 +163,9 @@ defmodule Polyphony.Authoring.Studio do
   end
 
   defp provider(opts), do: Keyword.get(opts, :provider) || Provider.default()
+
+  # Usage attribution forwarded to the metered LLM call (Polyphony.LLM).
+  defp attribution(opts), do: Keyword.take(opts, [:user_id, :campaign_id, :usage_kind])
 
   defp model(opts) do
     Keyword.get(opts, :model) ||

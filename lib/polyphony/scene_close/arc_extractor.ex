@@ -32,7 +32,11 @@ defmodule Polyphony.SceneClose.ArcExtractor do
 
     call_opts = Keyword.merge(Keyword.take(opts, [:respond_with, :model]), response: :arc)
 
-    with {:ok, text} <- provider.complete(messages, call_opts),
+    metered =
+      [provider: provider] ++
+        call_opts ++ Keyword.take(opts, [:user_id, :campaign_id, :usage_kind])
+
+    with {:ok, text} <- Polyphony.LLM.call(messages, metered),
          {:ok, data} when is_map(data) <- Jason.decode(text),
          {:ok, entries} <- ArcSchema.parse(data, source_scene_id: opts[:source_scene_id]) do
       {:ok, Enum.map(entries, &%{&1 | source_scene_id: opts[:source_scene_id]})}

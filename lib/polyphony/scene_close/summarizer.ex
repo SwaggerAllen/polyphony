@@ -26,7 +26,12 @@ defmodule Polyphony.SceneClose.Summarizer do
     ]
 
     call_opts = Keyword.merge(Keyword.take(opts, [:respond_with, :model]), response: :summary)
-    provider.complete(messages, call_opts)
+
+    Polyphony.LLM.call(
+      messages,
+      [provider: provider] ++
+        call_opts ++ Keyword.take(opts, [:user_id, :campaign_id, :usage_kind])
+    )
   end
 
   defp system_prompt(:omniscient),

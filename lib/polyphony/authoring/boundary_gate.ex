@@ -89,7 +89,11 @@ defmodule Polyphony.Authoring.BoundaryGate do
         %{role: "user", content: "Canon so far:\n#{facts}\n\nCondition: #{condition}\n\nMet?"}
       ]
 
-      case provider.complete(messages, response: :gate, model: Keyword.get(opts, :model)) do
+      case Polyphony.LLM.call(
+             messages,
+             [provider: provider, response: :gate, model: Keyword.get(opts, :model)] ++
+               Keyword.take(opts, [:user_id, :campaign_id, :usage_kind])
+           ) do
         {:ok, text} -> yes?(text)
         _ -> false
       end

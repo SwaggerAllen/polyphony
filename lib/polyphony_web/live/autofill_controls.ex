@@ -23,12 +23,12 @@ defmodule PolyphonyWeb.AutofillControls do
   @doc "Kick off whole-form generation from a free-text brief."
   def start_all(socket, kind, brief) do
     current = socket.assigns.draft
-    world = Map.get(socket.assigns, :world_context)
+    opts = gen_opts(socket)
 
     socket
     |> mark(@all, true)
     |> start_async(:autofill_all, fn ->
-      Autofill.generate_all(kind, brief, current, world: world)
+      Autofill.generate_all(kind, brief, current, opts)
     end)
   end
 
@@ -36,13 +36,26 @@ defmodule PolyphonyWeb.AutofillControls do
   def start_field(socket, kind, field) do
     field = to_string(field)
     current = socket.assigns.draft
-    world = Map.get(socket.assigns, :world_context)
+    opts = gen_opts(socket)
 
     socket
     |> mark(field, true)
     |> start_async({:autofill_field, field}, fn ->
-      Autofill.generate_field(kind, field, current, world: world)
+      Autofill.generate_field(kind, field, current, opts)
     end)
+  end
+
+  # World seed + usage attribution (the signed-in author) for the metered LLM call.
+  defp gen_opts(socket) do
+    [world: Map.get(socket.assigns, :world_context), usage_kind: "authoring"] ++
+      user_attribution(socket)
+  end
+
+  defp user_attribution(socket) do
+    case Map.get(socket.assigns, :current_user) do
+      %{id: id} -> [user_id: id]
+      _ -> []
+    end
   end
 
   @doc "Fold a whole-form result into the draft (or flash the error)."
