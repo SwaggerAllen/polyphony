@@ -77,6 +77,13 @@ services:
       - key: MIGRATE_ON_BOOT
         scope: RUN_TIME
         value: "true"
+      # Floating debug drawer that streams recent server logs into the browser
+      # (copy + clear). Set to "true" to watch what the server does on a click
+      # during bring-up; exposes raw logs, so keep it "false" once the app is
+      # public. See Polyphony.DebugLog.
+      - key: DEBUG_DRAWER
+        scope: RUN_TIME
+        value: "false"
 
 databases:
   - name: db

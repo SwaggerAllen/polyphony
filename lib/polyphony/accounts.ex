@@ -125,6 +125,26 @@ defmodule Polyphony.Accounts do
     end
   end
 
+  @doc """
+  Clean up a **failed bootstrap**. A "complete" account has at least one recorded
+  consent (`register/2` writes the user + consents atomically). If any complete
+  account exists, the bootstrap succeeded and this is a no-op. Otherwise nobody has
+  finished signing up, so any partial user rows left by an earlier crash are deleted
+  — letting the very next sign-up bootstrap the superadmin cleanly.
+
+  Returns `{:ok, :bootstrap_complete}` or `{:ok, {:cleaned, count}}`.
+  """
+  def clean_incomplete_bootstrap(opts \\ []) do
+    repo = repo(opts)
+
+    if repo.exists?(Consent) do
+      {:ok, :bootstrap_complete}
+    else
+      {count, _} = repo.delete_all(User)
+      {:ok, {:cleaned, count}}
+    end
+  end
+
   defp require_attestation(attrs) do
     if truthy?(Map.get(attrs, :attested_adult)), do: :ok, else: {:error, :attestation_required}
   end

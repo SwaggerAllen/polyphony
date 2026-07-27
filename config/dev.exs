@@ -30,4 +30,7 @@ config :polyphony, PolyphonyWeb.Endpoint,
     ]
   ]
 
+# The debug drawer is handy while developing — stream server logs into the page.
+config :polyphony, :debug_drawer, true
+
 config :logger, :console, level: :info

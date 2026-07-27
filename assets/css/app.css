@@ -138,3 +138,67 @@ hr.sep { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
 code, pre { background: var(--bg-3); border-radius: 6px; }
 code { padding: .05rem .3rem; font-size: .85em; }
 pre { padding: .75rem; overflow-x: auto; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Debug drawer — a floating server-log viewer (bring-up aid, gated by
+   :debug_drawer). Fixed bottom-right, out of the content flow.
+   ──────────────────────────────────────────────────────────────────────────── */
+.debug-drawer { position: fixed; right: 1rem; bottom: 1rem; z-index: 9999; font-size: .8rem; }
+.debug-drawer-toggle {
+  background: var(--bg-3); color: var(--fg-dim); border: 1px solid var(--border);
+  border-radius: 999px; padding: .4rem .8rem; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.debug-drawer-toggle:hover { color: var(--fg); }
+.debug-count {
+  display: inline-block; min-width: 1.2em; text-align: center; margin-left: .3rem;
+  background: var(--accent); color: #0a0d16; border-radius: 999px;
+  padding: 0 .35em; font-size: .72rem; font-weight: 700;
+}
+.debug-drawer-body {
+  width: min(640px, 92vw); height: min(45vh, 420px); display: flex; flex-direction: column;
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgba(0,0,0,.5); overflow: hidden;
+}
+.debug-drawer-head {
+  display: flex; align-items: center; gap: .4rem;
+  padding: .5rem .6rem; border-bottom: 1px solid var(--border);
+}
+.debug-drawer-head .debug-title { font-weight: 700; color: var(--fg); }
+.debug-drawer-head .spacer { flex: 1; }
+.debug-empty { color: var(--fg-faint); padding: 1rem .6rem; }
+.debug-log-list {
+  flex: 1; overflow-y: auto; padding: .4rem .6rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.debug-line {
+  white-space: pre-wrap; word-break: break-word;
+  padding: .1rem 0; border-bottom: 1px solid rgba(255,255,255,.03);
+}
+.debug-time { color: var(--fg-faint); margin-right: .5rem; }
+.debug-lvl { text-transform: uppercase; font-size: .7rem; margin-right: .5rem; }
+.debug-msg { color: var(--fg); }
+.lvl-emergency .debug-lvl, .lvl-alert .debug-lvl,
+.lvl-critical .debug-lvl, .lvl-error .debug-lvl { color: var(--bad); }
+.lvl-warning .debug-lvl, .lvl-warn .debug-lvl { color: var(--warn); }
+.lvl-notice .debug-lvl, .lvl-info .debug-lvl { color: var(--good); }
+.lvl-debug .debug-lvl { color: var(--accent-2); }
+
+/* Socket status — a labelled pill in the drawer head, plus a dot on the collapsed
+   toggle so connection state is visible either way. Driven by app.js. */
+.socket-status {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-size: .7rem; color: var(--fg-dim); text-transform: lowercase;
+}
+.socket-status::before {
+  content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--fg-faint);
+}
+.socket-dot {
+  display: inline-block; width: .5rem; height: .5rem; border-radius: 50%;
+  margin-left: .1rem; background: var(--fg-faint); vertical-align: middle;
+}
+.socket-status.connected::before, .socket-dot.connected { background: var(--good); }
+.socket-status.connecting::before, .socket-dot.connecting { background: var(--warn); }
+.socket-status.disconnected::before, .socket-dot.disconnected {
+  background: var(--bad); animation: pulse 1.2s ease-in-out infinite;
+}

@@ -87,6 +87,16 @@ config :polyphony, :show_error_details, false
 # self-healing regardless of the pre-deploy migrate job. dev/test manage their own.
 config :polyphony, :migrate_on_boot, false
 
+# One-shot cleanup of a failed sign-up bootstrap on boot (RESET_INCOMPLETE_BOOTSTRAP
+# in prod). Off by default — see Polyphony.Accounts.clean_incomplete_bootstrap/1.
+config :polyphony, :reset_incomplete_bootstrap, false
+
+# Floating debug drawer (PolyphonyWeb.DebugDrawerLive) that streams recent server
+# logs to the browser with copy/clear — a bring-up aid. Off by default; dev turns it
+# on, prod from DEBUG_DRAWER (runtime.exs). Exposes raw logs, so keep it off in
+# public prod. See Polyphony.DebugLog.
+config :polyphony, :debug_drawer, false
+
 # Asset build tooling. esbuild bundles the JS (resolving `phoenix` /
 # `phoenix_live_view` from deps via NODE_PATH); Tailwind builds the CSS. Both run
 # as standalone binaries — no Node.js toolchain required.
