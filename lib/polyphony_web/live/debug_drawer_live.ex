@@ -11,7 +11,6 @@ defmodule PolyphonyWeb.DebugDrawerLive do
   """
   use Phoenix.LiveView
 
-  alias Phoenix.LiveView.JS
   alias Polyphony.DebugLog
 
   @impl true
@@ -43,30 +42,24 @@ defmodule PolyphonyWeb.DebugDrawerLive do
 
   @impl true
   def render(assigns) do
+    #
+    # Open/close, copy, and the socket-status indicator are driven by plain JS
+    # (see assets/js/app.js), not phx-click / hooks, so the drawer stays usable and
+    # keeps reporting status even when the LiveView socket never connects — the very
+    # failure the drawer exists to diagnose. `#socket-status` is phx-update="ignore"
+    # so LiveView never clobbers what that JS writes. Clear is a server event (only
+    # meaningful while connected).
     ~H"""
     <div id="debug-drawer" class="debug-drawer">
       <div id="debug-drawer-body" class="debug-drawer-body" style="display:none;">
         <div class="debug-drawer-head">
           <span class="debug-title">Session log</span>
           <span class="debug-count"><%= @count %></span>
+          <span id="socket-status" class="socket-status connecting" phx-update="ignore">connecting…</span>
           <div class="spacer"></div>
-          <button
-            type="button"
-            class="btn sm ghost"
-            id="debug-copy"
-            phx-hook="CopyLog"
-            data-target="debug-log-list"
-          >
-            Copy
-          </button>
+          <button type="button" class="btn sm ghost" id="debug-copy">Copy</button>
           <button type="button" class="btn sm ghost" phx-click="clear">Clear</button>
-          <button
-            type="button"
-            class="btn sm ghost"
-            phx-click={JS.hide(to: "#debug-drawer-body") |> JS.show(to: "#debug-drawer-toggle")}
-          >
-            ✕
-          </button>
+          <button type="button" class="btn sm ghost" id="debug-drawer-close">✕</button>
         </div>
         <div class="debug-empty" :if={@count == 0}>No log lines captured yet.</div>
         <div id="debug-log-list" class="debug-log-list" phx-hook="Autoscroll" phx-update="stream">
@@ -82,13 +75,9 @@ defmodule PolyphonyWeb.DebugDrawerLive do
         </div>
       </div>
 
-      <button
-        type="button"
-        id="debug-drawer-toggle"
-        class="debug-drawer-toggle"
-        phx-click={JS.show(to: "#debug-drawer-body") |> JS.hide(to: "#debug-drawer-toggle")}
-      >
+      <button type="button" id="debug-drawer-toggle" class="debug-drawer-toggle">
         ⚙ log <span class="debug-count"><%= @count %></span>
+        <span id="socket-status-toggle" class="socket-dot connecting" phx-update="ignore"></span>
       </button>
     </div>
     """

@@ -17,6 +17,11 @@ defmodule PolyphonyWeb.DebugDrawerLiveTest do
     html = conn |> get(~p"/") |> html_response(200)
     assert html =~ ~s(id="debug-drawer")
     assert html =~ "Session log"
+    # The socket-status indicators are present for app.js to drive (and are
+    # phx-update="ignore" so LiveView never clobbers the client-set state).
+    assert html =~ ~s(id="socket-status")
+    assert html =~ ~s(id="socket-status-toggle")
+    assert html =~ ~s(phx-update="ignore")
   end
 
   test "is absent when disabled", %{conn: conn} do

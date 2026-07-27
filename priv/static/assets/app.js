@@ -8729,23 +8729,58 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
       if (this.pinned) this.el.scrollTop = this.el.scrollHeight;
     }
   };
-  Hooks2.CopyLog = {
-    mounted() {
-      this.el.addEventListener("click", () => {
-        const target = document.getElementById(this.el.dataset.target);
-        if (!target) return;
-        navigator.clipboard.writeText(target.innerText).then(() => {
-          const original = this.el.textContent;
-          this.el.textContent = "Copied!";
-          setTimeout(() => this.el.textContent = original, 1200);
-        });
-      });
-    }
-  };
   var liveSocket = new LiveSocket("/live", Socket, {
     params: { _csrf_token: csrfToken },
     hooks: Hooks2
   });
+  function initDebugDrawer(liveSocket2) {
+    const drawer = document.getElementById("debug-drawer");
+    if (!drawer) return;
+    const body = document.getElementById("debug-drawer-body");
+    const toggle = document.getElementById("debug-drawer-toggle");
+    const closeBtn = document.getElementById("debug-drawer-close");
+    const copyBtn = document.getElementById("debug-copy");
+    if (toggle && body) {
+      toggle.addEventListener("click", () => {
+        body.style.display = "flex";
+        toggle.style.display = "none";
+      });
+    }
+    if (closeBtn && body && toggle) {
+      closeBtn.addEventListener("click", () => {
+        body.style.display = "none";
+        toggle.style.display = "";
+      });
+    }
+    if (copyBtn) {
+      copyBtn.addEventListener("click", () => {
+        const list = document.getElementById("debug-log-list");
+        if (!list) return;
+        navigator.clipboard.writeText(list.innerText).then(() => {
+          const original = copyBtn.textContent;
+          copyBtn.textContent = "Copied!";
+          setTimeout(() => copyBtn.textContent = original, 1200);
+        });
+      });
+    }
+    const pill = document.getElementById("socket-status");
+    const dot = document.getElementById("socket-status-toggle");
+    const setStatus = (state, label) => {
+      if (pill) {
+        pill.className = `socket-status ${state}`;
+        pill.textContent = label;
+      }
+      if (dot) dot.className = `socket-dot ${state}`;
+    };
+    setStatus("connecting", "connecting\u2026");
+    const socket = liveSocket2.socket;
+    if (socket) {
+      socket.onOpen(() => setStatus("connected", "connected"));
+      socket.onError(() => setStatus("disconnected", "disconnected"));
+      socket.onClose(() => setStatus("disconnected", "disconnected"));
+    }
+  }
+  initDebugDrawer(liveSocket);
   liveSocket.connect();
   window.liveSocket = liveSocket;
 })();

@@ -26,26 +26,69 @@ Hooks.Autoscroll = {
   },
 }
 
-// Copy the full debug-log buffer (the `data-target` element's text) to the
-// clipboard, with a brief "Copied!" confirmation on the button.
-Hooks.CopyLog = {
-  mounted() {
-    this.el.addEventListener("click", () => {
-      const target = document.getElementById(this.el.dataset.target)
-      if (!target) return
-      navigator.clipboard.writeText(target.innerText).then(() => {
-        const original = this.el.textContent
-        this.el.textContent = "Copied!"
-        setTimeout(() => (this.el.textContent = original), 1200)
-      })
-    })
-  },
-}
-
 const liveSocket = new LiveSocket("/live", Socket, {
   params: { _csrf_token: csrfToken },
   hooks: Hooks,
 })
 
+// The debug drawer (bring-up aid). Its open/close, copy, and socket-status
+// indicator are wired here in plain JS — deliberately NOT via phx-click / hooks —
+// so the drawer stays usable and keeps reporting connection state even when the
+// LiveView socket never connects, which is the exact failure it exists to surface.
+function initDebugDrawer(liveSocket) {
+  const drawer = document.getElementById("debug-drawer")
+  if (!drawer) return // drawer disabled — nothing rendered
+
+  const body = document.getElementById("debug-drawer-body")
+  const toggle = document.getElementById("debug-drawer-toggle")
+  const closeBtn = document.getElementById("debug-drawer-close")
+  const copyBtn = document.getElementById("debug-copy")
+
+  if (toggle && body) {
+    toggle.addEventListener("click", () => {
+      body.style.display = "flex"
+      toggle.style.display = "none"
+    })
+  }
+  if (closeBtn && body && toggle) {
+    closeBtn.addEventListener("click", () => {
+      body.style.display = "none"
+      toggle.style.display = ""
+    })
+  }
+  if (copyBtn) {
+    copyBtn.addEventListener("click", () => {
+      const list = document.getElementById("debug-log-list")
+      if (!list) return
+      navigator.clipboard.writeText(list.innerText).then(() => {
+        const original = copyBtn.textContent
+        copyBtn.textContent = "Copied!"
+        setTimeout(() => (copyBtn.textContent = original), 1200)
+      })
+    })
+  }
+
+  // Reflect the Phoenix socket lifecycle onto the status pill (drawer head) and
+  // the dot on the collapsed toggle, so connection state is visible either way.
+  const pill = document.getElementById("socket-status")
+  const dot = document.getElementById("socket-status-toggle")
+  const setStatus = (state, label) => {
+    if (pill) {
+      pill.className = `socket-status ${state}`
+      pill.textContent = label
+    }
+    if (dot) dot.className = `socket-dot ${state}`
+  }
+
+  setStatus("connecting", "connecting…")
+  const socket = liveSocket.socket
+  if (socket) {
+    socket.onOpen(() => setStatus("connected", "connected"))
+    socket.onError(() => setStatus("disconnected", "disconnected"))
+    socket.onClose(() => setStatus("disconnected", "disconnected"))
+  }
+}
+
+initDebugDrawer(liveSocket)
 liveSocket.connect()
 window.liveSocket = liveSocket

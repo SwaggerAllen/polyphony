@@ -194,9 +194,12 @@ generation — end to end:
      server logs with **Copy** and **Clear** — invaluable when a click seems to do
      nothing (you can see whether it even reached the server, e.g. the `[signup]`
      lines). It exposes raw logs, so set it back to `false` before the app is
-     public. If a **button does nothing and no log line appears**, the LiveView
-     socket isn't connecting — check the logs for a `check_origin` rejection
-     (`PHX_HOST` must match the app domain).
+     public. The drawer also shows a **socket-status** indicator (a dot on the
+     collapsed toggle, a labelled pill when open): green = connected, amber =
+     connecting, red = disconnected. It's driven by client JS, so it works even
+     when the socket is down. If a **button does nothing, no log line appears, and
+     the status is red**, the LiveView socket isn't connecting — check the logs for
+     a `check_origin` rejection (`PHX_HOST` must match the app domain).
 6. **Persistence check.** Redeploy (or restart the app) and confirm the scene is
    still there — that's the persistent event store surviving a restart, the whole
    reason prod isn't on the in-memory adapter.

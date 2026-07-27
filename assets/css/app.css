@@ -183,3 +183,22 @@ pre { padding: .75rem; overflow-x: auto; }
 .lvl-warning .debug-lvl, .lvl-warn .debug-lvl { color: var(--warn); }
 .lvl-notice .debug-lvl, .lvl-info .debug-lvl { color: var(--good); }
 .lvl-debug .debug-lvl { color: var(--accent-2); }
+
+/* Socket status — a labelled pill in the drawer head, plus a dot on the collapsed
+   toggle so connection state is visible either way. Driven by app.js. */
+.socket-status {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-size: .7rem; color: var(--fg-dim); text-transform: lowercase;
+}
+.socket-status::before {
+  content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--fg-faint);
+}
+.socket-dot {
+  display: inline-block; width: .5rem; height: .5rem; border-radius: 50%;
+  margin-left: .1rem; background: var(--fg-faint); vertical-align: middle;
+}
+.socket-status.connected::before, .socket-dot.connected { background: var(--good); }
+.socket-status.connecting::before, .socket-dot.connecting { background: var(--warn); }
+.socket-status.disconnected::before, .socket-dot.disconnected {
+  background: var(--bad); animation: pulse 1.2s ease-in-out infinite;
+}
