@@ -79,14 +79,17 @@ defmodule Polyphony.Release do
     :ok
   end
 
-  # Retry the whole migration on connection-ish failures — a fresh managed DB can
-  # briefly be at its connection cap during a rolling deploy. Migrations are
-  # idempotent, so a re-run after a partial failure is safe.
+  # Retry the whole migration on transient DB failures — connection crunch
+  # (managed DB at its slot cap during a rolling deploy) or a migration-lock
+  # **deadlock** (another migrator, or a lock left by a crash-looped boot). All are
+  # transient and migrations are idempotent, so a re-run after a partial failure is
+  # safe. A non-transient error (e.g. a genuinely broken migration) is re-raised at
+  # once so it isn't masked by pointless retries.
   defp with_retry(fun, attempt \\ 1) do
     fun.()
   rescue
-    e in [DBConnection.ConnectionError, Postgrex.Error] ->
-      if attempt < @max_attempts do
+    e ->
+      if attempt < @max_attempts and retryable?(e) do
         wait = min(2_000 * Integer.pow(2, attempt - 1), 30_000)
 
         Logger.warning(
@@ -99,6 +102,24 @@ defmodule Polyphony.Release do
       else
         reraise e, __STACKTRACE__
       end
+  end
+
+  defp retryable?(%DBConnection.ConnectionError{}), do: true
+  defp retryable?(%Postgrex.Error{postgres: %{code: :deadlock_detected}}), do: true
+  defp retryable?(%Postgrex.Error{postgres: %{code: :too_many_connections}}), do: true
+
+  defp retryable?(e) do
+    # Ecto sometimes wraps the lock deadlock / connection issues in a RuntimeError;
+    # match on the message as a fallback.
+    msg = Exception.message(e)
+
+    String.contains?(msg, [
+      "deadlock",
+      "connection not available",
+      "too many connections",
+      "tcp closed",
+      "timed out"
+    ])
   end
 
   # CREATE SCHEMA "eventstore" over the existing DATABASE_URL connection; a schema

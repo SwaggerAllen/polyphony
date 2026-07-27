@@ -17,8 +17,9 @@ self-contained OTP release built by the repo `Dockerfile`; CI/CD lives in
 - **One managed Postgres 16 cluster, two schemas.** The read models live in `public`;
   the persistent event store lives in a dedicated `eventstore` schema. Both come from
   the single `DATABASE_URL` App Platform injects.
-- **A PRE_DEPLOY job migrates before each release goes live**, then the web service
-  boots.
+- **The web service migrates itself on boot** (`Polyphony.Release.migrate/0`, gated
+  by `MIGRATE_ON_BOOT`) before it serves — the single migrator, so nothing contends
+  on the migration lock.
 
 ## Prerequisites
 
@@ -53,9 +54,8 @@ without a code change:
    doctl apps create --spec .do/app.yaml
    ```
 
-   This provisions the `web` service, the `migrate` PRE_DEPLOY job, and the managed
-   `db` (Postgres 16). Note the returned app id and set it as the `DO_APP_ID` repo
-   secret for CD.
+   This provisions the `web` service and the managed `db` (Postgres 16). Note the
+   returned app id and set it as the `DO_APP_ID` repo secret for CD.
 
 2. **Set secrets / env.** `.do/app.yaml` declares them; fill in the `SECRET` ones in
    the App Platform UI (or via `doctl`):
@@ -85,26 +85,30 @@ without a code change:
 
 ## Migrations & the event store on deploy
 
-The PRE_DEPLOY job runs `bin/migrate`, which calls `Polyphony.Release.migrate/0`:
+On boot the web service runs `Polyphony.Release.migrate/0` (before it serves):
 
 1. runs pending read-model Ecto migrations (`public` schema), then
 2. creates the `eventstore` schema if absent (over the existing `DATABASE_URL`
    connection — no `CREATE DATABASE`), and initializes/upgrades the event store
    tables.
 
-Both steps are **idempotent**, so it is safe on every deploy. This is the only place
-the event store schema is provisioned; the web service then boots with the
-persistent adapter (`config/config.exs` selects it in prod).
+Both steps are **idempotent** and safe to run on every boot. `migrate/0` is
+deliberately robust for a small managed DB: the migration uses a tiny pool with
+long queue/connect timeouts and retries with backoff on transient failures
+(connection crunch, or a migration-lock **deadlock**).
 
-**Belt-and-suspenders: migrate on boot.** Because a pre-deploy job that silently
-fails leaves the app up with missing tables (you'll see `relation "users" does not
-exist`), the web service **also** runs `Polyphony.Release.migrate/0` at startup when
-`MIGRATE_ON_BOOT=true` (the spec default) — before it serves. It's the same
-idempotent call, guarded by Ecto's migration lock, so the schema is guaranteed
-present on every boot regardless of the job. Set `MIGRATE_ON_BOOT=false` to rely
-solely on the pre-deploy job (e.g. to keep boots fast once you run many instances).
-If you ever need to run it by hand, open the web component's console and run
-`bin/migrate`.
+**One migrator, on boot.** There is intentionally **no PRE_DEPLOY migrate job** —
+two migrators (a job plus the booting instance) contend on the `schema_migrations`
+migration lock and can deadlock. Instead the web service runs `migrate/0` at
+startup when `MIGRATE_ON_BOOT=true` (the spec default), before it serves, so the
+schema is guaranteed present. Once migrations are applied, later boots are a fast
+no-op. Set `MIGRATE_ON_BOOT=false` only if you move migrations elsewhere. To run it
+by hand, open the web component's console and run `bin/migrate`.
+
+> **If you created the app from an older spec** that still has the `migrate`
+> PRE_DEPLOY job, delete that job from the app (DO console → the job component, or
+> re-sync with `doctl apps update --spec .do/app.yaml`) — otherwise it and the
+> boot migrator race.
 
 ## Database connection budget
 
