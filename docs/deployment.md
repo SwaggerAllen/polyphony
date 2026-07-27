@@ -157,6 +157,14 @@ multiplies further. If you raise `instance_count`, add traffic, or want bigger
 pools, move off the dev DB to a plan with a higher connection limit and raise
 `POOL_SIZE` accordingly.
 
+`Polyphony.ShutdownHook` helps here: on shutdown it terminates first and releases
+the Repo connections **early**, so an outgoing instance frees its slots at the
+start of the shutdown window instead of the end (`drain_on_shutdown`, on in prod).
+This only helps a **graceful** shutdown (SIGTERM) — a hard SIGKILL or a crash can't
+run cleanup, so those connections linger until the server reaps the dead sockets
+(minutes). If you still see `no connection available` after that, the dev DB's slot
+cap is simply too tight for a rolling deploy — bump the DB plan.
+
 ## First smoke test after deploy
 
 Once the app is live, confirm the whole stack — auth, DB, event store, and real
