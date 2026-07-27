@@ -20,27 +20,35 @@ defmodule PolyphonyWeb.LibraryLive do
   end
 
   def handle_event("new", %{"kind" => kind, "name" => name}, socket) when name != "" do
-    payload = blank_payload(kind, name)
-    Library.put(%{owner: socket.assigns.owner, kind: kind, payload: payload})
-    {:noreply, socket |> put_flash(:info, "Created #{kind} “#{name}”.") |> load()}
+    safe(socket, fn ->
+      payload = blank_payload(kind, name)
+      Library.put(%{owner: socket.assigns.owner, kind: kind, payload: payload})
+      {:noreply, socket |> put_flash(:info, "Created #{kind} “#{name}”.") |> load()}
+    end)
   end
 
   def handle_event("new", _params, socket),
     do: {:noreply, put_flash(socket, :error, "Give it a name first.")}
 
   def handle_event("visibility", %{"eid" => id, "visibility" => vis}, socket) do
-    Library.set_visibility(id, vis)
-    {:noreply, load(socket)}
+    safe(socket, fn ->
+      Library.set_visibility(id, vis)
+      {:noreply, load(socket)}
+    end)
   end
 
   def handle_event("archive", %{"id" => id}, socket) do
-    Library.archive(id)
-    {:noreply, socket |> put_flash(:info, "Archived.") |> load()}
+    safe(socket, fn ->
+      Library.archive(id)
+      {:noreply, socket |> put_flash(:info, "Archived.") |> load()}
+    end)
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
-    Library.soft_delete(id)
-    {:noreply, socket |> put_flash(:info, "Deleted (recoverable).") |> load()}
+    safe(socket, fn ->
+      Library.soft_delete(id)
+      {:noreply, socket |> put_flash(:info, "Deleted (recoverable).") |> load()}
+    end)
   end
 
   defp blank_payload("character", name), do: %CharacterSheet{name: name, status: :full}

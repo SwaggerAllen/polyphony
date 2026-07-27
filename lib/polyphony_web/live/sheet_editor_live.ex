@@ -17,43 +17,49 @@ defmodule PolyphonyWeb.SheetEditorLive do
   end
 
   def handle_event("save", params, socket) do
-    sheet = %CharacterSheet{
-      socket.assigns.sheet
-      | name: params["name"],
-        premise: params["premise"],
-        appearance: params["appearance"],
-        voice: params["voice"],
-        temperament: params["temperament"],
-        backstory: params["backstory"]
-    }
+    safe(socket, fn ->
+      sheet = %CharacterSheet{
+        socket.assigns.sheet
+        | name: params["name"],
+          premise: params["premise"],
+          appearance: params["appearance"],
+          voice: params["voice"],
+          temperament: params["temperament"],
+          backstory: params["backstory"]
+      }
 
-    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, sheet)
-    {:noreply, socket |> put_flash(:info, "Saved.") |> assign(entry: entry, sheet: sheet)}
+      {:ok, entry} = Library.update_payload(socket.assigns.entry.id, sheet)
+      {:noreply, socket |> put_flash(:info, "Saved.") |> assign(entry: entry, sheet: sheet)}
+    end)
   end
 
   def handle_event("promote", _params, socket) do
-    case Stub.promote(socket.assigns.sheet) do
-      {:ok, promoted} ->
-        {:ok, entry} = Library.update_payload(socket.assigns.entry.id, promoted)
+    safe(socket, fn ->
+      case Stub.promote(socket.assigns.sheet) do
+        {:ok, promoted} ->
+          {:ok, entry} = Library.update_payload(socket.assigns.entry.id, promoted)
 
-        {:noreply,
-         socket
-         |> put_flash(:info, "Promoted — review and accept below.")
-         |> assign(entry: entry, sheet: promoted)}
+          {:noreply,
+           socket
+           |> put_flash(:info, "Promoted — review and accept below.")
+           |> assign(entry: entry, sheet: promoted)}
 
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Could not generate a sheet.")}
-    end
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Could not generate a sheet.")}
+      end
+    end)
   end
 
   def handle_event("accept", _params, socket) do
-    accepted = Stub.accept(socket.assigns.sheet)
-    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, accepted)
+    safe(socket, fn ->
+      accepted = Stub.accept(socket.assigns.sheet)
+      {:ok, entry} = Library.update_payload(socket.assigns.entry.id, accepted)
 
-    {:noreply,
-     socket
-     |> put_flash(:info, "Accepted — the character is ready to cast.")
-     |> assign(entry: entry, sheet: accepted)}
+      {:noreply,
+       socket
+       |> put_flash(:info, "Accepted — the character is ready to cast.")
+       |> assign(entry: entry, sheet: accepted)}
+    end)
   end
 
   def render(assigns) do

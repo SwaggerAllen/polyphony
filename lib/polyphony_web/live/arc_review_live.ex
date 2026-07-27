@@ -28,8 +28,10 @@ defmodule PolyphonyWeb.ArcReviewLive do
   end
 
   def handle_event("accept", %{"id" => id}, socket) do
-    ArcEntry.accept(Repo, String.to_integer(id))
-    {:noreply, socket |> put_flash(:info, "Accepted into canon.") |> load()}
+    safe(socket, fn ->
+      ArcEntry.accept(Repo, String.to_integer(id))
+      {:noreply, socket |> put_flash(:info, "Accepted into canon.") |> load()}
+    end)
   end
 
   def render(assigns) do

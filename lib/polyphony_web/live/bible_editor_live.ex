@@ -17,17 +17,19 @@ defmodule PolyphonyWeb.BibleEditorLive do
   end
 
   def handle_event("save", params, socket) do
-    bible = %WorldBible{
-      socket.assigns.bible
-      | name: params["name"],
-        setting: params["setting"],
-        tone: params["tone"],
-        rules: lines(params["rules"]),
-        starting_canon: lines(params["starting_canon"])
-    }
+    safe(socket, fn ->
+      bible = %WorldBible{
+        socket.assigns.bible
+        | name: params["name"],
+          setting: params["setting"],
+          tone: params["tone"],
+          rules: lines(params["rules"]),
+          starting_canon: lines(params["starting_canon"])
+      }
 
-    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, bible)
-    {:noreply, socket |> put_flash(:info, "Saved.") |> assign(entry: entry, bible: bible)}
+      {:ok, entry} = Library.update_payload(socket.assigns.entry.id, bible)
+      {:noreply, socket |> put_flash(:info, "Saved.") |> assign(entry: entry, bible: bible)}
+    end)
   end
 
   defp lines(nil), do: []

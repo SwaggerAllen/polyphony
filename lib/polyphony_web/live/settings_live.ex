@@ -23,38 +23,46 @@ defmodule PolyphonyWeb.SettingsLive do
   end
 
   def handle_event("profile", params, socket) do
-    Accounts.update_profile(socket.assigns.current_user, %{
-      display_name: params["display_name"],
-      bio: params["bio"],
-      avatar_url: params["avatar_url"]
-    })
+    safe(socket, fn ->
+      Accounts.update_profile(socket.assigns.current_user, %{
+        display_name: params["display_name"],
+        bio: params["bio"],
+        avatar_url: params["avatar_url"]
+      })
 
-    {:noreply, socket |> put_flash(:info, "Profile saved.") |> refresh()}
+      {:noreply, socket |> put_flash(:info, "Profile saved.") |> refresh()}
+    end)
   end
 
   def handle_event("username", %{"username" => username}, socket) do
-    case Accounts.change_username(socket.assigns.current_user, username) do
-      {:ok, _} ->
-        {:noreply, socket |> put_flash(:info, "Username changed.") |> refresh()}
+    safe(socket, fn ->
+      case Accounts.change_username(socket.assigns.current_user, username) do
+        {:ok, _} ->
+          {:noreply, socket |> put_flash(:info, "Username changed.") |> refresh()}
 
-      {:error, :rate_limited} ->
-        {:noreply, put_flash(socket, :error, "You can only change your username once a month.")}
+        {:error, :rate_limited} ->
+          {:noreply, put_flash(socket, :error, "You can only change your username once a month.")}
 
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "That username is taken or invalid.")}
-    end
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "That username is taken or invalid.")}
+      end
+    end)
   end
 
   def handle_event("proactive_opt_out", params, socket) do
-    Accounts.set_proactive_opt_out(socket.assigns.current_user, params["value"] == "true")
-    {:noreply, socket |> put_flash(:info, "Data preference saved.") |> refresh()}
+    safe(socket, fn ->
+      Accounts.set_proactive_opt_out(socket.assigns.current_user, params["value"] == "true")
+      {:noreply, socket |> put_flash(:info, "Data preference saved.") |> refresh()}
+    end)
   end
 
   def handle_event("consent", _params, socket) do
-    for doc <- socket.assigns.needs_reconsent,
-        do: Accounts.accept_consent(socket.assigns.current_user.id, doc)
+    safe(socket, fn ->
+      for doc <- socket.assigns.needs_reconsent,
+          do: Accounts.accept_consent(socket.assigns.current_user.id, doc)
 
-    {:noreply, socket |> put_flash(:info, "Thanks — consent updated.") |> refresh()}
+      {:noreply, socket |> put_flash(:info, "Thanks — consent updated.") |> refresh()}
+    end)
   end
 
   def render(assigns) do
