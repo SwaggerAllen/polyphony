@@ -72,11 +72,65 @@ defmodule Polyphony.Release do
     for event_store <- Application.get_env(@app, :event_stores, []) do
       # Keep the setup's own connections minimal (it's connection-constrained too).
       config = Keyword.put(event_store.config(), :pool_size, 2)
+      maybe_bootstrap_schema_as_admin(config)
       ensure_schema!(config)
       :ok = EventStore.Tasks.Init.exec(config, quiet: true)
     end
 
     :ok
+  end
+
+  # One-time bootstrap for a managed DB whose app user lacks CREATE on the database.
+  # If DB_ADMIN_URL is set, connect as that admin (e.g. DO's `doadmin`) and create
+  # the event-store schema **owned by the app user** — so the app user (from
+  # DATABASE_URL) can then create/use its tables without any further grants, and you
+  # can remove DB_ADMIN_URL afterward. Idempotent (CREATE SCHEMA IF NOT EXISTS); a
+  # no-op when DB_ADMIN_URL is unset.
+  defp maybe_bootstrap_schema_as_admin(config) do
+    case System.get_env("DB_ADMIN_URL") do
+      nil ->
+        :ok
+
+      admin_url ->
+        schema = Keyword.fetch!(config, :schema)
+        # config() has already parsed the url into discrete opts.
+        app_user = Keyword.fetch!(config, :username)
+        {:ok, conn} = Postgrex.start_link(admin_conn_opts(admin_url))
+
+        try do
+          Postgrex.query!(
+            conn,
+            ~s|CREATE SCHEMA IF NOT EXISTS "#{schema}" AUTHORIZATION "#{app_user}"|,
+            []
+          )
+
+          Logger.info(
+            "[migrate] ensured schema #{inspect(schema)} owned by #{inspect(app_user)} via DB_ADMIN_URL"
+          )
+        after
+          GenServer.stop(conn)
+        end
+    end
+  end
+
+  defp admin_conn_opts(admin_url) do
+    uri = URI.parse(String.split(admin_url, "?") |> hd())
+    [user, pass] = String.split(uri.userinfo || ":", ":", parts: 2)
+
+    base = [
+      hostname: uri.host,
+      port: uri.port || 5432,
+      username: URI.decode(user),
+      password: URI.decode(pass),
+      database: String.trim_leading(uri.path || "", "/")
+    ]
+
+    # Match the app's SSL posture (managed DBs require it; DATABASE_SSL=false opts out).
+    if System.get_env("DATABASE_SSL") == "false" do
+      base
+    else
+      base ++ [ssl: true, ssl_opts: [verify: :verify_none]]
+    end
   end
 
   # Retry the whole migration on transient DB failures — connection crunch
@@ -122,13 +176,70 @@ defmodule Polyphony.Release do
     ])
   end
 
-  # CREATE SCHEMA "eventstore" over the existing DATABASE_URL connection; a schema
-  # that already exists is fine.
+  # Ensure the event-store schema exists. Check first (a SELECT the app user can
+  # always do) and only CREATE if it's genuinely missing — because Postgres checks
+  # the CREATE privilege *before* the "already exists" case, so an app user without
+  # database-level CREATE gets `permission denied` even for an existing schema (e.g.
+  # one made by the DB_ADMIN_URL bootstrap or pre-created by hand).
   defp ensure_schema!(config) do
+    if schema_exists?(config) do
+      :ok
+    else
+      create_schema!(config)
+    end
+  end
+
+  defp schema_exists?(config) do
+    conn_opts =
+      Keyword.take(config, [:hostname, :port, :username, :password, :database, :ssl, :ssl_opts])
+
+    {:ok, conn} = Postgrex.start_link(conn_opts)
+
+    try do
+      %{rows: [[exists?]]} =
+        Postgrex.query!(
+          conn,
+          "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = $1)",
+          [Keyword.fetch!(config, :schema)]
+        )
+
+      exists?
+    after
+      GenServer.stop(conn)
+    end
+  end
+
+  defp create_schema!(config) do
     case EventStore.Storage.Schema.create(config) do
-      :ok -> :ok
-      {:error, :already_up} -> :ok
-      {:error, reason} -> raise "failed to create event store schema: #{inspect(reason)}"
+      :ok ->
+        :ok
+
+      {:error, :already_up} ->
+        :ok
+
+      {:error, reason} ->
+        message = to_string(inspect(reason))
+
+        if String.contains?(message, ["insufficient_privilege", "permission denied"]) do
+          schema = Keyword.fetch!(config, :schema)
+
+          raise """
+          Could not create the event store schema #{inspect(schema)}: #{message}
+
+          The app's database user lacks CREATE on the database. Easiest fix (no DB
+          console needed): set the DB_ADMIN_URL env var to the admin connection
+          string (DO's `doadmin`) and redeploy — the app will create the schema
+          owned by the app user, then you can remove DB_ADMIN_URL.
+
+          Or, from a DB console as the admin, run once then redeploy:
+
+              CREATE SCHEMA IF NOT EXISTS #{schema} AUTHORIZATION "<app_user>";
+
+          (<app_user> is the username in DATABASE_URL.) See docs/deployment.md.
+          """
+        else
+          raise "failed to create event store schema: #{message}"
+        end
     end
   end
 
