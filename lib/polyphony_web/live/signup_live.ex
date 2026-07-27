@@ -16,22 +16,24 @@ defmodule PolyphonyWeb.SignupLive do
   end
 
   def handle_event("register", params, socket) do
-    attrs = %{
-      email: params["email"],
-      username: params["username"],
-      attested_adult: params["attest"] == "true",
-      accepted_consents:
-        if(params["consent"] == "true", do: Consent.required_documents(), else: []),
-      invite_token: params["invite_token"]
-    }
+    safe(socket, fn ->
+      attrs = %{
+        email: params["email"],
+        username: params["username"],
+        attested_adult: params["attest"] == "true",
+        accepted_consents:
+          if(params["consent"] == "true", do: Consent.required_documents(), else: []),
+        invite_token: params["invite_token"]
+      }
 
-    case Accounts.register(attrs) do
-      {:ok, user} ->
-        {:noreply, redirect(socket, to: ~p"/auth/verify/#{Auth.sign_token(user.id)}")}
+      case Accounts.register(attrs) do
+        {:ok, user} ->
+          {:noreply, redirect(socket, to: ~p"/auth/verify/#{Auth.sign_token(user.id)}")}
 
-      {:error, reason} ->
-        {:noreply, assign(socket, error: message(reason))}
-    end
+        {:error, reason} ->
+          {:noreply, assign(socket, error: message(reason))}
+      end
+    end)
   end
 
   defp message(:attestation_required), do: "You must confirm you are 18 or older."

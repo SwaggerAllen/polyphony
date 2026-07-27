@@ -29,6 +29,7 @@ defmodule PolyphonyWeb do
   def live_view do
     quote do
       use Phoenix.LiveView, layout: {PolyphonyWeb.Layouts, :app}
+      import PolyphonyWeb.SafeEvent, only: [safe: 2]
       unquote(html_helpers())
     end
   end

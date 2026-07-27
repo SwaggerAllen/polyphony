@@ -14,15 +14,17 @@ defmodule PolyphonyWeb.LoginLive do
   end
 
   def handle_event("send", %{"email" => email}, socket) do
-    case Accounts.get_by_email(email) do
-      nil ->
-        # Don't reveal whether an address exists; claim sent either way.
-        {:noreply, assign(socket, sent: true, dev_link: nil)}
+    safe(socket, fn ->
+      case Accounts.get_by_email(email) do
+        nil ->
+          # Don't reveal whether an address exists; claim sent either way.
+          {:noreply, assign(socket, sent: true, dev_link: nil)}
 
-      user ->
-        url = Auth.deliver_magic_link(user)
-        {:noreply, assign(socket, sent: true, dev_link: dev_link(url))}
-    end
+        user ->
+          url = Auth.deliver_magic_link(user)
+          {:noreply, assign(socket, sent: true, dev_link: dev_link(url))}
+      end
+    end)
   end
 
   # In dev we surface the link; in prod it only goes to email.
