@@ -91,6 +91,14 @@ if config_env() == :prod do
          :reset_incomplete_bootstrap,
          System.get_env("RESET_INCOMPLETE_BOOTSTRAP", "false") in ~w(true 1)
 
+  # Floating debug drawer that streams recent server logs into the browser (copy +
+  # clear). Invaluable during bring-up — you can watch what the server does on a
+  # click without SSH. Off by default; it exposes raw logs, so set DEBUG_DRAWER=true
+  # only while diagnosing and turn it off before the app is public.
+  config :polyphony,
+         :debug_drawer,
+         System.get_env("DEBUG_DRAWER", "false") in ~w(true 1)
+
   config :polyphony, :llm,
     provider: Polyphony.LLM.DeepInfra,
     deepinfra: [

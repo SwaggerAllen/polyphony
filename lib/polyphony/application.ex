@@ -19,7 +19,7 @@ defmodule Polyphony.Application do
         Polyphony.Broadcast.Publisher,
         PolyphonyWeb.Telemetry,
         PolyphonyWeb.Endpoint
-      ] ++ projectors() ++ shutdown_hook()
+      ] ++ debug_log() ++ projectors() ++ shutdown_hook()
 
     opts = [strategy: :one_for_one, name: Polyphony.Supervisor]
     Supervisor.start_link(children, opts)
@@ -57,6 +57,17 @@ defmodule Polyphony.Application do
     if Application.get_env(:polyphony, :reset_incomplete_bootstrap, false) do
       Logger.info("[boot] checking sign-up bootstrap state")
       Polyphony.Release.clean_incomplete_bootstrap()
+    end
+  end
+
+  # The debug-log ring buffer + :logger handler backing PolyphonyWeb.DebugDrawerLive.
+  # Only started when the drawer is enabled (DEBUG_DRAWER in prod); depends on PubSub
+  # (already started above) for broadcasting captured lines to connected drawers.
+  defp debug_log do
+    if Application.get_env(:polyphony, :debug_drawer, false) do
+      [Polyphony.DebugLog]
+    else
+      []
     end
   end
 

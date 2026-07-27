@@ -26,6 +26,22 @@ Hooks.Autoscroll = {
   },
 }
 
+// Copy the full debug-log buffer (the `data-target` element's text) to the
+// clipboard, with a brief "Copied!" confirmation on the button.
+Hooks.CopyLog = {
+  mounted() {
+    this.el.addEventListener("click", () => {
+      const target = document.getElementById(this.el.dataset.target)
+      if (!target) return
+      navigator.clipboard.writeText(target.innerText).then(() => {
+        const original = this.el.textContent
+        this.el.textContent = "Copied!"
+        setTimeout(() => (this.el.textContent = original), 1200)
+      })
+    })
+  },
+}
+
 const liveSocket = new LiveSocket("/live", Socket, {
   params: { _csrf_token: csrfToken },
   hooks: Hooks,

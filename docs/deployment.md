@@ -189,6 +189,14 @@ generation — end to end:
    - **Unexpected 500s** (with `SHOW_ERROR_DETAILS=true`) now render the full
      exception + stacktrace in the browser, plus a request id — so you rarely need
      the logs during bring-up. Turn the flag off before opening the app publicly.
+   - **Watch the server live from the browser.** Set `DEBUG_DRAWER=true` to get a
+     floating **debug drawer** (bottom-right, on every page) that streams recent
+     server logs with **Copy** and **Clear** — invaluable when a click seems to do
+     nothing (you can see whether it even reached the server, e.g. the `[signup]`
+     lines). It exposes raw logs, so set it back to `false` before the app is
+     public. If a **button does nothing and no log line appears**, the LiveView
+     socket isn't connecting — check the logs for a `check_origin` rejection
+     (`PHX_HOST` must match the app domain).
 6. **Persistence check.** Redeploy (or restart the app) and confirm the scene is
    still there — that's the persistent event store surviving a restart, the whole
    reason prod isn't on the in-memory adapter.

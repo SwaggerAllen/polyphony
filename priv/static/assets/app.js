@@ -8729,6 +8729,19 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
       if (this.pinned) this.el.scrollTop = this.el.scrollHeight;
     }
   };
+  Hooks2.CopyLog = {
+    mounted() {
+      this.el.addEventListener("click", () => {
+        const target = document.getElementById(this.el.dataset.target);
+        if (!target) return;
+        navigator.clipboard.writeText(target.innerText).then(() => {
+          const original = this.el.textContent;
+          this.el.textContent = "Copied!";
+          setTimeout(() => this.el.textContent = original, 1200);
+        });
+      });
+    }
+  };
   var liveSocket = new LiveSocket("/live", Socket, {
     params: { _csrf_token: csrfToken },
     hooks: Hooks2

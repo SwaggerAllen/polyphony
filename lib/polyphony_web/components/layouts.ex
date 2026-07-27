@@ -17,6 +17,9 @@ defmodule PolyphonyWeb.Layouts do
       </head>
       <body>
         <%= @inner_content %>
+        <%= if debug_drawer?() && assigns[:conn] do %>
+          <%= live_render(@conn, PolyphonyWeb.DebugDrawerLive, id: "debug-drawer", sticky: true) %>
+        <% end %>
       </body>
     </html>
     """
@@ -49,4 +52,7 @@ defmodule PolyphonyWeb.Layouts do
     </main>
     """
   end
+
+  # The debug drawer (server-log viewer) is a bring-up aid, off unless enabled.
+  defp debug_drawer?, do: Application.get_env(:polyphony, :debug_drawer, false)
 end
