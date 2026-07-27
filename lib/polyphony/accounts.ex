@@ -108,15 +108,20 @@ defmodule Polyphony.Accounts do
           |> Map.put(:attested_adult_at, now)
         )
 
-      case repo.insert(changeset) do
-        {:ok, user} ->
-          if invite, do: repo.update!(Invite.redeem_changeset(invite, user.id, now))
-          record_consents(repo, user.id, now)
-          {:ok, user}
+      # Atomic: the user, invite redemption, and consent records land together or
+      # not at all — a mid-write failure never leaves a partial account behind (which
+      # would then block retries on the unique email/username).
+      repo.transaction(fn ->
+        case repo.insert(changeset) do
+          {:ok, user} ->
+            if invite, do: repo.update!(Invite.redeem_changeset(invite, user.id, now))
+            record_consents(repo, user.id, now)
+            user
 
-        {:error, changeset} ->
-          {:error, changeset}
-      end
+          {:error, changeset} ->
+            repo.rollback(changeset)
+        end
+      end)
     end
   end
 
