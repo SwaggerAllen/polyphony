@@ -36,51 +36,55 @@ defmodule PolyphonyWeb.CampaignLive do
   end
 
   def handle_event("start_scene", _params, socket) do
-    %{entry: entry, payload: payload, cast: cast} = socket.assigns
-    scene_id = "sc-" <> Integer.to_string(System.unique_integer([:positive]))
-    premise = payload[:premise] || ""
+    safe(socket, fn ->
+      %{entry: entry, payload: payload, cast: cast} = socket.assigns
+      scene_id = "sc-" <> Integer.to_string(System.unique_integer([:positive]))
+      premise = payload[:premise] || ""
 
-    :ok =
-      App.dispatch(%OpenScene{
-        scene_id: scene_id,
-        campaign_id: entry.id,
-        premise: premise,
-        opened_beat: 0
-      })
+      :ok =
+        App.dispatch(%OpenScene{
+          scene_id: scene_id,
+          campaign_id: entry.id,
+          premise: premise,
+          opened_beat: 0
+        })
 
-    for c <- cast do
-      sheet = Library.payload(c)
-      name = char_name(c)
-      :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: name, beat: 1})
-      seed_context(scene_id, name, sheet, premise)
-    end
+      for c <- cast do
+        sheet = Library.payload(c)
+        name = char_name(c)
+        :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: name, beat: 1})
+        seed_context(scene_id, name, sheet, premise)
+      end
 
-    Library.update_payload(entry.id, %{payload | scenes: [scene_id | socket.assigns.scenes]})
-    {:noreply, redirect(socket, to: ~p"/play/#{scene_id}")}
+      Library.update_payload(entry.id, %{payload | scenes: [scene_id | socket.assigns.scenes]})
+      {:noreply, redirect(socket, to: ~p"/play/#{scene_id}")}
+    end)
   end
 
   def handle_event("publish", _params, socket) do
-    %{entry: entry, payload: payload, cast: cast, owner: owner} = socket.assigns
-    bible = if payload[:bible_id], do: Library.get(payload[:bible_id]) |> maybe_payload()
+    safe(socket, fn ->
+      %{entry: entry, payload: payload, cast: cast, owner: owner} = socket.assigns
+      bible = if payload[:bible_id], do: Library.get(payload[:bible_id]) |> maybe_payload()
 
-    characters =
-      Enum.map(cast, fn c ->
-        %{source_id: c.id, source_version: c.version, sheet: Library.payload(c)}
-      end)
+      characters =
+        Enum.map(cast, fn c ->
+          %{source_id: c.id, source_version: c.version, sheet: Library.payload(c)}
+        end)
 
-    Library.publish_campaign(
-      %{
-        owner: owner,
-        campaign_id: entry.id,
-        published_beat: 0,
-        bible: bible,
-        characters: characters,
-        arc: []
-      },
-      visibility: "public"
-    )
+      Library.publish_campaign(
+        %{
+          owner: owner,
+          campaign_id: entry.id,
+          published_beat: 0,
+          bible: bible,
+          characters: characters,
+          arc: []
+        },
+        visibility: "public"
+      )
 
-    {:noreply, put_flash(socket, :info, "Published a public snapshot of this campaign.")}
+      {:noreply, put_flash(socket, :info, "Published a public snapshot of this campaign.")}
+    end)
   end
 
   defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise) do

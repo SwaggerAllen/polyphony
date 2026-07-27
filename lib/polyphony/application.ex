@@ -18,10 +18,21 @@ defmodule Polyphony.Application do
         Polyphony.Broadcast.Publisher,
         PolyphonyWeb.Telemetry,
         PolyphonyWeb.Endpoint
-      ] ++ projectors()
+      ] ++ projectors() ++ shutdown_hook()
 
     opts = [strategy: :one_for_one, name: Polyphony.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  # Last child ⇒ terminates first on shutdown, releasing DB connections early so a
+  # rolling deploy's outgoing instance frees its slots before the new one boots.
+  # Off in test (would touch the SQL sandbox).
+  defp shutdown_hook do
+    if Application.get_env(:polyphony, :drain_on_shutdown, true) do
+      [Polyphony.ShutdownHook]
+    else
+      []
+    end
   end
 
   # Run migrations + event-store setup before the app serves, when enabled

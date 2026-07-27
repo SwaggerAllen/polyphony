@@ -19,57 +19,71 @@ defmodule PolyphonyWeb.AdminLive do
   # ── Report actions ─────────────────────────────────────────────────────────────
 
   def handle_event("take_down", %{"rid" => id, "reason" => reason}, socket) do
-    report = Moderation.get_report(String.to_integer(id))
-    Moderation.take_down(socket.assigns.current_user, report, reason)
-    {:noreply, socket |> put_flash(:info, "Taken down.") |> load()}
+    safe(socket, fn ->
+      report = Moderation.get_report(String.to_integer(id))
+      Moderation.take_down(socket.assigns.current_user, report, reason)
+      {:noreply, socket |> put_flash(:info, "Taken down.") |> load()}
+    end)
   end
 
   def handle_event("dismiss", %{"id" => id}, socket) do
-    report = Moderation.get_report(String.to_integer(id))
-    Moderation.dismiss(socket.assigns.current_user, report)
-    {:noreply, socket |> put_flash(:info, "Dismissed.") |> load()}
+    safe(socket, fn ->
+      report = Moderation.get_report(String.to_integer(id))
+      Moderation.dismiss(socket.assigns.current_user, report)
+      {:noreply, socket |> put_flash(:info, "Dismissed.") |> load()}
+    end)
   end
 
   def handle_event("suspend", %{"id" => id}, socket) do
-    report = Moderation.get_report(String.to_integer(id))
-    Moderation.suspend_user(socket.assigns.current_user, report)
-    {:noreply, socket |> put_flash(:info, "Account suspended.") |> load()}
+    safe(socket, fn ->
+      report = Moderation.get_report(String.to_integer(id))
+      Moderation.suspend_user(socket.assigns.current_user, report)
+      {:noreply, socket |> put_flash(:info, "Account suspended.") |> load()}
+    end)
   end
 
   def handle_event("warn", %{"id" => id, "message" => msg}, socket) do
-    report = Moderation.get_report(String.to_integer(id))
-    Moderation.warn_owner(socket.assigns.current_user, report, msg)
-    {:noreply, put_flash(socket, :info, "Owner warned.")}
+    safe(socket, fn ->
+      report = Moderation.get_report(String.to_integer(id))
+      Moderation.warn_owner(socket.assigns.current_user, report, msg)
+      {:noreply, put_flash(socket, :info, "Owner warned.")}
+    end)
   end
 
   def handle_event("view", %{"id" => id}, socket) do
-    report = Moderation.get_report(String.to_integer(id))
+    safe(socket, fn ->
+      report = Moderation.get_report(String.to_integer(id))
 
-    case Moderation.access_report_content(socket.assigns.current_user, report) do
-      {:ok, entries} -> {:noreply, assign(socket, viewed: {report.id, entries})}
-      _ -> {:noreply, put_flash(socket, :error, "Could not open report content.")}
-    end
+      case Moderation.access_report_content(socket.assigns.current_user, report) do
+        {:ok, entries} -> {:noreply, assign(socket, viewed: {report.id, entries})}
+        _ -> {:noreply, put_flash(socket, :error, "Could not open report content.")}
+      end
+    end)
   end
 
   # ── Invites + roles ─────────────────────────────────────────────────────────────
 
   def handle_event("invite", _params, socket) do
-    case Accounts.create_invite(socket.assigns.current_user) do
-      {:ok, invite} ->
-        {:noreply, assign(socket, invite_url: "#{url(~p"/signup")} · code: #{invite.token}")}
+    safe(socket, fn ->
+      case Accounts.create_invite(socket.assigns.current_user) do
+        {:ok, invite} ->
+          {:noreply, assign(socket, invite_url: "#{url(~p"/signup")} · code: #{invite.token}")}
 
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Only admins can create invites.")}
-    end
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Only admins can create invites.")}
+      end
+    end)
   end
 
   def handle_event("promote", %{"username" => username}, socket) do
-    with %Accounts.User{} = target <- Accounts.get_by_username(username),
-         {:ok, _} <- Accounts.promote_to_admin(socket.assigns.current_user, target) do
-      {:noreply, socket |> put_flash(:info, "@#{username} is now an admin.") |> load()}
-    else
-      _ -> {:noreply, put_flash(socket, :error, "Could not promote @#{username}.")}
-    end
+    safe(socket, fn ->
+      with %Accounts.User{} = target <- Accounts.get_by_username(username),
+           {:ok, _} <- Accounts.promote_to_admin(socket.assigns.current_user, target) do
+        {:noreply, socket |> put_flash(:info, "@#{username} is now an admin.") |> load()}
+      else
+        _ -> {:noreply, put_flash(socket, :error, "Could not promote @#{username}.")}
+      end
+    end)
   end
 
   def render(assigns) do

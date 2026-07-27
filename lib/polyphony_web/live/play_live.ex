@@ -62,53 +62,57 @@ defmodule PolyphonyWeb.PlayLive do
 
   def handle_event("say", %{"as" => as, "text" => text} = params, socket)
       when as != "" and text != "" do
-    beat = socket.assigns.next_beat
+    safe(socket, fn ->
+      beat = socket.assigns.next_beat
 
-    to =
-      case params["to"] do
-        t when t in [nil, ""] -> []
-        t -> [t]
-      end
+      to =
+        case params["to"] do
+          t when t in [nil, ""] -> []
+          t -> [t]
+        end
 
-    audibility = if(to == [], do: :normal, else: :private)
+      audibility = if(to == [], do: :normal, else: :private)
 
-    packet = %TurnPacket{
-      moves: [
-        %Move{seq: 1, type: :speech, content: text, addressed_to: to, audibility: audibility}
-      ],
-      self_state: %SelfState{}
-    }
+      packet = %TurnPacket{
+        moves: [
+          %Move{seq: 1, type: :speech, content: text, addressed_to: to, audibility: audibility}
+        ],
+        self_state: %SelfState{}
+      }
 
-    :ok =
-      App.dispatch(%CommitPacket{
-        scene_id: socket.assigns.scene_id,
-        character_id: as,
-        beat: beat,
-        packet_id: BeatOps.packet_id(socket.assigns.scene_id, beat, as),
-        packet: packet,
-        edited: true
-      })
+      :ok =
+        App.dispatch(%CommitPacket{
+          scene_id: socket.assigns.scene_id,
+          character_id: as,
+          beat: beat,
+          packet_id: BeatOps.packet_id(socket.assigns.scene_id, beat, as),
+          packet: packet,
+          edited: true
+        })
 
-    {:noreply, socket |> assign(next_beat: beat + 1) |> reload()}
+      {:noreply, socket |> assign(next_beat: beat + 1) |> reload()}
+    end)
   end
 
   def handle_event("say", _params, socket),
     do: {:noreply, put_flash(socket, :error, "Pick a character and type something.")}
 
   def handle_event("continue", _params, socket) do
-    scene_id = socket.assigns.scene_id
-    beat = socket.assigns.next_beat
-    roster = socket.assigns.roster
+    safe(socket, fn ->
+      scene_id = socket.assigns.scene_id
+      beat = socket.assigns.next_beat
+      roster = socket.assigns.roster
 
-    if roster == [] do
-      {:noreply, put_flash(socket, :error, "No cast present to continue with.")}
-    else
-      # Declare the beat's turn order (roster order), then let the Oban Director loop
-      # cast the autonomous members. Events stream back over the broadcaster.
-      :ok = App.dispatch(%DeclareTurnOrder{scene_id: scene_id, beat: beat, order: roster})
-      SceneControl.continue(scene_id, beat, args: %{"control_hint" => "yield_to_user"})
-      {:noreply, socket |> assign(waiting: :director, next_beat: beat + 1)}
-    end
+      if roster == [] do
+        {:noreply, put_flash(socket, :error, "No cast present to continue with.")}
+      else
+        # Declare the beat's turn order (roster order), then let the Oban Director loop
+        # cast the autonomous members. Events stream back over the broadcaster.
+        :ok = App.dispatch(%DeclareTurnOrder{scene_id: scene_id, beat: beat, order: roster})
+        SceneControl.continue(scene_id, beat, args: %{"control_hint" => "yield_to_user"})
+        {:noreply, socket |> assign(waiting: :director, next_beat: beat + 1)}
+      end
+    end)
   end
 
   # ── Live events ──────────────────────────────────────────────────────────────

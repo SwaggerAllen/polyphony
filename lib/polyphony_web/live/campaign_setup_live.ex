@@ -12,25 +12,27 @@ defmodule PolyphonyWeb.CampaignSetupLive do
   end
 
   def handle_event("create", params, socket) do
-    character_ids = params |> Map.get("characters", %{}) |> Map.keys()
+    safe(socket, fn ->
+      character_ids = params |> Map.get("characters", %{}) |> Map.keys()
 
-    bible_id =
-      case params["bible_id"] do
-        "" -> nil
-        v -> v
-      end
+      bible_id =
+        case params["bible_id"] do
+          "" -> nil
+          v -> v
+        end
 
-    payload = %{
-      kind: :campaign,
-      name: params["name"],
-      premise: params["premise"],
-      character_ids: character_ids,
-      bible_id: bible_id,
-      scenes: []
-    }
+      payload = %{
+        kind: :campaign,
+        name: params["name"],
+        premise: params["premise"],
+        character_ids: character_ids,
+        bible_id: bible_id,
+        scenes: []
+      }
 
-    entry = Library.put(%{owner: socket.assigns.owner, kind: "campaign", payload: payload})
-    {:noreply, redirect(socket, to: ~p"/campaigns/#{entry.id}")}
+      entry = Library.put(%{owner: socket.assigns.owner, kind: "campaign", payload: payload})
+      {:noreply, redirect(socket, to: ~p"/campaigns/#{entry.id}")}
+    end)
   end
 
   def render(assigns) do

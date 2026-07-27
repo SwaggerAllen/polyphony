@@ -17,6 +17,10 @@ config :polyphony, Oban, testing: :manual
 # stored event stream (MembershipSet). Keeps Commanded dispatch off the sandbox.
 config :polyphony, start_projectors: false
 
+# Don't run the shutdown connection-drainer in tests (it would touch the SQL
+# sandbox at suite teardown). It's a managed-DB deploy optimization.
+config :polyphony, drain_on_shutdown: false
+
 # Deterministic, network-free provider for tests.
 config :polyphony, :llm, provider: Polyphony.LLM.Stub
 
