@@ -170,10 +170,28 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   the beat loop and fire the scripted event as an ordinary world event (subject to default-deny
   visibility like anything else — scripted beats can carry dramatic irony too). Needs a place in
   the World Bible / campaign model to store them and an **authoring UI** (none exists yet).
+  **Scope: world, character, and location.** Though framed at the world level, the same
+  declarative trigger → event mechanism must apply at **character** and **location** scope
+  too — a trigger can fire a *character* event (a revealed secret, a change of allegiance) or
+  a *location* event (a description/state update, §B11), not only a world event. One trigger
+  model, three target scopes.
   *Open questions:* the condition language (beat-count / state-predicate / location-entry /
   arc-milestone?); one-shot vs. repeatable; copy-on-fork behavior of a fired vs. unfired trigger;
   author-visible vs. player-hidden. Keep triggers **pure/declarative** so aggregates stay
   LLM-free (rule 1) — the Director *decides* to fire, a job *generates* any prose.
+- **B11 — Locations as first-class arced entities.** ⬜ **Planned — not yet designed.**
+  Locations exist as authored/discovered entities (`origin: :discovered`) but are static; they
+  need parity with characters on two fronts. (a) **Location arcs** — a location changes over a
+  campaign (the tavern burns down, the border closes), so scene-close should extract
+  **per-location arc entries** the way it does per-character ones, reusing the existing
+  summary → arc + supersede-and-recommit machinery rather than new plumbing. (b) A
+  **location-description event type** — a first-class event that records/updates a location's
+  description and state, so a location's *current* description is a **projection over the log**
+  (like membership and everything else), not a static sheet field. Decide its `visible_to?`
+  clause deliberately (rule 3) — who can perceive a location change depends on presence/
+  knowledge, so this is not automatically public. Pairs with §B10 (a location-scoped trigger
+  fires exactly this event) and feeds the deferred V7 Location Graph and boundary/arc
+  evaluation the way character arcs do.
 
 ---
 
