@@ -147,7 +147,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
         <.field_label field="setting" label="Setting" generating={@generating} />
         <textarea name="setting"><%= @draft["setting"] %></textarea>
         <.field_label field="tone" label="Tone" generating={@generating} />
-        <input type="text" name="tone" value={@draft["tone"]} />
+        <textarea name="tone"><%= @draft["tone"] %></textarea>
         <.field_label field="rules" label="Rules / physics" hint="(one per line)" generating={@generating} />
         <textarea name="rules"><%= @draft["rules"] %></textarea>
         <.field_label

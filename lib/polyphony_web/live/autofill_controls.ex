@@ -23,21 +23,25 @@ defmodule PolyphonyWeb.AutofillControls do
   @doc "Kick off whole-form generation from a free-text brief."
   def start_all(socket, kind, brief) do
     current = socket.assigns.draft
+    world = Map.get(socket.assigns, :world_context)
 
     socket
     |> mark(@all, true)
-    |> start_async(:autofill_all, fn -> Autofill.generate_all(kind, brief, current) end)
+    |> start_async(:autofill_all, fn ->
+      Autofill.generate_all(kind, brief, current, world: world)
+    end)
   end
 
   @doc "Kick off single-field generation from the other fields + the field's own content."
   def start_field(socket, kind, field) do
     field = to_string(field)
     current = socket.assigns.draft
+    world = Map.get(socket.assigns, :world_context)
 
     socket
     |> mark(field, true)
     |> start_async({:autofill_field, field}, fn ->
-      Autofill.generate_field(kind, field, current)
+      Autofill.generate_field(kind, field, current, world: world)
     end)
   end
 

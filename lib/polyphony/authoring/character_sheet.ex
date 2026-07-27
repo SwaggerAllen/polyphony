@@ -85,7 +85,11 @@ defmodule Polyphony.Authoring.CharacterSheet do
             # generated sheet yet; promotion fills the sheet and gates it `:proposed`
             # before it becomes `:full` (mirrors locations' `origin: :discovered`).
             status: :full,
-            role: nil
+            role: nil,
+            # Optional authoring link to a `world_bible` Library entry (§15): when set,
+            # it seeds character auto-generation (`Authoring.Autofill`) so backstory and
+            # voice fit the setting. Purely an authoring aid — nil for a world-less sheet.
+            world_bible_id: nil
 
   @type status :: :stub | :proposed | :full
   @type t :: %__MODULE__{}

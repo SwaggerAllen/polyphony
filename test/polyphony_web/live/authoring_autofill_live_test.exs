@@ -91,6 +91,39 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
     end
   end
 
+  describe "world seeding on the character editor" do
+    test "the world selector lists the author's world bibles", %{conn: conn, user: user} do
+      world(user, %WorldBible{name: "Neon Bay", setting: "a drowned port"})
+      entry = character(user, %CharacterSheet{name: "", status: :full})
+
+      {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+      assert html =~ "Neon Bay"
+    end
+
+    test "selecting a world persists the link on save", %{conn: conn, user: user} do
+      wb = world(user, %WorldBible{name: "Neon Bay", setting: "a drowned port"})
+      entry = character(user, %CharacterSheet{name: "", status: :full})
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      view
+      |> form("form[phx-change=select_world]", %{world_id: to_string(wb.id)})
+      |> render_change()
+
+      view |> form("form[phx-submit=save]", %{name: "Rell"}) |> render_submit()
+
+      assert Library.payload(Library.get(entry.id)).world_bible_id == wb.id
+    end
+
+    test "a persisted world link is preselected on mount", %{conn: conn, user: user} do
+      wb = world(user, %WorldBible{name: "Neon Bay"})
+      entry = character(user, %CharacterSheet{name: "Rell", status: :full, world_bible_id: wb.id})
+
+      {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+      assert html =~ ~r/<option value="#{wb.id}"[^>]*selected/
+    end
+  end
+
   describe "world bible editor" do
     test "the brief fills every field including the list-typed ones", %{conn: conn, user: user} do
       entry = world(user, %WorldBible{name: "", rules: [], starting_canon: []})

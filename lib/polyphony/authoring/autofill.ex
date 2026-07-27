@@ -50,12 +50,15 @@ defmodule Polyphony.Authoring.Autofill do
   Generate a value for every field from a free-text `brief`. `current` is a map of
   `field => display string` already in the form (seed; may be empty). Returns
   `{:ok, %{field => display string}}` for the fields that came back non-empty.
+
+  `opts[:world]` — an optional map of world-bible display fields (`name`, `setting`,
+  `tone`, `rules`, `starting_canon`) used to ground the character in a setting.
   """
   @spec generate_all(kind(), String.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
   def generate_all(kind, brief, current \\ %{}, opts \\ []) do
     current = stringify(current)
     specs = fields(kind)
-    messages = all_messages(kind, brief, current, specs)
+    messages = all_messages(kind, brief, current, specs, opts[:world])
     call = [response: :autofill, fields: Enum.map(specs, &elem(&1, 0)), model: model(opts)]
 
     with {:ok, text} <- provider(opts).complete(messages, call ++ passthrough(opts)),
@@ -84,7 +87,7 @@ defmodule Polyphony.Authoring.Autofill do
         {:error, {:unknown_field, field}}
 
       {^field, type, guidance} ->
-        messages = field_messages(kind, field, type, guidance, current)
+        messages = field_messages(kind, field, type, guidance, current, opts[:world])
         call = [response: :field, model: model(opts)]
 
         with {:ok, text} <- provider(opts).complete(messages, call ++ passthrough(opts)) do
@@ -95,7 +98,7 @@ defmodule Polyphony.Authoring.Autofill do
 
   # ── Prompt building ──────────────────────────────────────────────────────────
 
-  defp all_messages(kind, brief, current, specs) do
+  defp all_messages(kind, brief, current, specs, world) do
     keys = specs |> Enum.map(&elem(&1, 0)) |> Enum.join(", ")
     guide = Enum.map_join(specs, "\n", fn {n, _t, g} -> "- #{n}: #{g}" end)
 
@@ -114,12 +117,12 @@ defmodule Polyphony.Authoring.Autofill do
         role: "user",
         content:
           "Author's brief:\n#{blank_to_dash(brief)}\n\n" <>
-            seed_block(current, specs) <> "Return the JSON object now."
+            world_block(world) <> seed_block(current, specs) <> "Return the JSON object now."
       }
     ]
   end
 
-  defp field_messages(kind, field, type, guidance, current) do
+  defp field_messages(kind, field, type, guidance, current, world) do
     others =
       current
       |> Map.drop([field])
@@ -148,9 +151,40 @@ defmodule Polyphony.Authoring.Autofill do
             "name, no quotes, no JSON, no preamble. Keep it consistent with the rest." <>
             list_hint
       },
-      %{role: "user", content: others_block <> seed <> "Write the #{field}:"}
+      %{
+        role: "user",
+        content: world_block(world) <> others_block <> seed <> "Write the #{field}:"
+      }
     ]
   end
+
+  # A compact rendering of the linked world bible, so generation grounds the
+  # character in its setting (backstory/voice that fit the world). Absent → "".
+  defp world_block(world) when is_map(world) do
+    parts =
+      [
+        kv("World", world["name"]),
+        kv("Setting", world["setting"]),
+        kv("Tone", world["tone"]),
+        kv("Rules", world["rules"]),
+        kv("Starting canon", world["starting_canon"])
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    case parts do
+      [] ->
+        ""
+
+      ps ->
+        "World context — this character belongs to the following setting; keep them " <>
+          "consistent with it:\n" <> Enum.join(ps, "\n") <> "\n\n"
+    end
+  end
+
+  defp world_block(_), do: ""
+
+  defp kv(_label, v) when v in [nil, ""], do: nil
+  defp kv(label, v), do: "#{label}: #{v}"
 
   defp noun(:character), do: "role-play character"
   defp noun(:world_bible), do: "world bible for a role-play setting"

@@ -8,7 +8,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   use PolyphonyWeb, :live_view
 
   alias Polyphony.Library
-  alias Polyphony.Authoring.{CharacterSheet, Stub}
+  alias Polyphony.Authoring.{CharacterSheet, Stub, WorldBible}
   alias PolyphonyWeb.AutofillControls
 
   @fields ~w(name premise appearance voice temperament backstory)
@@ -17,7 +17,11 @@ defmodule PolyphonyWeb.SheetEditorLive do
     entry = Library.get(id)
 
     if entry && entry.kind == "character" do
-      sheet = Library.payload(entry)
+      # struct/2 fills any field the stored struct predates (e.g. world_bible_id),
+      # so older saved sheets load without a KeyError.
+      sheet = struct(CharacterSheet, Map.from_struct(Library.payload(entry)))
+      worlds = load_worlds(socket.assigns.current_user)
+      world_id = if sheet.world_bible_id, do: to_string(sheet.world_bible_id), else: ""
 
       {:ok,
        assign(socket,
@@ -26,11 +30,22 @@ defmodule PolyphonyWeb.SheetEditorLive do
          sheet: sheet,
          draft: draft_from_sheet(sheet),
          generating: MapSet.new(),
-         saved: false
+         saved: false,
+         world_entries: worlds,
+         worlds: world_options(worlds),
+         world_id: world_id,
+         world_context: world_context_for(worlds, world_id)
        )}
     else
       {:ok, socket |> put_flash(:error, "Character not found.") |> redirect(to: ~p"/library")}
     end
+  end
+
+  def handle_event("select_world", %{"world_id" => id}, socket) do
+    {:noreply,
+     socket
+     |> assign(world_id: id, world_context: world_context_for(socket.assigns.world_entries, id))
+     |> assign(:saved, false)}
   end
 
   def handle_event("draft_changed", params, socket) do
@@ -51,7 +66,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
           appearance: d["appearance"],
           voice: d["voice"],
           temperament: d["temperament"],
-          backstory: d["backstory"]
+          backstory: d["backstory"],
+          world_bible_id: world_id_int(socket.assigns.world_id)
       }
 
       {:ok, entry} = Library.update_payload(socket.assigns.entry.id, sheet)
@@ -129,6 +145,44 @@ defmodule PolyphonyWeb.SheetEditorLive do
     }
   end
 
+  defp world_id_int(""), do: nil
+  defp world_id_int(nil), do: nil
+  defp world_id_int(id) when is_binary(id), do: String.to_integer(id)
+
+  defp load_worlds(user) do
+    user |> Library.list_for_owner() |> Enum.filter(&(&1.kind == "world_bible"))
+  end
+
+  defp world_options(entries), do: for(e <- entries, do: {to_string(e.id), world_name(e)})
+
+  defp world_name(entry) do
+    case Library.payload(entry) do
+      %WorldBible{name: n} when is_binary(n) and n != "" -> n
+      _ -> "Untitled world (##{entry.id})"
+    end
+  end
+
+  # The selected world bible as display fields (or nil) — the seed for generation.
+  defp world_context_for(_entries, id) when id in [nil, ""], do: nil
+
+  defp world_context_for(entries, id) do
+    case Enum.find(entries, &(to_string(&1.id) == id)) do
+      nil ->
+        nil
+
+      entry ->
+        wb = Library.payload(entry)
+
+        %{
+          "name" => wb.name || "",
+          "setting" => wb.setting || "",
+          "tone" => wb.tone || "",
+          "rules" => Enum.join(wb.rules || [], "\n"),
+          "starting_canon" => Enum.join(wb.starting_canon || [], "\n")
+        }
+    end
+  end
+
   attr(:field, :string, required: true)
   attr(:label, :string, required: true)
   attr(:generating, :any, required: true)
@@ -171,6 +225,17 @@ defmodule PolyphonyWeb.SheetEditorLive do
     </div>
 
     <div class="card gen-brief">
+      <form id="world-select-form" phx-change="select_world">
+        <label>World <span class="faint">(grounds generated backstory &amp; voice in a setting)</span></label>
+        <select name="world_id">
+          <option value="">— none —</option>
+          <option :for={{id, name} <- @worlds} value={id} selected={@world_id == id}><%= name %></option>
+        </select>
+        <p :if={@worlds == []} class="faint">
+          No world bibles yet — create one in the <a href={~p"/library"}>Library</a> to ground generation.
+        </p>
+      </form>
+
       <form phx-submit="generate_all">
         <label>Describe the character — we'll fill in every field <span class="faint">(builds on anything you've already written)</span></label>
         <textarea
