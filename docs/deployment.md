@@ -99,11 +99,13 @@ step fails with `permission denied for database …`. Two ways to fix it once:
 
 - **No DB console? Use `DB_ADMIN_URL` (easiest).** Set the `DB_ADMIN_URL` env var to
   your admin connection string (DO's `doadmin`, from the cluster's Connection
-  Details) and redeploy. On boot the app connects as that admin, creates the schema
-  **owned by the app user** (so no further grants are needed), then proceeds as the
-  app user. Once it's created, **remove `DB_ADMIN_URL`** — it's only needed the once,
-  and `migrate/0` detects the existing schema and skips the privileged create on
-  later boots.
+  Details) and redeploy. On boot the app connects with those admin credentials **to
+  your app's database** and creates the schema **owned by the app user** (so no
+  further grants are needed), then proceeds as the app user. Note: the database in
+  the `doadmin` string is `defaultdb` and is ignored — the schema is created in the
+  database from `DATABASE_URL` (override with `DB_ADMIN_DATABASE` if needed). Once
+  it's created, **remove `DB_ADMIN_URL`** — it's only needed the once; `migrate/0`
+  detects the existing schema and skips the privileged create on later boots.
 
 - **Have a DB console?** As the admin, run once then redeploy:
 
