@@ -22,7 +22,17 @@ defmodule Polyphony.Application do
       ] ++ debug_log() ++ projectors() ++ shutdown_hook()
 
     opts = [strategy: :one_for_one, name: Polyphony.Supervisor]
-    Supervisor.start_link(children, opts)
+
+    case Supervisor.start_link(children, opts) do
+      {:ok, pid} ->
+        # After the tree is up (so the debug-drawer log handler is attached and can
+        # capture this line too, not just the console).
+        log_web_origin_config()
+        {:ok, pid}
+
+      other ->
+        other
+    end
   end
 
   # Last child ⇒ terminates first on shutdown, releasing DB connections early so a
@@ -34,6 +44,19 @@ defmodule Polyphony.Application do
     else
       []
     end
+  end
+
+  # Surface the endpoint host + origin-check config at boot. If the LiveView socket
+  # is being rejected ("Could not check origin …"), this line shows whether PHX_HOST
+  # resolved to the real domain and what check_origin the socket will enforce — the
+  # first thing to look at (visible in the debug drawer). Cheap, so always logged.
+  defp log_web_origin_config do
+    cfg = Application.get_env(:polyphony, PolyphonyWeb.Endpoint, [])
+    host = cfg |> Keyword.get(:url, []) |> Keyword.get(:host)
+
+    Logger.info(
+      "[boot] endpoint host=#{inspect(host)} check_origin=#{inspect(cfg[:check_origin])}"
+    )
   end
 
   # Run migrations + event-store setup before the app serves, when enabled

@@ -52,6 +52,16 @@ services:
       - key: PHX_HOST
         scope: RUN_TIME
         value: ${APP_DOMAIN}
+      # LiveView websocket origin check. If this is wrong the socket is rejected
+      # ("Could not check origin …") and every button goes dead while pages still
+      # render. `//*.ondigitalocean.app` accepts this app's default domain out of
+      # the box regardless of how ${APP_DOMAIN} resolves. For a custom domain, set
+      # this to your exact origin(s), comma-separated (e.g.
+      # "https://app.example.com"), or "false" to disable the check during bring-up.
+      # See docs/deployment.md.
+      - key: CHECK_ORIGIN
+        scope: RUN_TIME
+        value: //*.ondigitalocean.app
       # DB connection budget. DO's dev-tier Postgres caps connections low (~20,
       # minus superuser-reserved). Repo + event-store pools + the eventstore/Oban
       # LISTEN connections must fit under it, or queries fail with

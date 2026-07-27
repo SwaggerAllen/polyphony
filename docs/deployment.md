@@ -165,6 +165,34 @@ run cleanup, so those connections linger until the server reaps the dead sockets
 (minutes). If you still see `no connection available` after that, the dev DB's slot
 cap is simply too tight for a rolling deploy — bump the DB plan.
 
+## LiveView socket / origin check (dead buttons)
+
+If pages render but **every button does nothing** — sign-up, send-turn, everything
+— the LiveView websocket is being rejected. The tell is in the logs:
+
+```
+[error] Could not check origin for Phoenix.Socket transport.
+Origin of the request: https://<your-app>.ondigitalocean.app
+```
+
+Phoenix only accepts a socket whose `Origin` matches the endpoint's configured host
+(`PHX_HOST`). When `PHX_HOST` is wrong — e.g. `${APP_DOMAIN}` didn't resolve to the
+domain you're actually browsing — the socket is refused and the page falls back to
+inert, server-less HTML.
+
+- **Fix (spec default).** `.do/app.yaml` sets `CHECK_ORIGIN=//*.ondigitalocean.app`,
+  which accepts this app's default domain regardless of how `${APP_DOMAIN}` resolves.
+  Redeploy and the socket connects.
+- **Custom domain.** Set `CHECK_ORIGIN` to your exact origin(s), comma-separated
+  (`https://app.example.com,https://www.example.com`), and set `PHX_HOST` to the same
+  host (it also drives generated URLs / magic links). `CHECK_ORIGIN=false` disables
+  the check entirely — bring-up only, never public.
+- **Confirm it.** Every boot logs
+  `[boot] endpoint host=… check_origin=…` (visible in the debug drawer, see below) —
+  check that `host` is the domain you're browsing.
+- **In the browser**, the debug drawer's socket-status dot goes 🟢 green once the
+  socket connects; 🔴 red is the same diagnosis from the client side.
+
 ## First smoke test after deploy
 
 Once the app is live, confirm the whole stack — auth, DB, event store, and real
