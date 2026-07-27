@@ -9,11 +9,31 @@ if config_env() == :prod do
   host = System.get_env("PHX_HOST") || "localhost"
   port = String.to_integer(System.get_env("PORT") || "4000")
 
+  # Origin check for the LiveView websocket. By default the socket only accepts a
+  # connection whose Origin matches the configured host (PHX_HOST). If PHX_HOST is
+  # wrong or the platform's host is dynamic, the socket refuses every connection
+  # ("Could not check origin for Phoenix.Socket transport") and **every LiveView
+  # button goes dead** while pages still render. `CHECK_ORIGIN` is the escape hatch:
+  #   • unset  → accept the configured host over http/https (the correct fix is a
+  #              correct PHX_HOST);
+  #   • a comma-separated list (e.g. "https://app.example.com,//*.example.com");
+  #   • "false" → disable the check (bring-up only — do not ship public);
+  #   • "true"  → the framework default (check against PHX_HOST).
+  # See docs/deployment.md.
+  check_origin =
+    case System.get_env("CHECK_ORIGIN") do
+      blank when blank in [nil, ""] -> ["https://#{host}", "http://#{host}"]
+      "true" -> true
+      "false" -> false
+      origins -> origins |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+    end
+
   config :polyphony, PolyphonyWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     # Bind all IPv4 interfaces. App Platform routes to the container over IPv4, and
     # 0.0.0.0 binds everywhere without depending on IPv6 being available.
     http: [ip: {0, 0, 0, 0}, port: port],
+    check_origin: check_origin,
     secret_key_base: secret_key_base,
     server: true
 
