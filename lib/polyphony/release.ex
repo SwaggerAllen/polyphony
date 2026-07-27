@@ -48,6 +48,29 @@ defmodule Polyphony.Release do
     :ok
   end
 
+  @doc """
+  Clean up a failed sign-up bootstrap (see `Accounts.clean_incomplete_bootstrap/1`).
+  Safe: only deletes partial user rows when *no* account has completed sign-up.
+  Run via `bin/polyphony eval "Polyphony.Release.clean_incomplete_bootstrap()"`, or
+  on boot with `RESET_INCOMPLETE_BOOTSTRAP=true`.
+  """
+  def clean_incomplete_bootstrap do
+    load_app()
+
+    for repo <- repos() do
+      {:ok, result, _} =
+        Ecto.Migrator.with_repo(
+          repo,
+          fn r -> Polyphony.Accounts.clean_incomplete_bootstrap(repo: r) end,
+          @migrate_opts
+        )
+
+      Logger.info("[bootstrap] clean_incomplete_bootstrap → #{inspect(result)}")
+    end
+
+    :ok
+  end
+
   @doc "Run pending Ecto migrations for every read-model repo (patient pool/timeouts)."
   def migrate_read_models do
     load_app()

@@ -82,6 +82,15 @@ if config_env() == :prod do
          :migrate_on_boot,
          System.get_env("MIGRATE_ON_BOOT", "true") in ~w(true 1)
 
+  # One-shot cleanup of a failed sign-up bootstrap on boot: if no account has
+  # completed sign-up, delete any partial user rows a crash left behind so the very
+  # next sign-up can bootstrap the superadmin cleanly. Off by default — set
+  # RESET_INCOMPLETE_BOOTSTRAP=true for a single deploy, then remove it. See
+  # Polyphony.Accounts.clean_incomplete_bootstrap/1.
+  config :polyphony,
+         :reset_incomplete_bootstrap,
+         System.get_env("RESET_INCOMPLETE_BOOTSTRAP", "false") in ~w(true 1)
+
   config :polyphony, :llm,
     provider: Polyphony.LLM.DeepInfra,
     deepinfra: [

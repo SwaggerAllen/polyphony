@@ -208,6 +208,37 @@ defmodule Polyphony.AccountsTest do
     end
   end
 
+  describe "clean_incomplete_bootstrap/1" do
+    test "deletes a partial user row when no account has completed sign-up" do
+      # Simulate a crash mid-register: a user row with no consents recorded.
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:microsecond)
+
+      Repo.insert!(
+        User.registration_changeset(%{
+          email: "partial@x.io",
+          username: "partial",
+          role: "superadmin",
+          attested_adult_at: now
+        })
+      )
+
+      assert Accounts.count() == 1
+      assert {:ok, {:cleaned, 1}} = Accounts.clean_incomplete_bootstrap()
+      assert Accounts.count() == 0
+    end
+
+    test "is a no-op once any account has completed sign-up (has consents)" do
+      user = first_user()
+      assert {:ok, :bootstrap_complete} = Accounts.clean_incomplete_bootstrap()
+      # The completed account is untouched.
+      assert Accounts.get(user.id).id == user.id
+    end
+
+    test "is a harmless no-op on an empty database" do
+      assert {:ok, {:cleaned, 0}} = Accounts.clean_incomplete_bootstrap()
+    end
+  end
+
   describe "username rate limit" do
     test "cannot change again within the interval" do
       user = first_user()

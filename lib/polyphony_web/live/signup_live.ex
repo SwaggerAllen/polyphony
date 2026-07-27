@@ -7,6 +7,8 @@ defmodule PolyphonyWeb.SignupLive do
   """
   use PolyphonyWeb, :live_view
 
+  require Logger
+
   alias Polyphony.Accounts
   alias Polyphony.Accounts.Consent
   alias PolyphonyWeb.Auth
@@ -16,6 +18,11 @@ defmodule PolyphonyWeb.SignupLive do
   end
 
   def handle_event("register", params, socket) do
+    # Logged unconditionally so the server logs prove the click reached the server
+    # (a stuck button is usually the LiveView socket not connecting — then this line
+    # never appears and the form falls back to a native, no-op GET).
+    Logger.info("[signup] register submitted for username=#{inspect(params["username"])}")
+
     safe(socket, fn ->
       attrs = %{
         email: params["email"],
@@ -28,9 +35,11 @@ defmodule PolyphonyWeb.SignupLive do
 
       case Accounts.register(attrs) do
         {:ok, user} ->
+          Logger.info("[signup] registered user id=#{inspect(user.id)} role=#{user.role}")
           {:noreply, redirect(socket, to: ~p"/auth/verify/#{Auth.sign_token(user.id)}")}
 
         {:error, reason} ->
+          Logger.warning("[signup] registration rejected: #{inspect(reason)}")
           {:noreply, assign(socket, error: message(reason))}
       end
     end)
