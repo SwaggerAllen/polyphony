@@ -69,8 +69,25 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       # Not persisted yet — generation only populates the form.
       assert Library.payload(Library.get(entry.id)).premise in [nil, ""]
 
-      view |> form("form[phx-submit=save]") |> render_submit()
+      html = view |> form("form[phx-submit=save]") |> render_submit()
       refute Library.payload(Library.get(entry.id)).premise in [nil, ""]
+      # Confirmation shows inline by the button (not only the top-of-page flash).
+      assert html =~ "✓ Saved"
+    end
+  end
+
+  describe "inline save confirmation" do
+    test "the world bible editor confirms next to the Save button", %{conn: conn, user: user} do
+      entry = world(user, %WorldBible{name: "Old", rules: [], starting_canon: []})
+      {:ok, view, html} = live(conn, ~p"/authoring/bible/#{entry.id}")
+      refute html =~ "✓ Saved"
+
+      saved = view |> form("form[phx-submit=save]", %{name: "Newname"}) |> render_submit()
+      assert saved =~ "✓ Saved"
+
+      # Editing again clears the confirmation so it can't read as stale.
+      changed = view |> form("form[phx-submit=save]", %{name: "Newer"}) |> render_change()
+      refute changed =~ "✓ Saved"
     end
   end
 

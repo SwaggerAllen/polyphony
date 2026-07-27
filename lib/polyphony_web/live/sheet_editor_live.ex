@@ -25,7 +25,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
          entry: entry,
          sheet: sheet,
          draft: draft_from_sheet(sheet),
-         generating: MapSet.new()
+         generating: MapSet.new(),
+         saved: false
        )}
     else
       {:ok, socket |> put_flash(:error, "Character not found.") |> redirect(to: ~p"/library")}
@@ -33,7 +34,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
   end
 
   def handle_event("draft_changed", params, socket) do
-    {:noreply, assign(socket, :draft, Map.merge(socket.assigns.draft, Map.take(params, @fields)))}
+    {:noreply,
+     socket
+     |> assign(:draft, Map.merge(socket.assigns.draft, Map.take(params, @fields)))
+     |> assign(:saved, false)}
   end
 
   def handle_event("save", params, socket) do
@@ -52,10 +56,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
       {:ok, entry} = Library.update_payload(socket.assigns.entry.id, sheet)
 
+      # Inline confirmation (see the Save button) rather than a top-of-page flash,
+      # which is off-screen on mobile after a scroll down the form.
       {:noreply,
-       socket
-       |> put_flash(:info, "Saved.")
-       |> assign(entry: entry, sheet: sheet, draft: draft_from_sheet(sheet))}
+       assign(socket, entry: entry, sheet: sheet, draft: draft_from_sheet(sheet), saved: true)}
     end)
   end
 
@@ -76,7 +80,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
           {:noreply,
            socket
            |> put_flash(:info, "Promoted — review and accept below.")
-           |> assign(entry: entry, sheet: promoted, draft: draft_from_sheet(promoted))}
+           |> assign(
+             entry: entry,
+             sheet: promoted,
+             draft: draft_from_sheet(promoted),
+             saved: false
+           )}
 
         {:error, _} ->
           {:noreply, put_flash(socket, :error, "Could not generate a sheet.")}
@@ -92,18 +101,19 @@ defmodule PolyphonyWeb.SheetEditorLive do
       {:noreply,
        socket
        |> put_flash(:info, "Accepted — the character is ready to cast.")
-       |> assign(entry: entry, sheet: accepted, draft: draft_from_sheet(accepted))}
+       |> assign(entry: entry, sheet: accepted, draft: draft_from_sheet(accepted), saved: false)}
     end)
   end
 
   def handle_async(:autofill_all, {:ok, result}, socket),
-    do: {:noreply, AutofillControls.resolve_all(socket, result)}
+    do: {:noreply, socket |> AutofillControls.resolve_all(result) |> assign(:saved, false)}
 
   def handle_async(:autofill_all, {:exit, reason}, socket),
     do: {:noreply, AutofillControls.resolve_all(socket, {:exit, reason})}
 
   def handle_async({:autofill_field, field}, {:ok, result}, socket),
-    do: {:noreply, AutofillControls.resolve_field(socket, field, result)}
+    do:
+      {:noreply, socket |> AutofillControls.resolve_field(field, result) |> assign(:saved, false)}
 
   def handle_async({:autofill_field, field}, {:exit, reason}, socket),
     do: {:noreply, AutofillControls.resolve_field(socket, field, {:exit, reason})}
@@ -189,8 +199,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
         <.field_label field="backstory" label="Backstory" generating={@generating} />
         <textarea name="backstory"><%= @draft["backstory"] %></textarea>
         <br /><br />
-        <button class="btn" type="submit">Save</button>
-        <a class="btn ghost" href={~p"/library"}>Back to library</a>
+        <div class="row save-row">
+          <button class="btn" type="submit">Save</button>
+          <span :if={@saved} class="saved-note" role="status">✓ Saved</span>
+          <span class="spacer"></span>
+          <a class="btn ghost" href={~p"/library"}>Back to library</a>
+        </div>
       </form>
     </div>
     """

@@ -25,7 +25,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
          entry: entry,
          bible: bible,
          draft: draft_from_bible(bible),
-         generating: MapSet.new()
+         generating: MapSet.new(),
+         saved: false
        )}
     else
       {:ok, socket |> put_flash(:error, "World bible not found.") |> redirect(to: ~p"/library")}
@@ -33,7 +34,10 @@ defmodule PolyphonyWeb.BibleEditorLive do
   end
 
   def handle_event("draft_changed", params, socket) do
-    {:noreply, assign(socket, :draft, Map.merge(socket.assigns.draft, Map.take(params, @fields)))}
+    {:noreply,
+     socket
+     |> assign(:draft, Map.merge(socket.assigns.draft, Map.take(params, @fields)))
+     |> assign(:saved, false)}
   end
 
   def handle_event("save", params, socket) do
@@ -51,10 +55,10 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
       {:ok, entry} = Library.update_payload(socket.assigns.entry.id, bible)
 
+      # Inline confirmation (see the Save button) rather than a top-of-page flash,
+      # which is off-screen on mobile after a scroll down the form.
       {:noreply,
-       socket
-       |> put_flash(:info, "Saved.")
-       |> assign(entry: entry, bible: bible, draft: draft_from_bible(bible))}
+       assign(socket, entry: entry, bible: bible, draft: draft_from_bible(bible), saved: true)}
     end)
   end
 
@@ -67,13 +71,14 @@ defmodule PolyphonyWeb.BibleEditorLive do
   end
 
   def handle_async(:autofill_all, {:ok, result}, socket),
-    do: {:noreply, AutofillControls.resolve_all(socket, result)}
+    do: {:noreply, socket |> AutofillControls.resolve_all(result) |> assign(:saved, false)}
 
   def handle_async(:autofill_all, {:exit, reason}, socket),
     do: {:noreply, AutofillControls.resolve_all(socket, {:exit, reason})}
 
   def handle_async({:autofill_field, field}, {:ok, result}, socket),
-    do: {:noreply, AutofillControls.resolve_field(socket, field, result)}
+    do:
+      {:noreply, socket |> AutofillControls.resolve_field(field, result) |> assign(:saved, false)}
 
   def handle_async({:autofill_field, field}, {:exit, reason}, socket),
     do: {:noreply, AutofillControls.resolve_field(socket, field, {:exit, reason})}
@@ -153,8 +158,12 @@ defmodule PolyphonyWeb.BibleEditorLive do
         />
         <textarea name="starting_canon"><%= @draft["starting_canon"] %></textarea>
         <br /><br />
-        <button class="btn" type="submit">Save</button>
-        <a class="btn ghost" href={~p"/library"}>Back to library</a>
+        <div class="row save-row">
+          <button class="btn" type="submit">Save</button>
+          <span :if={@saved} class="saved-note" role="status">✓ Saved</span>
+          <span class="spacer"></span>
+          <a class="btn ghost" href={~p"/library"}>Back to library</a>
+        </div>
       </form>
     </div>
     """
