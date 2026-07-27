@@ -27,6 +27,29 @@ defmodule PolyphonyWeb.LibraryAdminLiveTest do
       {:ok, _view, html} = live(conn, ~p"/library")
       refute html =~ "Secret"
     end
+
+    test "filtering by kind and searching by name narrows the list", %{conn: conn, user: user} do
+      owner = Owner.of(user)
+      Library.put(%{owner: owner, kind: "character", payload: %{name: "Mira Vale"}})
+      Library.put(%{owner: owner, kind: "world_bible", payload: %{name: "Neon Bay"}})
+
+      {:ok, view, html} = live(conn, ~p"/library")
+      assert html =~ "Mira Vale" and html =~ "Neon Bay"
+
+      # Filter to world bibles only.
+      worlds =
+        view |> form("form[phx-change=filter]", %{kind: "world_bible", q: ""}) |> render_change()
+
+      assert worlds =~ "Neon Bay"
+      refute worlds =~ "Mira Vale"
+
+      # Search by name across all kinds.
+      search =
+        view |> form("form[phx-change=filter]", %{kind: "all", q: "mira"}) |> render_change()
+
+      assert search =~ "Mira Vale"
+      refute search =~ "Neon Bay"
+    end
   end
 
   describe "admin (V13)" do

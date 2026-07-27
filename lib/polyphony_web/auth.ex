@@ -109,5 +109,11 @@ defmodule PolyphonyWeb.Auth do
   defp load_user(id), do: Accounts.get(id)
 
   defp role_atom(role) when is_atom(role), do: role
-  defp role_atom(role) when is_binary(role), do: String.to_existing_atom(role)
+
+  # Match the stored role string against the known role atoms. Using `Roles.roles/0`
+  # (rather than `String.to_existing_atom/1`) both guarantees those atoms exist and
+  # avoids a crash on an unrecognized value — an unknown role safely reads as the
+  # least-privileged `:user`.
+  defp role_atom(role) when is_binary(role),
+    do: Enum.find(Roles.roles(), :user, &(Atom.to_string(&1) == role))
 end
