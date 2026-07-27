@@ -69,8 +69,58 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       # Not persisted yet — generation only populates the form.
       assert Library.payload(Library.get(entry.id)).premise in [nil, ""]
 
-      view |> form("form[phx-submit=save]") |> render_submit()
+      html = view |> form("form[phx-submit=save]") |> render_submit()
       refute Library.payload(Library.get(entry.id)).premise in [nil, ""]
+      # Confirmation shows inline by the button (not only the top-of-page flash).
+      assert html =~ "✓ Saved"
+    end
+  end
+
+  describe "inline save confirmation" do
+    test "the world bible editor confirms next to the Save button", %{conn: conn, user: user} do
+      entry = world(user, %WorldBible{name: "Old", rules: [], starting_canon: []})
+      {:ok, view, html} = live(conn, ~p"/authoring/bible/#{entry.id}")
+      refute html =~ "✓ Saved"
+
+      saved = view |> form("form[phx-submit=save]", %{name: "Newname"}) |> render_submit()
+      assert saved =~ "✓ Saved"
+
+      # Editing again clears the confirmation so it can't read as stale.
+      changed = view |> form("form[phx-submit=save]", %{name: "Newer"}) |> render_change()
+      refute changed =~ "✓ Saved"
+    end
+  end
+
+  describe "world seeding on the character editor" do
+    test "the world selector lists the author's world bibles", %{conn: conn, user: user} do
+      world(user, %WorldBible{name: "Neon Bay", setting: "a drowned port"})
+      entry = character(user, %CharacterSheet{name: "", status: :full})
+
+      {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+      assert html =~ "Neon Bay"
+    end
+
+    test "selecting a world persists the link on save", %{conn: conn, user: user} do
+      wb = world(user, %WorldBible{name: "Neon Bay", setting: "a drowned port"})
+      entry = character(user, %CharacterSheet{name: "", status: :full})
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      view
+      |> form("form[phx-change=select_world]", %{world_id: to_string(wb.id)})
+      |> render_change()
+
+      view |> form("form[phx-submit=save]", %{name: "Rell"}) |> render_submit()
+
+      assert Library.payload(Library.get(entry.id)).world_bible_id == wb.id
+    end
+
+    test "a persisted world link is preselected on mount", %{conn: conn, user: user} do
+      wb = world(user, %WorldBible{name: "Neon Bay"})
+      entry = character(user, %CharacterSheet{name: "Rell", status: :full, world_bible_id: wb.id})
+
+      {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+      assert html =~ ~r/<option value="#{wb.id}"[^>]*selected/
     end
   end
 

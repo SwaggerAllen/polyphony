@@ -997,6 +997,16 @@ input:focus, textarea:focus, select:focus {
   margin-bottom: .5rem;
 }
 
+.save-row {
+  gap: .75rem;
+}
+
+.saved-note {
+  color: var(--good);
+  font-size: .9rem;
+  font-weight: 600;
+}
+
 .list-empty {
   color: var(--fg-faint);
   padding: 2rem 1rem;

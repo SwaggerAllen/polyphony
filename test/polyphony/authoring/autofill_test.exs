@@ -51,6 +51,73 @@ defmodule Polyphony.Authoring.AutofillTest do
     end
   end
 
+  describe "world seeding" do
+    @world %{
+      "name" => "Neon Bay",
+      "setting" => "a drowned port city",
+      "tone" => "noir",
+      "rules" => "memory can be sold",
+      "starting_canon" => ""
+    }
+
+    test "the world context is injected into the whole-form prompt" do
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.generate_all(:character, "a smuggler", %{},
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture,
+            world: @world
+          )
+        end)
+
+      assert msgs =~ "Neon Bay"
+      assert msgs =~ "a drowned port city"
+      assert msgs =~ "memory can be sold"
+    end
+
+    test "the world context is injected into the single-field prompt" do
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.generate_field(:character, "backstory", %{},
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture,
+            world: @world
+          )
+        end)
+
+      assert msgs =~ "Neon Bay"
+      assert msgs =~ "noir"
+    end
+
+    test "no world context leaves the prompt clean (no dangling label)" do
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.generate_field(:character, "backstory", %{},
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture,
+            world: nil
+          )
+        end)
+
+      refute msgs =~ "World context"
+    end
+
+    # Runs `fun` with a capturing `respond_with` and returns the concatenated
+    # prompt content the provider saw.
+    defp capture_prompt(fun) do
+      test_pid = self()
+
+      capture = fn messages ->
+        send(test_pid, {:prompt, messages})
+        {:ok, ~s({"backstory":"x"})}
+      end
+
+      fun.(capture)
+      assert_received {:prompt, messages}
+      Enum.map_join(messages, "\n", & &1.content)
+    end
+  end
+
   describe "generate_field/4" do
     test "returns a single non-empty string for a known field" do
       current = %{"name" => "Mara", "temperament" => "guarded"}

@@ -8,7 +8,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   use PolyphonyWeb, :live_view
 
   alias Polyphony.Library
-  alias Polyphony.Authoring.{CharacterSheet, Stub}
+  alias Polyphony.Authoring.{CharacterSheet, Stub, WorldBible}
   alias PolyphonyWeb.AutofillControls
 
   @fields ~w(name premise appearance voice temperament backstory)
@@ -17,7 +17,11 @@ defmodule PolyphonyWeb.SheetEditorLive do
     entry = Library.get(id)
 
     if entry && entry.kind == "character" do
-      sheet = Library.payload(entry)
+      # struct/2 fills any field the stored struct predates (e.g. world_bible_id),
+      # so older saved sheets load without a KeyError.
+      sheet = struct(CharacterSheet, Map.from_struct(Library.payload(entry)))
+      worlds = load_worlds(socket.assigns.current_user)
+      world_id = if sheet.world_bible_id, do: to_string(sheet.world_bible_id), else: ""
 
       {:ok,
        assign(socket,
@@ -25,15 +29,30 @@ defmodule PolyphonyWeb.SheetEditorLive do
          entry: entry,
          sheet: sheet,
          draft: draft_from_sheet(sheet),
-         generating: MapSet.new()
+         generating: MapSet.new(),
+         saved: false,
+         world_entries: worlds,
+         worlds: world_options(worlds),
+         world_id: world_id,
+         world_context: world_context_for(worlds, world_id)
        )}
     else
       {:ok, socket |> put_flash(:error, "Character not found.") |> redirect(to: ~p"/library")}
     end
   end
 
+  def handle_event("select_world", %{"world_id" => id}, socket) do
+    {:noreply,
+     socket
+     |> assign(world_id: id, world_context: world_context_for(socket.assigns.world_entries, id))
+     |> assign(:saved, false)}
+  end
+
   def handle_event("draft_changed", params, socket) do
-    {:noreply, assign(socket, :draft, Map.merge(socket.assigns.draft, Map.take(params, @fields)))}
+    {:noreply,
+     socket
+     |> assign(:draft, Map.merge(socket.assigns.draft, Map.take(params, @fields)))
+     |> assign(:saved, false)}
   end
 
   def handle_event("save", params, socket) do
@@ -47,15 +66,16 @@ defmodule PolyphonyWeb.SheetEditorLive do
           appearance: d["appearance"],
           voice: d["voice"],
           temperament: d["temperament"],
-          backstory: d["backstory"]
+          backstory: d["backstory"],
+          world_bible_id: world_id_int(socket.assigns.world_id)
       }
 
       {:ok, entry} = Library.update_payload(socket.assigns.entry.id, sheet)
 
+      # Inline confirmation (see the Save button) rather than a top-of-page flash,
+      # which is off-screen on mobile after a scroll down the form.
       {:noreply,
-       socket
-       |> put_flash(:info, "Saved.")
-       |> assign(entry: entry, sheet: sheet, draft: draft_from_sheet(sheet))}
+       assign(socket, entry: entry, sheet: sheet, draft: draft_from_sheet(sheet), saved: true)}
     end)
   end
 
@@ -76,7 +96,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
           {:noreply,
            socket
            |> put_flash(:info, "Promoted — review and accept below.")
-           |> assign(entry: entry, sheet: promoted, draft: draft_from_sheet(promoted))}
+           |> assign(
+             entry: entry,
+             sheet: promoted,
+             draft: draft_from_sheet(promoted),
+             saved: false
+           )}
 
         {:error, _} ->
           {:noreply, put_flash(socket, :error, "Could not generate a sheet.")}
@@ -92,18 +117,19 @@ defmodule PolyphonyWeb.SheetEditorLive do
       {:noreply,
        socket
        |> put_flash(:info, "Accepted — the character is ready to cast.")
-       |> assign(entry: entry, sheet: accepted, draft: draft_from_sheet(accepted))}
+       |> assign(entry: entry, sheet: accepted, draft: draft_from_sheet(accepted), saved: false)}
     end)
   end
 
   def handle_async(:autofill_all, {:ok, result}, socket),
-    do: {:noreply, AutofillControls.resolve_all(socket, result)}
+    do: {:noreply, socket |> AutofillControls.resolve_all(result) |> assign(:saved, false)}
 
   def handle_async(:autofill_all, {:exit, reason}, socket),
     do: {:noreply, AutofillControls.resolve_all(socket, {:exit, reason})}
 
   def handle_async({:autofill_field, field}, {:ok, result}, socket),
-    do: {:noreply, AutofillControls.resolve_field(socket, field, result)}
+    do:
+      {:noreply, socket |> AutofillControls.resolve_field(field, result) |> assign(:saved, false)}
 
   def handle_async({:autofill_field, field}, {:exit, reason}, socket),
     do: {:noreply, AutofillControls.resolve_field(socket, field, {:exit, reason})}
@@ -117,6 +143,44 @@ defmodule PolyphonyWeb.SheetEditorLive do
       "temperament" => sheet.temperament || "",
       "backstory" => sheet.backstory || ""
     }
+  end
+
+  defp world_id_int(""), do: nil
+  defp world_id_int(nil), do: nil
+  defp world_id_int(id) when is_binary(id), do: String.to_integer(id)
+
+  defp load_worlds(user) do
+    user |> Library.list_for_owner() |> Enum.filter(&(&1.kind == "world_bible"))
+  end
+
+  defp world_options(entries), do: for(e <- entries, do: {to_string(e.id), world_name(e)})
+
+  defp world_name(entry) do
+    case Library.payload(entry) do
+      %WorldBible{name: n} when is_binary(n) and n != "" -> n
+      _ -> "Untitled world (##{entry.id})"
+    end
+  end
+
+  # The selected world bible as display fields (or nil) — the seed for generation.
+  defp world_context_for(_entries, id) when id in [nil, ""], do: nil
+
+  defp world_context_for(entries, id) do
+    case Enum.find(entries, &(to_string(&1.id) == id)) do
+      nil ->
+        nil
+
+      entry ->
+        wb = Library.payload(entry)
+
+        %{
+          "name" => wb.name || "",
+          "setting" => wb.setting || "",
+          "tone" => wb.tone || "",
+          "rules" => Enum.join(wb.rules || [], "\n"),
+          "starting_canon" => Enum.join(wb.starting_canon || [], "\n")
+        }
+    end
   end
 
   attr(:field, :string, required: true)
@@ -161,6 +225,17 @@ defmodule PolyphonyWeb.SheetEditorLive do
     </div>
 
     <div class="card gen-brief">
+      <form id="world-select-form" phx-change="select_world">
+        <label>World <span class="faint">(grounds generated backstory &amp; voice in a setting)</span></label>
+        <select name="world_id">
+          <option value="">— none —</option>
+          <option :for={{id, name} <- @worlds} value={id} selected={@world_id == id}><%= name %></option>
+        </select>
+        <p :if={@worlds == []} class="faint">
+          No world bibles yet — create one in the <a href={~p"/library"}>Library</a> to ground generation.
+        </p>
+      </form>
+
       <form phx-submit="generate_all">
         <label>Describe the character — we'll fill in every field <span class="faint">(builds on anything you've already written)</span></label>
         <textarea
@@ -189,8 +264,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
         <.field_label field="backstory" label="Backstory" generating={@generating} />
         <textarea name="backstory"><%= @draft["backstory"] %></textarea>
         <br /><br />
-        <button class="btn" type="submit">Save</button>
-        <a class="btn ghost" href={~p"/library"}>Back to library</a>
+        <div class="row save-row">
+          <button class="btn" type="submit">Save</button>
+          <span :if={@saved} class="saved-note" role="status">✓ Saved</span>
+          <span class="spacer"></span>
+          <a class="btn ghost" href={~p"/library"}>Back to library</a>
+        </div>
       </form>
     </div>
     """

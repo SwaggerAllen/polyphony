@@ -139,6 +139,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .gen-btn { white-space: nowrap; }
 .gen-brief { border-color: var(--accent); }
 .gen-brief textarea { margin-bottom: .5rem; }
+.save-row { gap: .75rem; }
+.saved-note { color: var(--good); font-size: .9rem; font-weight: 600; }
 
 .list-empty { color: var(--fg-faint); padding: 2rem 1rem; text-align: center; }
 hr.sep { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
