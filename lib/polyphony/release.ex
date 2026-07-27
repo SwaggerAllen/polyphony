@@ -81,11 +81,14 @@ defmodule Polyphony.Release do
   end
 
   # One-time bootstrap for a managed DB whose app user lacks CREATE on the database.
-  # If DB_ADMIN_URL is set, connect as that admin (e.g. DO's `doadmin`) and create
-  # the event-store schema **owned by the app user** — so the app user (from
-  # DATABASE_URL) can then create/use its tables without any further grants, and you
-  # can remove DB_ADMIN_URL afterward. Idempotent (CREATE SCHEMA IF NOT EXISTS); a
-  # no-op when DB_ADMIN_URL is unset.
+  # If DB_ADMIN_URL is set, connect with that admin's credentials (e.g. DO's
+  # `doadmin`) **to the app's own database** and create the event-store schema
+  # **owned by the app user** — so the app user (from DATABASE_URL) can then
+  # create/use its tables without further grants, and you can remove DB_ADMIN_URL
+  # afterward. `CREATE SCHEMA` acts on the *current* database, and a `doadmin`
+  # connection string points at `defaultdb`, not the app DB — so we deliberately use
+  # the app's database (from DATABASE_URL), overridable with DB_ADMIN_DATABASE.
+  # Idempotent (CREATE SCHEMA IF NOT EXISTS); a no-op when DB_ADMIN_URL is unset.
   defp maybe_bootstrap_schema_as_admin(config) do
     case System.get_env("DB_ADMIN_URL") do
       nil ->
@@ -95,7 +98,8 @@ defmodule Polyphony.Release do
         schema = Keyword.fetch!(config, :schema)
         # config() has already parsed the url into discrete opts.
         app_user = Keyword.fetch!(config, :username)
-        {:ok, conn} = Postgrex.start_link(admin_conn_opts(admin_url))
+        database = System.get_env("DB_ADMIN_DATABASE") || Keyword.fetch!(config, :database)
+        {:ok, conn} = Postgrex.start_link(admin_conn_opts(admin_url, database))
 
         try do
           Postgrex.query!(
@@ -105,7 +109,8 @@ defmodule Polyphony.Release do
           )
 
           Logger.info(
-            "[migrate] ensured schema #{inspect(schema)} owned by #{inspect(app_user)} via DB_ADMIN_URL"
+            "[migrate] ensured schema #{inspect(schema)} owned by #{inspect(app_user)} " <>
+              "in database #{inspect(database)} via DB_ADMIN_URL"
           )
         after
           GenServer.stop(conn)
@@ -113,7 +118,7 @@ defmodule Polyphony.Release do
     end
   end
 
-  defp admin_conn_opts(admin_url) do
+  defp admin_conn_opts(admin_url, database) do
     uri = URI.parse(String.split(admin_url, "?") |> hd())
     [user, pass] = String.split(uri.userinfo || ":", ":", parts: 2)
 
@@ -122,7 +127,9 @@ defmodule Polyphony.Release do
       port: uri.port || 5432,
       username: URI.decode(user),
       password: URI.decode(pass),
-      database: String.trim_leading(uri.path || "", "/")
+      # The admin URL's own database (e.g. defaultdb) is irrelevant — the schema must
+      # be created in the app's database.
+      database: database
     ]
 
     # Match the app's SSL posture (managed DBs require it; DATABASE_SSL=false opts out).
