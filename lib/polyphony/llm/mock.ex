@@ -27,6 +27,7 @@ defmodule Polyphony.LLM.Mock do
       :summary -> {:ok, summary_text(messages)}
       :arc -> {:ok, arc_json(messages)}
       :sheet -> {:ok, sheet_json(messages)}
+      :autofill -> {:ok, autofill_json(messages, opts)}
       :field -> {:ok, summary_text(messages)}
       :gate -> {:ok, gate_answer(messages)}
       _ -> {:ok, turn_packet_json(messages)}
@@ -84,6 +85,18 @@ defmodule Polyphony.LLM.Mock do
       temperament: lorem(seed + 6, 2),
       backstory: capitalize(lorem(seed + 8, 8)) <> "."
     })
+  end
+
+  # A lorem value for each requested authoring field (Authoring.Autofill, mode 1):
+  # one JSON object keyed by the field names the caller passes in `:fields`.
+  defp autofill_json(messages, opts) do
+    seed = :erlang.phash2(messages)
+
+    opts
+    |> Keyword.get(:fields, [])
+    |> Enum.with_index()
+    |> Map.new(fn {field, i} -> {to_string(field), capitalize(lorem(seed + i * 5, 4)) <> "."} end)
+    |> Jason.encode!()
   end
 
   defp decision_json(opts) do

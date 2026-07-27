@@ -974,6 +974,29 @@ input:focus, textarea:focus, select:focus {
   align-items: flex-end;
 }
 
+/* Authoring auto-generation: the per-field "✨ Generate" row + the brief card. */
+
+.gen-label {
+  margin-top: .75rem;
+  align-items: baseline;
+}
+
+.gen-label > span:first-child {
+  font-weight: inherit;
+}
+
+.gen-btn {
+  white-space: nowrap;
+}
+
+.gen-brief {
+  border-color: var(--accent);
+}
+
+.gen-brief textarea {
+  margin-bottom: .5rem;
+}
+
 .list-empty {
   color: var(--fg-faint);
   padding: 2rem 1rem;
