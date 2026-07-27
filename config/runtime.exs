@@ -43,13 +43,16 @@ if config_env() == :prod do
          [url: database_url, pool_size: pool_size] ++ db_ssl
 
   # The persistent event store shares the managed Postgres cluster with the read
-  # models (same DATABASE_URL), isolated in its own `eventstore` schema (set in
-  # config/prod.exs). A separate, smaller connection pool keeps event appends from
-  # contending with read-model queries.
+  # models (same DATABASE_URL), isolated in its own schema (default `eventstore`).
+  # Creating that schema needs CREATE on the database; on a managed DB where the app
+  # user lacks it, pre-create the schema as the admin and grant the app user rights
+  # (see docs/deployment.md). Override the name with EVENT_STORE_SCHEMA. A separate,
+  # smaller pool keeps event appends from contending with read-model queries.
   config :polyphony,
          Polyphony.EventStore,
          [
            url: database_url,
+           schema: System.get_env("EVENT_STORE_SCHEMA", "eventstore"),
            pool_size: String.to_integer(System.get_env("EVENT_STORE_POOL_SIZE") || "5")
          ] ++ db_ssl
 

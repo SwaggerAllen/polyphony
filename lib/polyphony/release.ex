@@ -126,9 +126,36 @@ defmodule Polyphony.Release do
   # that already exists is fine.
   defp ensure_schema!(config) do
     case EventStore.Storage.Schema.create(config) do
-      :ok -> :ok
-      {:error, :already_up} -> :ok
-      {:error, reason} -> raise "failed to create event store schema: #{inspect(reason)}"
+      :ok ->
+        :ok
+
+      {:error, :already_up} ->
+        :ok
+
+      {:error, reason} ->
+        message = to_string(inspect(reason))
+
+        if String.contains?(message, ["insufficient_privilege", "permission denied"]) do
+          schema = Keyword.fetch!(config, :schema)
+
+          raise """
+          Could not create the event store schema #{inspect(schema)}: #{message}
+
+          The app's database user lacks CREATE on the database. Fix it once, as an
+          admin (DO's `doadmin`), then redeploy — either:
+
+              GRANT CREATE ON DATABASE "<database>" TO "<app_user>";
+
+          or pre-create the schema and grant rights on it (least privilege):
+
+              CREATE SCHEMA IF NOT EXISTS #{schema};
+              GRANT ALL ON SCHEMA #{schema} TO "<app_user>";
+
+          (<app_user> is the username in DATABASE_URL.) See docs/deployment.md.
+          """
+        else
+          raise "failed to create event store schema: #{message}"
+        end
     end
   end
 

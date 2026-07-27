@@ -92,6 +92,28 @@ On boot the web service runs `Polyphony.Release.migrate/0` (before it serves):
    connection — no `CREATE DATABASE`), and initializes/upgrades the event store
    tables.
 
+**Event-store schema privilege (one-time).** `CREATE SCHEMA` needs `CREATE` on the
+database. On DO's managed DB the app user can create tables in `public` (so the read
+models migrate fine) but often **lacks database-level CREATE**, so the event-store
+step fails with `permission denied for database …`. Fix it once as the admin
+(`doadmin`, from the cluster's connection details), then redeploy — either grant the
+app user the privilege:
+
+```sql
+GRANT CREATE ON DATABASE "<database>" TO "<app_user>";
+```
+
+or, least-privilege, pre-create the schema and grant rights on it (the app then just
+uses it — `migrate/0` tolerates a pre-existing schema):
+
+```sql
+CREATE SCHEMA IF NOT EXISTS eventstore;
+GRANT ALL ON SCHEMA eventstore TO "<app_user>";
+```
+
+`<app_user>` / `<database>` are the username and database in your `DATABASE_URL`.
+The schema name is overridable with `EVENT_STORE_SCHEMA`.
+
 Both steps are **idempotent** and safe to run on every boot. `migrate/0` is
 deliberately robust for a small managed DB: the migration uses a tiny pool with
 long queue/connect timeouts and retries with backoff on transient failures
