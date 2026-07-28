@@ -149,6 +149,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .member-list .member { padding: .4rem 0 .4rem .75rem; border-bottom: 1px solid var(--border); gap: .5rem; }
 .member-list .member:last-child { border-bottom: none; }
 .member-empty { padding: .5rem 0 .25rem .75rem; }
+.pending-banner { border-color: var(--accent-2); }
 .save-row { gap: .75rem; }
 .saved-note { color: var(--good); font-size: .9rem; font-weight: 600; }
 .rel-list { list-style: none; padding: 0; margin: .5rem 0; }

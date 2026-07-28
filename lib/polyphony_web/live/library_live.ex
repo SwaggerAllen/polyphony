@@ -12,16 +12,24 @@ defmodule PolyphonyWeb.LibraryLive do
   use PolyphonyWeb, :live_view
 
   alias Polyphony.{Library, Owner}
-  alias Polyphony.Authoring.{CharacterSheet, WorldBible}
+  alias Polyphony.Authoring.{Autofill, CharacterSheet, WorldBible}
+
+  require Logger
 
   def mount(_params, _session, socket) do
-    {:ok, socket |> assign(page_title: "Library", filter: "all", query: "") |> load()}
+    {:ok,
+     socket
+     |> assign(page_title: "Library", filter: "all", query: "", generating: false)
+     |> load()}
   end
 
   defp load(socket) do
     owner = Owner.of(socket.assigns.current_user)
     entries = Library.list_for_owner(owner)
-    socket |> assign(owner: owner, entries: entries) |> assign_groups()
+
+    socket
+    |> assign(owner: owner, entries: entries, pending_count: Enum.count(entries, &pending?/1))
+    |> assign_groups()
   end
 
   # Group the shown entries under their world. A world group appears when it has any
@@ -137,6 +145,46 @@ defmodule PolyphonyWeb.LibraryLive do
     end)
   end
 
+  # Bulk-generate every pending stub — fill each one's sheet (grounded in its world
+  # and role) and finalize it, so the author doesn't open them one by one. Runs async
+  # with a busy button; each stub is best-effort.
+  def handle_event("generate_pending", _params, socket) do
+    safe(socket, fn ->
+      case Enum.filter(socket.assigns.entries, &pending?/1) do
+        [] ->
+          {:noreply, socket}
+
+        stubs ->
+          user = socket.assigns.current_user
+
+          {:noreply,
+           socket
+           |> assign(generating: true)
+           |> start_async(:generate_pending, fn -> generate_stubs(stubs, user) end)}
+      end
+    end)
+  end
+
+  def handle_async(:generate_pending, {:ok, {done, failed}}, socket) do
+    detail = if failed > 0, do: " #{failed} failed — open those to retry.", else: ""
+
+    {:noreply,
+     socket
+     |> assign(generating: false)
+     |> put_flash(:info, "Generated #{done} character(s).#{detail}")
+     |> load()}
+  end
+
+  def handle_async(:generate_pending, result, socket) do
+    Logger.warning("[authoring] bulk stub generation failed: #{inspect(result)}")
+
+    {:noreply,
+     socket
+     |> assign(generating: false)
+     |> put_flash(:error, "Bulk generation failed — try again.")
+     |> load()}
+  end
+
   defp blank_payload("character"), do: %CharacterSheet{name: "", status: :full}
   defp blank_payload("world_bible"), do: %WorldBible{name: ""}
 
@@ -146,6 +194,74 @@ defmodule PolyphonyWeb.LibraryLive do
   defp editor_path("character", id), do: ~p"/authoring/character/#{id}"
   defp editor_path("world_bible", id), do: ~p"/authoring/bible/#{id}"
   defp editor_path("campaign", id), do: ~p"/campaigns/#{id}"
+
+  # ── Bulk stub generation ─────────────────────────────────────────────────────
+
+  defp generate_stubs(stubs, user) do
+    Enum.reduce(stubs, {0, 0}, fn entry, {ok, bad} ->
+      case generate_stub(entry, user) do
+        :ok -> {ok + 1, bad}
+        :error -> {ok, bad + 1}
+      end
+    end)
+  end
+
+  defp generate_stub(entry, user) do
+    sheet = struct(CharacterSheet, Map.from_struct(Library.payload(entry)))
+    brief = [sheet.name, sheet.role] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join(" — ")
+
+    opts =
+      [world: world_context(sheet.world_bible_id), role: sheet.role, usage_kind: "authoring"] ++
+        if(user, do: [user_id: user.id], else: [])
+
+    case Autofill.generate_all(:character, brief, %{"name" => sheet.name || ""}, opts) do
+      {:ok, values} ->
+        finalized = %CharacterSheet{
+          sheet
+          | name: keep_or(sheet.name, values["name"]),
+            premise: values["premise"] || sheet.premise,
+            appearance: values["appearance"] || sheet.appearance,
+            voice: values["voice"] || sheet.voice,
+            temperament: values["temperament"] || sheet.temperament,
+            backstory: values["backstory"] || sheet.backstory,
+            status: :full
+        }
+
+        Library.update_payload(entry.id, finalized)
+        :ok
+
+      {:error, _} ->
+        :error
+    end
+  end
+
+  # Keep an author-set name; only fall back to a generated one when it was blank.
+  defp keep_or(name, generated) when name in [nil, ""], do: generated || name
+  defp keep_or(name, _generated), do: name
+
+  defp world_context(nil), do: nil
+
+  defp world_context(id) do
+    case Library.get(id) do
+      nil ->
+        nil
+
+      entry ->
+        case Library.payload(entry) do
+          %WorldBible{} = wb ->
+            %{
+              "name" => wb.name || "",
+              "setting" => wb.setting || "",
+              "tone" => wb.tone || "",
+              "rules" => Enum.join(wb.rules || [], "\n"),
+              "starting_canon" => Enum.join(wb.starting_canon || [], "\n")
+            }
+
+          _ ->
+            nil
+        end
+    end
+  end
 
   # ── Render ─────────────────────────────────────────────────────────────────────
 
@@ -176,6 +292,19 @@ defmodule PolyphonyWeb.LibraryLive do
       </select>
       <input type="text" name="q" value={@query} placeholder="Search by name…" style="flex:1;" phx-debounce="200" />
     </form>
+
+    <div :if={@pending_count > 0} class="card pending-banner">
+      <div class="row">
+        <span>
+          <strong><%= @pending_count %></strong> pending character<%= if @pending_count == 1, do: "", else: "s" %>
+          <span class="faint">— stubs from relationships, not yet fleshed out.</span>
+        </span>
+        <div class="spacer"></div>
+        <button class="btn" phx-click="generate_pending" disabled={@generating}>
+          <%= if @generating, do: "✨ Generating…", else: "✨ Generate all pending" %>
+        </button>
+      </div>
+    </div>
 
     <div :if={@entries != [] and @groups == []} class="list-empty">No matching items. Try a different type or search.</div>
 

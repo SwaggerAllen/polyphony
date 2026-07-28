@@ -1047,6 +1047,10 @@ input:focus, textarea:focus, select:focus {
   padding: .5rem 0 .25rem .75rem;
 }
 
+.pending-banner {
+  border-color: var(--accent-2);
+}
+
 .save-row {
   gap: .75rem;
 }
