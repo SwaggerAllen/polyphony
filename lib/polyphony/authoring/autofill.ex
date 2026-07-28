@@ -331,11 +331,26 @@ defmodule Polyphony.Authoring.Autofill do
     ]
   end
 
-  # The generation context (world bible + related character sheets), pulled from opts.
-  defp context(opts), do: %{world: opts[:world], relations: opts[:relations]}
+  # The generation context (world bible + related character sheets + a former stub's
+  # inherited role), pulled from opts.
+  defp context(opts),
+    do: %{world: opts[:world], relations: opts[:relations], role: opts[:role]}
 
-  defp context_block(%{} = ctx), do: world_block(ctx[:world]) <> relations_block(ctx[:relations])
+  defp context_block(%{} = ctx),
+    do: role_block(ctx[:role]) <> world_block(ctx[:world]) <> relations_block(ctx[:relations])
+
   defp context_block(_), do: ""
+
+  # A character stubbed from another's relationships carries a one-line `role` (how
+  # that source character described them, e.g. "estranged mentor"). Feed it into
+  # generation so the seed the author already committed to survives — the generated
+  # sheet realizes that role rather than inventing an unrelated person. Absent → "".
+  defp role_block(role) when is_binary(role) and role != "" do
+    "This character was introduced through another character as their \"#{role}\". " <>
+      "Honor that role — the generated details should realize it, not contradict it.\n\n"
+  end
+
+  defp role_block(_), do: ""
 
   # A compact rendering of the linked world bible, so generation grounds the
   # character in its setting (backstory/voice that fit the world). Absent → "".

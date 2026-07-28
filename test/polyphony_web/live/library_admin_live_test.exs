@@ -3,7 +3,7 @@ defmodule PolyphonyWeb.LibraryAdminLiveTest do
   use PolyphonyWeb.ConnCase, async: false
 
   alias Polyphony.{Library, Owner, Moderation}
-  alias Polyphony.Authoring.CharacterSheet
+  alias Polyphony.Authoring.{CharacterSheet, Stub}
 
   describe "library (V9)" do
     setup :register_and_log_in_user
@@ -101,6 +101,23 @@ defmodule PolyphonyWeb.LibraryAdminLiveTest do
       assert shown =~ "Bay Run <span"
       refute shown =~ "Red Dune <span"
       refute shown =~ "Free Agent <span"
+    end
+
+    test "a pending stub character is badged; a full one is not", %{conn: conn, user: user} do
+      owner = Owner.of(user)
+      Library.put(%{owner: owner, kind: "character", payload: Stub.new("Ghost", "haunts her")})
+
+      Library.put(%{
+        owner: owner,
+        kind: "character",
+        payload: %CharacterSheet{name: "Mira", status: :full}
+      })
+
+      {:ok, _view, html} = live(conn, ~p"/library")
+
+      assert html =~ "pending"
+      # Only Ghost (the stub) is pending; Mira is full.
+      assert Enum.count(Regex.scan(~r/badge stub">pending/, html)) == 1
     end
   end
 

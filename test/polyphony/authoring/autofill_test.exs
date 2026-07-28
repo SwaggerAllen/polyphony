@@ -129,6 +129,33 @@ defmodule Polyphony.Authoring.AutofillTest do
       refute msgs =~ "World context"
     end
 
+    test "a stub's inherited role is injected into generation" do
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.generate_field(:character, "backstory", %{},
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture,
+            role: "estranged mentor"
+          )
+        end)
+
+      assert msgs =~ "estranged mentor"
+      assert msgs =~ "Honor that role"
+    end
+
+    test "no role leaves the prompt clean (no dangling label)" do
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.generate_field(:character, "backstory", %{},
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture,
+            role: nil
+          )
+        end)
+
+      refute msgs =~ "Honor that role"
+    end
+
     # Runs `fun` with a capturing `respond_with` and returns the concatenated
     # prompt content the provider saw.
     defp capture_prompt(fun) do

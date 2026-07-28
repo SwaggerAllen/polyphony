@@ -76,6 +76,7 @@ defmodule Polyphony.LLM.Mock do
     })
   end
 
+  # A full lorem character sheet (Authoring.Studio's review-gated generation).
   defp sheet_json(messages) do
     seed = :erlang.phash2(messages)
 
