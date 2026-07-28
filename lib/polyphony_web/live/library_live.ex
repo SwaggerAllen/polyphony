@@ -1,77 +1,127 @@
 defmodule PolyphonyWeb.LibraryLive do
   @moduledoc """
-  V9 (library): the owner's authored entities. Everything is scoped through
-  `Polyphony.Owner` (the §P2 indirection) — the view never speaks a raw user id.
-  Create characters / bibles / campaigns; manage visibility; archive / delete.
+  V9 (library): the owner's authored entities, **grouped by world**. Each world bible
+  is a section; its characters and campaigns nest beneath it, with unassigned items in
+  a trailing "No world" group — so navigation follows the setting rather than one flat
+  list. A type filter and a name search narrow what's shown. Everything is scoped
+  through `Polyphony.Owner` (the §P2 indirection) — the view never speaks a raw user id.
+
+  Creating an artifact makes a blank entry and jumps straight to its editor, where the
+  name is typed or generated — no name is required up front.
   """
   use PolyphonyWeb, :live_view
 
   alias Polyphony.{Library, Owner}
-  alias Polyphony.Authoring.{CharacterSheet, WorldBible}
+  alias Polyphony.Authoring.{Autofill, CharacterSheet, WorldBible}
+
+  require Logger
 
   def mount(_params, _session, socket) do
     {:ok,
-     socket |> assign(page_title: "Library", filter: "all", query: "", world: "all") |> load()}
+     socket
+     |> assign(page_title: "Library", filter: "all", query: "", generating: false)
+     |> load()}
   end
 
   defp load(socket) do
     owner = Owner.of(socket.assigns.current_user)
     entries = Library.list_for_owner(owner)
 
-    worlds =
-      for e <- entries, e.kind == "world_bible", do: {to_string(e.id), entry_name(e)}
-
-    socket |> assign(owner: owner, entries: entries, worlds: worlds) |> assign_shown()
+    socket
+    |> assign(owner: owner, entries: entries, pending_count: Enum.count(entries, &pending?/1))
+    |> assign_groups()
   end
 
-  # The visible slice: filter the loaded owned entries by kind, by the world they
-  # belong to, and a case-insensitive substring match on the (decoded) name.
-  defp assign_shown(socket) do
-    %{entries: entries, filter: filter, query: query, world: world} = socket.assigns
+  # Group the shown entries under their world. A world group appears when it has any
+  # visible member, or (for the "all"/"world bibles" filters) when the world itself
+  # matches the search. Characters/campaigns with no world land in a trailing group.
+  defp assign_groups(socket) do
+    %{entries: entries, filter: filter, query: query} = socket.assigns
     q = query |> to_string() |> String.trim() |> String.downcase()
 
-    shown =
+    worlds =
       entries
-      |> Enum.filter(fn e -> filter in ["all", e.kind] end)
-      |> Enum.filter(fn e -> in_world?(e, world) end)
-      |> Enum.filter(fn e -> q == "" or String.contains?(String.downcase(entry_name(e)), q) end)
+      |> Enum.filter(&(&1.kind == "world_bible"))
+      |> Enum.sort_by(&String.downcase(entry_name(&1)))
 
-    assign(socket, :shown, shown)
+    members = Enum.filter(entries, &(&1.kind in ["character", "campaign"]))
+    by_world = Enum.group_by(members, &member_world_id/1)
+
+    world_groups =
+      for world <- worlds,
+          group = build_group(world, Map.get(by_world, world.id, []), filter, q),
+          group != nil,
+          do: group
+
+    none_members = visible_members(Map.get(by_world, :none, []), filter, q, false)
+    none_group = if none_members == [], do: [], else: [%{world: nil, members: none_members}]
+
+    assign(socket, groups: world_groups ++ none_group)
   end
 
-  # Does an entry belong to the selected world? "all" matches everything. The world
-  # bible itself matches its own id; characters match via `world_bible_id`, campaigns
-  # via `bible_id` (both reference the world bible entry's id). Anything unassociated
-  # (or a kind with no world link) is hidden when a specific world is chosen.
-  defp in_world?(_e, "all"), do: true
-  defp in_world?(%{kind: "world_bible", id: id}, world), do: to_string(id) == world
+  defp build_group(world, members, filter, q) do
+    world_matches = q == "" or String.contains?(String.downcase(entry_name(world)), q)
+    visible = visible_members(members, filter, q, world_matches)
 
-  defp in_world?(e, world) do
-    payload = Library.payload(e)
-    wid = Map.get(payload, :world_bible_id) || Map.get(payload, :bible_id)
-    wid != nil and to_string(wid) == world
+    cond do
+      visible != [] -> %{world: world, members: visible}
+      show_kind?(filter, "world_bible") and world_matches -> %{world: world, members: []}
+      true -> nil
+    end
   end
 
-  def handle_event("new", %{"kind" => kind, "name" => name}, socket) when name != "" do
+  defp visible_members(members, filter, q, world_matches) do
+    members
+    |> Enum.filter(fn m ->
+      show_kind?(filter, m.kind) and
+        (q == "" or world_matches or String.contains?(String.downcase(entry_name(m)), q))
+    end)
+    |> Enum.sort_by(&{&1.kind, String.downcase(entry_name(&1))})
+  end
+
+  defp show_kind?("all", _kind), do: true
+  defp show_kind?(filter, kind), do: filter == kind
+
+  # Which world an entry belongs to: a character via `world_bible_id`, a campaign via
+  # `bible_id` (which may be a string), else `:none`.
+  defp member_world_id(entry) do
+    payload = Library.payload(entry)
+
+    case normalize_id(Map.get(payload, :world_bible_id) || Map.get(payload, :bible_id)) do
+      nil -> :none
+      id -> id
+    end
+  end
+
+  defp normalize_id(nil), do: nil
+  defp normalize_id(id) when is_integer(id), do: id
+
+  defp normalize_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {n, _} -> n
+      :error -> nil
+    end
+  end
+
+  # ── Events ──────────────────────────────────────────────────────────────────────
+
+  # Create a blank artifact and jump to its editor — the name is set (or generated)
+  # there. No name is required to begin.
+  def handle_event("new", %{"kind" => kind}, socket)
+      when kind in ~w(character world_bible campaign) do
     safe(socket, fn ->
-      payload = blank_payload(kind, name)
-      Library.put(%{owner: socket.assigns.owner, kind: kind, payload: payload})
-      {:noreply, socket |> put_flash(:info, "Created #{kind} “#{name}”.") |> load()}
+      entry =
+        Library.put(%{owner: socket.assigns.owner, kind: kind, payload: blank_payload(kind)})
+
+      {:noreply, push_navigate(socket, to: editor_path(kind, entry.id))}
     end)
   end
-
-  def handle_event("new", _params, socket),
-    do: {:noreply, put_flash(socket, :error, "Give it a name first.")}
 
   def handle_event("filter", params, socket) do
     {:noreply,
      socket
-     |> assign(
-       filter: params["kind"] || "all",
-       query: params["q"] || "",
-       world: params["world"] || "all"
-     )
-     |> assign_shown()}
+     |> assign(filter: params["kind"] || "all", query: params["q"] || "")
+     |> assign_groups()}
   end
 
   def handle_event("visibility", %{"eid" => id, "visibility" => vis}, socket) do
@@ -95,13 +145,123 @@ defmodule PolyphonyWeb.LibraryLive do
     end)
   end
 
-  defp blank_payload("character", name), do: %CharacterSheet{name: name, status: :full}
-  defp blank_payload("world_bible", name), do: %WorldBible{name: name}
+  # Bulk-generate every pending stub — fill each one's sheet (grounded in its world
+  # and role) and finalize it, so the author doesn't open them one by one. Runs async
+  # with a busy button; each stub is best-effort.
+  def handle_event("generate_pending", _params, socket) do
+    safe(socket, fn ->
+      case Enum.filter(socket.assigns.entries, &pending?/1) do
+        [] ->
+          {:noreply, socket}
 
-  defp blank_payload("campaign", name),
-    do: %{kind: :campaign, name: name, character_ids: [], bible_id: nil, scenes: []}
+        stubs ->
+          user = socket.assigns.current_user
 
-  defp blank_payload(_other, name), do: %{name: name}
+          {:noreply,
+           socket
+           |> assign(generating: true)
+           |> start_async(:generate_pending, fn -> generate_stubs(stubs, user) end)}
+      end
+    end)
+  end
+
+  def handle_async(:generate_pending, {:ok, {done, failed}}, socket) do
+    detail = if failed > 0, do: " #{failed} failed — open those to retry.", else: ""
+
+    {:noreply,
+     socket
+     |> assign(generating: false)
+     |> put_flash(:info, "Generated #{done} character(s).#{detail}")
+     |> load()}
+  end
+
+  def handle_async(:generate_pending, result, socket) do
+    Logger.warning("[authoring] bulk stub generation failed: #{inspect(result)}")
+
+    {:noreply,
+     socket
+     |> assign(generating: false)
+     |> put_flash(:error, "Bulk generation failed — try again.")
+     |> load()}
+  end
+
+  defp blank_payload("character"), do: %CharacterSheet{name: "", status: :full}
+  defp blank_payload("world_bible"), do: %WorldBible{name: ""}
+
+  defp blank_payload("campaign"),
+    do: %{kind: :campaign, name: "", premise: "", character_ids: [], bible_id: nil, scenes: []}
+
+  defp editor_path("character", id), do: ~p"/authoring/character/#{id}"
+  defp editor_path("world_bible", id), do: ~p"/authoring/bible/#{id}"
+  defp editor_path("campaign", id), do: ~p"/campaigns/#{id}"
+
+  # ── Bulk stub generation ─────────────────────────────────────────────────────
+
+  defp generate_stubs(stubs, user) do
+    Enum.reduce(stubs, {0, 0}, fn entry, {ok, bad} ->
+      case generate_stub(entry, user) do
+        :ok -> {ok + 1, bad}
+        :error -> {ok, bad + 1}
+      end
+    end)
+  end
+
+  defp generate_stub(entry, user) do
+    sheet = struct(CharacterSheet, Map.from_struct(Library.payload(entry)))
+    brief = [sheet.name, sheet.role] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join(" — ")
+
+    opts =
+      [world: world_context(sheet.world_bible_id), role: sheet.role, usage_kind: "authoring"] ++
+        if(user, do: [user_id: user.id], else: [])
+
+    case Autofill.generate_all(:character, brief, %{"name" => sheet.name || ""}, opts) do
+      {:ok, values} ->
+        finalized = %CharacterSheet{
+          sheet
+          | name: keep_or(sheet.name, values["name"]),
+            premise: values["premise"] || sheet.premise,
+            appearance: values["appearance"] || sheet.appearance,
+            voice: values["voice"] || sheet.voice,
+            temperament: values["temperament"] || sheet.temperament,
+            backstory: values["backstory"] || sheet.backstory,
+            status: :full
+        }
+
+        Library.update_payload(entry.id, finalized)
+        :ok
+
+      {:error, _} ->
+        :error
+    end
+  end
+
+  # Keep an author-set name; only fall back to a generated one when it was blank.
+  defp keep_or(name, generated) when name in [nil, ""], do: generated || name
+  defp keep_or(name, _generated), do: name
+
+  defp world_context(nil), do: nil
+
+  defp world_context(id) do
+    case Library.get(id) do
+      nil ->
+        nil
+
+      entry ->
+        case Library.payload(entry) do
+          %WorldBible{} = wb ->
+            %{
+              "name" => wb.name || "",
+              "setting" => wb.setting || "",
+              "tone" => wb.tone || "",
+              "rules" => Enum.join(wb.rules || [], "\n"),
+              "starting_canon" => Enum.join(wb.starting_canon || [], "\n")
+            }
+
+          _ ->
+            nil
+        end
+    end
+  end
 
   # ── Render ─────────────────────────────────────────────────────────────────────
 
@@ -112,16 +272,16 @@ defmodule PolyphonyWeb.LibraryLive do
     <div class="card">
       <form phx-submit="new" class="row">
         <select name="kind" style="width:auto;">
-          <option value="character">Character</option>
-          <option value="world_bible">World bible</option>
-          <option value="campaign">Campaign</option>
+          <option value="character">New character</option>
+          <option value="world_bible">New world bible</option>
+          <option value="campaign">New campaign</option>
         </select>
-        <input type="text" name="name" placeholder="Name…" style="flex:1;" />
         <button class="btn" type="submit">Create</button>
+        <span class="faint">— opens the editor, where you name it.</span>
       </form>
     </div>
 
-    <div :if={@entries == []} class="list-empty">Nothing here yet. Create a character or a campaign to begin.</div>
+    <div :if={@entries == []} class="list-empty">Nothing here yet. Create a character, world, or campaign to begin.</div>
 
     <form :if={@entries != []} id="library-filter" phx-change="filter" class="row library-filter">
       <select name="kind" style="width:auto;">
@@ -130,60 +290,80 @@ defmodule PolyphonyWeb.LibraryLive do
         <option value="world_bible" selected={@filter == "world_bible"}>World bibles</option>
         <option value="campaign" selected={@filter == "campaign"}>Campaigns</option>
       </select>
-      <select :if={@worlds != []} name="world" style="width:auto;">
-        <option value="all" selected={@world == "all"}>All worlds</option>
-        <option :for={{id, name} <- @worlds} value={id} selected={@world == id}><%= name %></option>
-      </select>
       <input type="text" name="q" value={@query} placeholder="Search by name…" style="flex:1;" phx-debounce="200" />
     </form>
 
-    <div :if={@entries != [] and @shown == []} class="list-empty">No matching items. Try a different type, world, or search.</div>
-
-    <div :for={e <- @shown} class="card">
+    <div :if={@pending_count > 0} class="card pending-banner">
       <div class="row">
-        <div>
-          <h3><%= entry_name(e) %> <span class="faint">· <%= e.kind %></span></h3>
-          <.visibility_badge visibility={e.visibility} />
-          <span :if={pending?(e)} class="badge stub">pending</span>
-          <span :if={e.frozen} class="badge">published snapshot</span>
-        </div>
-        <div class="spacer"></div>
-        <a :if={e.kind == "character"} class="btn ghost sm" href={~p"/authoring/character/#{e.id}"}>Edit</a>
-        <a :if={e.kind == "world_bible"} class="btn ghost sm" href={~p"/authoring/bible/#{e.id}"}>Edit</a>
-        <a :if={e.kind == "campaign"} class="btn ghost sm" href={~p"/campaigns/#{e.id}"}>Open</a>
-      </div>
-
-      <div class="row" style="margin-top:.5rem;gap:.4rem;">
-        <form id={"vis-#{e.id}"} phx-change="visibility">
-          <input type="hidden" name="eid" value={e.id} />
-          <select name="visibility" style="width:auto;">
-            <option value="private" selected={e.visibility == "private"}>Private</option>
-            <option value="unlisted" selected={e.visibility == "unlisted"}>Unlisted</option>
-            <option value="public" selected={e.visibility == "public"}>Public</option>
-          </select>
-        </form>
-        <span :if={e.visibility == "unlisted" and e.share_token} class="faint">
-          share: <a href={~p"/s/#{e.share_token}"}>/s/<%= String.slice(e.share_token, 0, 8) %>…</a>
+        <span>
+          <strong><%= @pending_count %></strong> pending character<%= if @pending_count == 1, do: "", else: "s" %>
+          <span class="faint">— stubs from relationships, not yet fleshed out.</span>
         </span>
         <div class="spacer"></div>
-        <button class="btn ghost sm" phx-click="archive" phx-value-id={e.id}>Archive</button>
-        <button class="btn danger sm" phx-click="delete" phx-value-id={e.id}
-          data-confirm="Delete this? It's recoverable for a while.">Delete</button>
+        <button class="btn" phx-click="generate_pending" disabled={@generating}>
+          <%= if @generating, do: "✨ Generating…", else: "✨ Generate all pending" %>
+        </button>
       </div>
     </div>
+
+    <div :if={@entries != [] and @groups == []} class="list-empty">No matching items. Try a different type or search.</div>
+
+    <div :for={g <- @groups} class="card world-group">
+      <div :if={g.world} class="row group-head">
+        <h3><%= entry_name(g.world) %> <span class="faint">· world</span></h3>
+        <.visibility_badge visibility={g.world.visibility} />
+        <div class="spacer"></div>
+        <.entry_controls entry={g.world} />
+      </div>
+      <div :if={is_nil(g.world)} class="row group-head">
+        <h3 class="faint">No world</h3>
+      </div>
+
+      <div :if={g.members == []} class="faint member-empty">Nothing in this world yet.</div>
+      <ul class="member-list">
+        <li :for={m <- g.members} class="row member">
+          <span><%= entry_name(m) %> <span class="faint">· <%= m.kind %></span></span>
+          <span :if={pending?(m)} class="badge stub">pending</span>
+          <.visibility_badge visibility={m.visibility} />
+          <div class="spacer"></div>
+          <.entry_controls entry={m} />
+        </li>
+      </ul>
+    </div>
+    """
+  end
+
+  # The per-entry controls: visibility select, share link (unlisted), edit/open, and
+  # archive/delete — shared by world headers and their nested members.
+  attr(:entry, :map, required: true)
+
+  defp entry_controls(assigns) do
+    ~H"""
+    <form id={"vis-#{@entry.id}"} phx-change="visibility" style="display:inline;">
+      <input type="hidden" name="eid" value={@entry.id} />
+      <select name="visibility" style="width:auto;">
+        <option value="private" selected={@entry.visibility == "private"}>Private</option>
+        <option value="unlisted" selected={@entry.visibility == "unlisted"}>Unlisted</option>
+        <option value="public" selected={@entry.visibility == "public"}>Public</option>
+      </select>
+    </form>
+    <a :if={@entry.kind == "character"} class="btn ghost sm" href={~p"/authoring/character/#{@entry.id}"}>Edit</a>
+    <a :if={@entry.kind == "world_bible"} class="btn ghost sm" href={~p"/authoring/bible/#{@entry.id}"}>Edit</a>
+    <a :if={@entry.kind == "campaign"} class="btn ghost sm" href={~p"/campaigns/#{@entry.id}"}>Open</a>
+    <button class="btn ghost sm" phx-click="archive" phx-value-id={@entry.id}>Archive</button>
+    <button class="btn danger sm" phx-click="delete" phx-value-id={@entry.id}
+      data-confirm="Delete this? It's recoverable for a while.">Delete</button>
     """
   end
 
   defp entry_name(e) do
     case Library.payload(e) do
-      %{name: n} when is_binary(n) -> n
+      %{name: n} when is_binary(n) and n != "" -> n
       _ -> "Untitled"
     end
   end
 
-  # A character stubbed from another's relationships is "pending" until an author
-  # opens it and saves (which finalizes it to :full). Only characters have a status;
-  # anything else, or a payload without one, is never pending.
+  # A character stubbed from another's relationships is "pending" until finalized.
   defp pending?(%{kind: "character"} = e),
     do: match?(%{status: s} when s != :full, Library.payload(e))
 

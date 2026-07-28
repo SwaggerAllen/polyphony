@@ -16,7 +16,8 @@ defmodule PolyphonyWeb.PlayLive do
   alias Polyphony.Director.BeatOps
   alias Polyphony.Commands.{CommitPacket, DeclareTurnOrder}
   alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias Polyphony.TurnPacket.SelfState
+  alias PolyphonyWeb.SayParser
 
   def mount(%{"scene_id" => scene_id}, _session, socket) do
     {:ok, assign(socket, scene_id: scene_id, page_title: "Play", topic: nil, waiting: :you)}
@@ -27,11 +28,15 @@ defmodule PolyphonyWeb.PlayLive do
   def handle_params(params, _uri, socket) do
     viewer = parse_viewer(params["as"])
     socket = resubscribe(socket, viewer)
-    {:noreply, socket |> assign(viewer: viewer) |> reload()}
+    {:noreply, socket |> assign(viewer: viewer, speaker: speaker(viewer)) |> reload()}
   end
 
   defp parse_viewer(as) when as in [nil, "", "omniscient"], do: :omniscient
   defp parse_viewer(as), do: {:character, as}
+
+  # You speak as whoever you're viewing as; omniscient is a read-only vantage.
+  defp speaker({:character, c}), do: c
+  defp speaker(_), do: nil
 
   defp resubscribe(socket, viewer) do
     new_topic = Broadcast.topic(socket.assigns.scene_id, viewer)
@@ -60,42 +65,44 @@ defmodule PolyphonyWeb.PlayLive do
 
   # ── User actions ─────────────────────────────────────────────────────────────
 
-  def handle_event("say", %{"as" => as, "text" => text} = params, socket)
-      when as != "" and text != "" do
+  # Speak as the current viewer character. Aloud vs. whisper is inferred from the text
+  # (see `SayParser`), so a single submission can carry both.
+  def handle_event("say", %{"text" => text}, socket) do
     safe(socket, fn ->
-      beat = socket.assigns.next_beat
+      case {socket.assigns.speaker, SayParser.parse(text)} do
+        {nil, _} ->
+          {:noreply, put_flash(socket, :error, "Switch to a character above to speak.")}
 
-      to =
-        case params["to"] do
-          t when t in [nil, ""] -> []
-          t -> [t]
-        end
+        {_as, []} ->
+          {:noreply, put_flash(socket, :error, "Type something to say.")}
 
-      audibility = if(to == [], do: :normal, else: :private)
+        {as, moves} ->
+          beat = socket.assigns.next_beat
+          packet = %TurnPacket{moves: moves, self_state: %SelfState{}}
 
-      packet = %TurnPacket{
-        moves: [
-          %Move{seq: 1, type: :speech, content: text, addressed_to: to, audibility: audibility}
-        ],
-        self_state: %SelfState{}
-      }
+          :ok =
+            App.dispatch(%CommitPacket{
+              scene_id: socket.assigns.scene_id,
+              character_id: as,
+              beat: beat,
+              packet_id: BeatOps.packet_id(socket.assigns.scene_id, beat, as),
+              packet: packet,
+              edited: true
+            })
 
-      :ok =
-        App.dispatch(%CommitPacket{
-          scene_id: socket.assigns.scene_id,
-          character_id: as,
-          beat: beat,
-          packet_id: BeatOps.packet_id(socket.assigns.scene_id, beat, as),
-          packet: packet,
-          edited: true
-        })
-
-      {:noreply, socket |> assign(next_beat: beat + 1) |> reload()}
+          {:noreply, socket |> assign(next_beat: beat + 1) |> reload()}
+      end
     end)
   end
 
   def handle_event("say", _params, socket),
-    do: {:noreply, put_flash(socket, :error, "Pick a character and type something.")}
+    do: {:noreply, put_flash(socket, :error, "Type something to say.")}
+
+  def handle_event("view_as", %{"as" => as}, socket) do
+    scene_id = socket.assigns.scene_id
+    to = if as in [nil, ""], do: ~p"/play/#{scene_id}", else: ~p"/play/#{scene_id}?#{[as: as]}"
+    {:noreply, push_patch(socket, to: to)}
+  end
 
   def handle_event("continue", _params, socket) do
     safe(socket, fn ->
@@ -159,9 +166,13 @@ defmodule PolyphonyWeb.PlayLive do
     <div class="row">
       <h1>Scene</h1>
       <div class="spacer"></div>
-      <span class="faint">viewing as</span>
-      <.viewer_link scene_id={@scene_id} viewer={@viewer} label="Omniscient" as={nil} />
-      <.viewer_link :for={c <- @roster} scene_id={@scene_id} viewer={@viewer} label={c} as={c} />
+      <form id="viewer-form" phx-change="view_as">
+        <label class="faint" style="display:inline; margin-right:.4rem;">Viewing as</label>
+        <select name="as" style="width:auto;">
+          <option value="" selected={@viewer == :omniscient}>Omniscient</option>
+          <option :for={c <- @roster} value={c} selected={@viewer == {:character, c}}><%= c %></option>
+        </select>
+      </form>
     </div>
 
     <div class="card" style="padding:0;overflow:hidden;">
@@ -179,39 +190,31 @@ defmodule PolyphonyWeb.PlayLive do
 
     <div class="composer card">
       <form phx-submit="say">
-        <div class="row">
-          <select name="as" style="width:auto;">
-            <option :for={c <- @roster} value={c}><%= c %></option>
-          </select>
-          <input type="text" name="text" placeholder="Say something…" style="flex:1;" autocomplete="off" />
-          <select name="to" style="width:auto;" title="Whisper to (optional)">
-            <option value="">— aloud —</option>
-            <option :for={c <- @roster} value={c}>whisper: <%= c %></option>
-          </select>
-          <button class="btn" type="submit">Send</button>
+        <textarea
+          :if={@speaker}
+          id="say-input"
+          name="text"
+          rows="1"
+          class="say-input"
+          phx-hook="ComposerInput"
+          autocomplete="off"
+          placeholder={"Speak as #{@speaker}…  ·  whisper with (whisper to NAME: …)"}
+        ></textarea>
+        <div class="row" style="margin-top:.5rem;">
+          <span :if={@speaker} class="faint">
+            Speaking as <strong><%= @speaker %></strong> · Enter to send, Shift+Enter for a new line
+          </span>
+          <span :if={is_nil(@speaker)} class="faint">Viewing as omniscient — pick a character above to speak.</span>
+          <div class="spacer"></div>
+          <button :if={@speaker} class="btn" type="submit">Send</button>
         </div>
       </form>
-      <div class="row" style="margin-top:.5rem;">
+      <hr class="sep" />
+      <div class="row">
         <button class="btn ghost sm" phx-click="continue">Continue (Director)</button>
         <span class="faint">Let the autonomous cast take the next beat.</span>
       </div>
     </div>
-    """
-  end
-
-  attr(:scene_id, :string, required: true)
-  attr(:viewer, :any, required: true)
-  attr(:label, :string, required: true)
-  attr(:as, :any, required: true)
-
-  defp viewer_link(assigns) do
-    active = assigns.viewer == parse_viewer(assigns.as)
-    assigns = assign(assigns, active: active)
-
-    ~H"""
-    <.link patch={~p"/play/#{@scene_id}?#{[as: @as]}"} class={"btn sm #{if @active, do: "", else: "ghost"}"}>
-      <%= @label %>
-    </.link>
     """
   end
 

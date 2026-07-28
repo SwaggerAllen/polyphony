@@ -36,9 +36,14 @@ defmodule Polyphony.Authoring.CharacterSheet do
     regard (usually asymmetrical — a "mentor" is regarded back as a "student"). The
     reciprocal is authoring metadata, populated when a stub is seeded from another
     character's relationship so the stub carries both sides.
+
+    `target` is a display name; `target_id` is the stable library id of the character
+    it refers to (set once that character exists — an existing pick or a seeded stub).
+    Resolution goes through `target_id` so a rename never breaks the link; `target` is
+    for display and for stubbing a not-yet-created name.
     """
     @derive Jason.Encoder
-    defstruct [:target, :descriptor, :reciprocal]
+    defstruct [:target, :target_id, :descriptor, :reciprocal]
   end
 
   defmodule Boundary do

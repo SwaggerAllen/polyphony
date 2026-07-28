@@ -80,6 +80,50 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     refute back.descriptor == "estranged mentor"
   end
 
+  test "relationships carry the target's stable id (existing pick and seeded stub)",
+       %{conn: conn, user: user} do
+    bram = character(user, %CharacterSheet{name: "Bram", status: :full})
+    mira = character(user, %CharacterSheet{name: "Mira", status: :full})
+
+    {:ok, view, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
+
+    # An existing character resolves to its id; a new name stubs and links to the stub.
+    view
+    |> form("form[phx-submit=add_relationship]", %{target: "Bram", descriptor: "mentor"})
+    |> render_submit()
+
+    view
+    |> form("form[phx-submit=add_relationship]", %{target: "Ghost", descriptor: "haunts her"})
+    |> render_submit()
+
+    view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+    render_async(view)
+
+    rels = Library.payload(Library.get(mira.id)).relationships
+    assert Enum.find(rels, &(&1.target == "Bram")).target_id == bram.id
+    ghost = find(user, "Ghost")
+    assert Enum.find(rels, &(&1.target == "Ghost")).target_id == ghost.id
+  end
+
+  test "a related character stays linked after being renamed", %{conn: conn, user: user} do
+    bram = character(user, %CharacterSheet{name: "Bram", status: :full})
+    mira = character(user, %CharacterSheet{name: "Mira", status: :full})
+
+    {:ok, view, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
+
+    view
+    |> form("form[phx-submit=add_relationship]", %{target: "Bram", descriptor: "mentor"})
+    |> render_submit()
+
+    view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+
+    # Rename Bram → Bramwell; the link still resolves to his editor (by id).
+    Library.update_payload(bram.id, %CharacterSheet{name: "Bramwell", status: :full})
+
+    {:ok, view2, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
+    assert render(view2) =~ ~s(href="/authoring/character/#{bram.id}")
+  end
+
   test "a stubbed character inherits the generating character's world", %{conn: conn, user: user} do
     world =
       Library.put(%{

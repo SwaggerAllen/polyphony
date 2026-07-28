@@ -984,7 +984,16 @@ input:focus, textarea:focus, select:focus {
 }
 
 .composer .row {
-  align-items: flex-end;
+  align-items: center;
+}
+
+.say-input {
+  width: 100%;
+  min-height: 2.6rem;
+  max-height: 40vh;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.5;
 }
 
 /* Authoring auto-generation: the per-field "✨ Generate" row + the brief card. */
@@ -1012,6 +1021,43 @@ input:focus, textarea:focus, select:focus {
 
 .library-filter {
   margin-bottom: .75rem;
+}
+
+/* Library grouped by world: a world header card with its characters/campaigns nested
+   as a member list beneath it. */
+
+.world-group .group-head {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: .5rem;
+  margin-bottom: .25rem;
+}
+
+.world-group .group-head h3 {
+  margin: 0;
+}
+
+.member-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.member-list .member {
+  padding: .4rem 0 .4rem .75rem;
+  border-bottom: 1px solid var(--border);
+  gap: .5rem;
+}
+
+.member-list .member:last-child {
+  border-bottom: none;
+}
+
+.member-empty {
+  padding: .5rem 0 .25rem .75rem;
+}
+
+.pending-banner {
+  border-color: var(--accent-2);
 }
 
 .save-row {

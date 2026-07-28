@@ -86,9 +86,14 @@ defmodule PolyphonyWeb.SheetEditorLive do
       socket = assign_form(socket, params)
       %{name: name, blocks: blocks, relationships: rels} = socket.assigns
 
-      existing = char_names(other_characters(user, id))
+      existing_entries = other_characters(user, id)
+      existing = char_names(existing_entries)
       world_bible_id = world_id_int(socket.assigns.world_id)
-      stubbed = seed_stubs(rels, existing, name, Owner.of(user), world_bible_id)
+      stubbed = seed_stubs(rels, existing, name, Owner.of(user), world_bible_id, id)
+
+      # Every relationship that names a real character (existing or just-stubbed) now
+      # carries its stable id, so links and context resolve by id, not name.
+      rels = resolve_target_ids(rels, existing_entries, stubbed)
 
       sheet = %CharacterSheet{
         socket.assigns.sheet
@@ -123,7 +128,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
       socket =
         socket
         |> maybe_flash_stubs(stubbed)
-        |> generate_reciprocals(stubbed, name)
+        |> generate_reciprocals(stubbed, name, id)
 
       {:noreply, socket}
     end)
@@ -210,7 +215,15 @@ defmodule PolyphonyWeb.SheetEditorLive do
           {:noreply, put_flash(socket, :error, "Give the related character a name.")}
 
         name ->
-          rel = %Relationship{target: name, descriptor: String.trim(params["descriptor"] || "")}
+          # Link to an existing character by id when the typed name matches one; else
+          # leave target_id nil (a new name that stubs on save, then gets linked).
+          target_id = Map.get(socket.assigns.char_links, String.downcase(name))
+
+          rel = %Relationship{
+            target: name,
+            target_id: target_id,
+            descriptor: String.trim(params["descriptor"] || "")
+          }
 
           {:noreply,
            socket
@@ -305,9 +318,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # Reciprocal generation is best-effort background enrichment of the just-created
   # stubs — never surfaced as an error. On success, patch each stub's regard toward
   # this character; on failure, the placeholder descriptor stands.
-  def handle_async(:reciprocals, {:ok, {stubs, self_name, {:ok, reciprocals}}}, socket) do
+  def handle_async(:reciprocals, {:ok, {stubs, self_name, self_id, {:ok, reciprocals}}}, socket) do
     for %{id: id, target: target} <- stubs, r = reciprocals[target], present_string?(r) do
-      patch_stub_reciprocal(id, self_name, r)
+      patch_stub_reciprocal(id, self_name, self_id, r)
     end
 
     {:noreply, socket}
@@ -406,14 +419,18 @@ defmodule PolyphonyWeb.SheetEditorLive do
   end
 
   defp relations_context(relationships, user, exclude_id) do
-    by_name =
+    chars =
       user
       |> Library.list_for_owner()
       |> Enum.filter(&(&1.kind == "character" and &1.id != exclude_id))
-      |> Map.new(fn e -> {String.downcase(char_name(e) || ""), e} end)
+
+    by_id = Map.new(chars, &{&1.id, &1})
+    by_name = Map.new(chars, &{String.downcase(char_name(&1) || ""), &1})
 
     for r <- relationships,
-        entry = Map.get(by_name, String.downcase(r.target)),
+        entry =
+          (r.target_id && Map.get(by_id, r.target_id)) ||
+            Map.get(by_name, String.downcase(r.target || "")),
         entry != nil do
       s = Library.payload(entry)
 
@@ -434,15 +451,18 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # stub-→-self regard is generated afterwards (`generate_reciprocals`). `role`
   # describes the stub (the source's regard of them). Returns `[%{id, target,
   # descriptor}]` for the stubs created, feeding the flash and reciprocal generation.
-  defp seed_stubs(relationships, existing_names, self_name, owner, world_bible_id) do
+  defp seed_stubs(relationships, existing_names, self_name, owner, world_bible_id, self_id) do
     existing = MapSet.new(existing_names, &String.downcase/1)
     self_down = String.downcase(self_name || "")
+    # A target already linked to a real character (target_id set) is never stubbed.
+    linked = for r <- relationships, r.target_id != nil, into: MapSet.new(), do: r.target
 
     relationships
     |> Enum.map(& &1.target)
     |> Enum.uniq()
     |> Enum.reject(fn t ->
-      t == "" or String.downcase(t) == self_down or MapSet.member?(existing, String.downcase(t))
+      t == "" or String.downcase(t) == self_down or
+        MapSet.member?(existing, String.downcase(t)) or MapSet.member?(linked, t)
     end)
     |> Enum.map(fn target ->
       matching = Enum.filter(relationships, &(&1.target == target))
@@ -452,6 +472,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
         for r <- matching,
             do: %Relationship{
               target: self_name,
+              target_id: self_id,
               descriptor: r.descriptor,
               reciprocal: r.descriptor
             }
@@ -467,18 +488,40 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end)
   end
 
+  # Fill in each relationship's `target_id` from the characters that now exist — the
+  # owner's other characters and the stubs just created — matching by name once. A
+  # relationship that already has an id, or names no real character, is left as-is.
+  defp resolve_target_ids(relationships, existing_entries, stubbed) do
+    by_name =
+      for e <- existing_entries, n = char_name(e), n != nil, into: %{} do
+        {String.downcase(n), e.id}
+      end
+
+    lookup =
+      Enum.reduce(stubbed, by_name, fn s, acc ->
+        Map.put(acc, String.downcase(s.target), s.id)
+      end)
+
+    Enum.map(relationships, fn r ->
+      %Relationship{
+        r
+        | target_id: r.target_id || Map.get(lookup, String.downcase(r.target || ""))
+      }
+    end)
+  end
+
   # Best-effort async enrichment: generate each new stub's asymmetrical regard back
   # toward the character being saved, then patch it into the stub. Runs after save so
   # the save itself never blocks on a provider call; a failure leaves the placeholder.
-  defp generate_reciprocals(socket, [], _self_name), do: socket
+  defp generate_reciprocals(socket, [], _self_name, _self_id), do: socket
 
-  defp generate_reciprocals(socket, stubs, self_name) do
+  defp generate_reciprocals(socket, stubs, self_name, self_id) do
     source = current_values(socket)
     pairs = Enum.map(stubs, &%{"target" => &1.target, "descriptor" => &1.descriptor})
     opts = gen_opts(socket)
 
     start_async(socket, :reciprocals, fn ->
-      {stubs, self_name, Autofill.reciprocal_roles(source, pairs, opts)}
+      {stubs, self_name, self_id, Autofill.reciprocal_roles(source, pairs, opts)}
     end)
   end
 
@@ -495,12 +538,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # Set the stub's regard toward `self_name` to the generated reciprocal, keeping the
   # source's regard of the stub as its `reciprocal`. Best-effort: a vanished/edited
   # stub is left alone.
-  defp patch_stub_reciprocal(id, self_name, reciprocal) do
+  defp patch_stub_reciprocal(id, self_name, self_id, reciprocal) do
     with entry when not is_nil(entry) <- Library.get(id),
          %CharacterSheet{} = sheet <- Library.payload(entry) do
       rels =
         Enum.map(sheet.relationships || [], fn rel ->
-          if rel.target == self_name,
+          if rel.target_id == self_id or rel.target == self_name,
             do: %Relationship{rel | descriptor: reciprocal, reciprocal: rel.reciprocal},
             else: rel
         end)
@@ -580,11 +623,14 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # A relationship's target: a link to that character's editor when it's an existing
   # (or already-saved-stub) character, otherwise plain text.
   attr(:target, :string, required: true)
+  attr(:target_id, :integer, default: nil)
   attr(:links, :map, required: true)
   attr(:confirm, :string, default: nil)
 
   defp rel_target(assigns) do
-    assigns = assign(assigns, :id, Map.get(assigns.links, String.downcase(assigns.target)))
+    # Prefer the stable id; fall back to a name lookup for un-linked (legacy) rels.
+    id = assigns.target_id || Map.get(assigns.links, String.downcase(assigns.target))
+    assigns = assign(assigns, :id, id)
 
     ~H"""
     <a :if={@id} href={~p"/authoring/character/#{@id}"} data-confirm={@confirm}>
@@ -684,7 +730,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
       <div :if={@relationships == []} class="faint">No relationships yet.</div>
       <ul class="rel-list">
         <li :for={{r, i} <- Enum.with_index(@relationships)} class="row rel-item">
-          <span>→ <.rel_target target={r.target} links={@char_links} confirm={leave_confirm(@dirty)} /><span :if={r.descriptor not in [nil, ""]}> — <%= r.descriptor %></span></span>
+          <span>→ <.rel_target target={r.target} target_id={r.target_id} links={@char_links} confirm={leave_confirm(@dirty)} /><span :if={r.descriptor not in [nil, ""]}> — <%= r.descriptor %></span></span>
           <span class="spacer"></span>
           <button type="button" class="btn danger sm" phx-click="remove_relationship" phx-value-index={i}>Remove</button>
         </li>

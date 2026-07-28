@@ -31,16 +31,18 @@ defmodule PolyphonyWeb.CampaignLive do
     # bible_id may be stored as a string (setup) or integer (select_world); normalize
     # so it matches integer entry ids for selection and the world roster filter.
     world_id = normalize_id(payload[:bible_id])
-    cast_names = payload[:character_ids] || []
 
-    cast = Enum.filter(owned_chars, &(char_name(&1) in cast_names))
+    # The cast references characters by their stable library id — never by name, so a
+    # rename can't drop anyone. Names are resolved for display only.
+    cast_ids = cast_ids(payload)
+    cast = Enum.filter(owned_chars, &(&1.id in cast_ids))
 
     # Characters that can still be added: owned, not already cast, and — when a world
     # is attached — belonging to that world (or unassigned), so the world scopes the
     # roster the way the library filter does.
     addable =
       owned_chars
-      |> Enum.reject(&(char_name(&1) in cast_names))
+      |> Enum.reject(&(&1.id in cast_ids))
       |> Enum.filter(&addable_in_world?(&1, world_id))
 
     assign(socket,
@@ -65,49 +67,72 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
-  def handle_event("add_character", %{"name" => name}, socket) do
+  def handle_event("add_character", %{"id" => id}, socket) do
     safe(socket, fn ->
-      case String.trim(name) do
-        "" ->
+      case normalize_id(id) do
+        nil ->
           {:noreply, socket}
 
-        name ->
-          ids = Enum.uniq((socket.assigns.payload[:character_ids] || []) ++ [name])
-          {:noreply, update_cast(socket, ids, "Added #{name} to the cast.")}
+        cid ->
+          ids = Enum.uniq(cast_ids(socket.assigns.payload) ++ [cid])
+          {:noreply, update_cast(socket, ids, "Added #{display_name(cid)} to the cast.")}
       end
     end)
   end
 
-  def handle_event("remove_character", %{"name" => name}, socket) do
+  def handle_event("remove_character", %{"id" => id}, socket) do
     safe(socket, fn ->
-      ids = Enum.reject(socket.assigns.payload[:character_ids] || [], &(&1 == name))
-      {:noreply, update_cast(socket, ids, "Removed #{name} from the cast.")}
+      cid = normalize_id(id)
+      ids = Enum.reject(cast_ids(socket.assigns.payload), &(&1 == cid))
+      {:noreply, update_cast(socket, ids, "Removed #{display_name(cid)} from the cast.")}
+    end)
+  end
+
+  def handle_event("update_details", params, socket) do
+    safe(socket, fn ->
+      payload =
+        socket.assigns.payload
+        |> Map.put(:name, params["name"] || "")
+        |> Map.put(:premise, params["premise"] || "")
+
+      {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+      {:noreply, socket |> assign(entry: entry) |> load()}
     end)
   end
 
   def handle_event("start_scene", _params, socket) do
     safe(socket, fn ->
       %{entry: entry, payload: payload, cast: cast} = socket.assigns
-      scene_id = "sc-" <> Integer.to_string(System.unique_integer([:positive]))
-      premise = payload[:premise] || ""
+      # Only finalized characters enter the scene; pending stubs are skipped (they
+      # aren't castable until generated — bulk-generate them from the library first).
+      {ready, pending} = Enum.split_with(cast, &full?/1)
 
-      :ok =
-        App.dispatch(%OpenScene{
-          scene_id: scene_id,
-          campaign_id: entry.id,
-          premise: premise,
-          opened_beat: 0
-        })
+      if ready == [] do
+        {:noreply,
+         put_flash(socket, :error, "No ready characters — generate the pending ones first.")}
+      else
+        scene_id = "sc-" <> Integer.to_string(System.unique_integer([:positive]))
+        premise = payload[:premise] || ""
 
-      for c <- cast do
-        sheet = Library.payload(c)
-        name = char_name(c)
-        :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: name, beat: 1})
-        seed_context(scene_id, name, sheet, premise)
+        :ok =
+          App.dispatch(%OpenScene{
+            scene_id: scene_id,
+            campaign_id: entry.id,
+            premise: premise,
+            opened_beat: 0
+          })
+
+        for c <- ready do
+          sheet = Library.payload(c)
+          name = char_name(c)
+          :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: name, beat: 1})
+          seed_context(scene_id, name, sheet, premise)
+        end
+
+        Library.update_payload(entry.id, %{payload | scenes: [scene_id | socket.assigns.scenes]})
+
+        {:noreply, socket |> maybe_flash_pending(pending) |> redirect(to: ~p"/play/#{scene_id}")}
       end
-
-      Library.update_payload(entry.id, %{payload | scenes: [scene_id | socket.assigns.scenes]})
-      {:noreply, redirect(socket, to: ~p"/play/#{scene_id}")}
     end)
   end
 
@@ -151,8 +176,16 @@ defmodule PolyphonyWeb.CampaignLive do
 
   def render(assigns) do
     ~H"""
-    <h1><%= @payload[:name] || "Campaign" %></h1>
-    <p class="dim"><%= @payload[:premise] %></p>
+    <h1><%= if @payload[:name] in [nil, ""], do: "Untitled campaign", else: @payload[:name] %></h1>
+
+    <div class="card">
+      <form id="campaign-details" phx-change="update_details">
+        <label class="gen-label"><span>Name</span></label>
+        <input type="text" name="name" value={@payload[:name]} placeholder="Name this campaign…" phx-debounce="blur" />
+        <label>Premise <span class="faint">(what the story is about)</span></label>
+        <textarea name="premise" phx-debounce="blur"><%= @payload[:premise] %></textarea>
+      </form>
+    </div>
 
     <div class="card">
       <div class="row">
@@ -167,13 +200,13 @@ defmodule PolyphonyWeb.CampaignLive do
           <span><%= char_name(c) %></span>
           <span :if={pending?(c)} class="badge stub">pending</span>
           <span class="spacer"></span>
-          <button class="btn danger sm" phx-click="remove_character" phx-value-name={char_name(c)}>Remove</button>
+          <button class="btn danger sm" phx-click="remove_character" phx-value-id={c.id}>Remove</button>
         </li>
       </ul>
 
       <form :if={@addable != []} id="add-character" phx-submit="add_character" class="row rel-add">
-        <select name="name" style="flex:1;">
-          <option :for={c <- @addable} value={char_name(c)}><%= char_name(c) %></option>
+        <select name="id" style="flex:1;">
+          <option :for={c <- @addable} value={c.id}><%= char_name(c) %><%= if pending?(c), do: " (pending)", else: "" %></option>
         </select>
         <button class="btn" type="submit">Add to cast</button>
       </form>
@@ -226,6 +259,33 @@ defmodule PolyphonyWeb.CampaignLive do
     {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
     socket |> assign(entry: entry) |> load() |> put_flash(:info, flash)
   end
+
+  # The cast as a list of integer library ids (tolerating any legacy name entries,
+  # which simply won't resolve to a character and drop out).
+  defp cast_ids(payload) do
+    (payload[:character_ids] || []) |> Enum.map(&normalize_id/1) |> Enum.reject(&is_nil/1)
+  end
+
+  defp display_name(nil), do: "character"
+
+  defp display_name(id) do
+    case Library.get(id) do
+      nil -> "character"
+      entry -> char_name(entry)
+    end
+  end
+
+  defp full?(entry), do: match?(%CharacterSheet{status: :full}, Library.payload(entry))
+
+  defp maybe_flash_pending(socket, []), do: socket
+
+  defp maybe_flash_pending(socket, pending),
+    do:
+      put_flash(
+        socket,
+        :info,
+        "Skipped #{length(pending)} pending character(s) — generate them, then re-add to a scene."
+      )
 
   defp normalize_id(nil), do: nil
   defp normalize_id(id) when is_integer(id), do: id

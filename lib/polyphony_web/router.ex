@@ -41,7 +41,6 @@ defmodule PolyphonyWeb.Router do
     live_session :authed, on_mount: [{PolyphonyWeb.Auth, :require_authed}] do
       live("/library", LibraryLive, :index)
       live("/settings", SettingsLive, :index)
-      live("/campaigns/new", CampaignSetupLive, :new)
       live("/campaigns/:id", CampaignLive, :show)
       live("/play/:scene_id", PlayLive, :show)
       live("/authoring/character/:id", SheetEditorLive, :edit)

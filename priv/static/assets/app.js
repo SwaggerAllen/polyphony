@@ -8742,6 +8742,33 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
       this.grow();
     }
   };
+  Hooks2.ComposerInput = {
+    grow() {
+      this.el.style.height = "auto";
+      this.el.style.height = this.el.scrollHeight + "px";
+    },
+    mounted() {
+      this.grow();
+      this.el.addEventListener("input", () => this.grow());
+      this.el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          if (this.el.form) this.el.form.requestSubmit();
+        }
+      });
+      if (this.el.form) {
+        this.el.form.addEventListener("submit", () => {
+          setTimeout(() => {
+            this.el.value = "";
+            this.grow();
+          }, 0);
+        });
+      }
+    },
+    updated() {
+      this.grow();
+    }
+  };
   window.addEventListener(
     "click",
     (e) => {

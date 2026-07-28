@@ -3,22 +3,24 @@ defmodule PolyphonyWeb.LibraryAdminLiveTest do
   use PolyphonyWeb.ConnCase, async: false
 
   alias Polyphony.{Library, Owner, Moderation}
-  alias Polyphony.Authoring.{CharacterSheet, Stub}
+  alias Polyphony.Authoring.{CharacterSheet, Stub, WorldBible}
+
+  defp at(html, str), do: html |> :binary.match(str) |> elem(0)
 
   describe "library (V9)" do
     setup :register_and_log_in_user
 
-    test "creating a character shows it, scoped to the owner", %{conn: conn, user: user} do
+    test "creating a character makes a blank entry and jumps to its editor",
+         %{conn: conn, user: user} do
       {:ok, view, _html} = live(conn, ~p"/library")
 
-      view
-      |> form("form[phx-submit=new]", %{kind: "character", name: "Mira"})
-      |> render_submit()
+      # No name is required — Create navigates straight to the editor.
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view |> form("form[phx-submit=new]", %{kind: "character"}) |> render_submit()
 
-      assert render(view) =~ "Mira"
-      # It really is owned by this user (via the Owner indirection).
       assert [entry] = Library.list_for_owner(Owner.of(user))
       assert entry.kind == "character"
+      assert to == "/authoring/character/#{entry.id}"
     end
 
     test "another user's library is not shown", %{conn: conn} do
@@ -53,25 +55,17 @@ defmodule PolyphonyWeb.LibraryAdminLiveTest do
       refute search =~ "Neon Bay <span"
     end
 
-    test "filtering by world narrows to that world's characters and campaigns",
+    test "characters and campaigns nest under their world; unassigned trail in No world",
          %{conn: conn, user: user} do
       owner = Owner.of(user)
 
       bay =
-        Library.put(%{owner: owner, kind: "world_bible", payload: %{name: "Neon Bay"}})
-
-      _dune = Library.put(%{owner: owner, kind: "world_bible", payload: %{name: "Red Dune"}})
+        Library.put(%{owner: owner, kind: "world_bible", payload: %WorldBible{name: "Neon Bay"}})
 
       Library.put(%{
         owner: owner,
         kind: "character",
-        payload: %CharacterSheet{name: "Bay Native", world_bible_id: bay.id, status: :full}
-      })
-
-      Library.put(%{
-        owner: owner,
-        kind: "character",
-        payload: %CharacterSheet{name: "Free Agent", status: :full}
+        payload: %CharacterSheet{name: "BayNative", world_bible_id: bay.id, status: :full}
       })
 
       Library.put(%{
@@ -79,28 +73,26 @@ defmodule PolyphonyWeb.LibraryAdminLiveTest do
         kind: "campaign",
         payload: %{
           kind: :campaign,
-          name: "Bay Run",
+          name: "BayRun",
           bible_id: bay.id,
           character_ids: [],
           scenes: []
         }
       })
 
-      {:ok, view, _html} = live(conn, ~p"/library")
+      Library.put(%{
+        owner: owner,
+        kind: "character",
+        payload: %CharacterSheet{name: "FreeAgent", status: :full}
+      })
 
-      shown =
-        view
-        |> form("form[phx-change=filter]", %{kind: "all", q: "", world: to_string(bay.id)})
-        |> render_change()
+      {:ok, _view, html} = live(conn, ~p"/library")
 
-      # The world itself, its character, and its campaign show; the others don't.
-      # Match the entry card ("Name <span…"), since "Red Dune" also appears as a
-      # world-filter dropdown option regardless of what's shown.
-      assert shown =~ "Neon Bay <span"
-      assert shown =~ "Bay Native <span"
-      assert shown =~ "Bay Run <span"
-      refute shown =~ "Red Dune <span"
-      refute shown =~ "Free Agent <span"
+      # The world's character and campaign nest under its header; the unassigned
+      # character lands in the trailing "No world" group.
+      assert at(html, "Neon Bay") < at(html, "BayNative")
+      assert at(html, "BayNative") < at(html, "No world")
+      assert at(html, "No world") < at(html, "FreeAgent")
     end
 
     test "a pending stub character is badged; a full one is not", %{conn: conn, user: user} do
