@@ -39,13 +39,13 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
     scene = scene_with_proposal("Bram", "he's owed a debt")
 
     {:ok, _author, author_html} = live(conn, ~p"/play/#{scene}")
-    assert author_html =~ "wants to bring characters on"
+    assert author_html =~ "New characters to bring on"
     assert author_html =~ "Bram"
     assert author_html =~ "he&#39;s owed a debt"
 
     # A character viewer must never see the pending introduction (irony guarantee).
     {:ok, _mira, mira_html} = live(conn, ~p"/play/#{scene}?as=mira")
-    refute mira_html =~ "wants to bring characters on"
+    refute mira_html =~ "New characters to bring on"
     refute mira_html =~ "he&#39;s owed a debt"
   end
 
@@ -62,7 +62,7 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
 
     html = render(view)
     # Proposal gone; Bram is now a scene member (offered in the viewing-as roster).
-    refute html =~ "wants to bring characters on"
+    refute html =~ "New characters to bring on"
     assert html =~ ~s(<option value="Bram")
   end
 
@@ -91,7 +91,7 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
     view |> element("button[phx-click=intro_dismiss][phx-value-name=Bram]") |> render_click()
 
     html = render(view)
-    refute html =~ "wants to bring characters on"
+    refute html =~ "New characters to bring on"
     refute html =~ ~s(<option value="Bram")
   end
 end

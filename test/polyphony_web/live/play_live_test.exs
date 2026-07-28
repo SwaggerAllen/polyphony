@@ -71,7 +71,7 @@ defmodule PolyphonyWeb.PlayLiveTest do
     # Omniscient view offers no composer input, just a hint to pick a character.
     {:ok, _author, author_html} = live(conn, ~p"/play/#{scene}")
     refute author_html =~ ~s(id="say-input")
-    assert author_html =~ "pick a character above to speak"
+    assert author_html =~ "Pick a character above to speak"
 
     # As cara, an aloud line is visible to every member's view.
     {:ok, cara, _html} = live(conn, ~p"/play/#{scene}?as=cara")

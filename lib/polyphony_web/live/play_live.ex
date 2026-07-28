@@ -399,75 +399,67 @@ defmodule PolyphonyWeb.PlayLive do
 
   def render(assigns) do
     ~H"""
-    <div class="row">
-      <h1>Scene</h1>
-      <div class="spacer"></div>
-      <form id="viewer-form" phx-change="view_as">
-        <label class="faint" style="display:inline; margin-right:.4rem;">Viewing as</label>
-        <select name="as" style="width:auto;">
-          <option value="" selected={@viewer == :omniscient}>Omniscient</option>
-          <option :for={c <- @roster} value={c} selected={@viewer == {:character, c}}><%= c %></option>
-        </select>
-      </form>
-    </div>
+    <div class="play">
+      <div class="row play-head">
+        <h1>Scene</h1>
+        <div class="spacer"></div>
+        <form id="viewer-form" phx-change="view_as">
+          <label class="faint" style="display:inline; margin-right:.4rem;">Viewing as</label>
+          <select name="as" style="width:auto;">
+            <option value="" selected={@viewer == :omniscient}>Omniscient</option>
+            <option :for={c <- @roster} value={c} selected={@viewer == {:character, c}}><%= c %></option>
+          </select>
+        </form>
+      </div>
 
-    <div class="card" style="padding:0;overflow:hidden;">
-      <div id="transcript" class="transcript" phx-hook="Autoscroll">
-        <div :for={{m, i} <- Enum.with_index(@messages)} id={"m-#{m[:seq] || "x"}-#{i}"}>
-          <%= render_move(m) %>
+      <div class="card transcript-card">
+        <div id="transcript" class="transcript" phx-hook="Autoscroll">
+          <div :for={{m, i} <- Enum.with_index(@messages)} id={"m-#{m[:seq] || "x"}-#{i}"}>
+            <%= render_move(m) %>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div :if={@introductions != []} class="card intro-queue">
-      <h3>The Director wants to bring characters on</h3>
-      <ul class="rel-list">
-        <li :for={i <- @introductions} class="row rel-item">
-          <span>
-            <strong><%= i.name %></strong>
-            <span :if={i.reason not in [nil, ""]} class="faint">— <%= i.reason %></span>
-            <span :if={i.resolution.status == :stub} class="badge stub">pending</span>
-            <span :if={i.resolution.status == :new} class="badge stub">new</span>
-          </span>
-          <span class="spacer"></span>
-          <button :if={i.resolution.status == :ready} class="btn sm" phx-click="intro_admit" phx-value-name={i.name}>Admit</button>
-          <button :if={i.resolution.status != :ready} class="btn sm" phx-click="intro_generate" phx-value-name={i.name}>Generate &amp; admit</button>
-          <button class="btn ghost sm" phx-click="intro_edit" phx-value-name={i.name}>Edit</button>
-          <button class="btn danger sm" phx-click="intro_dismiss" phx-value-name={i.name}>Dismiss</button>
-        </li>
-      </ul>
-    </div>
+      <div :if={@introductions != []} class="card intro-queue">
+        <h3>New characters to bring on</h3>
+        <ul class="rel-list">
+          <li :for={i <- @introductions} class="row rel-item">
+            <span>
+              <strong><%= i.name %></strong>
+              <span :if={i.reason not in [nil, ""]} class="faint">— <%= i.reason %></span>
+              <span :if={i.resolution.status == :stub} class="badge stub">pending</span>
+              <span :if={i.resolution.status == :new} class="badge stub">new</span>
+            </span>
+            <span class="spacer"></span>
+            <button :if={i.resolution.status == :ready} class="btn sm" phx-click="intro_admit" phx-value-name={i.name}>Admit</button>
+            <button :if={i.resolution.status != :ready} class="btn sm" phx-click="intro_generate" phx-value-name={i.name}>Generate &amp; admit</button>
+            <button class="btn ghost sm" phx-click="intro_edit" phx-value-name={i.name}>Edit</button>
+            <button class="btn danger sm" phx-click="intro_dismiss" phx-value-name={i.name}>Dismiss</button>
+          </li>
+        </ul>
+      </div>
 
-    <%= case @waiting do %>
-      <% :director -> %><.waiting state="director" label="The Director is casting…" />
-      <% _ -> %><.waiting state="you" label="Your move." />
-    <% end %>
-
-    <div class="composer card">
-      <form phx-submit="say">
-        <textarea
-          :if={@speaker}
-          id="say-input"
-          name="text"
-          rows="1"
-          class="say-input"
-          phx-hook="ComposerInput"
-          autocomplete="off"
-          placeholder={"Speak as #{@speaker}…  ·  whisper with (whisper to NAME: …)"}
-        ></textarea>
-        <div class="row" style="margin-top:.5rem;">
-          <span :if={@speaker} class="faint">
-            Speaking as <strong><%= @speaker %></strong> · Enter to send, Shift+Enter for a new line
-          </span>
-          <span :if={is_nil(@speaker)} class="faint">Viewing as omniscient — pick a character above to speak.</span>
-          <div class="spacer"></div>
-          <button :if={@speaker} class="btn" type="submit">Send</button>
-        </div>
-      </form>
-      <hr class="sep" />
-      <div class="row">
-        <button class="btn ghost sm" phx-click="continue">Continue (Director)</button>
-        <span class="faint">Let the autonomous cast take the next beat.</span>
+      <div class="composer card">
+        <.waiting :if={@waiting == :director} state="director" label="The cast is responding…" />
+        <form phx-submit="say">
+          <textarea
+            :if={@speaker}
+            id="say-input"
+            name="text"
+            rows="1"
+            class="say-input"
+            phx-hook="ComposerInput"
+            autocomplete="off"
+            placeholder={"Speak as #{@speaker}…  ·  whisper with (whisper to NAME: …)"}
+          ></textarea>
+          <div class="row composer-actions">
+            <span :if={@speaker} class="faint">as <strong><%= @speaker %></strong></span>
+            <span :if={is_nil(@speaker)} class="faint">Pick a character above to speak.</span>
+            <div class="spacer"></div>
+            <button class="btn ghost sm" type="button" phx-click="continue">Continue</button>
+            <button :if={@speaker} class="btn" type="submit">Send</button>
+          </div>
+        </form>
       </div>
     </div>
     """
@@ -500,8 +492,16 @@ defmodule PolyphonyWeb.PlayLive do
   end
 
   defp render_move(%{kind: "DemeanorReported", payload: p}) do
-    assigns = %{p: p}
-    ~H|<div class="move action"><%= @p[:character_id] %> seems <%= @p[:demeanor] %>.</div>|
+    case String.trim(to_string(p[:demeanor] || "")) do
+      "" ->
+        # No demeanor to report — render nothing rather than "X seems ."
+        assigns = %{}
+        ~H||
+
+      demeanor ->
+        assigns = %{p: p, demeanor: demeanor}
+        ~H|<div class="move action"><%= @p[:character_id] %> seems <%= @demeanor %>.</div>|
+    end
   end
 
   defp render_move(%{kind: kind, payload: p})
