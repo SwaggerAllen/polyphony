@@ -154,6 +154,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .member-list .member:last-child { border-bottom: none; }
 .member-empty { padding: .5rem 0 .25rem .75rem; }
 .pending-banner { border-color: var(--accent-2); }
+.intro-queue { border-color: var(--accent-2); }
+.intro-queue h3 { margin-bottom: .25rem; }
 .save-row { gap: .75rem; }
 .saved-note { color: var(--good); font-size: .9rem; font-weight: 600; }
 .rel-list { list-style: none; padding: 0; margin: .5rem 0; }

@@ -12,7 +12,7 @@ defmodule PolyphonyWeb.LibraryLive do
   use PolyphonyWeb, :live_view
 
   alias Polyphony.{Library, Owner}
-  alias Polyphony.Authoring.{Autofill, CharacterSheet, WorldBible}
+  alias Polyphony.Authoring.{CharacterSheet, StubGen, WorldBible}
 
   require Logger
 
@@ -198,69 +198,14 @@ defmodule PolyphonyWeb.LibraryLive do
   # ── Bulk stub generation ─────────────────────────────────────────────────────
 
   defp generate_stubs(stubs, user) do
+    uid = user && user.id
+
     Enum.reduce(stubs, {0, 0}, fn entry, {ok, bad} ->
-      case generate_stub(entry, user) do
+      case StubGen.finalize(entry, uid) do
         :ok -> {ok + 1, bad}
         :error -> {ok, bad + 1}
       end
     end)
-  end
-
-  defp generate_stub(entry, user) do
-    sheet = struct(CharacterSheet, Map.from_struct(Library.payload(entry)))
-    brief = [sheet.name, sheet.role] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join(" — ")
-
-    opts =
-      [world: world_context(sheet.world_bible_id), role: sheet.role, usage_kind: "authoring"] ++
-        if(user, do: [user_id: user.id], else: [])
-
-    case Autofill.generate_all(:character, brief, %{"name" => sheet.name || ""}, opts) do
-      {:ok, values} ->
-        finalized = %CharacterSheet{
-          sheet
-          | name: keep_or(sheet.name, values["name"]),
-            premise: values["premise"] || sheet.premise,
-            appearance: values["appearance"] || sheet.appearance,
-            voice: values["voice"] || sheet.voice,
-            temperament: values["temperament"] || sheet.temperament,
-            backstory: values["backstory"] || sheet.backstory,
-            status: :full
-        }
-
-        Library.update_payload(entry.id, finalized)
-        :ok
-
-      {:error, _} ->
-        :error
-    end
-  end
-
-  # Keep an author-set name; only fall back to a generated one when it was blank.
-  defp keep_or(name, generated) when name in [nil, ""], do: generated || name
-  defp keep_or(name, _generated), do: name
-
-  defp world_context(nil), do: nil
-
-  defp world_context(id) do
-    case Library.get(id) do
-      nil ->
-        nil
-
-      entry ->
-        case Library.payload(entry) do
-          %WorldBible{} = wb ->
-            %{
-              "name" => wb.name || "",
-              "setting" => wb.setting || "",
-              "tone" => wb.tone || "",
-              "rules" => Enum.join(wb.rules || [], "\n"),
-              "starting_canon" => Enum.join(wb.starting_canon || [], "\n")
-            }
-
-          _ ->
-            nil
-        end
-    end
   end
 
   # ── Render ─────────────────────────────────────────────────────────────────────
