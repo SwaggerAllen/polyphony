@@ -11,7 +11,7 @@ defmodule PolyphonyWeb.DebugDrawerLive do
   """
   use Phoenix.LiveView
 
-  alias Polyphony.DebugLog
+  alias Polyphony.{DebugFlags, DebugLog}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -21,7 +21,8 @@ defmodule PolyphonyWeb.DebugDrawerLive do
     {:ok,
      socket
      |> assign(:count, length(recent))
-     |> assign(:heavy, force_heavy?())
+     |> assign(:heavy, DebugFlags.get(:force_heavy))
+     |> assign(:events, DebugFlags.get(:events))
      |> stream(:logs, recent), layout: false}
   end
 
@@ -41,15 +42,16 @@ defmodule PolyphonyWeb.DebugDrawerLive do
     {:noreply, socket}
   end
 
-  # Toggle routing every chat generation to the heavy model (§9) — a global debug
-  # lever read by `Polyphony.LLM.call`. Affects all sessions; it's a bring-up aid.
+  # Toggle routing every chat generation to the heavy model (§9) — read by
+  # `Polyphony.LLM.call`. Global, all sessions; a bring-up aid.
   def handle_event("toggle_heavy", _params, socket) do
-    heavy = not force_heavy?()
-    Application.put_env(:polyphony, :force_heavy_model, heavy)
-    {:noreply, assign(socket, :heavy, heavy)}
+    {:noreply, assign(socket, :heavy, DebugFlags.toggle(:force_heavy))}
   end
 
-  defp force_heavy?, do: Application.get_env(:polyphony, :force_heavy_model, false)
+  # Toggle the play view's raw event / beat-boundary stream (broadcast to it).
+  def handle_event("toggle_events", _params, socket) do
+    {:noreply, assign(socket, :events, DebugFlags.toggle(:events))}
+  end
 
   @impl true
   def render(assigns) do
@@ -75,6 +77,14 @@ defmodule PolyphonyWeb.DebugDrawerLive do
             title="Route every generation to the heavy model"
           >
             Heavy: <%= if @heavy, do: "on", else: "off" %>
+          </button>
+          <button
+            type="button"
+            class={"btn sm #{if @events, do: "", else: "ghost"}"}
+            phx-click="toggle_events"
+            title="Show the raw event / beat-boundary stream in the scene pane"
+          >
+            Events: <%= if @events, do: "on", else: "off" %>
           </button>
           <button type="button" class="btn sm ghost" id="debug-copy">Copy</button>
           <button type="button" class="btn sm ghost" phx-click="clear">Clear</button>

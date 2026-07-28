@@ -16,6 +16,7 @@ defmodule PolyphonyWeb.PlayLive do
     App,
     Broadcast,
     Context,
+    DebugFlags,
     Failures,
     Library,
     MembershipSet,
@@ -53,6 +54,8 @@ defmodule PolyphonyWeb.PlayLive do
   alias PolyphonyWeb.TurnEdit
 
   def mount(%{"scene_id" => scene_id}, _session, socket) do
+    if connected?(socket), do: DebugFlags.subscribe()
+
     {:ok,
      assign(socket,
        scene_id: scene_id,
@@ -64,6 +67,8 @@ defmodule PolyphonyWeb.PlayLive do
        failures: [],
        editing: nil,
        composing: false,
+       debug_events: DebugFlags.get(:events),
+       raw_events: [],
        premise: ""
      )}
   end
@@ -107,6 +112,7 @@ defmodule PolyphonyWeb.PlayLive do
 
     assign(socket,
       messages: messages,
+      raw_events: events,
       roster: roster,
       next_beat: next_beat,
       premise: scene_premise(plain),
@@ -613,6 +619,12 @@ defmodule PolyphonyWeb.PlayLive do
     {:noreply, append(socket, msg)}
   end
 
+  # Debug drawer toggled the raw-events view — reflect it (reload so raw_events is fresh).
+  def handle_info({:debug_flag, :events, value}, socket),
+    do: {:noreply, socket |> assign(debug_events: value) |> reload()}
+
+  def handle_info({:debug_flag, _flag, _value}, socket), do: {:noreply, socket}
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # A just-generated introduction is now :full — admit them.
@@ -771,6 +783,20 @@ defmodule PolyphonyWeb.PlayLive do
   defp event_beat(%{beat: b}) when is_integer(b), do: b
   defp event_beat(_), do: 0
 
+  # Debug view (author-only): the event's struct name and a compact dump of its fields.
+  defp debug_kind(e) when is_struct(e), do: e.__struct__ |> Module.split() |> List.last()
+  defp debug_kind(_), do: "?"
+
+  defp debug_detail(e) when is_struct(e) do
+    e
+    |> Map.from_struct()
+    |> Map.drop([:scene_id, :beat])
+    |> inspect(pretty: false, limit: 12, printable_limit: 240)
+    |> String.slice(0, 400)
+  end
+
+  defp debug_detail(other), do: inspect(other)
+
   # A character's control mode, defaulting to autonomous (matches the beat walk).
   defp control_of(modes, character), do: Map.get(modes, character) || "autonomous"
 
@@ -856,6 +882,19 @@ defmodule PolyphonyWeb.PlayLive do
 
       <div class="card transcript-card">
         <div id="transcript" class="transcript" phx-hook="Autoscroll">
+          <%= if @debug_events and @viewer == :omniscient do %>
+            <div class="faint" style="padding:.3rem 0;">Debug: raw event stream — <%= length(@raw_events) %> events</div>
+            <div
+              :for={{seq, e} <- @raw_events}
+              class="row"
+              style="gap:.5rem; font-family:monospace; font-size:.78rem; align-items:baseline;"
+            >
+              <span class="faint" style="min-width:2.4rem; text-align:right;"><%= seq %></span>
+              <span class="faint" style="min-width:1.8rem;">b<%= event_beat(e) %></span>
+              <span style="min-width:11rem; font-weight:600;"><%= debug_kind(e) %></span>
+              <span style="white-space:pre-wrap; word-break:break-word;"><%= debug_detail(e) %></span>
+            </div>
+          <% else %>
           <div :for={{block, i} <- Enum.with_index(turn_blocks(@messages))} id={"blk-#{i}"} class="turn-block">
             <div :for={m <- block.msgs}><%= render_move(m) %></div>
 
@@ -884,6 +923,7 @@ defmodule PolyphonyWeb.PlayLive do
               </div>
             </form>
           </div>
+          <% end %>
         </div>
       </div>
 
