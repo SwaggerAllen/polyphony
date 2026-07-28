@@ -44,7 +44,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
          name: bible.name || "",
          blocks: blocks_from_bible(bible),
          generating: MapSet.new(),
-         saved: false
+         saved: false,
+         dirty: false
        )}
     else
       {:ok, socket |> put_flash(:error, "World bible not found.") |> redirect(to: ~p"/library")}
@@ -54,7 +55,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
   # ── Editing ───────────────────────────────────────────────────────────────────
 
   def handle_event("sync", params, socket) do
-    {:noreply, socket |> assign_form(params) |> assign(:saved, false)}
+    {:noreply, socket |> assign_form(params) |> touch()}
   end
 
   def handle_event("save", params, socket) do
@@ -79,7 +80,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
          bible: bible,
          name: bible.name || "",
          blocks: blocks_from_bible(bible),
-         saved: true
+         saved: true,
+         dirty: false
        )}
     end)
   end
@@ -159,13 +161,13 @@ defmodule PolyphonyWeb.BibleEditorLive do
       end)
 
     name = if values["name"] in [nil, ""], do: socket.assigns.name, else: values["name"]
-    {:noreply, socket |> assign(name: name, blocks: blocks) |> mark("all", false)}
+    {:noreply, socket |> assign(name: name, blocks: blocks) |> mark("all", false) |> touch()}
   end
 
   def handle_async(:gen_all, result, socket), do: {:noreply, gen_failed(socket, "all", result)}
 
   def handle_async({:gen_field, f}, {:ok, {:ok, value}}, socket) do
-    {:noreply, socket |> put_blocks(f, split_generated(f, value)) |> mark(f, false)}
+    {:noreply, socket |> put_blocks(f, split_generated(f, value)) |> mark(f, false) |> touch()}
   end
 
   def handle_async({:gen_field, f}, result, socket),
@@ -175,7 +177,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
     {:noreply,
      socket
      |> put_blocks(f, append_paragraph(socket.assigns.blocks[f], para))
-     |> mark("#{f}:expand", false)}
+     |> mark("#{f}:expand", false)
+     |> touch()}
   end
 
   def handle_async({:expand, f}, result, socket),
@@ -183,7 +186,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   def handle_async({:gen_block, f, idx}, {:ok, {:ok, para}}, socket) do
     blocks = List.replace_at(socket.assigns.blocks[f], idx, para)
-    {:noreply, socket |> put_blocks(f, blocks) |> mark("#{f}:#{idx}", false)}
+    {:noreply, socket |> put_blocks(f, blocks) |> mark("#{f}:#{idx}", false) |> touch()}
   end
 
   def handle_async({:gen_block, f, idx}, result, socket),
@@ -203,7 +206,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
   end
 
   defp update_blocks(socket, field, fun),
-    do: socket |> put_blocks(field, fun.(socket.assigns.blocks[field])) |> assign(:saved, false)
+    do: socket |> put_blocks(field, fun.(socket.assigns.blocks[field])) |> touch()
 
   defp put_blocks(socket, field, blocks),
     do: assign(socket, :blocks, Map.put(socket.assigns.blocks, field, ensure_one(blocks)))
@@ -250,6 +253,11 @@ defmodule PolyphonyWeb.BibleEditorLive do
         _ -> []
       end
   end
+
+  defp touch(socket), do: assign(socket, saved: false, dirty: true)
+
+  defp leave_confirm(true), do: "You have unsaved changes. Leave without saving?"
+  defp leave_confirm(false), do: nil
 
   defp mark(socket, key, true),
     do: assign(socket, :generating, MapSet.put(socket.assigns.generating, key))
@@ -307,7 +315,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
           <button class="btn" type="submit">Save</button>
           <span :if={@saved} class="saved-note" role="status">✓ Saved</span>
           <span class="spacer"></span>
-          <a class="btn ghost" href={~p"/library"}>Back to library</a>
+          <a class="btn ghost" href={~p"/library"} data-confirm={leave_confirm(@dirty)}>Back to library</a>
         </div>
       </form>
     </div>

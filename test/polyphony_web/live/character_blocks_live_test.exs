@@ -114,4 +114,34 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
 
     assert render(view) =~ ~s(href="/authoring/character/#{bram.id}")
   end
+
+  test "navigation is unguarded until there are unsaved edits", %{conn: conn, user: user} do
+    entry = character(user, %CharacterSheet{name: "Mira", status: :full})
+    {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+    # A freshly loaded sheet has nothing to lose — no confirmation armed.
+    refute html =~ "data-confirm"
+
+    # Any edit arms the leave-confirmation on the nav links.
+    view
+    |> element("button[phx-click=add_block][phx-value-field=backstory]")
+    |> render_click()
+
+    assert render(view) =~ "data-confirm=\"You have unsaved changes"
+  end
+
+  test "saving clears the unsaved-changes guard", %{conn: conn, user: user} do
+    entry = character(user, %CharacterSheet{name: "Mira", status: :full})
+    {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+    view
+    |> element("button[phx-click=add_block][phx-value-field=backstory]")
+    |> render_click()
+
+    assert render(view) =~ "data-confirm"
+
+    view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+
+    refute render(view) =~ "data-confirm"
+  end
 end

@@ -8742,6 +8742,17 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
       this.grow();
     }
   };
+  window.addEventListener(
+    "click",
+    (e) => {
+      const link = e.target.closest && e.target.closest("a[data-confirm]");
+      if (link && !window.confirm(link.getAttribute("data-confirm"))) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    },
+    true
+  );
   var liveSocket = new LiveSocket("/live", Socket, {
     params: { _csrf_token: csrfToken },
     hooks: Hooks2
