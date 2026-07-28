@@ -11,7 +11,7 @@ defmodule Polyphony.Director.BeatOps do
 
   alias Polyphony.{App, Context, MembershipSet, Packets}
   alias Polyphony.Context.Store
-  alias Polyphony.Commands.{RecordWorldEvent, ExitCharacter, CloseScene}
+  alias Polyphony.Commands.{RecordWorldEvent, ExitCharacter, CloseScene, ProposeIntroduction}
   alias Polyphony.Director.Proposal
 
   @doc "The beat aggregate's stream id (distinct from the integer scene beat)."
@@ -154,6 +154,22 @@ defmodule Polyphony.Director.BeatOps do
         scene_id: Map.get(we, :scene_id) || scene_id,
         beat: beat,
         content: we.content
+      })
+    end)
+  end
+
+  @doc """
+  Dispatch the Director's character-introduction proposals onto the scene log. These
+  are omniscient-only queue signals (§B7) — they do NOT change membership, so they
+  never trigger truncation; the author admits them from the play view.
+  """
+  def author_introductions(introductions, scene_id, beat) do
+    Enum.each(introductions || [], fn intro ->
+      App.dispatch(%ProposeIntroduction{
+        scene_id: scene_id,
+        beat: beat,
+        name: intro.name,
+        reason: Map.get(intro, :reason)
       })
     end)
   end

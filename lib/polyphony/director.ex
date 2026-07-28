@@ -33,6 +33,7 @@ defmodule Polyphony.Director do
           accepted: [Proposal.t()],
           world_events: [WorldEventOccurred.t()],
           scene_actions: [map()],
+          introductions: [%{name: String.t(), reason: String.t() | nil}],
           search_need: String.t() | nil
         }
 
@@ -131,6 +132,7 @@ defmodule Polyphony.Director do
       accepted: arb.accepted ++ judged_accepted,
       world_events: authored ++ rejection_world_events,
       scene_actions: decision.scene_actions || [],
+      introductions: Enum.map(decision.introductions || [], &%{name: &1.name, reason: &1.reason}),
       search_need: decision.search_need
     }
   end

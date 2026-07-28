@@ -86,6 +86,15 @@ defmodule Polyphony.DirectorTest do
     assert Enum.any?(resolved.world_events, &(&1.content =~ "no magic in this world"))
   end
 
+  test "introduction proposals are carried into the resolved plan" do
+    j = %{
+      "introductions" => [%{"name" => "Bram", "reason" => "he's owed a debt"}]
+    }
+
+    assert {:ok, resolved} = decide(respond_with: {:ok, decision_json(j)})
+    assert [%{name: "Bram", reason: "he's owed a debt"}] = resolved.introductions
+  end
+
   test "the ordered cast and control flow come straight from the decision" do
     j = %{
       "control" => "yield_to_user",

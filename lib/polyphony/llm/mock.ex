@@ -125,9 +125,19 @@ defmodule Polyphony.LLM.Mock do
   defp decision_json(opts) do
     cast = Keyword.get(opts, :cast_hint, []) |> Enum.map(&%{character_id: to_string(&1)})
     control = opts |> Keyword.get(:control_hint, :yield_to_user) |> to_string()
+    introductions = opts |> Keyword.get(:introduce_hint, []) |> Enum.map(&introduction/1)
 
-    Jason.encode!(%{control: control, cast: cast, world_events: [], proposal_rulings: []})
+    Jason.encode!(%{
+      control: control,
+      cast: cast,
+      world_events: [],
+      proposal_rulings: [],
+      introductions: introductions
+    })
   end
+
+  defp introduction({name, reason}), do: %{name: to_string(name), reason: to_string(reason)}
+  defp introduction(name), do: %{name: to_string(name), reason: "arrives"}
 
   # A deterministic boundary-gate judgment (§A3): yes/no by hash, so a dev run
   # exercises both released and gated conditionals.

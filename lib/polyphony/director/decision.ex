@@ -47,6 +47,14 @@ defmodule Polyphony.Director.Decision do
       field(:premise, :string)
     end
 
+    # Characters the Director wants to bring on-stage (§B7). Each is a *proposal*,
+    # not an entry — the author admits/generates/edits it before the character
+    # formally enters, so this never changes membership on its own.
+    embeds_many :introductions, Introduction, primary_key: false do
+      field(:name, :string)
+      field(:reason, :string)
+    end
+
     field(:control, Ecto.Enum, values: [:continue, :yield_to_user])
     field(:search_need, :string)
   end
@@ -62,6 +70,13 @@ defmodule Polyphony.Director.Decision do
     |> cast_embed(:cast, with: &cast_member_changeset/2)
     |> cast_embed(:world_events, with: &world_event_changeset/2)
     |> cast_embed(:scene_actions, with: &scene_action_changeset/2)
+    |> cast_embed(:introductions, with: &introduction_changeset/2)
+  end
+
+  defp introduction_changeset(i, params) do
+    i
+    |> cast(params, [:name, :reason])
+    |> validate_required([:name])
   end
 
   defp ruling_changeset(r, params) do
