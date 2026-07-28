@@ -28,20 +28,30 @@ defmodule PolyphonyWeb.CampaignLive do
     owned_chars = Enum.filter(owned, &(&1.kind == "character"))
     bibles = Enum.filter(owned, &(&1.kind == "world_bible"))
 
-    cast =
-      Enum.filter(owned_chars, fn c ->
-        n = char_name(c)
-        n in (payload[:character_ids] || [])
-      end)
+    # bible_id may be stored as a string (setup) or integer (select_world); normalize
+    # so it matches integer entry ids for selection and the world roster filter.
+    world_id = normalize_id(payload[:bible_id])
+    cast_names = payload[:character_ids] || []
+
+    cast = Enum.filter(owned_chars, &(char_name(&1) in cast_names))
+
+    # Characters that can still be added: owned, not already cast, and — when a world
+    # is attached — belonging to that world (or unassigned), so the world scopes the
+    # roster the way the library filter does.
+    addable =
+      owned_chars
+      |> Enum.reject(&(char_name(&1) in cast_names))
+      |> Enum.filter(&addable_in_world?(&1, world_id))
 
     assign(socket,
       payload: payload,
       owner: owner,
       cast: cast,
+      addable: addable,
       scenes: payload[:scenes] || [],
       bibles: bibles,
-      bible_id: payload[:bible_id],
-      bible_name: bible_label(bibles, payload[:bible_id])
+      bible_id: world_id,
+      bible_name: bible_label(bibles, world_id)
     )
   end
 
@@ -52,6 +62,26 @@ defmodule PolyphonyWeb.CampaignLive do
       {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
 
       {:noreply, socket |> assign(entry: entry) |> load() |> put_flash(:info, "World updated.")}
+    end)
+  end
+
+  def handle_event("add_character", %{"name" => name}, socket) do
+    safe(socket, fn ->
+      case String.trim(name) do
+        "" ->
+          {:noreply, socket}
+
+        name ->
+          ids = Enum.uniq((socket.assigns.payload[:character_ids] || []) ++ [name])
+          {:noreply, update_cast(socket, ids, "Added #{name} to the cast.")}
+      end
+    end)
+  end
+
+  def handle_event("remove_character", %{"name" => name}, socket) do
+    safe(socket, fn ->
+      ids = Enum.reject(socket.assigns.payload[:character_ids] || [], &(&1 == name))
+      {:noreply, update_cast(socket, ids, "Removed #{name} from the cast.")}
     end)
   end
 
@@ -131,10 +161,29 @@ defmodule PolyphonyWeb.CampaignLive do
         <button class="btn" phx-click="start_scene" disabled={@cast == []}>Start a scene</button>
         <button class="btn ghost" phx-click="publish" data-confirm="Publish a public snapshot? It exposes the omniscient story.">Publish</button>
       </div>
-      <div :if={@cast == []} class="faint">No cast — add characters to this campaign from setup.</div>
-      <ul>
-        <li :for={c <- @cast}><%= char_name(c) %></li>
+      <div :if={@cast == []} class="faint">No cast yet — add characters below.</div>
+      <ul class="rel-list">
+        <li :for={c <- @cast} class="row rel-item">
+          <span><%= char_name(c) %></span>
+          <span :if={pending?(c)} class="badge stub">pending</span>
+          <span class="spacer"></span>
+          <button class="btn danger sm" phx-click="remove_character" phx-value-name={char_name(c)}>Remove</button>
+        </li>
       </ul>
+
+      <form :if={@addable != []} id="add-character" phx-submit="add_character" class="row rel-add">
+        <select name="name" style="flex:1;">
+          <option :for={c <- @addable} value={char_name(c)}><%= char_name(c) %></option>
+        </select>
+        <button class="btn" type="submit">Add to cast</button>
+      </form>
+      <p :if={@addable == [] and @cast != []} class="faint">
+        Every one of your characters<span :if={@bible_name}> in <%= @bible_name %></span> is already in the cast.
+      </p>
+      <p :if={@addable == [] and @cast == []} class="faint">
+        No characters available<span :if={@bible_name}> for <%= @bible_name %></span> —
+        create one in the <a href={~p"/library"}>Library</a><span :if={@bible_name}> and attach it to this world</span>.
+      </p>
     </div>
 
     <div class="card">
@@ -170,6 +219,35 @@ defmodule PolyphonyWeb.CampaignLive do
       %{name: n} when is_binary(n) and n != "" -> n
       _ -> "char-#{entry.id}"
     end
+  end
+
+  defp update_cast(socket, ids, flash) do
+    payload = Map.put(socket.assigns.payload, :character_ids, ids)
+    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+    socket |> assign(entry: entry) |> load() |> put_flash(:info, flash)
+  end
+
+  defp normalize_id(nil), do: nil
+  defp normalize_id(id) when is_integer(id), do: id
+
+  defp normalize_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {n, _} -> n
+      :error -> nil
+    end
+  end
+
+  # With no world attached, every owned character is addable; with one attached, the
+  # roster is scoped to that world's characters plus any not yet assigned to a world.
+  defp addable_in_world?(_char, nil), do: true
+
+  defp addable_in_world?(char, world_id) do
+    wid = char |> Library.payload() |> Map.get(:world_bible_id)
+    wid in [nil, world_id]
+  end
+
+  defp pending?(char) do
+    match?(%CharacterSheet{status: s} when s != :full, Library.payload(char))
   end
 
   defp bible_label(_bibles, nil), do: nil
