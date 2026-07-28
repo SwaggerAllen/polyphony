@@ -233,18 +233,15 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   def handle_event("promote", _params, socket) do
     safe(socket, fn ->
-      case Stub.promote(socket.assigns.sheet) do
-        {:ok, promoted} ->
-          {:ok, entry} = Library.update_payload(socket.assigns.entry.id, promoted)
+      sheet = socket.assigns.sheet
+      opts = promote_opts(socket)
 
-          {:noreply,
-           socket
-           |> put_flash(:info, "Promoted — review and accept below.")
-           |> reload(entry, promoted)}
-
-        {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Could not generate a sheet.")}
-      end
+      # Generation is a real (possibly slow) provider call — run it async with a
+      # busy button so the click gives immediate feedback instead of a frozen page.
+      {:noreply,
+       socket
+       |> mark("promote", true)
+       |> start_async(:promote, fn -> Stub.promote(sheet, opts) end)}
     end)
   end
 
@@ -321,6 +318,28 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def handle_async(:suggest_rel, result, socket),
     do: {:noreply, gen_failed(socket, "relationships", result)}
 
+  def handle_async(:promote, {:ok, {:ok, promoted}}, socket) do
+    safe(socket, fn ->
+      {:ok, entry} = Library.update_payload(socket.assigns.entry.id, promoted)
+
+      {:noreply,
+       socket
+       |> mark("promote", false)
+       |> put_flash(:info, "Promoted — review and accept below.")
+       |> reload(entry, promoted)}
+    end)
+  end
+
+  def handle_async(:promote, {:ok, {:error, _reason}}, socket) do
+    {:noreply,
+     socket
+     |> mark("promote", false)
+     |> put_flash(:error, "Could not generate a sheet. Try again.")}
+  end
+
+  def handle_async(:promote, result, socket),
+    do: {:noreply, gen_failed(socket, "promote", result)}
+
   # ── Assign / block helpers ────────────────────────────────────────────────────
 
   defp reload(socket, entry, sheet) do
@@ -384,6 +403,24 @@ defmodule PolyphonyWeb.SheetEditorLive do
     case socket.assigns.current_user do
       %{id: id} -> [user_id: id]
       _ -> []
+    end
+  end
+
+  # Stub promotion: ground generation in the (inherited) world bible, and attribute
+  # the metered call to the author like every other generation here.
+  defp promote_opts(socket) do
+    [bible: bible_text(socket.assigns.world_context), usage_kind: "authoring"] ++
+      user_attribution(socket)
+  end
+
+  defp bible_text(nil), do: "(unspecified)"
+
+  defp bible_text(world) when is_map(world) do
+    case [world["name"], world["setting"], world["tone"]]
+         |> Enum.reject(&(&1 in [nil, ""]))
+         |> Enum.join("\n\n") do
+      "" -> "(unspecified)"
+      text -> text
     end
   end
 
@@ -570,7 +607,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
     <div :if={@sheet.status == :stub} class="card">
       <p class="dim">This is a stub (name + role). Promote it to generate a full sheet behind a review gate.</p>
-      <button class="btn" phx-click="promote">Promote to full sheet</button>
+      <button class="btn" phx-click="promote" disabled={busy?(@generating, "promote")}>
+        <%= if busy?(@generating, "promote"), do: "✨ Promoting…", else: "Promote to full sheet" %>
+      </button>
     </div>
     <div :if={@sheet.status == :proposed} class="card">
       <p class="dim">Generated draft below. Accept to make it usable.</p>
