@@ -37,7 +37,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
          world_id: world_id,
          world_context: world_context_for(worlds, world_id),
          relationships: sheet.relationships || [],
-         char_names: other_character_names(socket.assigns.current_user, entry.id)
+         char_names: other_character_names(socket.assigns.current_user, entry.id),
+         relations_context:
+           relations_context(sheet.relationships || [], socket.assigns.current_user, entry.id)
        )}
     else
       {:ok, socket |> put_flash(:error, "Character not found.") |> redirect(to: ~p"/library")}
@@ -86,13 +88,15 @@ defmodule PolyphonyWeb.SheetEditorLive do
       # Inline confirmation (see the Save button) rather than a top-of-page flash,
       # which is off-screen on mobile after a scroll down the form.
       socket =
-        assign(socket,
+        socket
+        |> assign(
           entry: entry,
           sheet: sheet,
           draft: draft_from_sheet(sheet),
           char_names: other_character_names(user, id),
           saved: true
         )
+        |> assign_relationships(rels)
 
       {:noreply, maybe_flash_stubs(socket, stubbed)}
     end)
@@ -109,7 +113,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
           {:noreply,
            socket
-           |> assign(relationships: socket.assigns.relationships ++ [rel], saved: false)}
+           |> assign_relationships(socket.assigns.relationships ++ [rel])
+           |> assign(:saved, false)}
       end
     end)
   end
@@ -119,7 +124,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
     {:noreply,
      socket
-     |> assign(relationships: List.delete_at(socket.assigns.relationships, idx), saved: false)}
+     |> assign_relationships(List.delete_at(socket.assigns.relationships, idx))
+     |> assign(:saved, false)}
   end
 
   def handle_event("generate_all", %{"brief" => brief}, socket) do
@@ -229,10 +235,14 @@ defmodule PolyphonyWeb.SheetEditorLive do
             r.target == target,
             do: %Relationship{target: self_name, descriptor: r.descriptor}
 
+      # Seed the stub's one-line role from the first non-empty descriptor that
+      # introduced it, so it reads meaningfully in the library before promotion.
+      role = inbound |> Enum.map(& &1.descriptor) |> Enum.find("", &(&1 not in [nil, ""]))
+
       Library.put(%{
         owner: owner,
         kind: "character",
-        payload: Stub.new(target, "", relationships: inbound)
+        payload: Stub.new(target, role, relationships: inbound)
       })
 
       target
@@ -243,6 +253,42 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   defp maybe_flash_stubs(socket, names),
     do: put_flash(socket, :info, "Stubbed new character(s): #{Enum.join(names, ", ")}.")
+
+  # Keep the relationships list and the derived generation context (the related
+  # characters' sheets) in lockstep, so a ✨ generate always sees the current web.
+  defp assign_relationships(socket, relationships) do
+    assign(socket,
+      relationships: relationships,
+      relations_context:
+        relations_context(relationships, socket.assigns.current_user, socket.assigns.entry.id)
+    )
+  end
+
+  # For each relationship whose target is an existing character, a compact snapshot
+  # of that character's sheet + how this character regards them — the context that
+  # makes generated backstory/voice fit the people they're connected to.
+  defp relations_context(relationships, user, exclude_id) do
+    by_name =
+      user
+      |> Library.list_for_owner()
+      |> Enum.filter(&(&1.kind == "character" and &1.id != exclude_id))
+      |> Map.new(fn e -> {String.downcase(char_name(e) || ""), e} end)
+
+    for r <- relationships,
+        entry = Map.get(by_name, String.downcase(r.target)),
+        entry != nil do
+      s = Library.payload(entry)
+
+      %{
+        "name" => r.target,
+        "descriptor" => r.descriptor,
+        "premise" => s.premise,
+        "voice" => s.voice,
+        "temperament" => s.temperament,
+        "backstory" => s.backstory
+      }
+    end
+  end
 
   defp load_worlds(user) do
     user |> Library.list_for_owner() |> Enum.filter(&(&1.kind == "world_bible"))

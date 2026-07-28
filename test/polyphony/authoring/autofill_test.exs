@@ -89,6 +89,33 @@ defmodule Polyphony.Authoring.AutofillTest do
       assert msgs =~ "noir"
     end
 
+    test "related character sheets are injected into the prompt" do
+      relations = [
+        %{
+          "name" => "Bram",
+          "descriptor" => "estranged mentor",
+          "premise" => "a retired duelist who taught her everything",
+          "voice" => "clipped",
+          "temperament" => "stoic",
+          "backstory" => "left the guild in disgrace"
+        }
+      ]
+
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.generate_field(:character, "backstory", %{},
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture,
+            relations: relations
+          )
+        end)
+
+      assert msgs =~ "Related characters"
+      assert msgs =~ "Bram"
+      assert msgs =~ "estranged mentor"
+      assert msgs =~ "a retired duelist who taught her everything"
+    end
+
     test "no world context leaves the prompt clean (no dangling label)" do
       msgs =
         capture_prompt(fn capture ->
