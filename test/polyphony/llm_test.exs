@@ -101,7 +101,8 @@ defmodule Polyphony.LLMTest do
       end)
 
       # The caller asked for a different model; the lever overrides it to heavy.
-      assert {:ok, "HEAVY-MODEL"} = LLM.call(@messages, provider: EchoModel, model: "workhorse-xyz")
+      assert {:ok, "HEAVY-MODEL"} =
+               LLM.call(@messages, provider: EchoModel, model: "workhorse-xyz")
     end
   end
 end

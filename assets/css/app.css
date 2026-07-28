@@ -237,7 +237,7 @@ pre { padding: .75rem; overflow-x: auto; }
   box-shadow: 0 6px 24px rgba(0,0,0,.5); overflow: hidden;
 }
 .debug-drawer-head {
-  display: flex; align-items: center; gap: .4rem;
+  display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; row-gap: .35rem;
   padding: .5rem .6rem; border-bottom: 1px solid var(--border);
 }
 .debug-drawer-head .debug-title { font-weight: 700; color: var(--fg); }

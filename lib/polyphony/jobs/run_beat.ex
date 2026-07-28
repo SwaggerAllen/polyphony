@@ -45,7 +45,7 @@ defmodule Polyphony.Jobs.RunBeat do
 
     members = BeatOps.members_now(scene_id, beat)
 
-    case Director.decide(decide_opts(args, scene_id, beat, members)) do
+    case decide_with_fallback(decide_opts(args, scene_id, beat, members), beat) do
       {:ok, resolved} ->
         BeatOps.author_world_events(resolved.world_events, scene_id, beat)
         BeatOps.author_introductions(Map.get(resolved, :introductions, []), scene_id, beat)
@@ -69,6 +69,31 @@ defmodule Polyphony.Jobs.RunBeat do
         {:error, reason}
     end
   end
+
+  # The workhorse model sometimes returns an empty body or a spurious refusal
+  # (§12; a known Qwen quirk) — which stalls Continue. Retry once on the heavy model,
+  # the same model-swap the cast path uses for refusals. Rate-limit / transport
+  # errors are NOT retried here (that's the separate 429-handling concern).
+  defp decide_with_fallback(opts, beat) do
+    case Director.decide(opts) do
+      {:ok, resolved} ->
+        {:ok, resolved}
+
+      {:error, reason} ->
+        if retry_on_heavy?(reason) && heavy_model() do
+          Logger.info("director #{inspect(reason)} at beat #{beat}; retrying on the heavy model")
+          Director.decide(Keyword.put(opts, :model, heavy_model()))
+        else
+          {:error, reason}
+        end
+    end
+  end
+
+  defp retry_on_heavy?({:director, :empty_response}), do: true
+  defp retry_on_heavy?({:director, {:refusal, _}}), do: true
+  defp retry_on_heavy?(_), do: false
+
+  defp heavy_model, do: get_in(Application.get_env(:polyphony, :llm, []), [:models, :heavy])
 
   # ── Drive the outcome ────────────────────────────────────────────────────────
 

@@ -382,11 +382,16 @@ defmodule PolyphonyWeb.PlayLive do
           scene_id = socket.assigns.scene_id
           roster = socket.assigns.roster
           user = socket.assigns.current_user
+          premise = socket.assigns.premise
+          sheet = character_sheet(socket, as)
+          bible = campaign_world_bible(socket)
 
           {:noreply,
            socket
            |> assign(composing: true)
-           |> start_async(:compose, fn -> compose_draft(scene_id, as, roster, draft, user) end)}
+           |> start_async(:compose, fn ->
+             compose_draft(scene_id, as, sheet, premise, bible, roster, draft, user)
+           end)}
       end
     end)
   end
@@ -669,13 +674,6 @@ defmodule PolyphonyWeb.PlayLive do
     {:noreply, socket |> assign(composing: false) |> push_event("set_composer", %{text: text})}
   end
 
-  def handle_async(:compose, {:ok, {:error, :no_context}}, socket) do
-    {:noreply,
-     socket
-     |> assign(composing: false)
-     |> put_flash(:error, "No character context to draft from yet — enter the scene first.")}
-  end
-
   def handle_async(:compose, _result, socket) do
     {:noreply,
      socket |> assign(composing: false) |> put_flash(:error, "Couldn't draft a turn. Try again.")}
@@ -684,21 +682,58 @@ defmodule PolyphonyWeb.PlayLive do
   # Draft a turn from the character's filtered view (§11) — steered by the player's
   # partial text if any, else generated fresh. Never omniscient (a suggestion can't
   # react to something the character never learned).
-  defp compose_draft(scene_id, character, roster, draft, user) do
+  defp compose_draft(scene_id, character, sheet, premise, bible, roster, draft, user) do
+    ctx = character_context(scene_id, character, sheet, premise, bible)
+
+    Suggest.variants(
+      context: ctx,
+      live_events: BeatOps.canonical_events(scene_id),
+      members: roster,
+      count: 1,
+      steer: compose_steer(draft),
+      user_id: user && user.id,
+      usage_kind: "suggestion"
+    )
+  end
+
+  # The character's frozen context — from the cache, or **rebuilt and re-cached on a
+  # miss**. The ETS cache is cold after a restart (it's pure cache, rebuildable from
+  # the sheet + log), so a miss must not fail the draft.
+  defp character_context(scene_id, character, sheet, premise, bible) do
     case Store.fetch(scene_id, character) do
       {:ok, ctx} ->
-        Suggest.variants(
-          context: ctx,
-          live_events: BeatOps.canonical_events(scene_id),
-          members: roster,
-          count: 1,
-          steer: compose_steer(draft),
-          user_id: user && user.id,
-          usage_kind: "suggestion"
-        )
+        ctx
 
       :error ->
-        {:error, :no_context}
+        ctx =
+          Context.materialize(
+            scene_id: scene_id,
+            character_id: character,
+            sheet: sheet,
+            premise: premise,
+            world_bible: bible,
+            retriever: PgvectorRetriever
+          )
+
+        Store.put(scene_id, character, ctx)
+        ctx
+    end
+  end
+
+  # Resolve the acting character's sheet from the author's library by name, falling
+  # back to a name-only sheet so a draft still works for a character with no full sheet.
+  defp character_sheet(socket, name) do
+    key = String.downcase(to_string(name))
+
+    case Map.get(owner_characters(socket.assigns.current_user), key) do
+      %{} = entry ->
+        case Library.payload(entry) do
+          %CharacterSheet{} = sheet -> sheet
+          _ -> %CharacterSheet{name: to_string(name)}
+        end
+
+      _ ->
+        %CharacterSheet{name: to_string(name)}
     end
   end
 
