@@ -1041,18 +1041,6 @@ input:focus, textarea:focus, select:focus {
   margin-top: .5rem;
 }
 
-.rel-suggestions {
-  margin: .5rem 0;
-  padding: .5rem;
-  background: var(--bg-2);
-  border-radius: 8px;
-}
-
-.rel-suggestion {
-  padding: .25rem 0;
-  gap: .5rem;
-}
-
 /* Block-field editor: paragraphs as focus-styled, auto-growing textareas that read
    like prose until you click into them (no toggle logic — the textarea is always
    live, just styled to look like text when unfocused). */

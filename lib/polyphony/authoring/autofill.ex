@@ -135,36 +135,85 @@ defmodule Polyphony.Authoring.Autofill do
   Propose relationships for a character from its fields + context. Returns
   `{:ok, [%{"target" => name, "descriptor" => how_they_regard_them}]}`. The caller
   decides which to accept (and new names stub on save, like a typed relationship).
+
+  `opts[:existing]` — the character's current relationships (maps or `%Relationship{}`
+  structs). They're shown to the model as "already present, don't repeat", and any
+  suggestion matching one (or the character itself) is filtered out — so re-running
+  never re-proposes a relationship the character already has.
   """
   @spec suggest_relationships(map(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def suggest_relationships(current, opts \\ []) do
     current = stringify(current)
+    existing = normalize_existing(opts[:existing] || [])
+    self_name = to_string(current["name"] || "")
 
     messages = [
       %{
         role: "system",
         content:
           "You are helping an author populate a role-play character's relationships. " <>
-            "Propose 3–5 people this character would plausibly know. Return ONLY a JSON " <>
+            "Propose 3–5 people this character would plausibly know. Do NOT propose anyone " <>
+            "already listed, and do not propose the character themselves. Return ONLY a JSON " <>
             "array of objects, each with keys \"target\" (the other person's name) and " <>
             "\"descriptor\" (how THIS character regards them — a short phrase)."
       },
-      %{role: "user", content: context_block(context(opts)) <> character_block(current)}
+      %{
+        role: "user",
+        content:
+          context_block(context(opts)) <>
+            character_block(current) <> existing_block(existing, self_name)
+      }
     ]
 
     with {:ok, text} <-
            Polyphony.LLM.call(messages, [response: :relationships] ++ meter_opts(opts)),
          {:ok, list} <- decode_array(text) do
+      excluded =
+        [self_name | Enum.map(existing, & &1["target"])]
+        |> Enum.map(&normalize_name/1)
+        |> Enum.reject(&(&1 == ""))
+        |> MapSet.new()
+
       suggestions =
-        for item <- list, is_map(item), present?(t = item["target"]) do
+        list
+        |> Enum.filter(&is_map/1)
+        |> Enum.map(fn item ->
           %{
-            "target" => String.trim(to_string(t)),
+            "target" => String.trim(to_string(item["target"] || "")),
             "descriptor" => String.trim(to_string(item["descriptor"] || ""))
           }
-        end
+        end)
+        |> Enum.reject(
+          &(&1["target"] == "" or MapSet.member?(excluded, normalize_name(&1["target"])))
+        )
+        |> Enum.uniq_by(&normalize_name(&1["target"]))
 
       {:ok, suggestions}
     end
+  end
+
+  defp normalize_name(name), do: name |> to_string() |> String.trim() |> String.downcase()
+
+  defp normalize_existing(list) do
+    for item <- list, t = existing_target(item), present?(t) do
+      %{"target" => to_string(t), "descriptor" => to_string(existing_descriptor(item) || "")}
+    end
+  end
+
+  defp existing_target(%{"target" => t}), do: t
+  defp existing_target(%{target: t}), do: t
+  defp existing_target(_), do: nil
+
+  defp existing_descriptor(%{"descriptor" => d}), do: d
+  defp existing_descriptor(%{descriptor: d}), do: d
+  defp existing_descriptor(_), do: nil
+
+  defp existing_block([], _self_name), do: ""
+
+  defp existing_block(existing, _self_name) do
+    lines = Enum.map_join(existing, "\n", fn e -> "- #{e["target"]}: #{e["descriptor"]}" end)
+
+    "\nAlready has these relationships (do NOT propose these people again):\n" <> lines <> "\n"
   end
 
   # ── Prompt building ──────────────────────────────────────────────────────────

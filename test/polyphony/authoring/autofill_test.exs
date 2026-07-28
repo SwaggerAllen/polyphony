@@ -201,6 +201,62 @@ defmodule Polyphony.Authoring.AutofillTest do
       assert Enum.all?(suggestions, &(is_binary(&1["target"]) and &1["target"] != ""))
     end
 
+    test "excludes people the character already has, and lists them in the prompt" do
+      array =
+        {:ok,
+         Jason.encode!([
+           %{"target" => "Bram", "descriptor" => "mentor"},
+           %{"target" => "Vane", "descriptor" => "rival"}
+         ])}
+
+      existing = [%{"target" => "Bram", "descriptor" => "old mentor"}]
+
+      assert {:ok, [%{"target" => "Vane"}]} =
+               Autofill.suggest_relationships(%{"name" => "Mira"},
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: array,
+                 existing: existing
+               )
+    end
+
+    test "the existing relationships are shown to the model" do
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.suggest_relationships(%{"name" => "Mira"},
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture,
+            existing: [%{"target" => "Bram", "descriptor" => "old mentor"}]
+          )
+        end)
+
+      assert msgs =~ "Bram"
+      assert msgs =~ "old mentor"
+      assert msgs =~ "do NOT propose"
+    end
+
+    test "does not propose the character themselves" do
+      array =
+        {:ok, Jason.encode!([%{"target" => "Mira", "descriptor" => "me"}, %{"target" => "Vane"}])}
+
+      assert {:ok, [%{"target" => "Vane"}]} =
+               Autofill.suggest_relationships(%{"name" => "Mira"},
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: array
+               )
+    end
+
+    test "de-duplicates repeated targets within one suggestion set" do
+      array =
+        {:ok,
+         Jason.encode!([%{"target" => "Vane"}, %{"target" => "vane", "descriptor" => "dup"}])}
+
+      assert {:ok, [%{"target" => "Vane"}]} =
+               Autofill.suggest_relationships(%{},
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: array
+               )
+    end
+
     test "parses a fenced JSON array and drops entries without a target" do
       array =
         {:ok,

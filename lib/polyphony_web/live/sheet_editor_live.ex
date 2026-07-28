@@ -60,11 +60,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
          world_id: world_id,
          world_context: world_context_for(worlds, world_id),
          relationships: sheet.relationships || [],
-         char_names: other_character_names(socket.assigns.current_user, entry.id),
          relations_context:
-           relations_context(sheet.relationships || [], socket.assigns.current_user, entry.id),
-         rel_suggestions: []
-       )}
+           relations_context(sheet.relationships || [], socket.assigns.current_user, entry.id)
+       )
+       |> assign_characters(other_characters(socket.assigns.current_user, entry.id))}
     else
       {:ok, socket |> put_flash(:error, "Character not found.") |> redirect(to: ~p"/library")}
     end
@@ -82,7 +81,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
       socket = assign_form(socket, params)
       %{name: name, blocks: blocks, relationships: rels} = socket.assigns
 
-      existing = other_character_names(user, id)
+      existing = char_names(other_characters(user, id))
       stubbed = seed_stubs(rels, existing, name, Owner.of(user))
 
       sheet = %CharacterSheet{
@@ -106,9 +105,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
           sheet: sheet,
           name: sheet.name || "",
           blocks: blocks_from_sheet(sheet),
-          char_names: other_character_names(user, id),
           saved: true
         )
+        |> assign_characters(other_characters(user, id))
         |> assign_relationships(rels)
 
       {:noreply, maybe_flash_stubs(socket, stubbed)}
@@ -218,7 +217,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def handle_event("suggest_relationships", _params, socket) do
     safe(socket, fn ->
       current = current_values(socket)
-      opts = gen_opts(socket)
+      opts = [existing: socket.assigns.relationships] ++ gen_opts(socket)
 
       {:noreply,
        socket
@@ -226,27 +225,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
        |> start_async(:suggest_rel, fn -> Autofill.suggest_relationships(current, opts) end)}
     end)
   end
-
-  def handle_event("accept_suggestion", %{"index" => i}, socket) do
-    idx = String.to_integer(i)
-
-    case Enum.at(socket.assigns.rel_suggestions, idx) do
-      nil ->
-        {:noreply, socket}
-
-      s ->
-        rel = %Relationship{target: s["target"], descriptor: s["descriptor"]}
-
-        {:noreply,
-         socket
-         |> assign_relationships(socket.assigns.relationships ++ [rel])
-         |> assign(rel_suggestions: List.delete_at(socket.assigns.rel_suggestions, idx))
-         |> assign(:saved, false)}
-    end
-  end
-
-  def handle_event("dismiss_suggestions", _params, socket),
-    do: {:noreply, assign(socket, :rel_suggestions, [])}
 
   # ── Stub promotion (§B8) ──────────────────────────────────────────────────────
 
@@ -319,10 +297,21 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def handle_async(:suggest_rel, {:ok, {:ok, suggestions}}, socket) do
     socket = mark(socket, "relationships", false)
 
-    if suggestions == [] do
-      {:noreply, put_flash(socket, :info, "No new relationships suggested.")}
-    else
-      {:noreply, assign(socket, :rel_suggestions, suggestions)}
+    case suggestions do
+      [] ->
+        {:noreply, put_flash(socket, :info, "No new relationships suggested.")}
+
+      list ->
+        rels =
+          Enum.map(list, fn s ->
+            %Relationship{target: s["target"], descriptor: s["descriptor"]}
+          end)
+
+        {:noreply,
+         socket
+         |> assign_relationships(socket.assigns.relationships ++ rels)
+         |> assign(:saved, false)
+         |> put_flash(:info, "Added #{length(rels)} suggested relationship(s). Review and Save.")}
     end
   end
 
@@ -474,12 +463,25 @@ defmodule PolyphonyWeb.SheetEditorLive do
   defp maybe_flash_stubs(socket, names),
     do: put_flash(socket, :info, "Stubbed new character(s): #{Enum.join(names, ", ")}.")
 
-  defp other_character_names(user, exclude_id) do
+  # The owner's other character entries — powers the relationship datalist (names)
+  # and the "open this character" links (name → id).
+  defp other_characters(user, exclude_id) do
     user
     |> Library.list_for_owner()
     |> Enum.filter(&(&1.kind == "character" and &1.id != exclude_id))
-    |> Enum.map(&char_name/1)
-    |> Enum.reject(&is_nil/1)
+  end
+
+  defp assign_characters(socket, entries),
+    do: assign(socket, char_names: char_names(entries), char_links: char_links(entries))
+
+  defp char_names(entries), do: entries |> Enum.map(&char_name/1) |> Enum.reject(&is_nil/1)
+
+  defp char_links(entries) do
+    for e <- entries,
+        name = char_name(e),
+        name != nil,
+        into: %{},
+        do: {String.downcase(name), e.id}
   end
 
   defp char_name(entry) do
@@ -526,6 +528,20 @@ defmodule PolyphonyWeb.SheetEditorLive do
   end
 
   # ── Render ────────────────────────────────────────────────────────────────────
+
+  # A relationship's target: a link to that character's editor when it's an existing
+  # (or already-saved-stub) character, otherwise plain text.
+  attr(:target, :string, required: true)
+  attr(:links, :map, required: true)
+
+  defp rel_target(assigns) do
+    assigns = assign(assigns, :id, Map.get(assigns.links, String.downcase(assigns.target)))
+
+    ~H"""
+    <a :if={@id} href={~p"/authoring/character/#{@id}"}><strong><%= @target %></strong></a>
+    <strong :if={is_nil(@id)}><%= @target %></strong>
+    """
+  end
 
   def render(assigns) do
     ~H"""
@@ -608,25 +624,13 @@ defmodule PolyphonyWeb.SheetEditorLive do
       <p class="dim">
         How this character regards others. Pick an existing character or type a new name —
         a new name becomes a <strong>stub</strong> character, created when you Save.
+        <strong>✨ Suggest</strong> adds AI-proposed relationships straight to the list.
       </p>
-
-      <div :if={@rel_suggestions != []} class="rel-suggestions">
-        <div class="row">
-          <strong>Suggestions</strong>
-          <div class="spacer"></div>
-          <button type="button" class="btn xs ghost" phx-click="dismiss_suggestions">Dismiss</button>
-        </div>
-        <div :for={{s, i} <- Enum.with_index(@rel_suggestions)} class="row rel-suggestion">
-          <span>→ <strong><%= s["target"] %></strong><span :if={s["descriptor"] not in [nil, ""]}> — <%= s["descriptor"] %></span></span>
-          <span class="spacer"></span>
-          <button type="button" class="btn xs" phx-click="accept_suggestion" phx-value-index={i}>Add</button>
-        </div>
-      </div>
 
       <div :if={@relationships == []} class="faint">No relationships yet.</div>
       <ul class="rel-list">
         <li :for={{r, i} <- Enum.with_index(@relationships)} class="row rel-item">
-          <span>→ <strong><%= r.target %></strong><span :if={r.descriptor not in [nil, ""]}> — <%= r.descriptor %></span></span>
+          <span>→ <.rel_target target={r.target} links={@char_links} /><span :if={r.descriptor not in [nil, ""]}> — <%= r.descriptor %></span></span>
           <span class="spacer"></span>
           <button type="button" class="btn danger sm" phx-click="remove_relationship" phx-value-index={i}>Remove</button>
         </li>
