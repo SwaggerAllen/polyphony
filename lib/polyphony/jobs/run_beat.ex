@@ -46,6 +46,7 @@ defmodule Polyphony.Jobs.RunBeat do
     case Director.decide(decide_opts(args, scene_id, beat, members)) do
       {:ok, resolved} ->
         BeatOps.author_world_events(resolved.world_events, scene_id, beat)
+        BeatOps.author_introductions(Map.get(resolved, :introductions, []), scene_id, beat)
 
         drive(
           BeatOps.apply_membership_changes(resolved, scene_id, beat),

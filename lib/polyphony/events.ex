@@ -192,6 +192,25 @@ defmodule Polyphony.Events do
     defstruct [:scene_id, :character_id, :beat]
   end
 
+  defmodule IntroductionProposed do
+    @moduledoc """
+    The Director proposes bringing a character on-stage (§B7/B8) — a `name` and the
+    `reason` — at `beat`. This is an **authoring/queue signal, not scene canon**: it
+    does not make the character a member. It is **omniscient-only** (default-deny for
+    characters): in-scene characters must not know about someone who hasn't formally
+    entered, or the irony guarantee leaks. The author resolves it from the play view
+    (admit / generate / edit / dismiss); admitting emits `CharacterEntered`.
+    """
+    @derive Jason.Encoder
+    defstruct [:scene_id, :beat, :name, :reason]
+  end
+
+  defmodule IntroductionDismissed do
+    @moduledoc "The author declined a proposed introduction. Omniscient-only; clears the queue item."
+    @derive Jason.Encoder
+    defstruct [:scene_id, :name]
+  end
+
   defmodule BeatOpened do
     @moduledoc """
     Pacing/structure. User & system only — never a character. `beat_ref` is the

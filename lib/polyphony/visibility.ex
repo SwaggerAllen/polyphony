@@ -31,7 +31,9 @@ defmodule Polyphony.Visibility do
     DemeanorReported,
     WorldEventOccurred,
     CharacterEntered,
-    CharacterExited
+    CharacterExited,
+    IntroductionProposed,
+    IntroductionDismissed
   }
 
   @type viewer :: :omniscient | {:character, term()}
@@ -79,6 +81,16 @@ defmodule Polyphony.Visibility do
 
       %CharacterExited{} = e ->
         member_at?.(e.scene_id, char_id, e.beat)
+
+      # Director introduction proposals are author-facing tooling, NOT scene canon:
+      # a character must never learn someone is *about to* be introduced before they
+      # formally enter (that would leak the irony). Omniscient-only — deny to any
+      # character. Explicit, not by default, so the decision is on the record.
+      %IntroductionProposed{} ->
+        false
+
+      %IntroductionDismissed{} ->
+        false
 
       # DEFAULT DENY (rule 3): Thought/PrivateState of others, scene lifecycle,
       # beat structure, generation failures, arc entries — none reach a

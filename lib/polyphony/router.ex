@@ -14,7 +14,9 @@ defmodule Polyphony.Router do
     ForkScene,
     SetControlMode,
     DeclareTurnOrder,
-    RecordWorldEvent
+    RecordWorldEvent,
+    ProposeIntroduction,
+    DismissIntroduction
   }
 
   alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, RecordPass, CloseBeat}
@@ -33,7 +35,9 @@ defmodule Polyphony.Router do
       ForkScene,
       SetControlMode,
       DeclareTurnOrder,
-      RecordWorldEvent
+      RecordWorldEvent,
+      ProposeIntroduction,
+      DismissIntroduction
     ],
     to: Scene
   )

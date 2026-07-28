@@ -30,6 +30,7 @@ defmodule Polyphony.LLM.Mock do
       :autofill -> {:ok, autofill_json(messages, opts)}
       :relationships -> {:ok, relationships_json(messages)}
       :reciprocals -> {:ok, reciprocals_json(messages, opts)}
+      :mentions -> {:ok, mentions_json(messages)}
       :field -> {:ok, summary_text(messages)}
       :gate -> {:ok, gate_answer(messages)}
       _ -> {:ok, turn_packet_json(messages)}
@@ -122,12 +123,28 @@ defmodule Polyphony.LLM.Mock do
     Jason.encode!(for i <- 0..(max(count, 1) - 1), do: lorem(seed + i * 3, 2))
   end
 
+  # A couple of lorem "mentioned character" names (Authoring.extract_mentions).
+  defp mentions_json(messages) do
+    seed = :erlang.phash2(messages)
+    Jason.encode!([capitalize(lorem(seed, 1)), capitalize(lorem(seed + 3, 1))])
+  end
+
   defp decision_json(opts) do
     cast = Keyword.get(opts, :cast_hint, []) |> Enum.map(&%{character_id: to_string(&1)})
     control = opts |> Keyword.get(:control_hint, :yield_to_user) |> to_string()
+    introductions = opts |> Keyword.get(:introduce_hint, []) |> Enum.map(&introduction/1)
 
-    Jason.encode!(%{control: control, cast: cast, world_events: [], proposal_rulings: []})
+    Jason.encode!(%{
+      control: control,
+      cast: cast,
+      world_events: [],
+      proposal_rulings: [],
+      introductions: introductions
+    })
   end
+
+  defp introduction({name, reason}), do: %{name: to_string(name), reason: to_string(reason)}
+  defp introduction(name), do: %{name: to_string(name), reason: "arrives"}
 
   # A deterministic boundary-gate judgment (§A3): yes/no by hash, so a dev run
   # exercises both released and gated conditionals.
