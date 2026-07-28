@@ -96,6 +96,8 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
     assert html =~ "Remove"
 
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+    # Drain the background reciprocal-generation the stubs trigger.
+    render_async(view)
 
     after_count = Enum.count(Library.list_for_owner(Owner.of(user)), &(&1.kind == "character"))
     assert after_count > before

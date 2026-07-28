@@ -301,6 +301,67 @@ defmodule Polyphony.Authoring.AutofillTest do
     end
   end
 
+  describe "reciprocal_roles/3" do
+    test "maps each target to its generated reciprocal, in order" do
+      array = {:ok, Jason.encode!(["former student", "wary creditor"])}
+
+      pairs = [
+        %{"target" => "Bram", "descriptor" => "estranged mentor"},
+        %{"target" => "Vane", "descriptor" => "debtor"}
+      ]
+
+      assert {:ok, %{"Bram" => "former student", "Vane" => "wary creditor"}} =
+               Autofill.reciprocal_roles(%{"name" => "Mira"}, pairs,
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: array
+               )
+    end
+
+    test "an empty pair list short-circuits without a provider call" do
+      # A provider that would crash if called proves it isn't.
+      boom = fn _ -> raise "should not be called" end
+
+      assert {:ok, %{}} =
+               Autofill.reciprocal_roles(%{"name" => "Mira"}, [],
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: boom
+               )
+    end
+
+    test "the prompt states each source→target regard and asks for the reverse" do
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.reciprocal_roles(
+            %{"name" => "Mira"},
+            [%{"target" => "Bram", "descriptor" => "estranged mentor"}],
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture
+          )
+        end)
+
+      assert msgs =~ "Mira regards Bram as \"estranged mentor\""
+      assert msgs =~ "reciprocal"
+    end
+
+    test "skips blanks and tolerates a short/long array (zips by position)" do
+      # Two pairs, one blank reciprocal and an extra ignored element.
+      array = {:ok, Jason.encode!(["", "rival", "leftover"])}
+
+      pairs = [
+        %{"target" => "Bram", "descriptor" => "mentor"},
+        %{"target" => "Vane", "descriptor" => "foe"}
+      ]
+
+      assert {:ok, %{"Vane" => "rival"} = map} =
+               Autofill.reciprocal_roles(%{}, pairs,
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: array
+               )
+
+      refute Map.has_key?(map, "Bram")
+    end
+  end
+
   describe "generate_field/4" do
     test "returns a single non-empty string for a known field" do
       current = %{"name" => "Mara", "temperament" => "guarded"}

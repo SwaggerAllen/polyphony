@@ -1,18 +1,22 @@
 defmodule PolyphonyWeb.SheetEditorLive do
   @moduledoc """
-  V4 (sheet editor): edit a character's authored sheet; promote a stub (§B8); and
-  build rich fields with AI assistance.
+  V4 (sheet editor): edit a character's authored sheet and build rich fields with AI
+  assistance. A stub (§B8) reads as *pending* and is finalized to `:full` silently on
+  save — there is no separate promote/accept step.
 
   Prose fields are edited as **blocks** (paragraphs): each block is an always-live,
   auto-growing textarea styled to read like prose until focused — long content stays
   readable instead of trapped in a scroll box. Every block can be regenerated;
   fields can be **Generated** fresh (from a brief), **Expanded** (append a paragraph
   that deepens them), or built a paragraph at a time. Generation is grounded in the
-  linked world bible and the character's relationships. Blocks are joined with blank
-  lines into the plain-string field on save, so the domain is unchanged.
+  linked world bible, the character's relationships, and (for a former stub) its
+  inherited `role`. Blocks are joined with blank lines into the plain-string field on
+  save, so the domain is unchanged.
 
   Relationships link existing characters or **stub** new ones on save; the author can
-  also ask for AI **suggestions**.
+  also ask for AI **suggestions**. When a stub is seeded, its regard back toward the
+  generating character is generated asynchronously (`Autofill.reciprocal_roles`) so
+  the two directions can be asymmetrical rather than a copied descriptor.
   """
   use PolyphonyWeb, :live_view
 
@@ -116,7 +120,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
         |> assign_characters(other_characters(user, id))
         |> assign_relationships(rels)
 
-      {:noreply, maybe_flash_stubs(socket, stubbed)}
+      socket =
+        socket
+        |> maybe_flash_stubs(stubbed)
+        |> generate_reciprocals(stubbed, name)
+
+      {:noreply, socket}
     end)
   end
 
@@ -293,6 +302,22 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def handle_async(:suggest_rel, result, socket),
     do: {:noreply, gen_failed(socket, "relationships", result)}
 
+  # Reciprocal generation is best-effort background enrichment of the just-created
+  # stubs — never surfaced as an error. On success, patch each stub's regard toward
+  # this character; on failure, the placeholder descriptor stands.
+  def handle_async(:reciprocals, {:ok, {stubs, self_name, {:ok, reciprocals}}}, socket) do
+    for %{id: id, target: target} <- stubs, r = reciprocals[target], present_string?(r) do
+      patch_stub_reciprocal(id, self_name, r)
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_async(:reciprocals, result, socket) do
+    Logger.warning("[authoring] reciprocal generation skipped: #{inspect(result)}")
+    {:noreply, socket}
+  end
+
   # ── Assign / block helpers ────────────────────────────────────────────────────
 
   # Mark the form as having unsaved edits (hides the ✓ indicator, arms the
@@ -403,6 +428,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end
   end
 
+  # Create a stub for each newly-referenced relationship target. The stub's inbound
+  # relationship (stub → self) is seeded with the source's descriptor as a placeholder
+  # and its `reciprocal` records how the source regards the stub; the asymmetrical
+  # stub-→-self regard is generated afterwards (`generate_reciprocals`). `role`
+  # describes the stub (the source's regard of them). Returns `[%{id, target,
+  # descriptor}]` for the stubs created, feeding the flash and reciprocal generation.
   defp seed_stubs(relationships, existing_names, self_name, owner, world_bible_id) do
     existing = MapSet.new(existing_names, &String.downcase/1)
     self_down = String.downcase(self_name || "")
@@ -414,27 +445,71 @@ defmodule PolyphonyWeb.SheetEditorLive do
       t == "" or String.downcase(t) == self_down or MapSet.member?(existing, String.downcase(t))
     end)
     |> Enum.map(fn target ->
+      matching = Enum.filter(relationships, &(&1.target == target))
+      role = matching |> Enum.map(& &1.descriptor) |> Enum.find("", &(&1 not in [nil, ""]))
+
       inbound =
-        for r <- relationships,
-            r.target == target,
-            do: %Relationship{target: self_name, descriptor: r.descriptor}
+        for r <- matching,
+            do: %Relationship{
+              target: self_name,
+              descriptor: r.descriptor,
+              reciprocal: r.descriptor
+            }
 
-      role = inbound |> Enum.map(& &1.descriptor) |> Enum.find("", &(&1 not in [nil, ""]))
+      entry =
+        Library.put(%{
+          owner: owner,
+          kind: "character",
+          payload: Stub.new(target, role, relationships: inbound, world_bible_id: world_bible_id)
+        })
 
-      Library.put(%{
-        owner: owner,
-        kind: "character",
-        payload: Stub.new(target, role, relationships: inbound, world_bible_id: world_bible_id)
-      })
+      %{id: entry.id, target: target, descriptor: role}
+    end)
+  end
 
-      target
+  # Best-effort async enrichment: generate each new stub's asymmetrical regard back
+  # toward the character being saved, then patch it into the stub. Runs after save so
+  # the save itself never blocks on a provider call; a failure leaves the placeholder.
+  defp generate_reciprocals(socket, [], _self_name), do: socket
+
+  defp generate_reciprocals(socket, stubs, self_name) do
+    source = current_values(socket)
+    pairs = Enum.map(stubs, &%{"target" => &1.target, "descriptor" => &1.descriptor})
+    opts = gen_opts(socket)
+
+    start_async(socket, :reciprocals, fn ->
+      {stubs, self_name, Autofill.reciprocal_roles(source, pairs, opts)}
     end)
   end
 
   defp maybe_flash_stubs(socket, []), do: socket
 
-  defp maybe_flash_stubs(socket, names),
-    do: put_flash(socket, :info, "Stubbed new character(s): #{Enum.join(names, ", ")}.")
+  defp maybe_flash_stubs(socket, stubs),
+    do:
+      put_flash(
+        socket,
+        :info,
+        "Stubbed new character(s): #{Enum.map_join(stubs, ", ", & &1.target)}."
+      )
+
+  # Set the stub's regard toward `self_name` to the generated reciprocal, keeping the
+  # source's regard of the stub as its `reciprocal`. Best-effort: a vanished/edited
+  # stub is left alone.
+  defp patch_stub_reciprocal(id, self_name, reciprocal) do
+    with entry when not is_nil(entry) <- Library.get(id),
+         %CharacterSheet{} = sheet <- Library.payload(entry) do
+      rels =
+        Enum.map(sheet.relationships || [], fn rel ->
+          if rel.target == self_name,
+            do: %Relationship{rel | descriptor: reciprocal, reciprocal: rel.reciprocal},
+            else: rel
+        end)
+
+      Library.update_payload(id, %CharacterSheet{sheet | relationships: rels})
+    end
+  end
+
+  defp present_string?(v), do: is_binary(v) and String.trim(v) != ""
 
   # The owner's other character entries — powers the relationship datalist (names)
   # and the "open this character" links (name → id).

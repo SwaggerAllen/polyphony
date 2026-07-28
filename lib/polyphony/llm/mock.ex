@@ -29,6 +29,7 @@ defmodule Polyphony.LLM.Mock do
       :sheet -> {:ok, sheet_json(messages)}
       :autofill -> {:ok, autofill_json(messages, opts)}
       :relationships -> {:ok, relationships_json(messages)}
+      :reciprocals -> {:ok, reciprocals_json(messages, opts)}
       :field -> {:ok, summary_text(messages)}
       :gate -> {:ok, gate_answer(messages)}
       _ -> {:ok, turn_packet_json(messages)}
@@ -110,6 +111,15 @@ defmodule Polyphony.LLM.Mock do
         %{target: capitalize(lorem(seed + i * 4, 1)), descriptor: lorem(seed + i * 4 + 1, 2)}
       end
     )
+  end
+
+  # `count` lorem reciprocal descriptors, in order (Authoring.reciprocal_roles). The
+  # count is passed by the caller since the Mock can't see how many pairs there are.
+  defp reciprocals_json(messages, opts) do
+    seed = :erlang.phash2(messages)
+    count = Keyword.get(opts, :count, 3)
+
+    Jason.encode!(for i <- 0..(max(count, 1) - 1), do: lorem(seed + i * 3, 2))
   end
 
   defp decision_json(opts) do

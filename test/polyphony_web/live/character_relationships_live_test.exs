@@ -10,6 +10,13 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
 
   setup :register_and_log_in_user
 
+  setup do
+    previous = Application.get_env(:polyphony, :llm)
+    Application.put_env(:polyphony, :llm, provider: Polyphony.LLM.Mock)
+    on_exit(fn -> Application.put_env(:polyphony, :llm, previous) end)
+    :ok
+  end
+
   defp character(user, sheet),
     do: Library.put(%{owner: Owner.of(user), kind: "character", payload: sheet})
 
@@ -36,27 +43,41 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     assert length(characters(user)) == 2
   end
 
-  test "a relationship to a new name stubs that character on save", %{conn: conn, user: user} do
+  test "a new name stubs on save, with an asymmetrical reciprocal regard",
+       %{conn: conn, user: user} do
     mira = character(user, %CharacterSheet{name: "Mira", status: :full})
 
     {:ok, view, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
 
     view
-    |> form("form[phx-submit=add_relationship]", %{target: "Ghost", descriptor: "haunts her"})
+    |> form("form[phx-submit=add_relationship]", %{
+      target: "Ghost",
+      descriptor: "estranged mentor"
+    })
     |> render_submit()
 
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+    # Drain the background reciprocal-generation before inspecting the stub.
+    render_async(view)
 
-    # Mira now references Ghost...
-    assert [%{target: "Ghost"}] = Library.payload(Library.get(mira.id)).relationships
+    # Mira now references Ghost as she described them...
+    assert [%{target: "Ghost", descriptor: "estranged mentor"}] =
+             Library.payload(Library.get(mira.id)).relationships
 
-    # ...and Ghost exists as a stub carrying the inbound relationship for promotion.
+    # ...and Ghost exists as a stub whose role is that regard, but whose OWN regard
+    # back toward Mira is a distinct, generated reciprocal (not a copy).
     ghost = find(user, "Ghost")
     assert ghost, "expected a stub character named Ghost"
     stub = Library.payload(ghost)
     assert stub.status == :stub
-    assert stub.role == "haunts her"
-    assert [%{target: "Mira", descriptor: "haunts her"}] = stub.relationships
+    assert stub.role == "estranged mentor"
+
+    assert [%{target: "Mira"} = back] = stub.relationships
+    # The reciprocal field records how Mira regards Ghost; the descriptor (Ghost→Mira)
+    # is the generated, asymmetrical regard — different from Mira's.
+    assert back.reciprocal == "estranged mentor"
+    assert is_binary(back.descriptor) and back.descriptor != ""
+    refute back.descriptor == "estranged mentor"
   end
 
   test "a stubbed character inherits the generating character's world", %{conn: conn, user: user} do
@@ -77,6 +98,7 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     |> render_submit()
 
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+    render_async(view)
 
     ghost = find(user, "Ghost")
     assert ghost, "expected a stub character named Ghost"
@@ -92,7 +114,9 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     |> render_submit()
 
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+    render_async(view)
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+    render_async(view)
 
     assert Enum.count(characters(user), &(Library.payload(&1).name == "Ghost")) == 1
   end

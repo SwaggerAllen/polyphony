@@ -192,6 +192,74 @@ defmodule Polyphony.Authoring.Autofill do
     end
   end
 
+  @doc """
+  Generate the **reciprocal** of each relationship — how the *other* person regards
+  the source character, given how the source regards them. Relationships are usually
+  asymmetrical (a "mentor" is regarded back as a "student"), so a stub seeded from a
+  source character's relationship needs its own regard generated, not the source's
+  descriptor copied.
+
+  `source` is the source character's fields (for context); `pairs` is a list of
+  `%{"target" => name, "descriptor" => how_source_regards_them}`. Returns
+  `{:ok, %{target => reciprocal_descriptor}}` — only the pairs that came back
+  non-empty. An empty `pairs` list short-circuits without a provider call.
+  """
+  @spec reciprocal_roles(map(), [map()], keyword()) :: {:ok, map()} | {:error, term()}
+  def reciprocal_roles(_source, [], _opts), do: {:ok, %{}}
+
+  def reciprocal_roles(source, pairs, opts) do
+    source = stringify(source)
+    self_name = to_string(source["name"] || "this character")
+    listed = Enum.map_join(Enum.with_index(pairs, 1), "\n", &pair_line(&1, self_name))
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author with character relationships. For each numbered pair " <>
+            "you are told how #{self_name} regards another person. Write how THAT person " <>
+            "would regard #{self_name} in return — the reciprocal. It is usually NOT the " <>
+            "same (a \"mentor\" is regarded back as a \"student\"; a \"captor\" as a " <>
+            "\"prisoner\"). Return ONLY a JSON array of short strings — one reciprocal per " <>
+            "pair, in the SAME order, no names, no keys."
+      },
+      %{
+        role: "user",
+        content:
+          source_block(source) <>
+            "Pairs (how #{self_name} regards each person):\n" <>
+            listed <> "\n\nReturn the JSON array."
+      }
+    ]
+
+    call = [response: :reciprocals, count: length(pairs)]
+
+    with {:ok, text} <- Polyphony.LLM.call(messages, call ++ meter_opts(opts)),
+         {:ok, list} <- decode_array(text) do
+      recips =
+        pairs
+        |> Enum.zip(list ++ List.duplicate(nil, max(length(pairs) - length(list), 0)))
+        |> Enum.reduce(%{}, fn {pair, raw}, acc ->
+          case String.trim(to_string(raw || "")) do
+            "" -> acc
+            r -> Map.put(acc, to_string(pair["target"]), r)
+          end
+        end)
+
+      {:ok, recips}
+    end
+  end
+
+  defp pair_line({pair, i}, self_name),
+    do: "#{i}. #{self_name} regards #{pair["target"]} as \"#{pair["descriptor"]}\"."
+
+  defp source_block(source) do
+    case for(f <- ~w(name premise temperament), v = source[f], not blank?(v), do: "#{f}: #{v}") do
+      [] -> ""
+      lines -> "The character:\n" <> Enum.join(lines, "\n") <> "\n\n"
+    end
+  end
+
   defp normalize_name(name), do: name |> to_string() |> String.trim() |> String.downcase()
 
   defp normalize_existing(list) do
