@@ -284,7 +284,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
     <h1>World bible</h1>
 
     <div class="card gen-brief">
-      <form phx-submit="generate_all">
+      <form id="bible-generate-all" phx-submit="generate_all">
         <label>Describe the world — we'll fill in every field <span class="faint">(builds on anything you've already written)</span></label>
         <textarea
           name="brief"

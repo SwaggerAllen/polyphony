@@ -706,7 +706,7 @@ defmodule PolyphonyWeb.PlayLive do
           <li :for={c <- @roster} class="row rel-item">
             <span><%= c %></span>
             <span class="spacer"></span>
-            <form phx-change="set_control">
+            <form id={"control-#{c}"} phx-change="set_control">
               <input type="hidden" name="character" value={c} />
               <select name="control" style="width:auto;">
                 <option value="autonomous" selected={control_of(@control_modes, c) == "autonomous"}>Automated</option>
@@ -738,6 +738,7 @@ defmodule PolyphonyWeb.PlayLive do
 
             <form
               :if={@viewer == :omniscient and block.type == :turn and @editing == block.packet_id}
+              id={"edit-#{block.packet_id}"}
               phx-submit="save_edit"
               class="turn-edit"
             >
@@ -788,7 +789,7 @@ defmodule PolyphonyWeb.PlayLive do
 
       <div class="composer card">
         <.waiting :if={@waiting == :director} state="director" label="The cast is responding…" />
-        <form phx-submit="say">
+        <form id="say-form" phx-submit="say">
           <textarea
             :if={@speaker}
             id="say-input"

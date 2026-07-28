@@ -102,7 +102,7 @@ defmodule PolyphonyWeb.AdminLive do
     <div class="card">
       <h3>Admins</h3>
       <ul><li :for={a <- @admins}>@<%= a.username %> <span class="faint">· <%= a.role %></span></li></ul>
-      <form phx-submit="promote" class="row">
+      <form id="admin-promote" phx-submit="promote" class="row">
         <input type="text" name="username" placeholder="username to promote" />
         <button class="btn ghost sm" type="submit">Promote to admin</button>
       </form>
@@ -120,7 +120,7 @@ defmodule PolyphonyWeb.AdminLive do
       </div>
       <div class="row" style="margin-top:.5rem;gap:.4rem;flex-wrap:wrap;">
         <button class="btn ghost sm" phx-click="view" phx-value-id={r.id}>View in context</button>
-        <form phx-submit="take_down" class="row" style="gap:.3rem;">
+        <form id={"take-down-#{r.id}"} phx-submit="take_down" class="row" style="gap:.3rem;">
           <input type="hidden" name="rid" value={r.id} />
           <input type="text" name="reason" placeholder="takedown reason" style="width:12rem;" />
           <button class="btn danger sm" type="submit">Take down</button>

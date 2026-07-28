@@ -673,7 +673,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
         </p>
       </form>
 
-      <form phx-submit="generate_all">
+      <form id="sheet-generate-all" phx-submit="generate_all">
         <label>Describe the character — we'll fill in every field <span class="faint">(builds on anything you've already written)</span></label>
         <textarea
           name="brief"
