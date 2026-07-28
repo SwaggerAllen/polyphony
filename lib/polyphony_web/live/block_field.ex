@@ -20,7 +20,10 @@ defmodule PolyphonyWeb.BlockField do
   def to_blocks(nil), do: [""]
 
   def to_blocks(str) when is_binary(str) do
-    case str |> String.split(~r/\n{2,}/) |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == "")) do
+    case str
+         |> String.split(~r/\n{2,}/)
+         |> Enum.map(&String.trim/1)
+         |> Enum.reject(&(&1 == "")) do
       [] -> [""]
       list -> list
     end
@@ -29,6 +32,26 @@ defmodule PolyphonyWeb.BlockField do
   @doc "Join paragraph blocks back into the stored field string (blank-line separated)."
   def join_blocks(blocks),
     do: blocks |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n")
+
+  @doc """
+  Blocks for a **line-list** field (rules, starting canon), one block per item.
+  Accepts the stored list, a newline string (e.g. from generation), or nil.
+  """
+  def to_line_blocks(list) when is_list(list),
+    do: list |> Enum.map(&to_string/1) |> Enum.reject(&(String.trim(&1) == "")) |> ensure_one()
+
+  def to_line_blocks(str) when is_binary(str),
+    do:
+      str
+      |> String.split("\n")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> ensure_one()
+
+  def to_line_blocks(nil), do: [""]
+
+  @doc "Line-list blocks back into the stored list (non-empty, trimmed)."
+  def block_list(blocks), do: blocks |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
 
   @doc "The blocks a `b_<field>[]` form param carries (falling back to the current ones)."
   def param_blocks(nil, fallback), do: fallback
@@ -47,11 +70,12 @@ defmodule PolyphonyWeb.BlockField do
   @doc "Is `key` currently generating? (`generating` is a MapSet of in-flight keys.)"
   def busy?(generating, key), do: MapSet.member?(generating, key)
 
-  attr :field, :string, required: true
-  attr :label, :string, required: true
-  attr :hint, :string, default: nil
-  attr :blocks, :list, required: true
-  attr :generating, :any, required: true
+  attr(:field, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:hint, :string, default: nil)
+  attr(:unit, :string, default: "paragraph")
+  attr(:blocks, :list, required: true)
+  attr(:generating, :any, required: true)
 
   def block_field(assigns) do
     ~H"""
@@ -75,7 +99,7 @@ defmodule PolyphonyWeb.BlockField do
           phx-click="expand_field"
           phx-value-field={@field}
           disabled={busy?(@generating, "#{@field}:expand")}
-          title={"Add a paragraph that deepens #{@label}"}
+          title={"Add another #{@unit} to #{@label}"}
         >
           <%= if busy?(@generating, "#{@field}:expand"), do: "➕ …", else: "➕ Expand" %>
         </button>
@@ -89,7 +113,7 @@ defmodule PolyphonyWeb.BlockField do
           rows="1"
           phx-hook="AutoGrow"
           phx-debounce="blur"
-          placeholder="Write a paragraph…"
+          placeholder={"New #{@unit}…"}
         ><%= b %></textarea>
         <div class="para-controls">
           <button
@@ -99,7 +123,7 @@ defmodule PolyphonyWeb.BlockField do
             phx-value-field={@field}
             phx-value-index={i}
             disabled={busy?(@generating, "#{@field}:#{i}")}
-            title="Rewrite this paragraph, richer"
+            title={"Rewrite this #{@unit}, richer"}
           >
             <%= if busy?(@generating, "#{@field}:#{i}"), do: "…", else: "✨" %>
           </button>
@@ -109,7 +133,7 @@ defmodule PolyphonyWeb.BlockField do
             phx-click="remove_block"
             phx-value-field={@field}
             phx-value-index={i}
-            title="Remove paragraph"
+            title={"Remove #{@unit}"}
           >
             ✕
           </button>
@@ -117,7 +141,7 @@ defmodule PolyphonyWeb.BlockField do
       </div>
 
       <button type="button" class="btn xs ghost add-para" phx-click="add_block" phx-value-field={@field}>
-        + paragraph
+        + <%= @unit %>
       </button>
     </div>
     """

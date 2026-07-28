@@ -136,9 +136,9 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       |> render_submit()
 
       html = render_async(view)
-      # A prose field (setting) fills as a block, and the list field (rules) fills too.
+      # A prose field (setting) and a list field (rules) both fill as blocks.
       refute html =~ ~r/name="b_setting\[\]"[^>]*>\s*<\/textarea>/
-      refute html =~ ~r/<textarea name="rules"[^>]*>\s*<\/textarea>/
+      refute html =~ ~r/name="b_rules\[\]"[^>]*>\s*<\/textarea>/
     end
   end
 end
