@@ -20,6 +20,21 @@ defmodule PolyphonyWeb.CampaignCastLiveTest do
     Library.put(%{owner: Owner.of(user), kind: "campaign", payload: payload})
   end
 
+  test "a blank campaign can be named from its overview", %{conn: conn, user: user} do
+    camp = campaign(user, %{name: ""})
+
+    {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}")
+    assert html =~ "Untitled campaign"
+
+    view
+    |> form("form[phx-change=update_details]", %{name: "The Long Con", premise: "a heist"})
+    |> render_change()
+
+    payload = Library.payload(Library.get(camp.id))
+    assert payload[:name] == "The Long Con"
+    assert payload[:premise] == "a heist"
+  end
+
   test "a character can be added to and removed from the cast", %{conn: conn, user: user} do
     character(user, %CharacterSheet{name: "Mira", status: :full})
     camp = campaign(user, %{})

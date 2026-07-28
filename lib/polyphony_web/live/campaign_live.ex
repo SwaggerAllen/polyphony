@@ -85,6 +85,18 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
+  def handle_event("update_details", params, socket) do
+    safe(socket, fn ->
+      payload =
+        socket.assigns.payload
+        |> Map.put(:name, params["name"] || "")
+        |> Map.put(:premise, params["premise"] || "")
+
+      {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+      {:noreply, socket |> assign(entry: entry) |> load()}
+    end)
+  end
+
   def handle_event("start_scene", _params, socket) do
     safe(socket, fn ->
       %{entry: entry, payload: payload, cast: cast} = socket.assigns
@@ -151,8 +163,16 @@ defmodule PolyphonyWeb.CampaignLive do
 
   def render(assigns) do
     ~H"""
-    <h1><%= @payload[:name] || "Campaign" %></h1>
-    <p class="dim"><%= @payload[:premise] %></p>
+    <h1><%= if @payload[:name] in [nil, ""], do: "Untitled campaign", else: @payload[:name] %></h1>
+
+    <div class="card">
+      <form id="campaign-details" phx-change="update_details">
+        <label class="gen-label"><span>Name</span></label>
+        <input type="text" name="name" value={@payload[:name]} placeholder="Name this campaign…" phx-debounce="blur" />
+        <label>Premise <span class="faint">(what the story is about)</span></label>
+        <textarea name="premise" phx-debounce="blur"><%= @payload[:premise] %></textarea>
+      </form>
+    </div>
 
     <div class="card">
       <div class="row">
