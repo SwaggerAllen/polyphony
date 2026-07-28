@@ -84,4 +84,17 @@ defmodule PolyphonyWeb.WorldBlocksLiveTest do
     refute html =~ ">placeholder rule</textarea>"
     assert length(Regex.scan(~r/name="b_rules\[\]"/, html)) == 1
   end
+
+  test "navigation is guarded only once there are unsaved edits", %{conn: conn, user: user} do
+    entry = world(user, %WorldBible{name: "W", rules: [], starting_canon: []})
+    {:ok, view, html} = live(conn, ~p"/authoring/bible/#{entry.id}")
+
+    refute html =~ "data-confirm"
+
+    view |> element("button[phx-click=add_block][phx-value-field=rules]") |> render_click()
+    assert render(view) =~ "data-confirm=\"You have unsaved changes"
+
+    view |> form("form[phx-submit=save]", %{name: "W"}) |> render_submit()
+    refute render(view) =~ "data-confirm"
+  end
 end

@@ -42,6 +42,22 @@ Hooks.AutoGrow = {
   },
 }
 
+// Confirm before following a link that opts in via data-confirm (used to guard
+// navigation away from an editor with unsaved changes). Capture phase so it runs
+// before the browser navigates; the attribute is only rendered when there's
+// something to lose, so a clean page never prompts.
+window.addEventListener(
+  "click",
+  (e) => {
+    const link = e.target.closest && e.target.closest("a[data-confirm]")
+    if (link && !window.confirm(link.getAttribute("data-confirm"))) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+  },
+  true,
+)
+
 const liveSocket = new LiveSocket("/live", Socket, {
   params: { _csrf_token: csrfToken },
   hooks: Hooks,

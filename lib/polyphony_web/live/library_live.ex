@@ -10,27 +10,46 @@ defmodule PolyphonyWeb.LibraryLive do
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
 
   def mount(_params, _session, socket) do
-    {:ok, socket |> assign(page_title: "Library", filter: "all", query: "") |> load()}
+    {:ok,
+     socket |> assign(page_title: "Library", filter: "all", query: "", world: "all") |> load()}
   end
 
   defp load(socket) do
     owner = Owner.of(socket.assigns.current_user)
     entries = Library.list_for_owner(owner)
-    socket |> assign(owner: owner, entries: entries) |> assign_shown()
+
+    worlds =
+      for e <- entries, e.kind == "world_bible", do: {to_string(e.id), entry_name(e)}
+
+    socket |> assign(owner: owner, entries: entries, worlds: worlds) |> assign_shown()
   end
 
-  # The visible slice: filter the loaded owned entries by kind, and a
-  # case-insensitive substring match on the (decoded) name.
+  # The visible slice: filter the loaded owned entries by kind, by the world they
+  # belong to, and a case-insensitive substring match on the (decoded) name.
   defp assign_shown(socket) do
-    %{entries: entries, filter: filter, query: query} = socket.assigns
+    %{entries: entries, filter: filter, query: query, world: world} = socket.assigns
     q = query |> to_string() |> String.trim() |> String.downcase()
 
     shown =
       entries
       |> Enum.filter(fn e -> filter in ["all", e.kind] end)
+      |> Enum.filter(fn e -> in_world?(e, world) end)
       |> Enum.filter(fn e -> q == "" or String.contains?(String.downcase(entry_name(e)), q) end)
 
     assign(socket, :shown, shown)
+  end
+
+  # Does an entry belong to the selected world? "all" matches everything. The world
+  # bible itself matches its own id; characters match via `world_bible_id`, campaigns
+  # via `bible_id` (both reference the world bible entry's id). Anything unassociated
+  # (or a kind with no world link) is hidden when a specific world is chosen.
+  defp in_world?(_e, "all"), do: true
+  defp in_world?(%{kind: "world_bible", id: id}, world), do: to_string(id) == world
+
+  defp in_world?(e, world) do
+    payload = Library.payload(e)
+    wid = Map.get(payload, :world_bible_id) || Map.get(payload, :bible_id)
+    wid != nil and to_string(wid) == world
   end
 
   def handle_event("new", %{"kind" => kind, "name" => name}, socket) when name != "" do
@@ -47,7 +66,11 @@ defmodule PolyphonyWeb.LibraryLive do
   def handle_event("filter", params, socket) do
     {:noreply,
      socket
-     |> assign(filter: params["kind"] || "all", query: params["q"] || "")
+     |> assign(
+       filter: params["kind"] || "all",
+       query: params["q"] || "",
+       world: params["world"] || "all"
+     )
      |> assign_shown()}
   end
 
@@ -107,10 +130,14 @@ defmodule PolyphonyWeb.LibraryLive do
         <option value="world_bible" selected={@filter == "world_bible"}>World bibles</option>
         <option value="campaign" selected={@filter == "campaign"}>Campaigns</option>
       </select>
+      <select :if={@worlds != []} name="world" style="width:auto;">
+        <option value="all" selected={@world == "all"}>All worlds</option>
+        <option :for={{id, name} <- @worlds} value={id} selected={@world == id}><%= name %></option>
+      </select>
       <input type="text" name="q" value={@query} placeholder="Search by name…" style="flex:1;" phx-debounce="200" />
     </form>
 
-    <div :if={@entries != [] and @shown == []} class="list-empty">No matching items. Try a different type or search.</div>
+    <div :if={@entries != [] and @shown == []} class="list-empty">No matching items. Try a different type, world, or search.</div>
 
     <div :for={e <- @shown} class="card">
       <div class="row">

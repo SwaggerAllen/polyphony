@@ -114,4 +114,51 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
 
     assert render(view) =~ ~s(href="/authoring/character/#{bram.id}")
   end
+
+  test "promoting a stub generates a proposed sheet (async, with feedback)",
+       %{conn: conn, user: user} do
+    stub = Polyphony.Authoring.Stub.new("Ghost", "haunts her")
+    entry = Library.put(%{owner: Owner.of(user), kind: "character", payload: stub})
+
+    {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+    # The click gives immediate feedback (busy button) rather than freezing.
+    busy = view |> element("button[phx-click=promote]") |> render_click()
+    assert busy =~ "Promoting"
+
+    # Once generation resolves, the sheet is proposed and stored.
+    done = render_async(view)
+    assert done =~ "proposed"
+    assert Library.payload(Library.get(entry.id)).status == :proposed
+  end
+
+  test "navigation is unguarded until there are unsaved edits", %{conn: conn, user: user} do
+    entry = character(user, %CharacterSheet{name: "Mira", status: :full})
+    {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+    # A freshly loaded sheet has nothing to lose — no confirmation armed.
+    refute html =~ "data-confirm"
+
+    # Any edit arms the leave-confirmation on the nav links.
+    view
+    |> element("button[phx-click=add_block][phx-value-field=backstory]")
+    |> render_click()
+
+    assert render(view) =~ "data-confirm=\"You have unsaved changes"
+  end
+
+  test "saving clears the unsaved-changes guard", %{conn: conn, user: user} do
+    entry = character(user, %CharacterSheet{name: "Mira", status: :full})
+    {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+    view
+    |> element("button[phx-click=add_block][phx-value-field=backstory]")
+    |> render_click()
+
+    assert render(view) =~ "data-confirm"
+
+    view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+
+    refute render(view) =~ "data-confirm"
+  end
 end

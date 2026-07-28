@@ -55,6 +55,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
          blocks: blocks_from_sheet(sheet),
          generating: MapSet.new(),
          saved: false,
+         dirty: false,
          world_entries: worlds,
          worlds: world_options(worlds),
          world_id: world_id,
@@ -72,7 +73,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # ── Editing the sheet form ──────────────────────────────────────────────────
 
   def handle_event("sync", params, socket) do
-    {:noreply, socket |> assign_form(params) |> assign(:saved, false)}
+    {:noreply, socket |> assign_form(params) |> touch()}
   end
 
   def handle_event("save", params, socket) do
@@ -82,7 +83,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
       %{name: name, blocks: blocks, relationships: rels} = socket.assigns
 
       existing = char_names(other_characters(user, id))
-      stubbed = seed_stubs(rels, existing, name, Owner.of(user))
+      world_bible_id = world_id_int(socket.assigns.world_id)
+      stubbed = seed_stubs(rels, existing, name, Owner.of(user), world_bible_id)
 
       sheet = %CharacterSheet{
         socket.assigns.sheet
@@ -105,7 +107,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
           sheet: sheet,
           name: sheet.name || "",
           blocks: blocks_from_sheet(sheet),
-          saved: true
+          saved: true,
+          dirty: false
         )
         |> assign_characters(other_characters(user, id))
         |> assign_relationships(rels)
@@ -128,7 +131,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
     {:noreply,
      socket
      |> assign(world_id: id, world_context: world_context_for(socket.assigns.world_entries, id))
-     |> assign(:saved, false)}
+     |> touch()}
   end
 
   # ── Generation ──────────────────────────────────────────────────────────────
@@ -200,7 +203,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
           {:noreply,
            socket
            |> assign_relationships(socket.assigns.relationships ++ [rel])
-           |> assign(:saved, false)}
+           |> touch()}
       end
     end)
   end
@@ -211,7 +214,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
     {:noreply,
      socket
      |> assign_relationships(List.delete_at(socket.assigns.relationships, idx))
-     |> assign(:saved, false)}
+     |> touch()}
   end
 
   def handle_event("suggest_relationships", _params, socket) do
@@ -230,18 +233,15 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   def handle_event("promote", _params, socket) do
     safe(socket, fn ->
-      case Stub.promote(socket.assigns.sheet) do
-        {:ok, promoted} ->
-          {:ok, entry} = Library.update_payload(socket.assigns.entry.id, promoted)
+      sheet = socket.assigns.sheet
+      opts = promote_opts(socket)
 
-          {:noreply,
-           socket
-           |> put_flash(:info, "Promoted — review and accept below.")
-           |> reload(entry, promoted)}
-
-        {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Could not generate a sheet.")}
-      end
+      # Generation is a real (possibly slow) provider call — run it async with a
+      # busy button so the click gives immediate feedback instead of a frozen page.
+      {:noreply,
+       socket
+       |> mark("promote", true)
+       |> start_async(:promote, fn -> Stub.promote(sheet, opts) end)}
     end)
   end
 
@@ -266,13 +266,13 @@ defmodule PolyphonyWeb.SheetEditorLive do
       end)
 
     name = if values["name"] in [nil, ""], do: socket.assigns.name, else: values["name"]
-    {:noreply, socket |> assign(name: name, blocks: blocks) |> mark("all", false)}
+    {:noreply, socket |> assign(name: name, blocks: blocks) |> mark("all", false) |> touch()}
   end
 
   def handle_async(:gen_all, result, socket), do: {:noreply, gen_failed(socket, "all", result)}
 
   def handle_async({:gen_field, f}, {:ok, {:ok, value}}, socket) do
-    {:noreply, socket |> put_blocks(f, to_blocks(value)) |> mark(f, false)}
+    {:noreply, socket |> put_blocks(f, to_blocks(value)) |> mark(f, false) |> touch()}
   end
 
   def handle_async({:gen_field, f}, result, socket),
@@ -280,7 +280,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   def handle_async({:expand, f}, {:ok, {:ok, para}}, socket) do
     blocks = append_paragraph(socket.assigns.blocks[f], para)
-    {:noreply, socket |> put_blocks(f, blocks) |> mark("#{f}:expand", false)}
+    {:noreply, socket |> put_blocks(f, blocks) |> mark("#{f}:expand", false) |> touch()}
   end
 
   def handle_async({:expand, f}, result, socket),
@@ -288,7 +288,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   def handle_async({:gen_block, f, idx}, {:ok, {:ok, para}}, socket) do
     blocks = List.replace_at(socket.assigns.blocks[f], idx, para)
-    {:noreply, socket |> put_blocks(f, blocks) |> mark("#{f}:#{idx}", false)}
+    {:noreply, socket |> put_blocks(f, blocks) |> mark("#{f}:#{idx}", false) |> touch()}
   end
 
   def handle_async({:gen_block, f, idx}, result, socket),
@@ -310,13 +310,35 @@ defmodule PolyphonyWeb.SheetEditorLive do
         {:noreply,
          socket
          |> assign_relationships(socket.assigns.relationships ++ rels)
-         |> assign(:saved, false)
+         |> touch()
          |> put_flash(:info, "Added #{length(rels)} suggested relationship(s). Review and Save.")}
     end
   end
 
   def handle_async(:suggest_rel, result, socket),
     do: {:noreply, gen_failed(socket, "relationships", result)}
+
+  def handle_async(:promote, {:ok, {:ok, promoted}}, socket) do
+    safe(socket, fn ->
+      {:ok, entry} = Library.update_payload(socket.assigns.entry.id, promoted)
+
+      {:noreply,
+       socket
+       |> mark("promote", false)
+       |> put_flash(:info, "Promoted — review and accept below.")
+       |> reload(entry, promoted)}
+    end)
+  end
+
+  def handle_async(:promote, {:ok, {:error, _reason}}, socket) do
+    {:noreply,
+     socket
+     |> mark("promote", false)
+     |> put_flash(:error, "Could not generate a sheet. Try again.")}
+  end
+
+  def handle_async(:promote, result, socket),
+    do: {:noreply, gen_failed(socket, "promote", result)}
 
   # ── Assign / block helpers ────────────────────────────────────────────────────
 
@@ -326,9 +348,14 @@ defmodule PolyphonyWeb.SheetEditorLive do
       sheet: sheet,
       name: sheet.name || "",
       blocks: blocks_from_sheet(sheet),
-      saved: false
+      saved: false,
+      dirty: false
     )
   end
+
+  # Mark the form as having unsaved edits (hides the ✓ indicator, arms the
+  # leave-confirmation on navigation links).
+  defp touch(socket), do: assign(socket, saved: false, dirty: true)
 
   defp assign_form(socket, params) do
     name = params["name"] || socket.assigns.name
@@ -342,7 +369,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   end
 
   defp update_blocks(socket, field, fun),
-    do: socket |> put_blocks(field, fun.(socket.assigns.blocks[field])) |> assign(:saved, false)
+    do: socket |> put_blocks(field, fun.(socket.assigns.blocks[field])) |> touch()
 
   defp put_blocks(socket, field, blocks),
     do: assign(socket, :blocks, Map.put(socket.assigns.blocks, field, ensure_one(blocks)))
@@ -376,6 +403,24 @@ defmodule PolyphonyWeb.SheetEditorLive do
     case socket.assigns.current_user do
       %{id: id} -> [user_id: id]
       _ -> []
+    end
+  end
+
+  # Stub promotion: ground generation in the (inherited) world bible, and attribute
+  # the metered call to the author like every other generation here.
+  defp promote_opts(socket) do
+    [bible: bible_text(socket.assigns.world_context), usage_kind: "authoring"] ++
+      user_attribution(socket)
+  end
+
+  defp bible_text(nil), do: "(unspecified)"
+
+  defp bible_text(world) when is_map(world) do
+    case [world["name"], world["setting"], world["tone"]]
+         |> Enum.reject(&(&1 in [nil, ""]))
+         |> Enum.join("\n\n") do
+      "" -> "(unspecified)"
+      text -> text
     end
   end
 
@@ -430,7 +475,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end
   end
 
-  defp seed_stubs(relationships, existing_names, self_name, owner) do
+  defp seed_stubs(relationships, existing_names, self_name, owner, world_bible_id) do
     existing = MapSet.new(existing_names, &String.downcase/1)
     self_down = String.downcase(self_name || "")
 
@@ -451,7 +496,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
       Library.put(%{
         owner: owner,
         kind: "character",
-        payload: Stub.new(target, role, relationships: inbound)
+        payload: Stub.new(target, role, relationships: inbound, world_bible_id: world_bible_id)
       })
 
       target
@@ -533,15 +578,23 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # (or already-saved-stub) character, otherwise plain text.
   attr(:target, :string, required: true)
   attr(:links, :map, required: true)
+  attr(:confirm, :string, default: nil)
 
   defp rel_target(assigns) do
     assigns = assign(assigns, :id, Map.get(assigns.links, String.downcase(assigns.target)))
 
     ~H"""
-    <a :if={@id} href={~p"/authoring/character/#{@id}"}><strong><%= @target %></strong></a>
+    <a :if={@id} href={~p"/authoring/character/#{@id}"} data-confirm={@confirm}>
+      <strong><%= @target %></strong>
+    </a>
     <strong :if={is_nil(@id)}><%= @target %></strong>
     """
   end
+
+  # The leave-confirmation message when there are unsaved edits, else nil (which
+  # renders no data-confirm attribute, so a clean page never prompts).
+  defp leave_confirm(true), do: "You have unsaved changes. Leave without saving?"
+  defp leave_confirm(false), do: nil
 
   def render(assigns) do
     ~H"""
@@ -554,7 +607,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
     <div :if={@sheet.status == :stub} class="card">
       <p class="dim">This is a stub (name + role). Promote it to generate a full sheet behind a review gate.</p>
-      <button class="btn" phx-click="promote">Promote to full sheet</button>
+      <button class="btn" phx-click="promote" disabled={busy?(@generating, "promote")}>
+        <%= if busy?(@generating, "promote"), do: "✨ Promoting…", else: "Promote to full sheet" %>
+      </button>
     </div>
     <div :if={@sheet.status == :proposed} class="card">
       <p class="dim">Generated draft below. Accept to make it usable.</p>
@@ -569,7 +624,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
           <option :for={{id, name} <- @worlds} value={id} selected={@world_id == id}><%= name %></option>
         </select>
         <p :if={@worlds == []} class="faint">
-          No world bibles yet — create one in the <a href={~p"/library"}>Library</a> to ground generation.
+          No world bibles yet — create one in the <a href={~p"/library"} data-confirm={leave_confirm(@dirty)}>Library</a> to ground generation.
         </p>
       </form>
 
@@ -603,7 +658,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
           <button class="btn" type="submit">Save</button>
           <span :if={@saved} class="saved-note" role="status">✓ Saved</span>
           <span class="spacer"></span>
-          <a class="btn ghost" href={~p"/library"}>Back to library</a>
+          <a class="btn ghost" href={~p"/library"} data-confirm={leave_confirm(@dirty)}>Back to library</a>
         </div>
       </form>
     </div>
@@ -630,7 +685,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
       <div :if={@relationships == []} class="faint">No relationships yet.</div>
       <ul class="rel-list">
         <li :for={{r, i} <- Enum.with_index(@relationships)} class="row rel-item">
-          <span>→ <.rel_target target={r.target} links={@char_links} /><span :if={r.descriptor not in [nil, ""]}> — <%= r.descriptor %></span></span>
+          <span>→ <.rel_target target={r.target} links={@char_links} confirm={leave_confirm(@dirty)} /><span :if={r.descriptor not in [nil, ""]}> — <%= r.descriptor %></span></span>
           <span class="spacer"></span>
           <button type="button" class="btn danger sm" phx-click="remove_relationship" phx-value-index={i}>Remove</button>
         </li>

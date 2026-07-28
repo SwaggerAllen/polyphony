@@ -20,14 +20,19 @@ defmodule Polyphony.Authoring.Stub do
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.LLM.Provider
 
-  @doc "Create a stub: a name + one-line role (+ optional inbound `:relationships`)."
+  @doc """
+  Create a stub: a name + one-line role (+ optional inbound `:relationships` and a
+  `:world_bible_id` inherited from the character that spawned it, so the stub already
+  belongs to the right setting).
+  """
   @spec new(String.t(), String.t(), keyword()) :: CharacterSheet.t()
   def new(name, role, opts \\ []) do
     %CharacterSheet{
       name: name,
       role: role,
       status: :stub,
-      relationships: Keyword.get(opts, :relationships, [])
+      relationships: Keyword.get(opts, :relationships, []),
+      world_bible_id: Keyword.get(opts, :world_bible_id)
     }
   end
 
