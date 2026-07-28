@@ -25,7 +25,7 @@ defmodule PolyphonyWeb.PlayLive do
   }
 
   alias Polyphony.Context.Store
-  alias Polyphony.Director.BeatOps
+  alias Polyphony.Director.{BeatOps, SceneBrief}
 
   alias Polyphony.Commands.{
     CommitPacket,
@@ -263,21 +263,41 @@ defmodule PolyphonyWeb.PlayLive do
     scene_id = socket.assigns.scene_id
     beat = max(socket.assigns.next_beat - 1, 1)
     :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: name, beat: beat})
-    seed_context(scene_id, name, sheet, socket.assigns.premise)
+    seed_context(scene_id, name, sheet, socket.assigns.premise, campaign_world_bible(socket))
+    # Fold the newcomer into the Director's omniscient brief so the next beat knows them.
+    SceneBrief.note_character(scene_id, sheet)
     socket |> reload() |> put_flash(:info, "#{name} joins the scene.")
   end
 
   defp admit(socket, name, _other),
     do: put_flash(socket, :error, "#{name} has no usable sheet yet.")
 
-  defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise) do
+  defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible) do
     ctx =
-      Context.materialize(scene_id: scene_id, character_id: name, sheet: sheet, premise: premise)
+      Context.materialize(
+        scene_id: scene_id,
+        character_id: name,
+        sheet: sheet,
+        premise: premise,
+        world_bible: bible
+      )
 
     Store.put(scene_id, name, ctx)
   end
 
-  defp seed_context(_scene_id, _name, _other, _premise), do: :ok
+  defp seed_context(_scene_id, _name, _other, _premise, _bible), do: :ok
+
+  # The scene's world bible payload (a `%WorldBible{}`), or nil — for framing both
+  # the admitted character's context and the Director's omniscient brief.
+  defp campaign_world_bible(socket) do
+    case campaign_world_id(socket) do
+      nil -> nil
+      wid -> Library.get(wid) |> maybe_payload()
+    end
+  end
+
+  defp maybe_payload(nil), do: nil
+  defp maybe_payload(entry), do: Library.payload(entry)
 
   # The world bible id behind this scene's campaign, for stubbing new introductions
   # into the right setting. Nil if the scene has no campaign or world.

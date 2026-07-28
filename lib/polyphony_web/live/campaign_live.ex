@@ -7,9 +7,10 @@ defmodule PolyphonyWeb.CampaignLive do
   use PolyphonyWeb, :live_view
 
   alias Polyphony.{Library, Owner, Context, App}
-  alias Polyphony.Context.Store
+  alias Polyphony.Context.{Store, PgvectorRetriever}
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Authoring.CharacterSheet
+  alias Polyphony.Director.SceneBrief
 
   def mount(%{"id" => id}, _session, socket) do
     entry = Library.get(id)
@@ -113,6 +114,7 @@ defmodule PolyphonyWeb.CampaignLive do
       else
         scene_id = "sc-" <> Integer.to_string(System.unique_integer([:positive]))
         premise = payload[:premise] || ""
+        bible = payload[:bible_id] && Library.get(payload[:bible_id]) |> maybe_payload()
 
         :ok =
           App.dispatch(%OpenScene{
@@ -122,12 +124,22 @@ defmodule PolyphonyWeb.CampaignLive do
             opened_beat: 0
           })
 
-        for c <- ready do
-          sheet = Library.payload(c)
+        sheets = Enum.map(ready, &Library.payload/1)
+
+        for {c, sheet} <- Enum.zip(ready, sheets) do
           name = char_name(c)
           :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: name, beat: 1})
-          seed_context(scene_id, name, sheet, premise)
+          seed_context(scene_id, name, sheet, premise, bible)
         end
+
+        # The Director's omniscient brief: the world, the premise, the whole cast, and
+        # the cross-scene omniscient summaries (pgvector — no-ops without egress).
+        SceneBrief.materialize(scene_id,
+          world_bible: bible,
+          premise: premise,
+          roster: sheets,
+          retriever: PgvectorRetriever
+        )
 
         Library.update_payload(entry.id, %{payload | scenes: [scene_id | socket.assigns.scenes]})
 
@@ -162,14 +174,20 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
-  defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise) do
+  defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible) do
     ctx =
-      Context.materialize(scene_id: scene_id, character_id: name, sheet: sheet, premise: premise)
+      Context.materialize(
+        scene_id: scene_id,
+        character_id: name,
+        sheet: sheet,
+        premise: premise,
+        world_bible: bible
+      )
 
     Store.put(scene_id, name, ctx)
   end
 
-  defp seed_context(_scene_id, _name, _other, _premise), do: :ok
+  defp seed_context(_scene_id, _name, _other, _premise, _bible), do: :ok
 
   defp maybe_payload(nil), do: nil
   defp maybe_payload(entry), do: Library.payload(entry)
