@@ -984,7 +984,16 @@ input:focus, textarea:focus, select:focus {
 }
 
 .composer .row {
-  align-items: flex-end;
+  align-items: center;
+}
+
+.say-input {
+  width: 100%;
+  min-height: 2.6rem;
+  max-height: 40vh;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.5;
 }
 
 /* Authoring auto-generation: the per-field "✨ Generate" row + the brief card. */

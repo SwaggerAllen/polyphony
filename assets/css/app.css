@@ -131,7 +131,11 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 /* Composer */
 .composer { position: sticky; bottom: 0; background: var(--bg-2);
   border-top: 1px solid var(--border); padding: .75rem; }
-.composer .row { align-items: flex-end; }
+.composer .row { align-items: center; }
+.say-input {
+  width: 100%; min-height: 2.6rem; max-height: 40vh; resize: none; overflow-y: auto;
+  line-height: 1.5;
+}
 
 /* Authoring auto-generation: the per-field "✨ Generate" row + the brief card. */
 .gen-label { margin-top: .75rem; align-items: baseline; }

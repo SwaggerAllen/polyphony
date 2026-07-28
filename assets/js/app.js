@@ -42,6 +42,37 @@ Hooks.AutoGrow = {
   },
 }
 
+// The scene composer: an auto-growing textarea that sends on Enter (Shift+Enter for a
+// newline) and clears itself after submit. Distinct from AutoGrow — that one backs
+// persistent editor fields and must never self-clear.
+Hooks.ComposerInput = {
+  grow() {
+    this.el.style.height = "auto"
+    this.el.style.height = this.el.scrollHeight + "px"
+  },
+  mounted() {
+    this.grow()
+    this.el.addEventListener("input", () => this.grow())
+    this.el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault()
+        if (this.el.form) this.el.form.requestSubmit()
+      }
+    })
+    if (this.el.form) {
+      this.el.form.addEventListener("submit", () => {
+        setTimeout(() => {
+          this.el.value = ""
+          this.grow()
+        }, 0)
+      })
+    }
+  },
+  updated() {
+    this.grow()
+  },
+}
+
 // Confirm before following a link that opts in via data-confirm (used to guard
 // navigation away from an editor with unsaved changes). Capture phase so it runs
 // before the browser navigates; the attribute is only rendered when there's

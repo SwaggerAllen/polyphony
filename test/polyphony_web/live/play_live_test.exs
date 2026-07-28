@@ -22,17 +22,20 @@ defmodule PolyphonyWeb.PlayLiveTest do
     scene
   end
 
-  test "a whisper reaches the author and addressee but is absent for a bystander", %{conn: conn} do
+  test "a whisper (inferred from the text) reaches author + addressee, not a bystander",
+       %{conn: conn} do
     scene = scene_with_cast()
 
-    {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+    # You speak as whoever you're viewing as; the whisper is inferred from the text.
+    {:ok, mira, _html} = live(conn, ~p"/play/#{scene}?as=mira")
 
-    view
-    |> form("form[phx-submit=say]", %{as: "mira", to: "otto", text: "meet me at dawn"})
+    mira
+    |> form("form[phx-submit=say]", %{text: "(whisper to otto: meet me at dawn)"})
     |> render_submit()
 
     # Omniscient author view sees the whisper.
-    assert render(view) =~ "meet me at dawn"
+    {:ok, _author, author_html} = live(conn, ~p"/play/#{scene}")
+    assert author_html =~ "meet me at dawn"
 
     # A bystander (cara) — a scene member, but not addressed — must not see it.
     {:ok, _cara, cara_html} = live(conn, ~p"/play/#{scene}?as=cara")
@@ -43,13 +46,36 @@ defmodule PolyphonyWeb.PlayLiveTest do
     assert otto_html =~ "meet me at dawn"
   end
 
-  test "an ordinary (aloud) line is visible to every member's view", %{conn: conn} do
+  test "one submission can say a line aloud and whisper another", %{conn: conn} do
     scene = scene_with_cast()
-    {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+    {:ok, mira, _html} = live(conn, ~p"/play/#{scene}?as=mira")
 
-    view
-    |> form("form[phx-submit=say]", %{as: "cara", to: "", text: "lovely weather"})
+    mira
+    |> form("form[phx-submit=say]", %{text: "Lovely weather. (whisper to otto: meet me at dawn)"})
     |> render_submit()
+
+    # A bystander sees the aloud line but not the whisper.
+    {:ok, _cara, cara_html} = live(conn, ~p"/play/#{scene}?as=cara")
+    assert cara_html =~ "Lovely weather."
+    refute cara_html =~ "meet me at dawn"
+
+    # The addressee sees both.
+    {:ok, _otto, otto_html} = live(conn, ~p"/play/#{scene}?as=otto")
+    assert otto_html =~ "Lovely weather."
+    assert otto_html =~ "meet me at dawn"
+  end
+
+  test "you speak as whoever you view as, and omniscient is read-only", %{conn: conn} do
+    scene = scene_with_cast()
+
+    # Omniscient view offers no composer input, just a hint to pick a character.
+    {:ok, _author, author_html} = live(conn, ~p"/play/#{scene}")
+    refute author_html =~ ~s(id="say-input")
+    assert author_html =~ "pick a character above to speak"
+
+    # As cara, an aloud line is visible to every member's view.
+    {:ok, cara, _html} = live(conn, ~p"/play/#{scene}?as=cara")
+    cara |> form("form[phx-submit=say]", %{text: "lovely weather"}) |> render_submit()
 
     {:ok, _mira, mira_html} = live(conn, ~p"/play/#{scene}?as=mira")
     assert mira_html =~ "lovely weather"

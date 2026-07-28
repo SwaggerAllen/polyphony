@@ -19,14 +19,13 @@ defmodule PolyphonyWeb.PlayFeatureTest do
     user = user_fixture()
     scene = scene_with_cast()
 
-    # Author (omniscient): compose a whisper mira → otto through the composer, which
-    # commits over the WebSocket and streams back into the transcript.
+    # As mira (you speak as whoever you view as): compose a whisper to otto through the
+    # composer — audibility inferred from the text — which commits over the WebSocket
+    # and streams back into the transcript.
     session
     |> sign_in(user)
-    |> visit("/play/#{scene}")
-    |> find(select("as"), fn s -> click(s, option("mira")) end)
-    |> fill_in(text_field("text"), with: "meet me at dawn")
-    |> find(select("to"), fn s -> click(s, option("whisper: otto")) end)
+    |> visit("/play/#{scene}?as=mira")
+    |> fill_in(text_field("text"), with: "(whisper to otto: meet me at dawn)")
     |> click(button("Send"))
     |> assert_has(css("#transcript", text: "meet me at dawn"))
 
@@ -34,7 +33,7 @@ defmodule PolyphonyWeb.PlayFeatureTest do
     # structurally absent — occlusion is silent.
     session
     |> visit("/play/#{scene}?as=cara")
-    |> assert_has(css("body", text: "viewing as"))
+    |> assert_has(css("body", text: "Viewing as"))
     |> refute_has(css("#transcript", text: "meet me at dawn"))
 
     # Addressee (otto): the whisper is present.
