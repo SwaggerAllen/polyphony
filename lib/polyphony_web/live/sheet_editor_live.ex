@@ -18,6 +18,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   require Logger
 
+  import PolyphonyWeb.BlockField
+
   alias Polyphony.{Library, Owner}
   alias Polyphony.Authoring.{Autofill, CharacterSheet, Stub, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.Relationship
@@ -350,46 +352,14 @@ defmodule PolyphonyWeb.SheetEditorLive do
     assign(socket, name: name, blocks: blocks)
   end
 
-  defp param_blocks(nil, fallback), do: fallback
-  defp param_blocks([], _fallback), do: [""]
-  defp param_blocks(list, _fallback) when is_list(list), do: list
-  defp param_blocks(str, _fallback) when is_binary(str), do: [str]
-
   defp update_blocks(socket, field, fun),
     do: socket |> put_blocks(field, fun.(socket.assigns.blocks[field])) |> assign(:saved, false)
 
   defp put_blocks(socket, field, blocks),
     do: assign(socket, :blocks, Map.put(socket.assigns.blocks, field, ensure_one(blocks)))
 
-  defp ensure_one([]), do: [""]
-  defp ensure_one(list), do: list
-
-  defp drop_block(list, idx), do: list |> List.delete_at(idx) |> ensure_one()
-
-  # A generated field's text becomes its blocks (split on blank lines).
-  defp append_paragraph(blocks, para) do
-    trimmed = Enum.reject(blocks, &(String.trim(&1) == ""))
-    trimmed ++ [para]
-  end
-
   defp blocks_from_sheet(sheet) do
     Map.new(@block_fields, fn f -> {f, to_blocks(Map.get(sheet, String.to_existing_atom(f)))} end)
-  end
-
-  defp to_blocks(nil), do: [""]
-
-  defp to_blocks(str) when is_binary(str) do
-    case str
-         |> String.split(~r/\n{2,}/)
-         |> Enum.map(&String.trim/1)
-         |> Enum.reject(&(&1 == "")) do
-      [] -> [""]
-      list -> list
-    end
-  end
-
-  defp join_blocks(blocks) do
-    blocks |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n")
   end
 
   defp current_values(socket) do
@@ -425,8 +395,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   defp mark(socket, key, false),
     do: assign(socket, :generating, MapSet.delete(socket.assigns.generating, key))
-
-  defp busy?(generating, key), do: MapSet.member?(generating, key)
 
   defp gen_failed(socket, key, result) do
     Logger.warning("[authoring] generation failed (#{key}): #{inspect(result)}")
@@ -558,81 +526,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
   end
 
   # ── Render ────────────────────────────────────────────────────────────────────
-
-  attr(:field, :string, required: true)
-  attr(:label, :string, required: true)
-  attr(:blocks, :list, required: true)
-  attr(:generating, :any, required: true)
-
-  defp block_field(assigns) do
-    ~H"""
-    <div class="field-block">
-      <div class="row gen-label">
-        <span><%= @label %></span>
-        <span class="spacer"></span>
-        <button
-          type="button"
-          class="btn sm ghost"
-          phx-click="generate_field"
-          phx-value-field={@field}
-          disabled={busy?(@generating, @field)}
-          title={"Rewrite #{@label} from scratch"}
-        >
-          <%= if busy?(@generating, @field), do: "✨ …", else: "✨ Generate" %>
-        </button>
-        <button
-          type="button"
-          class="btn sm ghost"
-          phx-click="expand_field"
-          phx-value-field={@field}
-          disabled={busy?(@generating, "#{@field}:expand")}
-          title={"Add a paragraph that deepens #{@label}"}
-        >
-          <%= if busy?(@generating, "#{@field}:expand"), do: "➕ …", else: "➕ Expand" %>
-        </button>
-      </div>
-
-      <div :for={{b, i} <- Enum.with_index(@blocks)} class="para" id={"para-#{@field}-#{i}"}>
-        <textarea
-          id={"ta-#{@field}-#{i}"}
-          name={"b_#{@field}[]"}
-          class="para-input"
-          rows="1"
-          phx-hook="AutoGrow"
-          phx-debounce="blur"
-          placeholder="Write a paragraph…"
-        ><%= b %></textarea>
-        <div class="para-controls">
-          <button
-            type="button"
-            class="btn xs ghost"
-            phx-click="generate_block"
-            phx-value-field={@field}
-            phx-value-index={i}
-            disabled={busy?(@generating, "#{@field}:#{i}")}
-            title="Rewrite this paragraph, richer"
-          >
-            <%= if busy?(@generating, "#{@field}:#{i}"), do: "…", else: "✨" %>
-          </button>
-          <button
-            type="button"
-            class="btn xs ghost"
-            phx-click="remove_block"
-            phx-value-field={@field}
-            phx-value-index={i}
-            title="Remove paragraph"
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-
-      <button type="button" class="btn xs ghost add-para" phx-click="add_block" phx-value-field={@field}>
-        + paragraph
-      </button>
-    </div>
-    """
-  end
 
   def render(assigns) do
     ~H"""
