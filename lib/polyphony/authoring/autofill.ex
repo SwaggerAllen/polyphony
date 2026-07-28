@@ -250,6 +250,44 @@ defmodule Polyphony.Authoring.Autofill do
     end
   end
 
+  @doc """
+  Extract the proper names of **people/characters** mentioned in `texts` (a scene's
+  committed prose) — not places, objects, or groups. Returns `{:ok, [name]}`, de-duped
+  case-insensitively. Empty input short-circuits without a provider call. The caller
+  filters out characters that already exist and stubs the rest (§B8 mention-stubbing).
+  """
+  @spec extract_mentions([String.t()], keyword()) :: {:ok, [String.t()]} | {:error, term()}
+  def extract_mentions(texts, opts \\ []) do
+    joined = texts |> List.wrap() |> Enum.reject(&blank?/1) |> Enum.join("\n\n")
+
+    if String.trim(joined) == "" do
+      {:ok, []}
+    else
+      messages = [
+        %{
+          role: "system",
+          content:
+            "List the proper names of PEOPLE / characters mentioned in the passage — not " <>
+              "places, objects, or groups, and not the narrator. Return ONLY a JSON array of " <>
+              "names (strings); an empty array if none."
+        },
+        %{role: "user", content: joined}
+      ]
+
+      with {:ok, text} <- Polyphony.LLM.call(messages, [response: :mentions] ++ meter_opts(opts)),
+           {:ok, list} <- decode_array(text) do
+        names =
+          list
+          |> Enum.filter(&is_binary/1)
+          |> Enum.map(&String.trim/1)
+          |> Enum.reject(&(&1 == ""))
+          |> Enum.uniq_by(&String.downcase/1)
+
+        {:ok, names}
+      end
+    end
+  end
+
   defp pair_line({pair, i}, self_name),
     do: "#{i}. #{self_name} regards #{pair["target"]} as \"#{pair["descriptor"]}\"."
 

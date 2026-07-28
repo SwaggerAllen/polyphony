@@ -30,6 +30,7 @@ defmodule Polyphony.LLM.Mock do
       :autofill -> {:ok, autofill_json(messages, opts)}
       :relationships -> {:ok, relationships_json(messages)}
       :reciprocals -> {:ok, reciprocals_json(messages, opts)}
+      :mentions -> {:ok, mentions_json(messages)}
       :field -> {:ok, summary_text(messages)}
       :gate -> {:ok, gate_answer(messages)}
       _ -> {:ok, turn_packet_json(messages)}
@@ -120,6 +121,12 @@ defmodule Polyphony.LLM.Mock do
     count = Keyword.get(opts, :count, 3)
 
     Jason.encode!(for i <- 0..(max(count, 1) - 1), do: lorem(seed + i * 3, 2))
+  end
+
+  # A couple of lorem "mentioned character" names (Authoring.extract_mentions).
+  defp mentions_json(messages) do
+    seed = :erlang.phash2(messages)
+    Jason.encode!([capitalize(lorem(seed, 1)), capitalize(lorem(seed + 3, 1))])
   end
 
   defp decision_json(opts) do

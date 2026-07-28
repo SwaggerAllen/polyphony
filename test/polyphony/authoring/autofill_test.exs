@@ -301,6 +301,30 @@ defmodule Polyphony.Authoring.AutofillTest do
     end
   end
 
+  describe "extract_mentions/2" do
+    test "returns the de-duped names from a JSON array" do
+      array = {:ok, Jason.encode!(["Bram", "Vane", "bram"])}
+
+      assert {:ok, names} =
+               Autofill.extract_mentions(["Bram waved at Vane."],
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: array
+               )
+
+      assert names == ["Bram", "Vane"]
+    end
+
+    test "empty prose short-circuits without a provider call" do
+      boom = fn _ -> raise "should not be called" end
+
+      assert {:ok, []} =
+               Autofill.extract_mentions(["", nil],
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: boom
+               )
+    end
+  end
+
   describe "reciprocal_roles/3" do
     test "maps each target to its generated reciprocal, in order" do
       array = {:ok, Jason.encode!(["former student", "wary creditor"])}

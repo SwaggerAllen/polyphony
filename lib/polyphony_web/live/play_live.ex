@@ -34,13 +34,16 @@ defmodule PolyphonyWeb.PlayLive do
     SetControlMode
   }
 
-  alias Polyphony.Authoring.{CharacterSheet, Stub, StubGen}
+  alias Polyphony.Authoring.{Autofill, CharacterSheet, Stub, StubGen}
 
   alias Polyphony.Events.{
     IntroductionProposed,
     IntroductionDismissed,
     CharacterEntered,
-    SceneOpened
+    SceneOpened,
+    SpeechUttered,
+    ActionTaken,
+    WorldEventOccurred
   }
 
   alias Polyphony.TurnPacket
@@ -170,6 +173,40 @@ defmodule PolyphonyWeb.PlayLive do
     |> Library.list_for_owner()
     |> Enum.filter(&(&1.kind == "character"))
     |> Map.new(fn e -> {String.downcase(char_name(e) || ""), e} end)
+  end
+
+  # The scene's committed spoken/acted/world prose — the text mention-scanning reads.
+  defp scene_prose(scene_id) do
+    scene_id
+    |> stored_with_seq()
+    |> Enum.flat_map(fn {_seq, e} -> prose_of(e) end)
+  end
+
+  defp prose_of(%SpeechUttered{content: c}), do: [c]
+  defp prose_of(%ActionTaken{content: c}), do: [c]
+  defp prose_of(%WorldEventOccurred{content: c}), do: [c]
+  defp prose_of(_), do: []
+
+  # Create a pending stub for each mentioned name that isn't already a character or a
+  # current scene member. Returns the names actually stubbed.
+  defp stub_mentions(socket, names) do
+    known = owner_characters(socket.assigns.current_user)
+    members = MapSet.new(socket.assigns.roster, &String.downcase(to_string(&1)))
+    owner = Owner.of(socket.assigns.current_user)
+    world_id = campaign_world_id(socket)
+
+    for name <- names,
+        key = String.downcase(name),
+        not Map.has_key?(known, key),
+        not MapSet.member?(members, key) do
+      Library.put(%{
+        owner: owner,
+        kind: "character",
+        payload: Stub.new(name, "", world_bible_id: world_id)
+      })
+
+      name
+    end
   end
 
   defp char_name(entry) do
@@ -314,6 +351,20 @@ defmodule PolyphonyWeb.PlayLive do
     end)
   end
 
+  # Scan the scene's committed prose for characters mentioned but not yet created,
+  # and stub them for later (§B8 mention-stubbing).
+  def handle_event("find_mentions", _params, socket) do
+    safe(socket, fn ->
+      prose = scene_prose(socket.assigns.scene_id)
+      uid = socket.assigns.current_user && socket.assigns.current_user.id
+
+      {:noreply,
+       socket
+       |> put_flash(:info, "Scanning for mentioned characters…")
+       |> start_async(:mentions, fn -> Autofill.extract_mentions(prose, user_id: uid) end)}
+    end)
+  end
+
   def handle_event("continue", _params, socket) do
     safe(socket, fn ->
       scene_id = socket.assigns.scene_id
@@ -406,6 +457,26 @@ defmodule PolyphonyWeb.PlayLive do
      put_flash(socket, :error, "Couldn't generate #{name} — open them to finish manually.")}
   end
 
+  def handle_async(:mentions, {:ok, {:ok, names}}, socket) do
+    safe(socket, fn ->
+      case stub_mentions(socket, names) do
+        [] ->
+          {:noreply, put_flash(socket, :info, "No new characters were mentioned.")}
+
+        stubbed ->
+          {:noreply,
+           put_flash(
+             socket,
+             :info,
+             "Stubbed #{length(stubbed)} mentioned character(s): #{Enum.join(stubbed, ", ")}."
+           )}
+      end
+    end)
+  end
+
+  def handle_async(:mentions, _result, socket),
+    do: {:noreply, put_flash(socket, :error, "Couldn't scan for mentioned characters.")}
+
   defp append(socket, msg) do
     seq = msg[:seq]
     existing = socket.assigns.messages
@@ -465,6 +536,10 @@ defmodule PolyphonyWeb.PlayLive do
             </form>
           </li>
         </ul>
+        <div class="row" style="margin-top:.5rem;">
+          <button class="btn ghost sm" type="button" phx-click="find_mentions">Find mentioned characters</button>
+          <span class="faint">Stub anyone named in the scene who doesn't exist yet.</span>
+        </div>
       </details>
 
       <div class="card transcript-card">
