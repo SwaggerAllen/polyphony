@@ -145,6 +145,79 @@ defmodule Polyphony.Authoring.AutofillTest do
     end
   end
 
+  describe "generate_paragraph/3" do
+    test "rewrites the paragraph at a given index" do
+      assert {:ok, para} =
+               Autofill.generate_paragraph(:character, "backstory",
+                 blocks: ["orphaned young", "joined the guard"],
+                 index: 0,
+                 provider: Polyphony.LLM.Mock
+               )
+
+      assert is_binary(para) and para != ""
+    end
+
+    test "with no index, writes a fresh paragraph to append (expand)" do
+      assert {:ok, para} =
+               Autofill.generate_paragraph(:character, "backstory",
+                 blocks: ["orphaned young"],
+                 index: nil,
+                 provider: Polyphony.LLM.Mock
+               )
+
+      assert is_binary(para) and para != ""
+    end
+
+    test "the expand prompt asks not to repeat existing content" do
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.generate_paragraph(:character, "backstory",
+            blocks: ["She was orphaned in the flood."],
+            index: nil,
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture
+          )
+        end)
+
+      assert msgs =~ "NEW paragraph"
+      assert msgs =~ "do not repeat"
+      assert msgs =~ "She was orphaned in the flood."
+    end
+
+    test "rejects an unknown field" do
+      assert {:error, {:unknown_field, "nope"}} =
+               Autofill.generate_paragraph(:character, "nope", provider: Polyphony.LLM.Mock)
+    end
+  end
+
+  describe "suggest_relationships/2" do
+    test "returns target/descriptor suggestions" do
+      assert {:ok, suggestions} =
+               Autofill.suggest_relationships(%{"name" => "Mira", "premise" => "a smuggler"},
+                 provider: Polyphony.LLM.Mock
+               )
+
+      assert is_list(suggestions) and suggestions != []
+      assert Enum.all?(suggestions, &(is_binary(&1["target"]) and &1["target"] != ""))
+    end
+
+    test "parses a fenced JSON array and drops entries without a target" do
+      array =
+        {:ok,
+         "```json\n" <>
+           Jason.encode!([
+             %{"target" => "Bram", "descriptor" => "mentor"},
+             %{"descriptor" => "no target here"}
+           ]) <> "\n```"}
+
+      assert {:ok, [%{"target" => "Bram", "descriptor" => "mentor"}]} =
+               Autofill.suggest_relationships(%{},
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: array
+               )
+    end
+  end
+
   describe "generate_field/4" do
     test "returns a single non-empty string for a known field" do
       current = %{"name" => "Mara", "temperament" => "guarded"}

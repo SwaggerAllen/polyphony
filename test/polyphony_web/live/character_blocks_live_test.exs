@@ -1,0 +1,107 @@
+defmodule PolyphonyWeb.CharacterBlocksLiveTest do
+  @moduledoc """
+  The block-field editor on the character sheet: paragraphs add/remove/expand/
+  regenerate, join into the plain-string field on save; plus AI relationship
+  suggestions. Driven by the offline Mock so async generation is deterministic.
+  """
+  use PolyphonyWeb.ConnCase, async: false
+
+  alias Polyphony.{Library, Owner}
+  alias Polyphony.Authoring.CharacterSheet
+
+  setup :register_and_log_in_user
+
+  setup do
+    previous = Application.get_env(:polyphony, :llm)
+    Application.put_env(:polyphony, :llm, provider: Polyphony.LLM.Mock)
+    on_exit(fn -> Application.put_env(:polyphony, :llm, previous) end)
+    :ok
+  end
+
+  defp character(user, sheet),
+    do: Library.put(%{owner: Owner.of(user), kind: "character", payload: sheet})
+
+  test "a multi-paragraph field loads as separate blocks", %{conn: conn, user: user} do
+    entry =
+      character(user, %CharacterSheet{
+        name: "Mira",
+        backstory: "First para.\n\nSecond para.",
+        status: :full
+      })
+
+    {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+    assert html =~ "First para."
+    assert html =~ "Second para."
+    # Two backstory blocks.
+    assert length(Regex.scan(~r/name="b_backstory\[\]"/, html)) == 2
+  end
+
+  test "adding, editing, and saving blocks joins them with blank lines", %{conn: conn, user: user} do
+    entry = character(user, %CharacterSheet{name: "Mira", backstory: "", status: :full})
+    {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+    # Start with one empty block; add a second.
+    view |> element("button[phx-click=add_block][phx-value-field=backstory]") |> render_click()
+
+    view
+    |> form("form[phx-submit=save]", %{
+      "name" => "Mira",
+      "b_backstory" => ["Raised at sea.", "Lost her ship."]
+    })
+    |> render_submit()
+
+    assert Library.payload(Library.get(entry.id)).backstory == "Raised at sea.\n\nLost her ship."
+  end
+
+  test "expand appends a paragraph without touching the others", %{conn: conn, user: user} do
+    entry = character(user, %CharacterSheet{name: "Mira", backstory: "Only para.", status: :full})
+    {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+    view |> element("button[phx-click=expand_field][phx-value-field=backstory]") |> render_click()
+    html = render_async(view)
+
+    # Original stays; a second block now exists.
+    assert html =~ "Only para."
+    assert length(Regex.scan(~r/name="b_backstory\[\]"/, html)) == 2
+  end
+
+  test "regenerating one block rewrites just that block", %{conn: conn, user: user} do
+    entry =
+      character(user, %CharacterSheet{name: "Mira", backstory: "Placeholder.", status: :full})
+
+    {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+    view
+    |> element(
+      "button[phx-click='generate_block'][phx-value-field='backstory'][phx-value-index='0']"
+    )
+    |> render_click()
+
+    html = render_async(view)
+    refute html =~ ">Placeholder.</textarea>"
+    assert length(Regex.scan(~r/name="b_backstory\[\]"/, html)) == 1
+  end
+
+  test "AI-suggested relationships can be accepted and stubbed on save", %{conn: conn, user: user} do
+    entry = character(user, %CharacterSheet{name: "Mira", status: :full})
+    {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+    view |> element("button[phx-click=suggest_relationships]") |> render_click()
+    html = render_async(view)
+    assert html =~ "Suggestions"
+
+    # Accept the first suggestion, then save — the suggested target stubs.
+    before = Enum.count(Library.list_for_owner(Owner.of(user)), &(&1.kind == "character"))
+
+    view
+    |> element("button[phx-click='accept_suggestion'][phx-value-index='0']")
+    |> render_click()
+
+    view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+
+    after_count = Enum.count(Library.list_for_owner(Owner.of(user)), &(&1.kind == "character"))
+    assert after_count == before + 1
+    assert Library.payload(Library.get(entry.id)).relationships != []
+  end
+end

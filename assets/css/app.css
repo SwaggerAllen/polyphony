@@ -145,6 +145,25 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .rel-list { list-style: none; padding: 0; margin: .5rem 0; }
 .rel-item { padding: .35rem 0; border-bottom: 1px solid var(--border); gap: .5rem; }
 .rel-add { gap: .5rem; margin-top: .5rem; }
+.rel-suggestions { margin: .5rem 0; padding: .5rem; background: var(--bg-2); border-radius: 8px; }
+.rel-suggestion { padding: .25rem 0; gap: .5rem; }
+
+/* Block-field editor: paragraphs as focus-styled, auto-growing textareas that read
+   like prose until you click into them (no toggle logic — the textarea is always
+   live, just styled to look like text when unfocused). */
+.field-block { margin-bottom: 1.25rem; }
+.para { display: flex; gap: .35rem; align-items: flex-start; margin: .15rem 0; }
+.para-input {
+  flex: 1; min-height: 0; resize: none; overflow: hidden;
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  padding: .4rem .5rem; line-height: 1.55;
+}
+.para-input:hover { border-color: var(--border); }
+.para-input:focus { border-color: var(--accent); background: var(--bg-2); }
+.para-input::placeholder { color: var(--fg-faint); }
+.para-controls { display: flex; gap: .2rem; padding-top: .35rem; }
+.add-para { margin-top: .1rem; }
+.btn.xs { padding: .15rem .45rem; font-size: .78rem; }
 
 .list-empty { color: var(--fg-faint); padding: 2rem 1rem; text-align: center; }
 hr.sep { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
