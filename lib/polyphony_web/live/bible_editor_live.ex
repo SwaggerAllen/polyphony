@@ -3,11 +3,11 @@ defmodule PolyphonyWeb.BibleEditorLive do
   V6 (world bible editor): setting, tone, rules, and starting canon — with the same
   AI assistance as the character editor.
 
-  The prose fields (setting, tone) are edited as **blocks** (paragraphs) via
-  `PolyphonyWeb.BlockField`: readable, auto-growing, per-paragraph regenerate/expand.
-  Rules and starting canon stay **line lists** (one item per line). Generation
-  (whole-form brief, per-field, per-paragraph) is metered; nothing persists until
-  Save, and blocks join back into plain strings so the domain is unchanged.
+  Every field is edited as **blocks** (`PolyphonyWeb.BlockField`): setting and tone as
+  *paragraphs* (joined by blank lines into the stored string), rules and starting
+  canon as *items* (one per block, stored as the field's list). Each block can be
+  added, removed, regenerated, or the field expanded; the brief fills them all.
+  Nothing persists until Save, and blocks fold back into the domain's strings/lists.
   """
   use PolyphonyWeb, :live_view
 
@@ -18,13 +18,17 @@ defmodule PolyphonyWeb.BibleEditorLive do
   alias Polyphony.Library
   alias Polyphony.Authoring.{Autofill, WorldBible}
 
-  @block_specs [{"setting", "Setting"}, {"tone", "Tone"}]
-  @block_fields Enum.map(@block_specs, &elem(&1, 0))
-  @line_specs [{"rules", "Rules / physics"}, {"starting_canon", "Starting canon"}]
-  @line_fields Enum.map(@line_specs, &elem(&1, 0))
+  # {field, label, mode, unit}. mode: :paragraph (→ string) | :line (→ list).
+  @field_specs [
+    {"setting", "Setting", :paragraph, "paragraph"},
+    {"tone", "Tone", :paragraph, "paragraph"},
+    {"rules", "Rules / physics", :line, "item"},
+    {"starting_canon", "Starting canon", :line, "item"}
+  ]
+  @block_fields Enum.map(@field_specs, &elem(&1, 0))
+  @modes Map.new(@field_specs, fn {f, _l, m, _u} -> {f, m} end)
 
-  defp block_specs, do: @block_specs
-  defp line_specs, do: @line_specs
+  defp field_specs, do: @field_specs
 
   def mount(%{"id" => id}, _session, socket) do
     entry = Library.get(id)
@@ -39,7 +43,6 @@ defmodule PolyphonyWeb.BibleEditorLive do
          bible: bible,
          name: bible.name || "",
          blocks: blocks_from_bible(bible),
-         lines: lines_from_bible(bible),
          generating: MapSet.new(),
          saved: false
        )}
@@ -57,15 +60,15 @@ defmodule PolyphonyWeb.BibleEditorLive do
   def handle_event("save", params, socket) do
     safe(socket, fn ->
       socket = assign_form(socket, params)
-      %{name: name, blocks: blocks, lines: lines} = socket.assigns
+      %{name: name, blocks: blocks} = socket.assigns
 
       bible = %WorldBible{
         socket.assigns.bible
         | name: name,
-          setting: join_blocks(blocks["setting"]),
-          tone: join_blocks(blocks["tone"]),
-          rules: to_lines(lines["rules"]),
-          starting_canon: to_lines(lines["starting_canon"])
+          setting: to_domain("setting", blocks["setting"]),
+          tone: to_domain("tone", blocks["tone"]),
+          rules: to_domain("rules", blocks["rules"]),
+          starting_canon: to_domain("starting_canon", blocks["starting_canon"])
       }
 
       {:ok, entry} = Library.update_payload(socket.assigns.entry.id, bible)
@@ -76,7 +79,6 @@ defmodule PolyphonyWeb.BibleEditorLive do
          bible: bible,
          name: bible.name || "",
          blocks: blocks_from_bible(bible),
-         lines: lines_from_bible(bible),
          saved: true
        )}
     end)
@@ -107,8 +109,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
     end)
   end
 
-  def handle_event("generate_field", %{"field" => f}, socket)
-      when f in @block_fields or f in @line_fields do
+  def handle_event("generate_field", %{"field" => f}, socket) when f in @block_fields do
     safe(socket, fn ->
       current = current_values(socket)
       opts = gen_opts(socket)
@@ -154,27 +155,17 @@ defmodule PolyphonyWeb.BibleEditorLive do
   def handle_async(:gen_all, {:ok, {:ok, values}}, socket) do
     blocks =
       Enum.reduce(@block_fields, socket.assigns.blocks, fn f, acc ->
-        if values[f] in [nil, ""], do: acc, else: Map.put(acc, f, to_blocks(values[f]))
-      end)
-
-    lines =
-      Enum.reduce(@line_fields, socket.assigns.lines, fn f, acc ->
-        if values[f] in [nil, ""], do: acc, else: Map.put(acc, f, values[f])
+        if values[f] in [nil, ""], do: acc, else: Map.put(acc, f, split_generated(f, values[f]))
       end)
 
     name = if values["name"] in [nil, ""], do: socket.assigns.name, else: values["name"]
-    {:noreply, socket |> assign(name: name, blocks: blocks, lines: lines) |> mark("all", false)}
+    {:noreply, socket |> assign(name: name, blocks: blocks) |> mark("all", false)}
   end
 
   def handle_async(:gen_all, result, socket), do: {:noreply, gen_failed(socket, "all", result)}
 
-  def handle_async({:gen_field, f}, {:ok, {:ok, value}}, socket) when f in @block_fields do
-    {:noreply, socket |> put_blocks(f, to_blocks(value)) |> mark(f, false)}
-  end
-
-  def handle_async({:gen_field, f}, {:ok, {:ok, value}}, socket) when f in @line_fields do
-    {:noreply,
-     socket |> assign(:lines, Map.put(socket.assigns.lines, f, value)) |> mark(f, false)}
+  def handle_async({:gen_field, f}, {:ok, {:ok, value}}, socket) do
+    {:noreply, socket |> put_blocks(f, split_generated(f, value)) |> mark(f, false)}
   end
 
   def handle_async({:gen_field, f}, result, socket),
@@ -208,8 +199,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
         {f, param_blocks(params["b_#{f}"], socket.assigns.blocks[f])}
       end)
 
-    lines = Map.new(@line_fields, fn f -> {f, params[f] || socket.assigns.lines[f]} end)
-    assign(socket, name: name, blocks: blocks, lines: lines)
+    assign(socket, name: name, blocks: blocks)
   end
 
   defp update_blocks(socket, field, fun),
@@ -218,28 +208,33 @@ defmodule PolyphonyWeb.BibleEditorLive do
   defp put_blocks(socket, field, blocks),
     do: assign(socket, :blocks, Map.put(socket.assigns.blocks, field, ensure_one(blocks)))
 
-  defp blocks_from_bible(bible),
-    do: %{"setting" => to_blocks(bible.setting), "tone" => to_blocks(bible.tone)}
-
-  defp lines_from_bible(bible) do
-    %{
-      "rules" => Enum.join(bible.rules || [], "\n"),
-      "starting_canon" => Enum.join(bible.starting_canon || [], "\n")
-    }
+  defp blocks_from_bible(bible) do
+    Map.new(@block_fields, fn f ->
+      raw = Map.get(bible, String.to_existing_atom(f))
+      {f, if(@modes[f] == :line, do: to_line_blocks(raw), else: to_blocks(raw))}
+    end)
   end
 
-  defp to_lines(nil), do: []
+  # Blocks → the domain value: a blank-line string for prose, a trimmed list for items.
+  defp to_domain(field, blocks) do
+    if @modes[field] == :line, do: block_list(blocks), else: join_blocks(blocks)
+  end
 
-  defp to_lines(text),
-    do: text |> String.split("\n") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+  # Generated text → blocks: split on blank lines (prose) or single lines (items).
+  defp split_generated(field, value) do
+    if @modes[field] == :line, do: to_line_blocks(value), else: to_blocks(value)
+  end
+
+  # The current field text (for generation context): prose joined by blank lines,
+  # items joined by single newlines.
+  defp field_text(field, blocks) do
+    if @modes[field] == :line, do: Enum.join(block_list(blocks), "\n"), else: join_blocks(blocks)
+  end
 
   defp current_values(socket) do
     Map.merge(
       %{"name" => socket.assigns.name},
-      Map.merge(
-        Map.new(@block_fields, fn f -> {f, join_blocks(socket.assigns.blocks[f])} end),
-        Map.new(@line_fields, fn f -> {f, socket.assigns.lines[f]} end)
-      )
+      Map.new(@block_fields, fn f -> {f, field_text(f, socket.assigns.blocks[f])} end)
     )
   end
 
@@ -276,33 +271,6 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   # ── Render ────────────────────────────────────────────────────────────────────
 
-  attr(:field, :string, required: true)
-  attr(:label, :string, required: true)
-  attr(:value, :string, required: true)
-  attr(:generating, :any, required: true)
-
-  defp line_field(assigns) do
-    ~H"""
-    <div class="field-block">
-      <label class="row gen-label">
-        <span><%= @label %> <span class="faint">(one per line)</span></span>
-        <span class="spacer"></span>
-        <button
-          type="button"
-          class="btn sm ghost"
-          phx-click="generate_field"
-          phx-value-field={@field}
-          disabled={busy?(@generating, @field)}
-          title={"Generate #{@label}"}
-        >
-          <%= if busy?(@generating, @field), do: "✨ …", else: "✨ Generate" %>
-        </button>
-      </label>
-      <textarea name={@field} phx-debounce="blur"><%= @value %></textarea>
-    </div>
-    """
-  end
-
   def render(assigns) do
     ~H"""
     <h1>World bible</h1>
@@ -327,18 +295,11 @@ defmodule PolyphonyWeb.BibleEditorLive do
         <input type="text" name="name" value={@name} phx-debounce="blur" />
 
         <.block_field
-          :for={{f, label} <- block_specs()}
+          :for={{f, label, _mode, unit} <- field_specs()}
           field={f}
           label={label}
+          unit={unit}
           blocks={@blocks[f]}
-          generating={@generating}
-        />
-
-        <.line_field
-          :for={{f, label} <- line_specs()}
-          field={f}
-          label={label}
-          value={@lines[f]}
           generating={@generating}
         />
 

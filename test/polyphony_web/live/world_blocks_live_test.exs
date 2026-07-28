@@ -1,7 +1,8 @@
 defmodule PolyphonyWeb.WorldBlocksLiveTest do
   @moduledoc """
-  The block-field editor on the world bible: setting/tone as paragraphs, rules and
-  starting canon as line lists. Driven by the offline Mock.
+  The block-field editor on the world bible: setting/tone as paragraph blocks, rules
+  and starting canon as item blocks (one per block → the field's list). Driven by the
+  offline Mock.
   """
   use PolyphonyWeb.ConnCase, async: false
 
@@ -20,7 +21,7 @@ defmodule PolyphonyWeb.WorldBlocksLiveTest do
   defp world(user, bible),
     do: Library.put(%{owner: Owner.of(user), kind: "world_bible", payload: bible})
 
-  test "setting loads as paragraph blocks; rules stays a line list", %{conn: conn, user: user} do
+  test "setting loads as paragraphs; rules loads one block per item", %{conn: conn, user: user} do
     entry =
       world(user, %WorldBible{
         name: "Neon Bay",
@@ -33,27 +34,23 @@ defmodule PolyphonyWeb.WorldBlocksLiveTest do
 
     assert length(Regex.scan(~r/name="b_setting\[\]"/, html)) == 2
     assert html =~ "Memory is currency."
-    # rules is a single line-list textarea, one item per line.
-    assert html =~ ~s(name="rules")
-    assert html =~ "gravity is weak\ntime loops"
+    # Each rule is its own block.
+    assert length(Regex.scan(~r/name="b_rules\[\]"/, html)) == 2
+    assert html =~ "gravity is weak"
+    assert html =~ "time loops"
   end
 
-  test "editing blocks + lines and saving round-trips to the domain struct", %{
-    conn: conn,
-    user: user
-  } do
+  test "editing blocks saves prose as a string and lists as a list", %{conn: conn, user: user} do
     entry = world(user, %WorldBible{name: "W", setting: "", rules: [], starting_canon: []})
     {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
-
-    view |> element("button[phx-click=add_block][phx-value-field=setting]") |> render_click()
 
     view
     |> form("form[phx-submit=save]", %{
       "name" => "W",
       "b_setting" => ["A city of glass.", "It never stops raining."],
       "b_tone" => ["noir"],
-      "rules" => "no magic\nno gods",
-      "starting_canon" => "the bridge is out"
+      "b_rules" => ["no magic", "no gods"],
+      "b_starting_canon" => ["the bridge is out"]
     })
     |> render_submit()
 
@@ -64,26 +61,27 @@ defmodule PolyphonyWeb.WorldBlocksLiveTest do
     assert bible.starting_canon == ["the bridge is out"]
   end
 
-  test "expand appends a paragraph to a prose field", %{conn: conn, user: user} do
-    entry =
-      world(user, %WorldBible{name: "W", setting: "Only para.", rules: [], starting_canon: []})
-
+  test "expand adds an item to a line-list field", %{conn: conn, user: user} do
+    entry = world(user, %WorldBible{name: "W", rules: ["gravity is weak"], starting_canon: []})
     {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
 
-    view |> element("button[phx-click=expand_field][phx-value-field=setting]") |> render_click()
+    view |> element("button[phx-click=expand_field][phx-value-field=rules]") |> render_click()
     html = render_async(view)
 
-    assert html =~ "Only para."
-    assert length(Regex.scan(~r/name="b_setting\[\]"/, html)) == 2
+    assert html =~ "gravity is weak"
+    assert length(Regex.scan(~r/name="b_rules\[\]"/, html)) == 2
   end
 
-  test "generating the rules line field fills it", %{conn: conn, user: user} do
-    entry = world(user, %WorldBible{name: "W", rules: [], starting_canon: []})
+  test "regenerating one rule rewrites just that item", %{conn: conn, user: user} do
+    entry = world(user, %WorldBible{name: "W", rules: ["placeholder rule"], starting_canon: []})
     {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
 
-    view |> element("button[phx-click=generate_field][phx-value-field=rules]") |> render_click()
-    html = render_async(view)
+    view
+    |> element("button[phx-click='generate_block'][phx-value-field='rules'][phx-value-index='0']")
+    |> render_click()
 
-    refute html =~ ~r/<textarea name="rules"[^>]*>\s*<\/textarea>/
+    html = render_async(view)
+    refute html =~ ">placeholder rule</textarea>"
+    assert length(Regex.scan(~r/name="b_rules\[\]"/, html)) == 1
   end
 end

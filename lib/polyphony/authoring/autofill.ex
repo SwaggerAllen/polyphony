@@ -112,11 +112,12 @@ defmodule Polyphony.Authoring.Autofill do
       nil ->
         {:error, {:unknown_field, field}}
 
-      {^field, _type, guidance} ->
+      {^field, type, guidance} ->
         messages =
           paragraph_messages(
             kind,
             field,
+            type,
             guidance,
             opts[:blocks] || [],
             opts[:index],
@@ -168,7 +169,7 @@ defmodule Polyphony.Authoring.Autofill do
 
   # ── Prompt building ──────────────────────────────────────────────────────────
 
-  defp paragraph_messages(kind, field, guidance, blocks, index, current, ctx) do
+  defp paragraph_messages(kind, field, type, guidance, blocks, index, current, ctx) do
     others =
       current
       |> Map.drop([field])
@@ -177,6 +178,7 @@ defmodule Polyphony.Authoring.Autofill do
 
     others_block = if others == "", do: "", else: "The #{noun(kind)} so far:\n#{others}\n\n"
     nonempty = Enum.reject(blocks, &blank?/1)
+    unit = if type == :lines, do: "item", else: "paragraph"
 
     instruction =
       cond do
@@ -184,26 +186,30 @@ defmodule Polyphony.Authoring.Autofill do
           numbered =
             blocks |> Enum.with_index() |> Enum.map_join("\n", fn {b, i} -> "#{i + 1}. #{b}" end)
 
-          "The #{field} so far, paragraph by paragraph:\n#{numbered}\n\nRewrite paragraph " <>
+          "The #{field} so far, #{unit} by #{unit}:\n#{numbered}\n\nRewrite #{unit} " <>
             "#{index + 1} to be richer and more specific — keep its role and stay consistent " <>
-            "with the rest. Return only that paragraph."
+            "with the rest. Return only that #{unit}."
 
         nonempty == [] ->
-          "Write the opening paragraph of the #{field}."
+          "Write the opening #{unit} of the #{field}."
 
         true ->
-          "The #{field} so far:\n#{Enum.join(nonempty, "\n\n")}\n\nWrite a NEW paragraph that " <>
+          "The #{field} so far:\n#{Enum.join(nonempty, "\n\n")}\n\nWrite a NEW #{unit} that " <>
             "deepens the #{field} — add fresh, specific detail; do not repeat what's already " <>
-            "there. Return only the new paragraph."
+            "there. Return only the new #{unit}."
       end
+
+    shape =
+      if type == :lines,
+        do: "Write ONE concise item — a single line, not a paragraph.",
+        else: "Write ONE vivid paragraph of prose."
 
     [
       %{
         role: "system",
         content:
           "You are helping an author write the \"#{field}\" of a #{noun(kind)} — #{guidance}. " <>
-            "Write ONE vivid paragraph of prose. Return only the paragraph: no label, no " <>
-            "numbering, no quotes, no JSON."
+            "#{shape} Return only the #{unit}: no label, no numbering, no quotes, no JSON."
       },
       %{role: "user", content: context_block(ctx) <> others_block <> instruction}
     ]
