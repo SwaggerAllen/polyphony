@@ -218,7 +218,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def handle_event("suggest_relationships", _params, socket) do
     safe(socket, fn ->
       current = current_values(socket)
-      opts = gen_opts(socket)
+      opts = [existing: socket.assigns.relationships] ++ gen_opts(socket)
 
       {:noreply,
        socket
