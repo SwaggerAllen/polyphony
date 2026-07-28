@@ -8763,7 +8763,19 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
             this.grow();
           }, 0);
         });
+        const expand = this.el.form.querySelector("[data-composer-expand]");
+        if (expand) {
+          expand.addEventListener("click", (e) => {
+            e.preventDefault();
+            this.pushEvent("compose", { text: this.el.value });
+          });
+        }
       }
+      this.handleEvent("set_composer", ({ text }) => {
+        this.el.value = text;
+        this.grow();
+        this.el.focus();
+      });
     },
     updated() {
       this.grow();

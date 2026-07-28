@@ -8,6 +8,7 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
 
   alias Polyphony.{Library, Owner}
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
+  alias Polyphony.Authoring.CharacterSheet.Boundary
 
   setup :register_and_log_in_user
 
@@ -122,6 +123,68 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
       assert html =~ ~r/<option value="#{wb.id}"[^>]*selected/
+    end
+  end
+
+  describe "boundaries (§A3)" do
+    test "adding a boundary and saving persists the full structure", %{conn: conn, user: user} do
+      entry = character(user, %CharacterSheet{name: "Rell", status: :full})
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      html =
+        view
+        |> form("form[phx-submit=add_boundary]", %{
+          topic: "physical intimacy",
+          stance: "conditional",
+          condition: "she trusts them",
+          on_pressure: "she withdraws",
+          category: "sexual"
+        })
+        |> render_submit()
+
+      assert html =~ "physical intimacy"
+      assert html =~ "held until earned"
+
+      view |> form("form[phx-submit=save]", %{name: "Rell"}) |> render_submit()
+
+      assert [%Boundary{} = b] = Library.payload(Library.get(entry.id)).boundaries
+      assert b.topic == "physical intimacy"
+      assert b.stance == :conditional
+      assert b.condition == "she trusts them"
+      assert b.on_pressure == "she withdraws"
+      assert b.category == :sexual
+    end
+
+    test "a stored boundary renders and can be removed before saving", %{conn: conn, user: user} do
+      sheet = %CharacterSheet{
+        name: "Rell",
+        status: :full,
+        boundaries: [%Boundary{topic: "killing", stance: :closed}]
+      }
+
+      entry = character(user, sheet)
+      {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+      assert html =~ "killing"
+      assert html =~ "a hard line"
+
+      view
+      |> element("button[phx-click=remove_boundary][phx-value-index='0']")
+      |> render_click()
+
+      view |> form("form[phx-submit=save]", %{name: "Rell"}) |> render_submit()
+      assert Library.payload(Library.get(entry.id)).boundaries == []
+    end
+
+    test "an empty topic is rejected", %{conn: conn, user: user} do
+      entry = character(user, %CharacterSheet{name: "Rell", status: :full})
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      html =
+        view
+        |> form("form[phx-submit=add_boundary]", %{topic: "  ", stance: "closed"})
+        |> render_submit()
+
+      assert html =~ "Give the boundary a topic"
     end
   end
 

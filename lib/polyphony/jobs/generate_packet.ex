@@ -168,7 +168,10 @@ defmodule Polyphony.Jobs.GeneratePacket do
       provider: args["provider"],
       depth: args["depth"] || 0,
       max_depth: args["max_depth"] || BeatPolicy.default_max_depth(),
-      control: parse_control(args["control"])
+      control: parse_control(args["control"]),
+      # Keep the campaign-owner attribution flowing to the next slot (§B5).
+      user_id: args["user_id"],
+      campaign_id: args["campaign_id"]
     ]
   end
 
@@ -224,6 +227,9 @@ defmodule Polyphony.Jobs.GeneratePacket do
     |> maybe_put(:model, args["model"])
     |> maybe_put(:max_tokens, args["max_tokens"])
     |> maybe_put(:thinking, args["thinking"])
+    # Bill the cast turn to the campaign owner (§B5); nil ids record nothing.
+    |> maybe_put(:user_id, args["user_id"])
+    |> maybe_put(:campaign_id, args["campaign_id"])
   end
 
   defp maybe_put(opts, _key, nil), do: opts

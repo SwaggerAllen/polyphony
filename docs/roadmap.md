@@ -134,8 +134,15 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   `check/3` evaluates a rolling per-day cap and a lifetime per-campaign cap → `:ok` / `{:warn,…}`
   at the soft threshold / `{:stop,…}` past a ceiling; `allow?/3` is the circuit breaker the
   generation path consults so a stuck Director loop can't run unbounded. Caps from opts → config
-  → defaults. *Deferred:* wiring `record/2` into the live generation path and the resume/raise-cap
-  UI (the breaker + ledger are here).
+  → defaults. **Metering is now wired on the autonomous path:** `Polyphony.LLM.call` books every
+  chat call, and `Polyphony.Embeddings.embed` (the embed-path sibling) books every embedding;
+  autonomous spend — the Director's decision (`kind: "director"`), the cast turns it drives
+  (`"generation"`), and the memory embeddings (`"embedding"`) — is attributed to the **campaign
+  owner** via `Polyphony.Costs.Attribution.for_scene/1` (scene → campaign → owner), so a job with
+  no logged-in user still bills correctly. *Deferred:* consulting `allow?/3` as a pre-generation
+  gate (the breaker exists but isn't yet enforced on the beat loop), attributing **user-submitted**
+  turns (composer/suggestion) to the submitter, a separate embedding cost rate (embeddings reuse
+  the generation rate for now), and the resume/raise-cap UI.
 - **B6 — Export.** ✅ **Done.** `Polyphony.Export` (pure): `transcript/3` renders a scene's
   events to markdown, omniscient by default or **as a character** — the per-perspective export,
   which is just `Visibility.project/2`, so a character export structurally can't leak a whisper
@@ -250,6 +257,29 @@ Because content is stored unencrypted and the operator is a data controller:
    `DEEPINFRA_API_KEY`/model routing. See `docs/deployment.md`.
 4. **First-user auto-admin + `superadmin` role** → folded into **B2/B3**.
 5. **Invite-only sign-up (single-use links)** → folded into **B2**.
+
+---
+
+## FE/BE parity audit ⬜ **Planned — recurring gap**
+
+The same shape of bug keeps surfacing: a capability lives on **one** side only. Either
+the backend has it with no way to reach it (boundary authoring, human-controlled
+autogenerate, the cost circuit breaker — all now wired), or a subsystem is built and
+tested but **never invoked** on the live path (pgvector retrieval defaulted to the
+static retriever; the omniscient scene summary was written every close but never read;
+embeddings and autonomous generation weren't metered; embeddings weren't even produced
+by a real model). Each was found by accident, not by looking.
+
+Do a **deliberate one-pass audit**: enumerate the backend surface (contexts, Oban jobs,
+event types, read models, `Polyphony.*` public functions) against the LiveView surface
+(views, `handle_event`s, what's actually called at runtime), and for every capability
+that exists on one side only, either wire it or record it here as deliberately deferred
+with the reason. Known one-sided items to start from: the deferred FS views (**V2**
+Scene Index & Branch, **V3** Character Inspector, **V7** Location Graph, **V10.1**
+prompt-template editor); backend features whose UI is flagged deferred in §B (**B5**
+resume/raise-cap surface, **B6** export/download hooks, **B9** delete-confirmation flow,
+**B4** notification-prefs UI); and the standing invariant that any *new* event type or
+`Costs`/retrieval/generation seam gets checked for a live caller, not just a test.
 
 ---
 

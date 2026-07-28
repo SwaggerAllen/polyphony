@@ -21,6 +21,7 @@ defmodule PolyphonyWeb.DebugDrawerLive do
     {:ok,
      socket
      |> assign(:count, length(recent))
+     |> assign(:heavy, force_heavy?())
      |> stream(:logs, recent), layout: false}
   end
 
@@ -40,6 +41,16 @@ defmodule PolyphonyWeb.DebugDrawerLive do
     {:noreply, socket}
   end
 
+  # Toggle routing every chat generation to the heavy model (§9) — a global debug
+  # lever read by `Polyphony.LLM.call`. Affects all sessions; it's a bring-up aid.
+  def handle_event("toggle_heavy", _params, socket) do
+    heavy = not force_heavy?()
+    Application.put_env(:polyphony, :force_heavy_model, heavy)
+    {:noreply, assign(socket, :heavy, heavy)}
+  end
+
+  defp force_heavy?, do: Application.get_env(:polyphony, :force_heavy_model, false)
+
   @impl true
   def render(assigns) do
     #
@@ -57,6 +68,14 @@ defmodule PolyphonyWeb.DebugDrawerLive do
           <span class="debug-count"><%= @count %></span>
           <span id="socket-status" class="socket-status connecting" phx-update="ignore">connecting…</span>
           <div class="spacer"></div>
+          <button
+            type="button"
+            class={"btn sm #{if @heavy, do: "", else: "ghost"}"}
+            phx-click="toggle_heavy"
+            title="Route every generation to the heavy model"
+          >
+            Heavy: <%= if @heavy, do: "on", else: "off" %>
+          </button>
           <button type="button" class="btn sm ghost" id="debug-copy">Copy</button>
           <button type="button" class="btn sm ghost" phx-click="clear">Clear</button>
           <button type="button" class="btn sm ghost" id="debug-drawer-close">✕</button>

@@ -40,7 +40,7 @@ defmodule Polyphony.Suggest do
         members: Map.get(opts, :members, [])
       )
 
-    gen_opts = provider_opts(Map.get(opts, :provider))
+    gen_opts = gen_opts(opts)
 
     packets =
       1..count
@@ -77,6 +77,14 @@ defmodule Polyphony.Suggest do
   defp fetch_context!(%{context: %SceneContext{} = ctx}), do: ctx
   defp fetch_context!(_), do: raise(ArgumentError, "Suggest.variants requires a :context")
 
-  defp provider_opts(nil), do: []
-  defp provider_opts(provider), do: [provider: provider]
+  # Forward the provider (if injected) plus cost attribution — a user-initiated
+  # suggestion is the user's spend (§B5), metered like authoring.
+  defp gen_opts(opts) do
+    Enum.flat_map([:provider, :user_id, :campaign_id, :usage_kind], fn key ->
+      case Map.get(opts, key) do
+        nil -> []
+        value -> [{key, value}]
+      end
+    end)
+  end
 end

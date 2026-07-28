@@ -26,7 +26,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   alias Polyphony.{Library, Owner}
   alias Polyphony.Authoring.{Autofill, CharacterSheet, Stub, WorldBible}
-  alias Polyphony.Authoring.CharacterSheet.Relationship
+  alias Polyphony.Authoring.CharacterSheet.{Relationship, Boundary}
 
   # Prose fields are edited as blocks; name stays a single-line scalar.
   @field_specs [
@@ -66,7 +66,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
          world_context: world_context_for(worlds, world_id),
          relationships: sheet.relationships || [],
          relations_context:
-           relations_context(sheet.relationships || [], socket.assigns.current_user, entry.id)
+           relations_context(sheet.relationships || [], socket.assigns.current_user, entry.id),
+         boundaries: sheet.boundaries || []
        )
        |> assign_characters(other_characters(socket.assigns.current_user, entry.id))}
     else
@@ -105,6 +106,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
           backstory: join_blocks(blocks["backstory"]),
           world_bible_id: world_id_int(socket.assigns.world_id),
           relationships: rels,
+          boundaries: socket.assigns.boundaries,
           # Saving finalizes a pending stub — the author has reviewed it by editing
           # and saving, so it silently becomes a usable (:full) character.
           status: :full
@@ -239,6 +241,40 @@ defmodule PolyphonyWeb.SheetEditorLive do
     {:noreply,
      socket
      |> assign_relationships(List.delete_at(socket.assigns.relationships, idx))
+     |> touch()}
+  end
+
+  # ── Boundaries (§A3) ────────────────────────────────────────────────────────
+
+  def handle_event("add_boundary", params, socket) do
+    safe(socket, fn ->
+      case String.trim(params["topic"] || "") do
+        "" ->
+          {:noreply, put_flash(socket, :error, "Give the boundary a topic.")}
+
+        topic ->
+          boundary = %Boundary{
+            topic: topic,
+            stance: parse_stance(params["stance"]),
+            condition: blank_to_nil(params["condition"]),
+            on_pressure: blank_to_nil(params["on_pressure"]),
+            category: parse_category(params["category"])
+          }
+
+          {:noreply,
+           socket
+           |> assign(boundaries: socket.assigns.boundaries ++ [boundary])
+           |> touch()}
+      end
+    end)
+  end
+
+  def handle_event("remove_boundary", %{"index" => i}, socket) do
+    idx = String.to_integer(i)
+
+    {:noreply,
+     socket
+     |> assign(boundaries: List.delete_at(socket.assigns.boundaries, idx))
      |> touch()}
   end
 
@@ -745,6 +781,89 @@ defmodule PolyphonyWeb.SheetEditorLive do
         <option :for={n <- @char_names} value={n}></option>
       </datalist>
     </div>
+
+    <div class="card">
+      <h3>Boundaries</h3>
+      <p class="dim">
+        Lines this character holds. A refusal is played as a scene beat, never a filter (§A3).
+        A <strong>conditional</strong> boundary holds until its condition is earned in the story
+        (slow burn); an optional <strong>category</strong> lets a campaign's content ceiling cap it.
+      </p>
+
+      <div :if={@boundaries == []} class="faint">No boundaries yet.</div>
+      <ul class="rel-list">
+        <li :for={{b, i} <- Enum.with_index(@boundaries)} class="row rel-item">
+          <span><%= boundary_line(b) %></span>
+          <span class="spacer"></span>
+          <button type="button" class="btn danger sm" phx-click="remove_boundary" phx-value-index={i}>Remove</button>
+        </li>
+      </ul>
+
+      <form id="boundary-form" phx-submit="add_boundary" style="margin-top:.5rem;">
+        <div class="row">
+          <input type="text" name="topic" placeholder="Topic (e.g. physical intimacy, killing)" style="flex:1;" autocomplete="off" />
+          <select name="stance" style="width:auto;">
+            <option value="closed">Hard line — will not</option>
+            <option value="conditional">Conditional — until…</option>
+            <option value="open">Open to it</option>
+          </select>
+          <select name="category" style="width:auto;">
+            <option value="">No category</option>
+            <option value="sexual">Sexual</option>
+            <option value="graphic_violence">Graphic violence</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="row" style="margin-top:.4rem;">
+          <input type="text" name="condition" placeholder="Condition — until what happens? (conditional only)" style="flex:1;" />
+          <input type="text" name="on_pressure" placeholder="When pushed… (optional)" style="flex:1;" />
+          <button class="btn" type="submit">Add</button>
+        </div>
+      </form>
+    </div>
     """
+  end
+
+  # Human-readable one-line summary of a boundary for the list.
+  defp boundary_line(%Boundary{} = b) do
+    extras =
+      [condition_bit(b), pressure_bit(b), category_bit(b)] |> Enum.reject(&is_nil/1)
+
+    suffix = if extras == [], do: "", else: " · " <> Enum.join(extras, " · ")
+    "#{b.topic} — #{stance_label(b.stance)}" <> suffix
+  end
+
+  defp stance_label(:open), do: "open to it"
+  defp stance_label(:conditional), do: "held until earned"
+  defp stance_label(:closed), do: "a hard line"
+  defp stance_label(_), do: "holds back"
+
+  defp condition_bit(%Boundary{stance: :conditional, condition: c}) when is_binary(c) and c != "",
+    do: "until #{c}"
+
+  defp condition_bit(_), do: nil
+
+  defp pressure_bit(%Boundary{on_pressure: p}) when is_binary(p) and p != "",
+    do: "when pushed: #{p}"
+
+  defp pressure_bit(_), do: nil
+
+  defp category_bit(%Boundary{category: nil}), do: nil
+  defp category_bit(%Boundary{category: cat}), do: "capped by #{cat}"
+
+  defp parse_stance("open"), do: :open
+  defp parse_stance("conditional"), do: :conditional
+  defp parse_stance(_), do: :closed
+
+  defp parse_category("sexual"), do: :sexual
+  defp parse_category("graphic_violence"), do: :graphic_violence
+  defp parse_category("other"), do: :other
+  defp parse_category(_), do: nil
+
+  defp blank_to_nil(value) do
+    case String.trim(to_string(value || "")) do
+      "" -> nil
+      trimmed -> trimmed
+    end
   end
 end
