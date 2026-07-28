@@ -26,6 +26,22 @@ Hooks.Autoscroll = {
   },
 }
 
+// Auto-grow a textarea to fit its content (no inner scroll), so long authored
+// paragraphs are fully readable. Used by the block-field editor.
+Hooks.AutoGrow = {
+  grow() {
+    this.el.style.height = "auto"
+    this.el.style.height = this.el.scrollHeight + "px"
+  },
+  mounted() {
+    this.grow()
+    this.el.addEventListener("input", () => this.grow())
+  },
+  updated() {
+    this.grow()
+  },
+}
+
 const liveSocket = new LiveSocket("/live", Socket, {
   params: { _csrf_token: csrfToken },
   hooks: Hooks,

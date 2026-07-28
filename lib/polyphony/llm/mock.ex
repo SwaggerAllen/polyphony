@@ -28,6 +28,7 @@ defmodule Polyphony.LLM.Mock do
       :arc -> {:ok, arc_json(messages)}
       :sheet -> {:ok, sheet_json(messages)}
       :autofill -> {:ok, autofill_json(messages, opts)}
+      :relationships -> {:ok, relationships_json(messages)}
       :field -> {:ok, summary_text(messages)}
       :gate -> {:ok, gate_answer(messages)}
       _ -> {:ok, turn_packet_json(messages)}
@@ -97,6 +98,17 @@ defmodule Polyphony.LLM.Mock do
     |> Enum.with_index()
     |> Map.new(fn {field, i} -> {to_string(field), capitalize(lorem(seed + i * 5, 4)) <> "."} end)
     |> Jason.encode!()
+  end
+
+  # A couple of lorem relationship suggestions (Authoring.Autofill.suggest_relationships).
+  defp relationships_json(messages) do
+    seed = :erlang.phash2(messages)
+
+    Jason.encode!(
+      for i <- 0..2 do
+        %{target: capitalize(lorem(seed + i * 4, 1)), descriptor: lorem(seed + i * 4 + 1, 2)}
+      end
+    )
   end
 
   defp decision_json(opts) do

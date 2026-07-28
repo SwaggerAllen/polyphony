@@ -58,7 +58,7 @@ defmodule Polyphony.Authoring.Autofill do
   def generate_all(kind, brief, current \\ %{}, opts \\ []) do
     current = stringify(current)
     specs = fields(kind)
-    messages = all_messages(kind, brief, current, specs, opts[:world])
+    messages = all_messages(kind, brief, current, specs, context(opts))
     call = [response: :autofill, fields: Enum.map(specs, &elem(&1, 0))]
 
     with {:ok, text} <- Polyphony.LLM.call(messages, call ++ meter_opts(opts)),
@@ -87,7 +87,7 @@ defmodule Polyphony.Authoring.Autofill do
         {:error, {:unknown_field, field}}
 
       {^field, type, guidance} ->
-        messages = field_messages(kind, field, type, guidance, current, opts[:world])
+        messages = field_messages(kind, field, type, guidance, current, context(opts))
         call = [response: :field]
 
         with {:ok, text} <- Polyphony.LLM.call(messages, call ++ meter_opts(opts)) do
@@ -96,9 +96,127 @@ defmodule Polyphony.Authoring.Autofill do
     end
   end
 
+  @doc """
+  Generate a single paragraph of `field`. With `opts[:index]` set, rewrites that
+  paragraph (richer, same role); with `:index` nil, writes a NEW paragraph that
+  deepens the field without repeating it (the "expand" action). `opts[:blocks]` is
+  the field's current paragraphs, `:current` the other fields, plus the usual
+  `:world` / `:relations` context. Returns `{:ok, paragraph}`.
+  """
+  @spec generate_paragraph(kind(), String.t() | atom(), keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  def generate_paragraph(kind, field, opts \\ []) do
+    field = to_string(field)
+
+    case Enum.find(fields(kind), fn {name, _t, _g} -> name == field end) do
+      nil ->
+        {:error, {:unknown_field, field}}
+
+      {^field, _type, guidance} ->
+        messages =
+          paragraph_messages(
+            kind,
+            field,
+            guidance,
+            opts[:blocks] || [],
+            opts[:index],
+            stringify(opts[:current] || %{}),
+            context(opts)
+          )
+
+        with {:ok, text} <- Polyphony.LLM.call(messages, [response: :field] ++ meter_opts(opts)) do
+          {:ok, String.trim(text)}
+        end
+    end
+  end
+
+  @doc """
+  Propose relationships for a character from its fields + context. Returns
+  `{:ok, [%{"target" => name, "descriptor" => how_they_regard_them}]}`. The caller
+  decides which to accept (and new names stub on save, like a typed relationship).
+  """
+  @spec suggest_relationships(map(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  def suggest_relationships(current, opts \\ []) do
+    current = stringify(current)
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author populate a role-play character's relationships. " <>
+            "Propose 3–5 people this character would plausibly know. Return ONLY a JSON " <>
+            "array of objects, each with keys \"target\" (the other person's name) and " <>
+            "\"descriptor\" (how THIS character regards them — a short phrase)."
+      },
+      %{role: "user", content: context_block(context(opts)) <> character_block(current)}
+    ]
+
+    with {:ok, text} <-
+           Polyphony.LLM.call(messages, [response: :relationships] ++ meter_opts(opts)),
+         {:ok, list} <- decode_array(text) do
+      suggestions =
+        for item <- list, is_map(item), present?(t = item["target"]) do
+          %{
+            "target" => String.trim(to_string(t)),
+            "descriptor" => String.trim(to_string(item["descriptor"] || ""))
+          }
+        end
+
+      {:ok, suggestions}
+    end
+  end
+
   # ── Prompt building ──────────────────────────────────────────────────────────
 
-  defp all_messages(kind, brief, current, specs, world) do
+  defp paragraph_messages(kind, field, guidance, blocks, index, current, ctx) do
+    others =
+      current
+      |> Map.drop([field])
+      |> Enum.reject(fn {_k, v} -> blank?(v) end)
+      |> Enum.map_join("\n", fn {k, v} -> "#{k}: #{v}" end)
+
+    others_block = if others == "", do: "", else: "The #{noun(kind)} so far:\n#{others}\n\n"
+    nonempty = Enum.reject(blocks, &blank?/1)
+
+    instruction =
+      cond do
+        is_integer(index) and index < length(blocks) ->
+          numbered =
+            blocks |> Enum.with_index() |> Enum.map_join("\n", fn {b, i} -> "#{i + 1}. #{b}" end)
+
+          "The #{field} so far, paragraph by paragraph:\n#{numbered}\n\nRewrite paragraph " <>
+            "#{index + 1} to be richer and more specific — keep its role and stay consistent " <>
+            "with the rest. Return only that paragraph."
+
+        nonempty == [] ->
+          "Write the opening paragraph of the #{field}."
+
+        true ->
+          "The #{field} so far:\n#{Enum.join(nonempty, "\n\n")}\n\nWrite a NEW paragraph that " <>
+            "deepens the #{field} — add fresh, specific detail; do not repeat what's already " <>
+            "there. Return only the new paragraph."
+      end
+
+    [
+      %{
+        role: "system",
+        content:
+          "You are helping an author write the \"#{field}\" of a #{noun(kind)} — #{guidance}. " <>
+            "Write ONE vivid paragraph of prose. Return only the paragraph: no label, no " <>
+            "numbering, no quotes, no JSON."
+      },
+      %{role: "user", content: context_block(ctx) <> others_block <> instruction}
+    ]
+  end
+
+  defp character_block(current) do
+    case for {k, v} <- current, not blank?(v), do: "#{k}: #{v}" do
+      [] -> "The character has no details yet — invent evocative, specific connections.\n"
+      lines -> "The character:\n" <> Enum.join(lines, "\n") <> "\n"
+    end
+  end
+
+  defp all_messages(kind, brief, current, specs, ctx) do
     keys = specs |> Enum.map(&elem(&1, 0)) |> Enum.join(", ")
     guide = Enum.map_join(specs, "\n", fn {n, _t, g} -> "- #{n}: #{g}" end)
 
@@ -117,12 +235,12 @@ defmodule Polyphony.Authoring.Autofill do
         role: "user",
         content:
           "Author's brief:\n#{blank_to_dash(brief)}\n\n" <>
-            world_block(world) <> seed_block(current, specs) <> "Return the JSON object now."
+            context_block(ctx) <> seed_block(current, specs) <> "Return the JSON object now."
       }
     ]
   end
 
-  defp field_messages(kind, field, type, guidance, current, world) do
+  defp field_messages(kind, field, type, guidance, current, ctx) do
     others =
       current
       |> Map.drop([field])
@@ -153,10 +271,16 @@ defmodule Polyphony.Authoring.Autofill do
       },
       %{
         role: "user",
-        content: world_block(world) <> others_block <> seed <> "Write the #{field}:"
+        content: context_block(ctx) <> others_block <> seed <> "Write the #{field}:"
       }
     ]
   end
+
+  # The generation context (world bible + related character sheets), pulled from opts.
+  defp context(opts), do: %{world: opts[:world], relations: opts[:relations]}
+
+  defp context_block(%{} = ctx), do: world_block(ctx[:world]) <> relations_block(ctx[:relations])
+  defp context_block(_), do: ""
 
   # A compact rendering of the linked world bible, so generation grounds the
   # character in its setting (backstory/voice that fit the world). Absent → "".
@@ -182,6 +306,31 @@ defmodule Polyphony.Authoring.Autofill do
   end
 
   defp world_block(_), do: ""
+
+  # Compact sheets of this character's immediate relationships, so generated
+  # backstory/voice fit the people they're connected to. Each entry is one line.
+  defp relations_block(relations) when is_list(relations) and relations != [] do
+    lines =
+      Enum.map_join(relations, "\n", fn r ->
+        facets =
+          [
+            kv("premise", r["premise"]),
+            kv("voice", r["voice"]),
+            kv("temperament", r["temperament"]),
+            kv("backstory", r["backstory"])
+          ]
+          |> Enum.reject(&is_nil/1)
+          |> Enum.join(" | ")
+
+        regard = if r["descriptor"] in [nil, ""], do: "", else: " (#{r["descriptor"]})"
+        "- #{r["name"]}#{regard}: #{facets}"
+      end)
+
+    "Related characters — this character's connections; keep them consistent with " <>
+      "these people:\n" <> lines <> "\n\n"
+  end
+
+  defp relations_block(_), do: ""
 
   defp kv(_label, v) when v in [nil, ""], do: nil
   defp kv(label, v), do: "#{label}: #{v}"
@@ -233,6 +382,25 @@ defmodule Polyphony.Authoring.Autofill do
         with sub when is_binary(sub) <- slice_object(cleaned),
              {:ok, map} when is_map(map) <- Jason.decode(sub) do
           {:ok, map}
+        else
+          _ -> {:error, :invalid_json}
+        end
+    end
+  end
+
+  defp decode_array(text) do
+    cleaned = text |> strip_fences() |> String.trim()
+
+    case Jason.decode(cleaned) do
+      {:ok, list} when is_list(list) ->
+        {:ok, list}
+
+      _ ->
+        with a when a != nil <- index_of(cleaned, "["),
+             b when b != nil <- last_index_of(cleaned, "]"),
+             true <- b > a,
+             {:ok, list} when is_list(list) <- Jason.decode(binary_part(cleaned, a, b - a + 1)) do
+          {:ok, list}
         else
           _ -> {:error, :invalid_json}
         end

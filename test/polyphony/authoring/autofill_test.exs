@@ -89,6 +89,33 @@ defmodule Polyphony.Authoring.AutofillTest do
       assert msgs =~ "noir"
     end
 
+    test "related character sheets are injected into the prompt" do
+      relations = [
+        %{
+          "name" => "Bram",
+          "descriptor" => "estranged mentor",
+          "premise" => "a retired duelist who taught her everything",
+          "voice" => "clipped",
+          "temperament" => "stoic",
+          "backstory" => "left the guild in disgrace"
+        }
+      ]
+
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.generate_field(:character, "backstory", %{},
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture,
+            relations: relations
+          )
+        end)
+
+      assert msgs =~ "Related characters"
+      assert msgs =~ "Bram"
+      assert msgs =~ "estranged mentor"
+      assert msgs =~ "a retired duelist who taught her everything"
+    end
+
     test "no world context leaves the prompt clean (no dangling label)" do
       msgs =
         capture_prompt(fn capture ->
@@ -115,6 +142,79 @@ defmodule Polyphony.Authoring.AutofillTest do
       fun.(capture)
       assert_received {:prompt, messages}
       Enum.map_join(messages, "\n", & &1.content)
+    end
+  end
+
+  describe "generate_paragraph/3" do
+    test "rewrites the paragraph at a given index" do
+      assert {:ok, para} =
+               Autofill.generate_paragraph(:character, "backstory",
+                 blocks: ["orphaned young", "joined the guard"],
+                 index: 0,
+                 provider: Polyphony.LLM.Mock
+               )
+
+      assert is_binary(para) and para != ""
+    end
+
+    test "with no index, writes a fresh paragraph to append (expand)" do
+      assert {:ok, para} =
+               Autofill.generate_paragraph(:character, "backstory",
+                 blocks: ["orphaned young"],
+                 index: nil,
+                 provider: Polyphony.LLM.Mock
+               )
+
+      assert is_binary(para) and para != ""
+    end
+
+    test "the expand prompt asks not to repeat existing content" do
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.generate_paragraph(:character, "backstory",
+            blocks: ["She was orphaned in the flood."],
+            index: nil,
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture
+          )
+        end)
+
+      assert msgs =~ "NEW paragraph"
+      assert msgs =~ "do not repeat"
+      assert msgs =~ "She was orphaned in the flood."
+    end
+
+    test "rejects an unknown field" do
+      assert {:error, {:unknown_field, "nope"}} =
+               Autofill.generate_paragraph(:character, "nope", provider: Polyphony.LLM.Mock)
+    end
+  end
+
+  describe "suggest_relationships/2" do
+    test "returns target/descriptor suggestions" do
+      assert {:ok, suggestions} =
+               Autofill.suggest_relationships(%{"name" => "Mira", "premise" => "a smuggler"},
+                 provider: Polyphony.LLM.Mock
+               )
+
+      assert is_list(suggestions) and suggestions != []
+      assert Enum.all?(suggestions, &(is_binary(&1["target"]) and &1["target"] != ""))
+    end
+
+    test "parses a fenced JSON array and drops entries without a target" do
+      array =
+        {:ok,
+         "```json\n" <>
+           Jason.encode!([
+             %{"target" => "Bram", "descriptor" => "mentor"},
+             %{"descriptor" => "no target here"}
+           ]) <> "\n```"}
+
+      assert {:ok, [%{"target" => "Bram", "descriptor" => "mentor"}]} =
+               Autofill.suggest_relationships(%{},
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: array
+               )
     end
   end
 

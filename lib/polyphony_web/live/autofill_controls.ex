@@ -45,10 +45,13 @@ defmodule PolyphonyWeb.AutofillControls do
     end)
   end
 
-  # World seed + usage attribution (the signed-in author) for the metered LLM call.
+  # World seed + related-character sheets + usage attribution (the signed-in author).
   defp gen_opts(socket) do
-    [world: Map.get(socket.assigns, :world_context), usage_kind: "authoring"] ++
-      user_attribution(socket)
+    [
+      world: Map.get(socket.assigns, :world_context),
+      relations: Map.get(socket.assigns, :relations_context),
+      usage_kind: "authoring"
+    ] ++ user_attribution(socket)
   end
 
   defp user_attribution(socket) do

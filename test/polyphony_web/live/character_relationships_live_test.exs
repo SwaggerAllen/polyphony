@@ -55,6 +55,7 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     assert ghost, "expected a stub character named Ghost"
     stub = Library.payload(ghost)
     assert stub.status == :stub
+    assert stub.role == "haunts her"
     assert [%{target: "Mira", descriptor: "haunts her"}] = stub.relationships
   end
 

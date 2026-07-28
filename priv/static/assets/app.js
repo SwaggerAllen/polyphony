@@ -8729,6 +8729,19 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
       if (this.pinned) this.el.scrollTop = this.el.scrollHeight;
     }
   };
+  Hooks2.AutoGrow = {
+    grow() {
+      this.el.style.height = "auto";
+      this.el.style.height = this.el.scrollHeight + "px";
+    },
+    mounted() {
+      this.grow();
+      this.el.addEventListener("input", () => this.grow());
+    },
+    updated() {
+      this.grow();
+    }
+  };
   var liveSocket = new LiveSocket("/live", Socket, {
     params: { _csrf_token: csrfToken },
     hooks: Hooks2
