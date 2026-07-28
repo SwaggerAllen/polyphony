@@ -192,6 +192,30 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   knowledge, so this is not automatically public. Pairs with §B10 (a location-scoped trigger
   fires exactly this event) and feeds the deferred V7 Location Graph and boundary/arc
   evaluation the way character arcs do.
+- **B12 — Split the Director actor from a World actor.** ⬜ **Planned — not yet designed.**
+  **Sequence: after the locations authoring surface (§B11 / V7).** Today the Director *is* the
+  world agent — one agent casts/paces the scene *and* is the sole holder of world knowledge
+  (CLAUDE.md: "one agent per character plus a world agent ('Director')"). Split them: a **World
+  actor** owns the whole world **outside** the scene — persistent, campaign-level world state
+  that outlives any single scene (what's true, where things are, what's changed globally) —
+  while the **Director** keeps a narrowly-focused **per-scene** omniscient context. `Polyphony.
+  Director.SceneBrief` was built for exactly this shape (scene-scoped world framing + premise +
+  cast + cross-scene summaries, *not* the whole world), so it's already the Director-side seam.
+  Motivation: the Director's context should stay scene-tight for focus and cost; world-scale
+  knowledge doesn't belong in every beat's prompt.
+  *Interaction is the hard part (design later).* Leading candidate: the **Director calls the
+  World as a skill/tool**, and the **World runs on scene transitions (open/close), not every
+  beat** — so world-state updates are amortized at boundaries rather than paid per turn.
+  Alternative (or complement): **bump the Director to the heavy model** so it can carry more
+  context without a full split. These aren't mutually exclusive — a scene-tight Director on the
+  workhorse tier that consults a heavier World at transitions may beat either alone. Pairs with
+  §B10 (the World actor is the natural owner of world-scope triggers) and §B11 (world state
+  includes where things are). Keep it aggregate-safe (rule 1): the World *decides/produces
+  commands* in a job, aggregates stay LLM-free.
+  *Open questions:* the World↔Director contract (skill-call shape; what the World returns into a
+  scene); which world state is authored vs. emergent; how the World's cross-scene state relates
+  to the event log and copy-on-fork; whether "World at transitions" vs. "heavy Director" is
+  either/or or both.
 
 ---
 
