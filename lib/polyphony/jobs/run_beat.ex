@@ -25,6 +25,7 @@ defmodule Polyphony.Jobs.RunBeat do
   require Logger
 
   alias Polyphony.App
+  alias Polyphony.Costs.Attribution
   alias Polyphony.Director
   alias Polyphony.Director.{BeatDriver, BeatOps, BeatPolicy, Proposal, SceneBrief}
   alias Polyphony.Director.Commands.OpenBeat
@@ -37,6 +38,7 @@ defmodule Polyphony.Jobs.RunBeat do
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     scene_id = args["scene_id"]
+    args = put_attribution(args, scene_id)
     beat = args["beat"]
     depth = args["depth"] || 0
     max_depth = args["max_depth"] || BeatPolicy.default_max_depth()
@@ -102,7 +104,9 @@ defmodule Polyphony.Jobs.RunBeat do
       provider: args["provider"],
       depth: depth,
       max_depth: max_depth,
-      control: resolved.control
+      control: resolved.control,
+      user_id: args["user_id"],
+      campaign_id: args["campaign_id"]
     )
   end
 
@@ -121,8 +125,24 @@ defmodule Polyphony.Jobs.RunBeat do
       beat: beat,
       provider: BeatOps.resolve_provider(args["provider"]),
       cast_hint: members,
-      control_hint: parse_control(args["control_hint"])
+      control_hint: parse_control(args["control_hint"]),
+      # Bill the Director's judgment to the campaign owner (§B5); nil ids record nothing.
+      user_id: args["user_id"],
+      campaign_id: args["campaign_id"],
+      usage_kind: "director"
     ]
+  end
+
+  # Attribute autonomous spend (the Director's decision + the cast turns it drives) to
+  # the campaign owner (§B5). Resolved once from the scene and carried on args, so
+  # self-chained beats and cast jobs bill the same owner without re-resolving.
+  defp put_attribution(args, scene_id) do
+    if Map.has_key?(args, "user_id") or Map.has_key?(args, "campaign_id") do
+      args
+    else
+      attr = Attribution.for_scene(scene_id)
+      Map.merge(args, %{"user_id" => attr.user_id, "campaign_id" => attr.campaign_id})
+    end
   end
 
   # The Director is told the effective content register too (§A5) — governance is a

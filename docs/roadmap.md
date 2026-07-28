@@ -134,8 +134,15 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   `check/3` evaluates a rolling per-day cap and a lifetime per-campaign cap → `:ok` / `{:warn,…}`
   at the soft threshold / `{:stop,…}` past a ceiling; `allow?/3` is the circuit breaker the
   generation path consults so a stuck Director loop can't run unbounded. Caps from opts → config
-  → defaults. *Deferred:* wiring `record/2` into the live generation path and the resume/raise-cap
-  UI (the breaker + ledger are here).
+  → defaults. **Metering is now wired on the autonomous path:** `Polyphony.LLM.call` books every
+  chat call, and `Polyphony.Embeddings.embed` (the embed-path sibling) books every embedding;
+  autonomous spend — the Director's decision (`kind: "director"`), the cast turns it drives
+  (`"generation"`), and the memory embeddings (`"embedding"`) — is attributed to the **campaign
+  owner** via `Polyphony.Costs.Attribution.for_scene/1` (scene → campaign → owner), so a job with
+  no logged-in user still bills correctly. *Deferred:* consulting `allow?/3` as a pre-generation
+  gate (the breaker exists but isn't yet enforced on the beat loop), attributing **user-submitted**
+  turns (composer/suggestion) to the submitter, a separate embedding cost rate (embeddings reuse
+  the generation rate for now), and the resume/raise-cap UI.
 - **B6 — Export.** ✅ **Done.** `Polyphony.Export` (pure): `transcript/3` renders a scene's
   events to markdown, omniscient by default or **as a character** — the per-perspective export,
   which is just `Visibility.project/2`, so a character export structurally can't leak a whisper

@@ -30,8 +30,9 @@ defmodule Polyphony.SceneClose do
 
   require Logger
 
-  alias Polyphony.{App, Repo, Packets}
-  alias Polyphony.SceneClose.{Summarizer, ArcExtractor, Embedder}
+  alias Polyphony.{App, Embeddings, Repo, Packets}
+  alias Polyphony.Costs.Attribution
+  alias Polyphony.SceneClose.{Summarizer, ArcExtractor}
   alias Polyphony.ReadModels.{SceneSummary, ArcEntry}
   alias Polyphony.Events.CharacterEntered
   alias Polyphony.Jobs.{SummarizeScene, ExtractArc}
@@ -108,11 +109,15 @@ defmodule Polyphony.SceneClose do
           :ok | {:error, term()}
   def summarize_viewer(scene_id, viewer, opts) do
     repo = Keyword.get(opts, :repo) || Repo
-    embedder = Keyword.get(opts, :embedder) || Embedder.default()
     events = stored_events(scene_id)
 
+    # Meter the summary embedding to the campaign owner (§B5), resolved from the scene.
+    embed_opts =
+      [embedder: Keyword.get(opts, :embedder), usage_kind: "embedding"] ++
+        Map.to_list(Attribution.for_scene(scene_id))
+
     with {:ok, text} <- Summarizer.summarize(events, viewer, opts),
-         {:ok, embedding} <- embedder.embed(text) do
+         {:ok, embedding} <- Embeddings.embed(text, embed_opts) do
       SceneSummary.put(repo, scene_id, viewer_key(viewer), text, embedding)
       :ok
     else

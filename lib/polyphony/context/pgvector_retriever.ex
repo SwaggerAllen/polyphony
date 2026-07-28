@@ -17,9 +17,9 @@ defmodule Polyphony.Context.PgvectorRetriever do
 
   require Logger
 
-  alias Polyphony.Repo
+  alias Polyphony.{Embeddings, Repo}
+  alias Polyphony.Costs.Attribution
   alias Polyphony.ReadModels.SceneSummary
-  alias Polyphony.SceneClose.Embedder
 
   @impl true
   def rank_facts(facts, _premise, opts) do
@@ -30,12 +30,18 @@ defmodule Polyphony.Context.PgvectorRetriever do
   end
 
   @impl true
-  def fetch_summaries(%{character_id: character_id}, premise, opts) do
+  def fetch_summaries(%{character_id: character_id} = scope, premise, opts) do
     repo = Keyword.get(opts, :repo) || Repo
-    embedder = Keyword.get(opts, :embedder) || Embedder.default()
     limit = Keyword.get(opts, :limit) || 5
 
-    with {:ok, embedding} <- embedder.embed(premise || "") do
+    # Meter the query-embedding to the campaign owner (§B5), resolved from the scene.
+    attr = Attribution.for_scene(Map.get(scope, :scene_id))
+
+    embed_opts =
+      [embedder: Keyword.get(opts, :embedder), usage_kind: "embedding"] ++
+        Map.to_list(attr)
+
+    with {:ok, embedding} <- Embeddings.embed(premise || "", embed_opts) do
       repo
       |> SceneSummary.search(character_id, embedding, limit)
       |> Enum.map(&%{scene_id: &1.scene_id, text: &1.summary})

@@ -131,7 +131,10 @@ defmodule Polyphony.Director.BeatDriver do
       "provider" => provider_arg(opts[:provider]),
       "depth" => opts[:depth] || 0,
       "max_depth" => opts[:max_depth] || BeatPolicy.default_max_depth(),
-      "control" => control_str(opts[:control])
+      "control" => control_str(opts[:control]),
+      # Carry the campaign-owner attribution so the cast turn bills the owner (§B5).
+      "user_id" => opts[:user_id],
+      "campaign_id" => opts[:campaign_id]
     }
     |> GeneratePacket.new()
     |> Oban.insert!()
