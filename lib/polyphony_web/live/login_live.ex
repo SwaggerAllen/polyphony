@@ -40,7 +40,7 @@ defmodule PolyphonyWeb.LoginLive do
           <p class="dim">Dev: <a href={@dev_link}>click to sign in</a></p>
         <% end %>
       <% else %>
-        <form phx-submit="send">
+        <form id="login-form" phx-submit="send">
           <label for="email">Email</label>
           <input type="email" name="email" id="email" required autofocus placeholder="you@example.com" />
           <br /><br />

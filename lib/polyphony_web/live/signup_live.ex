@@ -78,7 +78,7 @@ defmodule PolyphonyWeb.SignupLive do
       <p :if={@first?} class="dim">You're the first user — you'll be the superadmin.</p>
       <div :if={@error} class="flash error"><%= @error %></div>
 
-      <form phx-submit="register">
+      <form id="signup-form" phx-submit="register">
         <label for="email">Email <span class="faint">(never shown publicly)</span></label>
         <input type="email" name="email" id="email" required />
 

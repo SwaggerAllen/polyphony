@@ -53,12 +53,20 @@ config :polyphony, :llm,
   provider: Polyphony.LLM.DeepInfra,
   deepinfra: [
     base_url: "https://api.deepinfra.com",
-    model: "Qwen/Qwen3.5-35B-A3B"
+    model: "Qwen/Qwen3.5-35B-A3B",
+    # Embedding model for pgvector summaries (§8). 1024-dim = the embedding column
+    # size; a different-dimension model is a migration. Overridable via
+    # DEEPINFRA_EMBED_MODEL. Only used in prod — dev/test embed with MockEmbedder.
+    embed_model: "BAAI/bge-large-en-v1.5"
   ],
   models: %{
     workhorse: "Qwen/Qwen3.5-35B-A3B",
     heavy: "Qwen/Qwen3.5-397B-A17B"
   }
+
+# Embedding provider. Defaults to the offline deterministic mock everywhere; prod
+# swaps in the real DeepInfra embedder in config/runtime.exs.
+config :polyphony, :embedder, Polyphony.SceneClose.MockEmbedder
 
 # Spend accounting (§B5). `micro_cents_per_1k_tokens` sets the estimated cost rate
 # every metered LLM call (`Polyphony.LLM`) books into the ledger; the caps guard

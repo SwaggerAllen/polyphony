@@ -215,7 +215,7 @@ defmodule PolyphonyWeb.LibraryLive do
     <h1>Your library</h1>
 
     <div class="card">
-      <form phx-submit="new" class="row">
+      <form id="library-new" phx-submit="new" class="row">
         <select name="kind" style="width:auto;">
           <option value="character">New character</option>
           <option value="world_bible">New world bible</option>

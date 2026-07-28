@@ -7,7 +7,7 @@ defmodule PolyphonyWeb.PlayTurnsLiveTest do
   alias Polyphony.TurnPacket.{Move, SelfState}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
   alias Polyphony.Director.BeatOps
-  alias Polyphony.Events.SpeechUttered
+  alias Polyphony.Events.{SpeechUttered, ThoughtOccurred, ActionTaken}
 
   setup :register_and_log_in_user
 
@@ -46,6 +46,14 @@ defmodule PolyphonyWeb.PlayTurnsLiveTest do
     |> BeatOps.stored_events()
     |> Packets.canonical()
     |> Enum.filter(&match?(%SpeechUttered{}, &1))
+    |> Enum.map(& &1.content)
+  end
+
+  defp canonical_kind(scene, struct) do
+    scene
+    |> BeatOps.stored_events()
+    |> Packets.canonical()
+    |> Enum.filter(&(&1.__struct__ == struct))
     |> Enum.map(& &1.content)
   end
 
@@ -93,6 +101,30 @@ defmodule PolyphonyWeb.PlayTurnsLiveTest do
 
     assert canonical_speech(scene) == ["New words entirely."]
     assert render(view) =~ "New words entirely."
+    refute render(view) =~ "Old words."
+  end
+
+  test "editing rewrites the whole turn — thought and action, not just speech",
+       %{conn: conn} do
+    scene = scene_with_turn("Old words.")
+    pid = BeatOps.packet_id(scene, 1, "mira")
+
+    {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+
+    view |> element("button[phx-click=edit_turn][phx-value-packet='#{pid}']") |> render_click()
+
+    view
+    |> form("form[phx-submit=save_edit]", %{
+      "beat" => "1",
+      "character" => "mira",
+      "packet" => pid,
+      "text" => "thinks: I should stay wary.\nWelcome.\ndoes: draws the bolt"
+    })
+    |> render_submit()
+
+    assert canonical_speech(scene) == ["Welcome."]
+    assert canonical_kind(scene, ThoughtOccurred) == ["I should stay wary."]
+    assert canonical_kind(scene, ActionTaken) == ["draws the bolt"]
     refute render(view) =~ "Old words."
   end
 end

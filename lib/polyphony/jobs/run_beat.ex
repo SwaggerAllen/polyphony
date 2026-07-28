@@ -26,7 +26,7 @@ defmodule Polyphony.Jobs.RunBeat do
 
   alias Polyphony.App
   alias Polyphony.Director
-  alias Polyphony.Director.{BeatDriver, BeatOps, BeatPolicy, Proposal}
+  alias Polyphony.Director.{BeatDriver, BeatOps, BeatPolicy, Proposal, SceneBrief}
   alias Polyphony.Director.Commands.OpenBeat
 
   @doc "Kick off (or resume) the beat loop for a scene."
@@ -112,7 +112,11 @@ defmodule Polyphony.Jobs.RunBeat do
     [
       proposals: parse_proposals(args["proposals"]),
       options: parse_options(args["options"]),
-      messages: [%{role: "system", content: director_system_message(args)}],
+      # The omniscient scene brief (§9): world + premise + cast + cross-scene
+      # summaries (frozen at scene open) plus the full transcript and present roster.
+      # cast_hint below is read only by the offline Mock; the real provider casts
+      # from the brief. Both must know who is present.
+      messages: SceneBrief.messages(scene_id, members, system: director_system_message(args)),
       scene_id: scene_id,
       beat: beat,
       provider: BeatOps.resolve_provider(args["provider"]),

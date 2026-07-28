@@ -24,8 +24,8 @@ defmodule PolyphonyWeb.PlayLive do
     TurnOrder
   }
 
-  alias Polyphony.Context.Store
-  alias Polyphony.Director.BeatOps
+  alias Polyphony.Context.{Store, PgvectorRetriever}
+  alias Polyphony.Director.{BeatOps, SceneBrief}
 
   alias Polyphony.Commands.{
     CommitPacket,
@@ -50,7 +50,7 @@ defmodule PolyphonyWeb.PlayLive do
 
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.SelfState
-  alias PolyphonyWeb.SayParser
+  alias PolyphonyWeb.{SayParser, TurnEdit}
 
   def mount(%{"scene_id" => scene_id}, _session, socket) do
     {:ok,
@@ -263,21 +263,44 @@ defmodule PolyphonyWeb.PlayLive do
     scene_id = socket.assigns.scene_id
     beat = max(socket.assigns.next_beat - 1, 1)
     :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: name, beat: beat})
-    seed_context(scene_id, name, sheet, socket.assigns.premise)
+    seed_context(scene_id, name, sheet, socket.assigns.premise, campaign_world_bible(socket))
+    # Fold the newcomer into the Director's omniscient brief so the next beat knows them.
+    SceneBrief.note_character(scene_id, sheet)
     socket |> reload() |> put_flash(:info, "#{name} joins the scene.")
   end
 
   defp admit(socket, name, _other),
     do: put_flash(socket, :error, "#{name} has no usable sheet yet.")
 
-  defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise) do
+  defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible) do
     ctx =
-      Context.materialize(scene_id: scene_id, character_id: name, sheet: sheet, premise: premise)
+      Context.materialize(
+        scene_id: scene_id,
+        character_id: name,
+        sheet: sheet,
+        premise: premise,
+        world_bible: bible,
+        # Retrieve this character's own distant-scene summaries from pgvector
+        # (no-ops to [] without egress / when the embed fails).
+        retriever: PgvectorRetriever
+      )
 
     Store.put(scene_id, name, ctx)
   end
 
-  defp seed_context(_scene_id, _name, _other, _premise), do: :ok
+  defp seed_context(_scene_id, _name, _other, _premise, _bible), do: :ok
+
+  # The scene's world bible payload (a `%WorldBible{}`), or nil — for framing both
+  # the admitted character's context and the Director's omniscient brief.
+  defp campaign_world_bible(socket) do
+    case campaign_world_id(socket) do
+      nil -> nil
+      wid -> Library.get(wid) |> maybe_payload()
+    end
+  end
+
+  defp maybe_payload(nil), do: nil
+  defp maybe_payload(entry), do: Library.payload(entry)
 
   # The world bible id behind this scene's campaign, for stubbing new introductions
   # into the right setting. Nil if the scene has no campaign or world.
@@ -430,11 +453,11 @@ defmodule PolyphonyWeb.PlayLive do
       scene = socket.assigns.scene_id
       beat = String.to_integer(b)
 
-      case SayParser.parse(params["text"] || "") do
-        [] ->
+      case TurnEdit.parse(params["text"] || "") do
+        {[], _self_state} ->
           {:noreply, put_flash(socket, :error, "The turn can't be empty.")}
 
-        moves ->
+        {moves, self_state} ->
           attempt = BeatOps.next_attempt(BeatOps.stored_events(scene), scene, beat, c)
           new_id = BeatOps.reroll_packet_id(scene, beat, c, attempt)
 
@@ -454,7 +477,7 @@ defmodule PolyphonyWeb.PlayLive do
               character_id: c,
               beat: beat,
               packet_id: new_id,
-              packet: %TurnPacket{moves: moves, self_state: %SelfState{}},
+              packet: %TurnPacket{moves: moves, self_state: self_state},
               edited: true
             })
 
@@ -674,15 +697,9 @@ defmodule PolyphonyWeb.PlayLive do
     |> Enum.reverse()
   end
 
-  # The editable text of a turn: its spoken/acted lines joined (interior thoughts and
-  # state aren't edited here — an edit rewrites what the character externally did).
-  defp turn_text(block) do
-    block.msgs
-    |> Enum.filter(&(&1[:kind] in ["SpeechUttered", "ActionTaken"]))
-    |> Enum.map(&(&1[:payload] || %{})[:content])
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.join("\n")
-  end
+  # The editable text of a turn: the whole turn — thoughts, speech, actions, and
+  # demeanor — serialized one move per line (see `TurnEdit`), not just its spoken lines.
+  defp turn_text(block), do: TurnEdit.serialize(block.msgs)
 
   # A short, human reason for a failure line — the model's reason if any, else the kind.
   defp failure_reason(%{reason: r}) when is_binary(r) and r != "", do: r
@@ -712,7 +729,7 @@ defmodule PolyphonyWeb.PlayLive do
           <li :for={c <- @roster} class="row rel-item">
             <span><%= c %></span>
             <span class="spacer"></span>
-            <form phx-change="set_control">
+            <form id={"control-#{c}"} phx-change="set_control">
               <input type="hidden" name="character" value={c} />
               <select name="control" style="width:auto;">
                 <option value="autonomous" selected={control_of(@control_modes, c) == "autonomous"}>Automated</option>
@@ -744,6 +761,7 @@ defmodule PolyphonyWeb.PlayLive do
 
             <form
               :if={@viewer == :omniscient and block.type == :turn and @editing == block.packet_id}
+              id={"edit-#{block.packet_id}"}
               phx-submit="save_edit"
               class="turn-edit"
             >
@@ -794,7 +812,7 @@ defmodule PolyphonyWeb.PlayLive do
 
       <div class="composer card">
         <.waiting :if={@waiting == :director} state="director" label="The cast is responding…" />
-        <form phx-submit="say">
+        <form id="say-form" phx-submit="say">
           <textarea
             :if={@speaker}
             id="say-input"

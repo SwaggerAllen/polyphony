@@ -38,6 +38,10 @@ without a code change:
 - **`DEEPINFRA_MODEL`** — the **workhorse** model, used on every turn.
 - **`DEEPINFRA_MODEL_HEAVY`** — reserved for character/world generation and the
   refusal model-swap (falls back to the workhorse if unset).
+- `DEEPINFRA_EMBED_MODEL` — optional; the embedding model for pgvector memory
+  (defaults to `BAAI/bge-large-en-v1.5`). ⚠ **Must be 1024-dim** to match the
+  `character_scene_summaries.embedding` column — a different-dimension model needs
+  a migration. Prod embeds real vectors here; dev/test use the offline mock.
 - `DEEPINFRA_BASE_URL` — optional; defaults to `https://api.deepinfra.com`.
 
 > ⚠ **The model ids in `config/config.exs` are placeholders** (illustrative Qwen

@@ -77,7 +77,7 @@ defmodule PolyphonyWeb.SettingsLive do
 
     <div class="card">
       <h3>Profile</h3>
-      <form phx-submit="profile">
+      <form id="profile-form" phx-submit="profile">
         <label>Display name</label>
         <input type="text" name="display_name" value={@current_user.display_name} />
         <label>Avatar URL</label>
@@ -91,7 +91,7 @@ defmodule PolyphonyWeb.SettingsLive do
 
     <div class="card">
       <h3>Username</h3>
-      <form phx-submit="username" class="row">
+      <form id="username-form" phx-submit="username" class="row">
         <input type="text" name="username" value={@current_user.username} />
         <button class="btn ghost" type="submit">Change</button>
       </form>
