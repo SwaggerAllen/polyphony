@@ -24,7 +24,7 @@ defmodule PolyphonyWeb.PlayLive do
     TurnOrder
   }
 
-  alias Polyphony.Context.Store
+  alias Polyphony.Context.{Store, PgvectorRetriever}
   alias Polyphony.Director.{BeatOps, SceneBrief}
 
   alias Polyphony.Commands.{
@@ -279,7 +279,10 @@ defmodule PolyphonyWeb.PlayLive do
         character_id: name,
         sheet: sheet,
         premise: premise,
-        world_bible: bible
+        world_bible: bible,
+        # Retrieve this character's own distant-scene summaries from pgvector
+        # (no-ops to [] without egress / when the embed fails).
+        retriever: PgvectorRetriever
       )
 
     Store.put(scene_id, name, ctx)

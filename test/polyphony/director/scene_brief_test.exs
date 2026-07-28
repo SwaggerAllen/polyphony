@@ -5,13 +5,16 @@ defmodule Polyphony.Director.SceneBriefTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.App
+  alias Polyphony.{App, Repo}
   alias Polyphony.Authoring.{WorldBible, CharacterSheet}
   alias Polyphony.Director.SceneBrief
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
+  alias Polyphony.Context.PgvectorRetriever
   alias Polyphony.Director.BeatOps
+  alias Polyphony.ReadModels.SceneSummary
+  alias Polyphony.SceneClose.MockEmbedder
 
   defp scene, do: "sb-" <> Integer.to_string(System.unique_integer([:positive]))
 
@@ -133,6 +136,35 @@ defmodule Polyphony.Director.SceneBriefTest do
       # The Director is omniscient: the interior thought is visible to it.
       assert user =~ "mira thinks: I must not flinch."
       assert user =~ "State your business."
+    end
+  end
+
+  describe "cross-scene continuity (pgvector, omniscient-scoped)" do
+    setup do
+      :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    end
+
+    defp embed(text), do: elem(MockEmbedder.embed(text), 1)
+
+    test "pulls the omniscient summary rows — the ones scene-close writes and nothing else read" do
+      # Scene-close writes an omniscient table-of-contents row plus per-character
+      # ones. The Director's brief must read the omniscient row, and only that.
+      SceneSummary.put(
+        Repo,
+        "S0",
+        SceneSummary.omniscient_key(),
+        "THE-WHOLE-TRUTH",
+        embed("gate")
+      )
+
+      SceneSummary.put(Repo, "S0", "mira", "MIRA-ONLY memory", embed("gate"))
+
+      s = scene()
+      SceneBrief.materialize(s, premise: "gate", retriever: PgvectorRetriever)
+
+      [_system, %{content: user}] = SceneBrief.messages(s, ["mira"])
+      assert user =~ "THE-WHOLE-TRUTH"
+      refute user =~ "MIRA-ONLY memory"
     end
   end
 end

@@ -181,7 +181,10 @@ defmodule PolyphonyWeb.CampaignLive do
         character_id: name,
         sheet: sheet,
         premise: premise,
-        world_bible: bible
+        world_bible: bible,
+        # Retrieve this character's own distant-scene summaries from pgvector
+        # (no-ops to [] without egress / when the embed fails).
+        retriever: PgvectorRetriever
       )
 
     Store.put(scene_id, name, ctx)
