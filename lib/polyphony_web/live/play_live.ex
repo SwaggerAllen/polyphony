@@ -32,7 +32,8 @@ defmodule PolyphonyWeb.PlayLive do
     DeclareTurnOrder,
     EnterCharacter,
     DismissIntroduction,
-    SetControlMode
+    SetControlMode,
+    SupersedePacket
   }
 
   alias Polyphony.Authoring.{Autofill, CharacterSheet, Stub, StubGen}
@@ -61,6 +62,7 @@ defmodule PolyphonyWeb.PlayLive do
        introductions: [],
        control_modes: %{},
        failures: [],
+       editing: nil,
        premise: ""
      )}
   end
@@ -374,6 +376,94 @@ defmodule PolyphonyWeb.PlayLive do
     end)
   end
 
+  # ── Turn management within a beat (§7 supersede-and-recommit) ──────────────────
+
+  # Reroll: regenerate this turn (and the rest of its beat) in place. Async — the
+  # generation can be slow — with the busy indicator up.
+  def handle_event("reroll_turn", %{"beat" => b, "character" => c}, socket) do
+    safe(socket, fn ->
+      scene = socket.assigns.scene_id
+      beat = String.to_integer(b)
+
+      {:noreply,
+       socket
+       |> assign(waiting: :director)
+       |> put_flash(:info, "Rerolling #{c}…")
+       |> start_async({:reroll, c}, fn -> Polyphony.Reroll.reroll(scene, beat, c) end)}
+    end)
+  end
+
+  # Delete: supersede this turn so it drops out of the canonical transcript.
+  def handle_event("delete_turn", %{"beat" => b, "character" => c, "packet" => pid}, socket) do
+    safe(socket, fn ->
+      scene = socket.assigns.scene_id
+      beat = String.to_integer(b)
+      attempt = BeatOps.next_attempt(BeatOps.stored_events(scene), scene, beat, c)
+
+      :ok =
+        App.dispatch(%SupersedePacket{
+          scene_id: scene,
+          beat: beat,
+          character_id: c,
+          packet_id: pid,
+          attempt: attempt,
+          reason: "deleted by author"
+        })
+
+      {:noreply, socket |> put_flash(:info, "Removed #{c}'s turn.") |> reload()}
+    end)
+  end
+
+  def handle_event("edit_turn", %{"packet" => pid}, socket),
+    do: {:noreply, assign(socket, editing: pid)}
+
+  def handle_event("cancel_edit", _params, socket), do: {:noreply, assign(socket, editing: nil)}
+
+  # Save an edit: supersede the old take and commit the author's rewrite as a new
+  # attempt (same aloud/whisper inference as the composer).
+  def handle_event(
+        "save_edit",
+        %{"beat" => b, "character" => c, "packet" => pid} = params,
+        socket
+      ) do
+    safe(socket, fn ->
+      scene = socket.assigns.scene_id
+      beat = String.to_integer(b)
+
+      case SayParser.parse(params["text"] || "") do
+        [] ->
+          {:noreply, put_flash(socket, :error, "The turn can't be empty.")}
+
+        moves ->
+          attempt = BeatOps.next_attempt(BeatOps.stored_events(scene), scene, beat, c)
+          new_id = BeatOps.reroll_packet_id(scene, beat, c, attempt)
+
+          :ok =
+            App.dispatch(%SupersedePacket{
+              scene_id: scene,
+              beat: beat,
+              character_id: c,
+              packet_id: pid,
+              attempt: attempt,
+              reason: "edited by author"
+            })
+
+          :ok =
+            App.dispatch(%CommitPacket{
+              scene_id: scene,
+              character_id: c,
+              beat: beat,
+              packet_id: new_id,
+              packet: %TurnPacket{moves: moves, self_state: %SelfState{}},
+              edited: true
+            })
+
+          {:noreply,
+           socket |> assign(editing: nil) |> put_flash(:info, "Updated #{c}'s turn.") |> reload()}
+      end
+    end)
+  end
+
   # Scan the scene's committed prose for characters mentioned but not yet created,
   # and stub them for later (§B8 mention-stubbing).
   def handle_event("find_mentions", _params, socket) do
@@ -455,6 +545,11 @@ defmodule PolyphonyWeb.PlayLive do
     {:noreply, socket |> assign(waiting: :you) |> reload()}
   end
 
+  def handle_info({:polyphony_event, %{type: "packet.superseded"}}, socket) do
+    # A re-roll/edit/delete dropped a packet — re-derive canonical rather than append.
+    {:noreply, reload(socket)}
+  end
+
   def handle_info({:polyphony_event, msg}, socket) do
     socket =
       case msg do
@@ -506,6 +601,21 @@ defmodule PolyphonyWeb.PlayLive do
   def handle_async(:mentions, _result, socket),
     do: {:noreply, put_flash(socket, :error, "Couldn't scan for mentioned characters.")}
 
+  def handle_async({:reroll, _c}, {:ok, {:ok, _}}, socket),
+    do: {:noreply, socket |> assign(waiting: :you) |> reload()}
+
+  def handle_async({:reroll, c}, {:ok, {:error, reason}}, socket) do
+    {:noreply,
+     socket
+     |> assign(waiting: :you)
+     |> put_flash(:error, "Couldn't reroll #{c} (#{inspect(reason)}).")
+     |> reload()}
+  end
+
+  def handle_async({:reroll, c}, _result, socket) do
+    {:noreply, socket |> assign(waiting: :you) |> put_flash(:error, "Reroll of #{c} failed.")}
+  end
+
   defp append(socket, msg) do
     seq = msg[:seq]
     existing = socket.assigns.messages
@@ -531,6 +641,48 @@ defmodule PolyphonyWeb.PlayLive do
 
   # A character's control mode, defaulting to autonomous (matches the beat walk).
   defp control_of(modes, character), do: Map.get(modes, character) || "autonomous"
+
+  # Group the flat message stream into blocks: a character's turn (one committed
+  # packet, all its moves) carries edit/reroll/delete affordances; everything else
+  # (world events, entrances) is a plain block.
+  defp turn_blocks(messages) do
+    messages
+    |> Enum.reduce([], fn m, acc ->
+      payload = m[:payload] || %{}
+      pid = payload[:packet_id]
+
+      case acc do
+        [%{type: :turn, packet_id: ^pid} = head | rest] when not is_nil(pid) ->
+          [%{head | msgs: head.msgs ++ [m]} | rest]
+
+        _ when is_nil(pid) ->
+          [%{type: :event, packet_id: nil, character: nil, beat: nil, msgs: [m]} | acc]
+
+        _ ->
+          [
+            %{
+              type: :turn,
+              packet_id: pid,
+              character: payload[:character_id] || payload[:speaker_id],
+              beat: payload[:beat],
+              msgs: [m]
+            }
+            | acc
+          ]
+      end
+    end)
+    |> Enum.reverse()
+  end
+
+  # The editable text of a turn: its spoken/acted lines joined (interior thoughts and
+  # state aren't edited here — an edit rewrites what the character externally did).
+  defp turn_text(block) do
+    block.msgs
+    |> Enum.filter(&(&1[:kind] in ["SpeechUttered", "ActionTaken"]))
+    |> Enum.map(&(&1[:payload] || %{})[:content])
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join("\n")
+  end
 
   # A short, human reason for a failure line — the model's reason if any, else the kind.
   defp failure_reason(%{reason: r}) when is_binary(r) and r != "", do: r
@@ -578,8 +730,32 @@ defmodule PolyphonyWeb.PlayLive do
 
       <div class="card transcript-card">
         <div id="transcript" class="transcript" phx-hook="Autoscroll">
-          <div :for={{m, i} <- Enum.with_index(@messages)} id={"m-#{m[:seq] || "x"}-#{i}"}>
-            <%= render_move(m) %>
+          <div :for={{block, i} <- Enum.with_index(turn_blocks(@messages))} id={"blk-#{i}"} class="turn-block">
+            <div :for={m <- block.msgs}><%= render_move(m) %></div>
+
+            <div
+              :if={@viewer == :omniscient and block.type == :turn and @editing != block.packet_id}
+              class="turn-controls"
+            >
+              <button class="btn ghost xs" phx-click="reroll_turn" phx-value-beat={block.beat} phx-value-character={block.character}>Reroll</button>
+              <button class="btn ghost xs" phx-click="edit_turn" phx-value-packet={block.packet_id}>Edit</button>
+              <button class="btn danger xs" phx-click="delete_turn" phx-value-beat={block.beat} phx-value-character={block.character} phx-value-packet={block.packet_id} data-confirm="Remove this turn?">Delete</button>
+            </div>
+
+            <form
+              :if={@viewer == :omniscient and block.type == :turn and @editing == block.packet_id}
+              phx-submit="save_edit"
+              class="turn-edit"
+            >
+              <input type="hidden" name="beat" value={block.beat} />
+              <input type="hidden" name="character" value={block.character} />
+              <input type="hidden" name="packet" value={block.packet_id} />
+              <textarea name="text" rows="2" class="say-input"><%= turn_text(block) %></textarea>
+              <div class="row" style="margin-top:.35rem;">
+                <button class="btn xs" type="submit">Save</button>
+                <button class="btn ghost xs" type="button" phx-click="cancel_edit">Cancel</button>
+              </div>
+            </form>
           </div>
         </div>
       </div>

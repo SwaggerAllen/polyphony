@@ -943,6 +943,30 @@ input:focus, textarea:focus, select:focus {
   color: var(--bad);
 }
 
+/* Turn management: controls appear on hover over a character's turn (omniscient). */
+
+.turn-block {
+  position: relative;
+}
+
+.turn-controls {
+  display: none;
+  gap: .25rem;
+  padding: .1rem 0 .35rem;
+}
+
+.turn-block:hover .turn-controls {
+  display: flex;
+}
+
+.turn-edit {
+  padding: .25rem 0 .5rem;
+}
+
+.turn-edit .say-input {
+  min-height: 3rem;
+}
+
 .cast-panel summary {
   cursor: pointer;
   font-size: .9rem;
