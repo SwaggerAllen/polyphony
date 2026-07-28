@@ -83,25 +83,35 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
     assert length(Regex.scan(~r/name="b_backstory\[\]"/, html)) == 1
   end
 
-  test "AI-suggested relationships can be accepted and stubbed on save", %{conn: conn, user: user} do
+  test "AI-suggested relationships are auto-added and stub on save", %{conn: conn, user: user} do
     entry = character(user, %CharacterSheet{name: "Mira", status: :full})
     {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
 
-    view |> element("button[phx-click=suggest_relationships]") |> render_click()
-    html = render_async(view)
-    assert html =~ "Suggestions"
-
-    # Accept the first suggestion, then save — the suggested target stubs.
     before = Enum.count(Library.list_for_owner(Owner.of(user)), &(&1.kind == "character"))
 
-    view
-    |> element("button[phx-click='accept_suggestion'][phx-value-index='0']")
-    |> render_click()
+    # Suggest adds directly to the list — no confirmation step.
+    view |> element("button[phx-click=suggest_relationships]") |> render_click()
+    html = render_async(view)
+    assert html =~ "Added"
+    assert html =~ "Remove"
 
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
 
     after_count = Enum.count(Library.list_for_owner(Owner.of(user)), &(&1.kind == "character"))
-    assert after_count == before + 1
+    assert after_count > before
     assert Library.payload(Library.get(entry.id)).relationships != []
+  end
+
+  test "a relationship to an existing character links to its editor", %{conn: conn, user: user} do
+    bram = character(user, %CharacterSheet{name: "Bram", status: :full})
+    mira = character(user, %CharacterSheet{name: "Mira", status: :full})
+
+    {:ok, view, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
+
+    view
+    |> form("form[phx-submit=add_relationship]", %{target: "Bram", descriptor: "old friend"})
+    |> render_submit()
+
+    assert render(view) =~ ~s(href="/authoring/character/#{bram.id}")
   end
 end
