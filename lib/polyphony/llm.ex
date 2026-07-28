@@ -30,11 +30,41 @@ defmodule Polyphony.LLM do
 
   @spec call([Provider.message()], keyword()) :: {:ok, String.t()} | {:error, term()}
   def call(messages, opts \\ []) do
-    provider = Keyword.get(opts, :provider) || Provider.default()
-    result = provider.complete(messages, opts)
-    meter(result, messages, opts)
-    result
+    opts = maybe_force_heavy(opts)
+
+    if allowed?(opts) do
+      provider = Keyword.get(opts, :provider) || Provider.default()
+      result = provider.complete(messages, opts)
+      meter(result, messages, opts)
+      result
+    else
+      # Circuit breaker (§B5): an attributed caller over a hard cap doesn't spend.
+      {:error, :cost_cap_reached}
+    end
   end
+
+  # The circuit breaker: refuse an attributed call once a hard cap is hit, so a stuck
+  # Director loop (or heavy-model testing) can't run unbounded. Unattributed internal
+  # calls have no per-user/campaign ledger to check, so they pass.
+  defp allowed?(opts) do
+    case {opts[:user_id], opts[:campaign_id]} do
+      {nil, nil} -> true
+      {user_id, campaign_id} -> Costs.allow?(user_id, campaign_id)
+    end
+  end
+
+  # Debug lever: when `:force_heavy_model` is set (toggled from the debug drawer),
+  # route every chat call to the heavy model regardless of the caller's choice — for
+  # eyeballing heavy-model quality without editing config.
+  defp maybe_force_heavy(opts) do
+    if Application.get_env(:polyphony, :force_heavy_model, false) do
+      Keyword.put(opts, :model, heavy_model())
+    else
+      opts
+    end
+  end
+
+  defp heavy_model, do: get_in(Application.get_env(:polyphony, :llm, []), [:models, :heavy])
 
   @doc """
   Rough cost estimate in micro-cents from prompt + response size (~4 chars/token).

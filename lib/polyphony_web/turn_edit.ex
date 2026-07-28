@@ -18,6 +18,7 @@ defmodule PolyphonyWeb.TurnEdit do
   through `SayParser` so aloud/whisper is inferred from the text exactly as in the
   composer. Move ordering follows line order (`seq` renumbered on parse).
   """
+  alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
   alias PolyphonyWeb.SayParser
 
@@ -51,6 +52,41 @@ defmodule PolyphonyWeb.TurnEdit do
   end
 
   defp line_for(_), do: []
+
+  @doc """
+  Render a freshly-generated `TurnPacket` to editable composer text (the same
+  one-move-per-line format `parse/1` reads), so a suggestion drops into the composer
+  and round-trips on submit.
+  """
+  @spec serialize_packet(TurnPacket.t()) :: String.t()
+  def serialize_packet(%TurnPacket{moves: moves, self_state: self_state}) do
+    move_lines = moves |> Enum.sort_by(& &1.seq) |> Enum.flat_map(&packet_move_line/1)
+    demeanor = self_state && self_state.demeanor
+
+    demeanor_line =
+      if is_binary(demeanor) and demeanor != "", do: ["seems: #{demeanor}"], else: []
+
+    Enum.join(move_lines ++ demeanor_line, "\n")
+  end
+
+  defp packet_move_line(%Move{type: :thought, content: c}), do: text_line("thinks: ", c)
+  defp packet_move_line(%Move{type: :action, content: c}), do: text_line("does: ", c)
+
+  defp packet_move_line(%Move{type: :speech, content: c, audibility: :private, addressed_to: to}) do
+    case String.trim(to_string(c || "")) do
+      "" -> []
+      said -> ["(whisper to #{Enum.join(to || [], ", ")}: #{said})"]
+    end
+  end
+
+  defp packet_move_line(%Move{type: :speech, content: c}) do
+    case String.trim(to_string(c || "")) do
+      "" -> []
+      said -> [said]
+    end
+  end
+
+  defp packet_move_line(_), do: []
 
   defp text_line(prefix, content) do
     case String.trim(to_string(content || "")) do

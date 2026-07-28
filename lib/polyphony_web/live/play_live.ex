@@ -21,6 +21,7 @@ defmodule PolyphonyWeb.PlayLive do
     MembershipSet,
     Owner,
     SceneControl,
+    Suggest,
     TurnOrder
   }
 
@@ -49,8 +50,7 @@ defmodule PolyphonyWeb.PlayLive do
   }
 
   alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.SelfState
-  alias PolyphonyWeb.{SayParser, TurnEdit}
+  alias PolyphonyWeb.TurnEdit
 
   def mount(%{"scene_id" => scene_id}, _session, socket) do
     {:ok,
@@ -63,6 +63,7 @@ defmodule PolyphonyWeb.PlayLive do
        control_modes: %{},
        failures: [],
        editing: nil,
+       composing: false,
        premise: ""
      )}
   end
@@ -337,16 +338,18 @@ defmodule PolyphonyWeb.PlayLive do
   # (see `SayParser`), so a single submission can carry both.
   def handle_event("say", %{"text" => text}, socket) do
     safe(socket, fn ->
-      case {socket.assigns.speaker, SayParser.parse(text)} do
+      # The composer parses the whole turn (speech + whisper, plus thinks:/does: from
+      # an expanded draft), same format as the transcript's turn editor (`TurnEdit`).
+      case {socket.assigns.speaker, TurnEdit.parse(text)} do
         {nil, _} ->
           {:noreply, put_flash(socket, :error, "Switch to a character above to speak.")}
 
-        {_as, []} ->
+        {_as, {[], _self_state}} ->
           {:noreply, put_flash(socket, :error, "Type something to say.")}
 
-        {as, moves} ->
+        {as, {moves, self_state}} ->
           beat = socket.assigns.next_beat
-          packet = %TurnPacket{moves: moves, self_state: %SelfState{}}
+          packet = %TurnPacket{moves: moves, self_state: self_state}
 
           :ok =
             App.dispatch(%CommitPacket{
@@ -365,6 +368,28 @@ defmodule PolyphonyWeb.PlayLive do
 
   def handle_event("say", _params, socket),
     do: {:noreply, put_flash(socket, :error, "Type something to say.")}
+
+  # ✨ Expand: draft the user's next turn from their character's *filtered* view (§11),
+  # seeded by whatever they've typed (expanded/polished) or from scratch if empty. The
+  # result is pushed back into the composer to edit before sending — never auto-committed.
+  def handle_event("compose", %{"text" => draft}, socket) do
+    safe(socket, fn ->
+      case socket.assigns.speaker do
+        nil ->
+          {:noreply, put_flash(socket, :error, "Switch to a character above to speak.")}
+
+        as ->
+          scene_id = socket.assigns.scene_id
+          roster = socket.assigns.roster
+          user = socket.assigns.current_user
+
+          {:noreply,
+           socket
+           |> assign(composing: true)
+           |> start_async(:compose, fn -> compose_draft(scene_id, as, roster, draft, user) end)}
+      end
+    end)
+  end
 
   def handle_event("view_as", %{"as" => as}, socket) do
     scene_id = socket.assigns.scene_id
@@ -639,6 +664,55 @@ defmodule PolyphonyWeb.PlayLive do
     {:noreply, socket |> assign(waiting: :you) |> put_flash(:error, "Reroll of #{c} failed.")}
   end
 
+  def handle_async(:compose, {:ok, {:ok, [packet | _]}}, socket) do
+    text = TurnEdit.serialize_packet(packet)
+    {:noreply, socket |> assign(composing: false) |> push_event("set_composer", %{text: text})}
+  end
+
+  def handle_async(:compose, {:ok, {:error, :no_context}}, socket) do
+    {:noreply,
+     socket
+     |> assign(composing: false)
+     |> put_flash(:error, "No character context to draft from yet — enter the scene first.")}
+  end
+
+  def handle_async(:compose, _result, socket) do
+    {:noreply,
+     socket |> assign(composing: false) |> put_flash(:error, "Couldn't draft a turn. Try again.")}
+  end
+
+  # Draft a turn from the character's filtered view (§11) — steered by the player's
+  # partial text if any, else generated fresh. Never omniscient (a suggestion can't
+  # react to something the character never learned).
+  defp compose_draft(scene_id, character, roster, draft, user) do
+    case Store.fetch(scene_id, character) do
+      {:ok, ctx} ->
+        Suggest.variants(
+          context: ctx,
+          live_events: BeatOps.canonical_events(scene_id),
+          members: roster,
+          count: 1,
+          steer: compose_steer(draft),
+          user_id: user && user.id,
+          usage_kind: "suggestion"
+        )
+
+      :error ->
+        {:error, :no_context}
+    end
+  end
+
+  defp compose_steer(draft) do
+    case String.trim(to_string(draft || "")) do
+      "" ->
+        "Write a natural next turn for this character from scratch."
+
+      text ->
+        "The player sketched this draft — expand and polish it into a full, in-character " <>
+          "turn, keeping their intent and any specifics:\n\n" <> text
+    end
+  end
+
   defp append(socket, msg) do
     seq = msg[:seq]
     existing = socket.assigns.messages
@@ -827,6 +901,16 @@ defmodule PolyphonyWeb.PlayLive do
             <span :if={@speaker} class="faint">as <strong><%= @speaker %></strong></span>
             <span :if={is_nil(@speaker)} class="faint">Pick a character above to speak.</span>
             <div class="spacer"></div>
+            <button
+              :if={@speaker}
+              type="button"
+              class="btn ghost sm"
+              data-composer-expand="true"
+              disabled={@composing}
+              title="Draft or expand this turn for you — you can edit it before sending"
+            >
+              <%= if @composing, do: "✨ …", else: "✨ Expand" %>
+            </button>
             <button class="btn ghost sm" type="button" phx-click="continue">Continue</button>
             <button :if={@speaker} class="btn" type="submit">Send</button>
           </div>

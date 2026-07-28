@@ -260,6 +260,29 @@ Because content is stored unencrypted and the operator is a data controller:
 
 ---
 
+## FE/BE parity audit ⬜ **Planned — recurring gap**
+
+The same shape of bug keeps surfacing: a capability lives on **one** side only. Either
+the backend has it with no way to reach it (boundary authoring, human-controlled
+autogenerate, the cost circuit breaker — all now wired), or a subsystem is built and
+tested but **never invoked** on the live path (pgvector retrieval defaulted to the
+static retriever; the omniscient scene summary was written every close but never read;
+embeddings and autonomous generation weren't metered; embeddings weren't even produced
+by a real model). Each was found by accident, not by looking.
+
+Do a **deliberate one-pass audit**: enumerate the backend surface (contexts, Oban jobs,
+event types, read models, `Polyphony.*` public functions) against the LiveView surface
+(views, `handle_event`s, what's actually called at runtime), and for every capability
+that exists on one side only, either wire it or record it here as deliberately deferred
+with the reason. Known one-sided items to start from: the deferred FS views (**V2**
+Scene Index & Branch, **V3** Character Inspector, **V7** Location Graph, **V10.1**
+prompt-template editor); backend features whose UI is flagged deferred in §B (**B5**
+resume/raise-cap surface, **B6** export/download hooks, **B9** delete-confirmation flow,
+**B4** notification-prefs UI); and the standing invariant that any *new* event type or
+`Costs`/retrieval/generation seam gets checked for a live caller, not just a test.
+
+---
+
 ## Frontend (LiveView) — FS view inventory
 
 ✅ **Done (core).** Phoenix 1.8 + LiveView 1.2 on OTP 27 / Elixir 1.17 (Cowboy, not
