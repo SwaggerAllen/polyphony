@@ -83,7 +83,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
       %{name: name, blocks: blocks, relationships: rels} = socket.assigns
 
       existing = char_names(other_characters(user, id))
-      stubbed = seed_stubs(rels, existing, name, Owner.of(user))
+      world_bible_id = world_id_int(socket.assigns.world_id)
+      stubbed = seed_stubs(rels, existing, name, Owner.of(user), world_bible_id)
 
       sheet = %CharacterSheet{
         socket.assigns.sheet
@@ -437,7 +438,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end
   end
 
-  defp seed_stubs(relationships, existing_names, self_name, owner) do
+  defp seed_stubs(relationships, existing_names, self_name, owner, world_bible_id) do
     existing = MapSet.new(existing_names, &String.downcase/1)
     self_down = String.downcase(self_name || "")
 
@@ -458,7 +459,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
       Library.put(%{
         owner: owner,
         kind: "character",
-        payload: Stub.new(target, role, relationships: inbound)
+        payload: Stub.new(target, role, relationships: inbound, world_bible_id: world_bible_id)
       })
 
       target

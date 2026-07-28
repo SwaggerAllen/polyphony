@@ -59,6 +59,30 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     assert [%{target: "Mira", descriptor: "haunts her"}] = stub.relationships
   end
 
+  test "a stubbed character inherits the generating character's world", %{conn: conn, user: user} do
+    world =
+      Library.put(%{
+        owner: Owner.of(user),
+        kind: "world_bible",
+        payload: %Polyphony.Authoring.WorldBible{name: "Neon Bay"}
+      })
+
+    mira = character(user, %CharacterSheet{name: "Mira", world_bible_id: world.id, status: :full})
+
+    {:ok, view, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
+
+    # The editor loads with Mira's world already selected.
+    view
+    |> form("form[phx-submit=add_relationship]", %{target: "Ghost", descriptor: "haunts her"})
+    |> render_submit()
+
+    view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+
+    ghost = find(user, "Ghost")
+    assert ghost, "expected a stub character named Ghost"
+    assert Library.payload(ghost).world_bible_id == world.id
+  end
+
   test "re-saving does not create a duplicate stub", %{conn: conn, user: user} do
     mira = character(user, %CharacterSheet{name: "Mira", status: :full})
     {:ok, view, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
