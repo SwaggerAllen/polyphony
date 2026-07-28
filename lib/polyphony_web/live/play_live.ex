@@ -16,6 +16,7 @@ defmodule PolyphonyWeb.PlayLive do
     App,
     Broadcast,
     Context,
+    Failures,
     Library,
     MembershipSet,
     Owner,
@@ -59,6 +60,7 @@ defmodule PolyphonyWeb.PlayLive do
        waiting: :you,
        introductions: [],
        control_modes: %{},
+       failures: [],
        premise: ""
      )}
   end
@@ -108,8 +110,16 @@ defmodule PolyphonyWeb.PlayLive do
       control_modes: Map.new(roster, fn c -> {c, TurnOrder.control_mode(plain, c)} end),
       # The Director's pending introductions — author-facing tooling, so only the
       # omniscient view shows the queue (and each carries how it resolves).
-      introductions: intro_queue(socket, plain)
+      introductions: intro_queue(socket, plain),
+      failures: open_failures(socket)
     )
+  end
+
+  # Open generation failures for this scene — author-facing, so omniscient only.
+  defp open_failures(socket) do
+    if socket.assigns.viewer == :omniscient,
+      do: Failures.list_open(socket.assigns.scene_id),
+      else: []
   end
 
   defp scene_premise(plain) do
@@ -351,6 +361,19 @@ defmodule PolyphonyWeb.PlayLive do
     end)
   end
 
+  def handle_event("retry_failure", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      case Failures.retry(String.to_integer(id)) do
+        {:ok, _} ->
+          {:noreply,
+           socket |> put_flash(:info, "Retrying…") |> assign(waiting: :director) |> reload()}
+
+        _ ->
+          {:noreply, put_flash(socket, :error, "Couldn't retry that.")}
+      end
+    end)
+  end
+
   # Scan the scene's committed prose for characters mentioned but not yet created,
   # and stub them for later (§B8 mention-stubbing).
   def handle_event("find_mentions", _params, socket) do
@@ -425,6 +448,12 @@ defmodule PolyphonyWeb.PlayLive do
   end
 
   # ── Live events ──────────────────────────────────────────────────────────────
+
+  def handle_info({:polyphony_event, %{type: "generation.failed"}}, socket) do
+    # A turn couldn't be generated — stop waiting and surface the open failure
+    # (reload picks it up from the Failures store) instead of failing silently.
+    {:noreply, socket |> assign(waiting: :you) |> reload()}
+  end
 
   def handle_info({:polyphony_event, msg}, socket) do
     socket =
@@ -503,6 +532,11 @@ defmodule PolyphonyWeb.PlayLive do
   # A character's control mode, defaulting to autonomous (matches the beat walk).
   defp control_of(modes, character), do: Map.get(modes, character) || "autonomous"
 
+  # A short, human reason for a failure line — the model's reason if any, else the kind.
+  defp failure_reason(%{reason: r}) when is_binary(r) and r != "", do: r
+  defp failure_reason(%{kind: k}) when is_binary(k) and k != "", do: String.replace(k, "_", " ")
+  defp failure_reason(_), do: "generation failed"
+
   # ── Render ─────────────────────────────────────────────────────────────────────
 
   def render(assigns) do
@@ -565,6 +599,19 @@ defmodule PolyphonyWeb.PlayLive do
             <button :if={i.resolution.status != :ready} class="btn sm" phx-click="intro_generate" phx-value-name={i.name}>Generate &amp; admit</button>
             <button class="btn ghost sm" phx-click="intro_edit" phx-value-name={i.name}>Edit</button>
             <button class="btn danger sm" phx-click="intro_dismiss" phx-value-name={i.name}>Dismiss</button>
+          </li>
+        </ul>
+      </div>
+
+      <div :if={@failures != []} class="card fail-panel">
+        <ul class="rel-list">
+          <li :for={f <- @failures} class="row rel-item">
+            <span>
+              ⚠ Couldn't generate <strong><%= f.subject || "a turn" %></strong>
+              <span class="faint">— <%= failure_reason(f) %></span>
+            </span>
+            <span class="spacer"></span>
+            <button :if={f.retryable} class="btn sm" phx-click="retry_failure" phx-value-id={f.id}>Retry</button>
           </li>
         </ul>
       </div>

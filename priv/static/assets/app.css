@@ -932,6 +932,17 @@ input:focus, textarea:focus, select:focus {
   overflow-y: auto;
 }
 
+.play .fail-panel {
+  flex: 0 0 auto;
+  max-height: 30vh;
+  overflow-y: auto;
+  border-color: var(--bad);
+}
+
+.move.failure {
+  color: var(--bad);
+}
+
 .cast-panel summary {
   cursor: pointer;
   font-size: .9rem;
