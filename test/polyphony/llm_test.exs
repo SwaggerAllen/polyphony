@@ -87,14 +87,21 @@ defmodule Polyphony.LLMTest do
 
   describe "force-heavy debug lever" do
     test "routes every call to the heavy model when enabled" do
-      previous = Application.get_env(:polyphony, :force_heavy_model)
-      Application.put_env(:polyphony, :force_heavy_model, true)
-      on_exit(fn -> Application.put_env(:polyphony, :force_heavy_model, previous) end)
+      # Self-contained config so the test doesn't depend on whatever :llm another test
+      # left in the shared app env (some replace it with just a provider).
+      prev_llm = Application.get_env(:polyphony, :llm)
+      prev_flag = Application.get_env(:polyphony, :force_heavy_model)
 
-      heavy = get_in(Application.get_env(:polyphony, :llm), [:models, :heavy])
+      Application.put_env(:polyphony, :llm, models: %{workhorse: "WORK", heavy: "HEAVY-MODEL"})
+      Application.put_env(:polyphony, :force_heavy_model, true)
+
+      on_exit(fn ->
+        Application.put_env(:polyphony, :llm, prev_llm)
+        Application.put_env(:polyphony, :force_heavy_model, prev_flag)
+      end)
 
       # The caller asked for a different model; the lever overrides it to heavy.
-      assert {:ok, ^heavy} = LLM.call(@messages, provider: EchoModel, model: "workhorse-xyz")
+      assert {:ok, "HEAVY-MODEL"} = LLM.call(@messages, provider: EchoModel, model: "workhorse-xyz")
     end
   end
 end
