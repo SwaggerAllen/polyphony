@@ -50,7 +50,7 @@ defmodule PolyphonyWeb.PlayLive do
 
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.SelfState
-  alias PolyphonyWeb.SayParser
+  alias PolyphonyWeb.{SayParser, TurnEdit}
 
   def mount(%{"scene_id" => scene_id}, _session, socket) do
     {:ok,
@@ -430,11 +430,11 @@ defmodule PolyphonyWeb.PlayLive do
       scene = socket.assigns.scene_id
       beat = String.to_integer(b)
 
-      case SayParser.parse(params["text"] || "") do
-        [] ->
+      case TurnEdit.parse(params["text"] || "") do
+        {[], _self_state} ->
           {:noreply, put_flash(socket, :error, "The turn can't be empty.")}
 
-        moves ->
+        {moves, self_state} ->
           attempt = BeatOps.next_attempt(BeatOps.stored_events(scene), scene, beat, c)
           new_id = BeatOps.reroll_packet_id(scene, beat, c, attempt)
 
@@ -454,7 +454,7 @@ defmodule PolyphonyWeb.PlayLive do
               character_id: c,
               beat: beat,
               packet_id: new_id,
-              packet: %TurnPacket{moves: moves, self_state: %SelfState{}},
+              packet: %TurnPacket{moves: moves, self_state: self_state},
               edited: true
             })
 
@@ -674,15 +674,9 @@ defmodule PolyphonyWeb.PlayLive do
     |> Enum.reverse()
   end
 
-  # The editable text of a turn: its spoken/acted lines joined (interior thoughts and
-  # state aren't edited here — an edit rewrites what the character externally did).
-  defp turn_text(block) do
-    block.msgs
-    |> Enum.filter(&(&1[:kind] in ["SpeechUttered", "ActionTaken"]))
-    |> Enum.map(&(&1[:payload] || %{})[:content])
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.join("\n")
-  end
+  # The editable text of a turn: the whole turn — thoughts, speech, actions, and
+  # demeanor — serialized one move per line (see `TurnEdit`), not just its spoken lines.
+  defp turn_text(block), do: TurnEdit.serialize(block.msgs)
 
   # A short, human reason for a failure line — the model's reason if any, else the kind.
   defp failure_reason(%{reason: r}) when is_binary(r) and r != "", do: r

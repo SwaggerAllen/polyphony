@@ -112,14 +112,63 @@ defmodule Polyphony.Jobs.RunBeat do
     [
       proposals: parse_proposals(args["proposals"]),
       options: parse_options(args["options"]),
-      messages: [%{role: "system", content: director_system_message(args)}],
+      messages: [
+        %{role: "system", content: director_system_message(args)},
+        %{role: "user", content: director_context(scene_id, members)}
+      ],
       scene_id: scene_id,
       beat: beat,
       provider: BeatOps.resolve_provider(args["provider"]),
+      # cast_hint is only read by the offline Mock; the real provider casts from the
+      # context below. Both must know who is present.
       cast_hint: members,
       control_hint: parse_control(args["control_hint"])
     ]
   end
+
+  # The Director's per-beat context: who is present (so it can cast them by their
+  # exact ids) and the recent scene so it can pace. Without this the real provider
+  # has no roster and casts no one — the beat silently yields (dev hides it because
+  # the Mock casts from `cast_hint`).
+  defp director_context(scene_id, members) do
+    roster = if members == [], do: "(no characters are present)", else: Enum.join(members, ", ")
+
+    """
+    Characters present in the scene: #{roster}
+
+    Cast the characters who should act in this beat. Unless a character just exited
+    or clearly has nothing to do, cast every present character, in a natural order —
+    an empty cast means no one acts. Use these exact ids in `cast`.
+
+    Recent events (oldest first):
+    #{recent_transcript(scene_id)}
+    """
+  end
+
+  defp recent_transcript(scene_id) do
+    case scene_id
+         |> BeatOps.stored_events()
+         |> Polyphony.Packets.canonical()
+         |> Enum.flat_map(&transcript_line/1)
+         |> Enum.take(-30) do
+      [] -> "(nothing has happened yet)"
+      lines -> Enum.join(lines, "\n")
+    end
+  end
+
+  defp transcript_line(%Polyphony.Events.SpeechUttered{speaker_id: s, content: c}),
+    do: ["#{s}: #{c}"]
+
+  defp transcript_line(%Polyphony.Events.ActionTaken{character_id: s, content: c}),
+    do: ["#{s} #{c}"]
+
+  defp transcript_line(%Polyphony.Events.ThoughtOccurred{character_id: s, content: c}),
+    do: ["(#{s} thinks: #{c})"]
+
+  defp transcript_line(%Polyphony.Events.WorldEventOccurred{content: c}), do: ["#{c}"]
+  defp transcript_line(%Polyphony.Events.CharacterEntered{character_id: s}), do: ["(#{s} enters)"]
+  defp transcript_line(%Polyphony.Events.CharacterExited{character_id: s}), do: ["(#{s} leaves)"]
+  defp transcript_line(_), do: []
 
   # The Director is told the effective content register too (§A5) — governance is a
   # context-assembly input for the Director, same as for the cast. `content_register`
