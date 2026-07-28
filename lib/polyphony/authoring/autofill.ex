@@ -192,6 +192,74 @@ defmodule Polyphony.Authoring.Autofill do
     end
   end
 
+  @doc """
+  Generate the **reciprocal** of each relationship — how the *other* person regards
+  the source character, given how the source regards them. Relationships are usually
+  asymmetrical (a "mentor" is regarded back as a "student"), so a stub seeded from a
+  source character's relationship needs its own regard generated, not the source's
+  descriptor copied.
+
+  `source` is the source character's fields (for context); `pairs` is a list of
+  `%{"target" => name, "descriptor" => how_source_regards_them}`. Returns
+  `{:ok, %{target => reciprocal_descriptor}}` — only the pairs that came back
+  non-empty. An empty `pairs` list short-circuits without a provider call.
+  """
+  @spec reciprocal_roles(map(), [map()], keyword()) :: {:ok, map()} | {:error, term()}
+  def reciprocal_roles(_source, [], _opts), do: {:ok, %{}}
+
+  def reciprocal_roles(source, pairs, opts) do
+    source = stringify(source)
+    self_name = to_string(source["name"] || "this character")
+    listed = Enum.map_join(Enum.with_index(pairs, 1), "\n", &pair_line(&1, self_name))
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author with character relationships. For each numbered pair " <>
+            "you are told how #{self_name} regards another person. Write how THAT person " <>
+            "would regard #{self_name} in return — the reciprocal. It is usually NOT the " <>
+            "same (a \"mentor\" is regarded back as a \"student\"; a \"captor\" as a " <>
+            "\"prisoner\"). Return ONLY a JSON array of short strings — one reciprocal per " <>
+            "pair, in the SAME order, no names, no keys."
+      },
+      %{
+        role: "user",
+        content:
+          source_block(source) <>
+            "Pairs (how #{self_name} regards each person):\n" <>
+            listed <> "\n\nReturn the JSON array."
+      }
+    ]
+
+    call = [response: :reciprocals, count: length(pairs)]
+
+    with {:ok, text} <- Polyphony.LLM.call(messages, call ++ meter_opts(opts)),
+         {:ok, list} <- decode_array(text) do
+      recips =
+        pairs
+        |> Enum.zip(list ++ List.duplicate(nil, max(length(pairs) - length(list), 0)))
+        |> Enum.reduce(%{}, fn {pair, raw}, acc ->
+          case String.trim(to_string(raw || "")) do
+            "" -> acc
+            r -> Map.put(acc, to_string(pair["target"]), r)
+          end
+        end)
+
+      {:ok, recips}
+    end
+  end
+
+  defp pair_line({pair, i}, self_name),
+    do: "#{i}. #{self_name} regards #{pair["target"]} as \"#{pair["descriptor"]}\"."
+
+  defp source_block(source) do
+    case for(f <- ~w(name premise temperament), v = source[f], not blank?(v), do: "#{f}: #{v}") do
+      [] -> ""
+      lines -> "The character:\n" <> Enum.join(lines, "\n") <> "\n\n"
+    end
+  end
+
   defp normalize_name(name), do: name |> to_string() |> String.trim() |> String.downcase()
 
   defp normalize_existing(list) do
@@ -331,11 +399,26 @@ defmodule Polyphony.Authoring.Autofill do
     ]
   end
 
-  # The generation context (world bible + related character sheets), pulled from opts.
-  defp context(opts), do: %{world: opts[:world], relations: opts[:relations]}
+  # The generation context (world bible + related character sheets + a former stub's
+  # inherited role), pulled from opts.
+  defp context(opts),
+    do: %{world: opts[:world], relations: opts[:relations], role: opts[:role]}
 
-  defp context_block(%{} = ctx), do: world_block(ctx[:world]) <> relations_block(ctx[:relations])
+  defp context_block(%{} = ctx),
+    do: role_block(ctx[:role]) <> world_block(ctx[:world]) <> relations_block(ctx[:relations])
+
   defp context_block(_), do: ""
+
+  # A character stubbed from another's relationships carries a one-line `role` (how
+  # that source character described them, e.g. "estranged mentor"). Feed it into
+  # generation so the seed the author already committed to survives — the generated
+  # sheet realizes that role rather than inventing an unrelated person. Absent → "".
+  defp role_block(role) when is_binary(role) and role != "" do
+    "This character was introduced through another character as their \"#{role}\". " <>
+      "Honor that role — the generated details should realize it, not contradict it.\n\n"
+  end
+
+  defp role_block(_), do: ""
 
   # A compact rendering of the linked world bible, so generation grounds the
   # character in its setting (backstory/voice that fit the world). Absent → "".

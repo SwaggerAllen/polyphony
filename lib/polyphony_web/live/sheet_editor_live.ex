@@ -1,18 +1,22 @@
 defmodule PolyphonyWeb.SheetEditorLive do
   @moduledoc """
-  V4 (sheet editor): edit a character's authored sheet; promote a stub (§B8); and
-  build rich fields with AI assistance.
+  V4 (sheet editor): edit a character's authored sheet and build rich fields with AI
+  assistance. A stub (§B8) reads as *pending* and is finalized to `:full` silently on
+  save — there is no separate promote/accept step.
 
   Prose fields are edited as **blocks** (paragraphs): each block is an always-live,
   auto-growing textarea styled to read like prose until focused — long content stays
   readable instead of trapped in a scroll box. Every block can be regenerated;
   fields can be **Generated** fresh (from a brief), **Expanded** (append a paragraph
   that deepens them), or built a paragraph at a time. Generation is grounded in the
-  linked world bible and the character's relationships. Blocks are joined with blank
-  lines into the plain-string field on save, so the domain is unchanged.
+  linked world bible, the character's relationships, and (for a former stub) its
+  inherited `role`. Blocks are joined with blank lines into the plain-string field on
+  save, so the domain is unchanged.
 
   Relationships link existing characters or **stub** new ones on save; the author can
-  also ask for AI **suggestions**.
+  also ask for AI **suggestions**. When a stub is seeded, its regard back toward the
+  generating character is generated asynchronously (`Autofill.reciprocal_roles`) so
+  the two directions can be asymmetrical rather than a copied descriptor.
   """
   use PolyphonyWeb, :live_view
 
@@ -95,7 +99,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
           temperament: join_blocks(blocks["temperament"]),
           backstory: join_blocks(blocks["backstory"]),
           world_bible_id: world_id_int(socket.assigns.world_id),
-          relationships: rels
+          relationships: rels,
+          # Saving finalizes a pending stub — the author has reviewed it by editing
+          # and saving, so it silently becomes a usable (:full) character.
+          status: :full
       }
 
       {:ok, entry} = Library.update_payload(id, sheet)
@@ -113,7 +120,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
         |> assign_characters(other_characters(user, id))
         |> assign_relationships(rels)
 
-      {:noreply, maybe_flash_stubs(socket, stubbed)}
+      socket =
+        socket
+        |> maybe_flash_stubs(stubbed)
+        |> generate_reciprocals(stubbed, name)
+
+      {:noreply, socket}
     end)
   end
 
@@ -229,34 +241,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end)
   end
 
-  # ── Stub promotion (§B8) ──────────────────────────────────────────────────────
-
-  def handle_event("promote", _params, socket) do
-    safe(socket, fn ->
-      sheet = socket.assigns.sheet
-      opts = promote_opts(socket)
-
-      # Generation is a real (possibly slow) provider call — run it async with a
-      # busy button so the click gives immediate feedback instead of a frozen page.
-      {:noreply,
-       socket
-       |> mark("promote", true)
-       |> start_async(:promote, fn -> Stub.promote(sheet, opts) end)}
-    end)
-  end
-
-  def handle_event("accept", _params, socket) do
-    safe(socket, fn ->
-      accepted = Stub.accept(socket.assigns.sheet)
-      {:ok, entry} = Library.update_payload(socket.assigns.entry.id, accepted)
-
-      {:noreply,
-       socket
-       |> put_flash(:info, "Accepted — the character is ready to cast.")
-       |> reload(entry, accepted)}
-    end)
-  end
-
   # ── Async generation results ──────────────────────────────────────────────────
 
   def handle_async(:gen_all, {:ok, {:ok, values}}, socket) do
@@ -318,40 +302,23 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def handle_async(:suggest_rel, result, socket),
     do: {:noreply, gen_failed(socket, "relationships", result)}
 
-  def handle_async(:promote, {:ok, {:ok, promoted}}, socket) do
-    safe(socket, fn ->
-      {:ok, entry} = Library.update_payload(socket.assigns.entry.id, promoted)
+  # Reciprocal generation is best-effort background enrichment of the just-created
+  # stubs — never surfaced as an error. On success, patch each stub's regard toward
+  # this character; on failure, the placeholder descriptor stands.
+  def handle_async(:reciprocals, {:ok, {stubs, self_name, {:ok, reciprocals}}}, socket) do
+    for %{id: id, target: target} <- stubs, r = reciprocals[target], present_string?(r) do
+      patch_stub_reciprocal(id, self_name, r)
+    end
 
-      {:noreply,
-       socket
-       |> mark("promote", false)
-       |> put_flash(:info, "Promoted — review and accept below.")
-       |> reload(entry, promoted)}
-    end)
+    {:noreply, socket}
   end
 
-  def handle_async(:promote, {:ok, {:error, _reason}}, socket) do
-    {:noreply,
-     socket
-     |> mark("promote", false)
-     |> put_flash(:error, "Could not generate a sheet. Try again.")}
+  def handle_async(:reciprocals, result, socket) do
+    Logger.warning("[authoring] reciprocal generation skipped: #{inspect(result)}")
+    {:noreply, socket}
   end
-
-  def handle_async(:promote, result, socket),
-    do: {:noreply, gen_failed(socket, "promote", result)}
 
   # ── Assign / block helpers ────────────────────────────────────────────────────
-
-  defp reload(socket, entry, sheet) do
-    assign(socket,
-      entry: entry,
-      sheet: sheet,
-      name: sheet.name || "",
-      blocks: blocks_from_sheet(sheet),
-      saved: false,
-      dirty: false
-    )
-  end
 
   # Mark the form as having unsaved edits (hides the ✓ indicator, arms the
   # leave-confirmation on navigation links).
@@ -390,11 +357,15 @@ defmodule PolyphonyWeb.SheetEditorLive do
       gen_opts(socket)
   end
 
-  # World seed + related-character sheets + usage attribution for a metered call.
+  # World seed + related-character sheets + the stub's inherited role + usage
+  # attribution for a metered call. `role` (a former stub's one-line seed, e.g.
+  # "estranged mentor") grounds generation so the source character's framing survives
+  # into the generated sheet; nil for a deliberately-created character.
   defp gen_opts(socket) do
     [
       world: socket.assigns.world_context,
       relations: socket.assigns.relations_context,
+      role: socket.assigns.sheet.role,
       usage_kind: "authoring"
     ] ++ user_attribution(socket)
   end
@@ -403,24 +374,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
     case socket.assigns.current_user do
       %{id: id} -> [user_id: id]
       _ -> []
-    end
-  end
-
-  # Stub promotion: ground generation in the (inherited) world bible, and attribute
-  # the metered call to the author like every other generation here.
-  defp promote_opts(socket) do
-    [bible: bible_text(socket.assigns.world_context), usage_kind: "authoring"] ++
-      user_attribution(socket)
-  end
-
-  defp bible_text(nil), do: "(unspecified)"
-
-  defp bible_text(world) when is_map(world) do
-    case [world["name"], world["setting"], world["tone"]]
-         |> Enum.reject(&(&1 in [nil, ""]))
-         |> Enum.join("\n\n") do
-      "" -> "(unspecified)"
-      text -> text
     end
   end
 
@@ -475,6 +428,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end
   end
 
+  # Create a stub for each newly-referenced relationship target. The stub's inbound
+  # relationship (stub → self) is seeded with the source's descriptor as a placeholder
+  # and its `reciprocal` records how the source regards the stub; the asymmetrical
+  # stub-→-self regard is generated afterwards (`generate_reciprocals`). `role`
+  # describes the stub (the source's regard of them). Returns `[%{id, target,
+  # descriptor}]` for the stubs created, feeding the flash and reciprocal generation.
   defp seed_stubs(relationships, existing_names, self_name, owner, world_bible_id) do
     existing = MapSet.new(existing_names, &String.downcase/1)
     self_down = String.downcase(self_name || "")
@@ -486,27 +445,71 @@ defmodule PolyphonyWeb.SheetEditorLive do
       t == "" or String.downcase(t) == self_down or MapSet.member?(existing, String.downcase(t))
     end)
     |> Enum.map(fn target ->
+      matching = Enum.filter(relationships, &(&1.target == target))
+      role = matching |> Enum.map(& &1.descriptor) |> Enum.find("", &(&1 not in [nil, ""]))
+
       inbound =
-        for r <- relationships,
-            r.target == target,
-            do: %Relationship{target: self_name, descriptor: r.descriptor}
+        for r <- matching,
+            do: %Relationship{
+              target: self_name,
+              descriptor: r.descriptor,
+              reciprocal: r.descriptor
+            }
 
-      role = inbound |> Enum.map(& &1.descriptor) |> Enum.find("", &(&1 not in [nil, ""]))
+      entry =
+        Library.put(%{
+          owner: owner,
+          kind: "character",
+          payload: Stub.new(target, role, relationships: inbound, world_bible_id: world_bible_id)
+        })
 
-      Library.put(%{
-        owner: owner,
-        kind: "character",
-        payload: Stub.new(target, role, relationships: inbound, world_bible_id: world_bible_id)
-      })
+      %{id: entry.id, target: target, descriptor: role}
+    end)
+  end
 
-      target
+  # Best-effort async enrichment: generate each new stub's asymmetrical regard back
+  # toward the character being saved, then patch it into the stub. Runs after save so
+  # the save itself never blocks on a provider call; a failure leaves the placeholder.
+  defp generate_reciprocals(socket, [], _self_name), do: socket
+
+  defp generate_reciprocals(socket, stubs, self_name) do
+    source = current_values(socket)
+    pairs = Enum.map(stubs, &%{"target" => &1.target, "descriptor" => &1.descriptor})
+    opts = gen_opts(socket)
+
+    start_async(socket, :reciprocals, fn ->
+      {stubs, self_name, Autofill.reciprocal_roles(source, pairs, opts)}
     end)
   end
 
   defp maybe_flash_stubs(socket, []), do: socket
 
-  defp maybe_flash_stubs(socket, names),
-    do: put_flash(socket, :info, "Stubbed new character(s): #{Enum.join(names, ", ")}.")
+  defp maybe_flash_stubs(socket, stubs),
+    do:
+      put_flash(
+        socket,
+        :info,
+        "Stubbed new character(s): #{Enum.map_join(stubs, ", ", & &1.target)}."
+      )
+
+  # Set the stub's regard toward `self_name` to the generated reciprocal, keeping the
+  # source's regard of the stub as its `reciprocal`. Best-effort: a vanished/edited
+  # stub is left alone.
+  defp patch_stub_reciprocal(id, self_name, reciprocal) do
+    with entry when not is_nil(entry) <- Library.get(id),
+         %CharacterSheet{} = sheet <- Library.payload(entry) do
+      rels =
+        Enum.map(sheet.relationships || [], fn rel ->
+          if rel.target == self_name,
+            do: %Relationship{rel | descriptor: reciprocal, reciprocal: rel.reciprocal},
+            else: rel
+        end)
+
+      Library.update_payload(id, %CharacterSheet{sheet | relationships: rels})
+    end
+  end
+
+  defp present_string?(v), do: is_binary(v) and String.trim(v) != ""
 
   # The owner's other character entries — powers the relationship datalist (names)
   # and the "open this character" links (name → id).
@@ -601,19 +604,15 @@ defmodule PolyphonyWeb.SheetEditorLive do
     <div class="row">
       <h1>Edit character</h1>
       <div class="spacer"></div>
-      <span :if={@sheet.status == :stub} class="badge stub">stub</span>
-      <span :if={@sheet.status == :proposed} class="badge">proposed — review</span>
+      <span :if={@sheet.status != :full} class="badge stub">pending</span>
     </div>
 
-    <div :if={@sheet.status == :stub} class="card">
-      <p class="dim">This is a stub (name + role). Promote it to generate a full sheet behind a review gate.</p>
-      <button class="btn" phx-click="promote" disabled={busy?(@generating, "promote")}>
-        <%= if busy?(@generating, "promote"), do: "✨ Promoting…", else: "Promote to full sheet" %>
-      </button>
-    </div>
-    <div :if={@sheet.status == :proposed} class="card">
-      <p class="dim">Generated draft below. Accept to make it usable.</p>
-      <button class="btn" phx-click="accept">Accept</button>
+    <div :if={@sheet.status != :full} class="card">
+      <p class="dim">
+        This character is <strong>pending</strong> — it came from another character's
+        relationships<span :if={@sheet.role not in [nil, ""]}> as their <em><%= @sheet.role %></em></span>.
+        Fill in the fields below (write them yourself or use ✨ Generate) and Save to finish it.
+      </p>
     </div>
 
     <div class="card gen-brief">

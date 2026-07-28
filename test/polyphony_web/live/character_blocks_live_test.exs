@@ -96,6 +96,8 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
     assert html =~ "Remove"
 
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+    # Drain the background reciprocal-generation the stubs trigger.
+    render_async(view)
 
     after_count = Enum.count(Library.list_for_owner(Owner.of(user)), &(&1.kind == "character"))
     assert after_count > before
@@ -115,21 +117,22 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
     assert render(view) =~ ~s(href="/authoring/character/#{bram.id}")
   end
 
-  test "promoting a stub generates a proposed sheet (async, with feedback)",
-       %{conn: conn, user: user} do
+  test "a pending stub is finalized silently on save", %{conn: conn, user: user} do
     stub = Polyphony.Authoring.Stub.new("Ghost", "haunts her")
     entry = Library.put(%{owner: Owner.of(user), kind: "character", payload: stub})
 
-    {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+    {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
 
-    # The click gives immediate feedback (busy button) rather than freezing.
-    busy = view |> element("button[phx-click=promote]") |> render_click()
-    assert busy =~ "Promoting"
+    # It reads as pending, with no promote/accept machinery on screen.
+    assert html =~ "pending"
+    refute html =~ "phx-click=\"promote\""
+    refute html =~ "phx-click=\"accept\""
 
-    # Once generation resolves, the sheet is proposed and stored.
-    done = render_async(view)
-    assert done =~ "proposed"
-    assert Library.payload(Library.get(entry.id)).status == :proposed
+    # Editing via the normal fields and saving finalizes it to :full.
+    view |> form("form[phx-submit=save]", %{name: "Ghost"}) |> render_submit()
+
+    assert Library.payload(Library.get(entry.id)).status == :full
+    refute render(view) =~ "pending"
   end
 
   test "navigation is unguarded until there are unsaved edits", %{conn: conn, user: user} do

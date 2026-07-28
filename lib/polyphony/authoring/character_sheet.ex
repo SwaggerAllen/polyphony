@@ -30,9 +30,15 @@ defmodule Polyphony.Authoring.CharacterSheet do
   end
 
   defmodule Relationship do
-    @moduledoc "A directional relationship: how `holder` regards `target` (§6.1)."
+    @moduledoc """
+    A directional relationship: how `holder` regards `target` (§6.1). `descriptor`
+    is the holder→target regard; `reciprocal` optionally records the target→holder
+    regard (usually asymmetrical — a "mentor" is regarded back as a "student"). The
+    reciprocal is authoring metadata, populated when a stub is seeded from another
+    character's relationship so the stub carries both sides.
+    """
     @derive Jason.Encoder
-    defstruct [:target, :descriptor]
+    defstruct [:target, :descriptor, :reciprocal]
   end
 
   defmodule Boundary do

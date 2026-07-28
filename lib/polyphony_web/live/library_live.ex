@@ -144,6 +144,7 @@ defmodule PolyphonyWeb.LibraryLive do
         <div>
           <h3><%= entry_name(e) %> <span class="faint">· <%= e.kind %></span></h3>
           <.visibility_badge visibility={e.visibility} />
+          <span :if={pending?(e)} class="badge stub">pending</span>
           <span :if={e.frozen} class="badge">published snapshot</span>
         </div>
         <div class="spacer"></div>
@@ -179,4 +180,12 @@ defmodule PolyphonyWeb.LibraryLive do
       _ -> "Untitled"
     end
   end
+
+  # A character stubbed from another's relationships is "pending" until an author
+  # opens it and saves (which finalizes it to :full). Only characters have a status;
+  # anything else, or a payload without one, is never pending.
+  defp pending?(%{kind: "character"} = e),
+    do: match?(%{status: s} when s != :full, Library.payload(e))
+
+  defp pending?(_), do: false
 end
