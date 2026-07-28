@@ -79,4 +79,19 @@ defmodule Polyphony.Commands do
     """
     defstruct [:scene_id, :beat, :content]
   end
+
+  defmodule ProposeIntroduction do
+    @moduledoc """
+    Record a Director proposal to bring `name` on-stage at `beat` (§B7/B8). Produces
+    an omniscient-only `IntroductionProposed`; the author admits it (→ `EnterCharacter`)
+    or dismisses it from the play view. A no-op if the name is already a member or
+    already pending.
+    """
+    defstruct [:scene_id, :beat, :name, :reason]
+  end
+
+  defmodule DismissIntroduction do
+    @moduledoc "Decline a proposed introduction, clearing it from the scene's pending queue."
+    defstruct [:scene_id, :name]
+  end
 end

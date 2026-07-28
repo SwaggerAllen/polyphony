@@ -23,7 +23,9 @@ defmodule Polyphony.Scene do
     ForkScene,
     SetControlMode,
     DeclareTurnOrder,
-    RecordWorldEvent
+    RecordWorldEvent,
+    ProposeIntroduction,
+    DismissIntroduction
   }
 
   alias Polyphony.Events.{
@@ -40,7 +42,9 @@ defmodule Polyphony.Scene do
     SceneForked,
     ControlModeSet,
     TurnOrderDeclared,
-    WorldEventOccurred
+    WorldEventOccurred,
+    IntroductionProposed,
+    IntroductionDismissed
   }
 
   alias Polyphony.TurnPacket
@@ -54,6 +58,7 @@ defmodule Polyphony.Scene do
             members: MapSet.new(),
             committed_packets: MapSet.new(),
             superseded_packets: MapSet.new(),
+            pending_introductions: MapSet.new(),
             forked_from: nil
 
   # ── Command handlers ──────────────────────────────────────────────────────
@@ -106,6 +111,33 @@ defmodule Polyphony.Scene do
   end
 
   def execute(%__MODULE__{}, %RecordWorldEvent{}), do: {:error, :scene_not_open}
+
+  # A Director introduction proposal — omniscient-only queue signal, not membership.
+  # Idempotent: a name already present, or already pending, is a no-op (so a retried
+  # or repeated beat can't stack duplicates).
+  def execute(%__MODULE__{status: :open} = state, %ProposeIntroduction{} = c) do
+    cond do
+      MapSet.member?(state.members, c.name) ->
+        {:error, :already_present}
+
+      MapSet.member?(state.pending_introductions, norm(c.name)) ->
+        []
+
+      norm(c.name) == "" ->
+        {:error, :blank_name}
+
+      true ->
+        %IntroductionProposed{scene_id: c.scene_id, beat: c.beat, name: c.name, reason: c.reason}
+    end
+  end
+
+  def execute(%__MODULE__{}, %ProposeIntroduction{}), do: {:error, :scene_not_open}
+
+  def execute(%__MODULE__{} = state, %DismissIntroduction{} = c) do
+    if MapSet.member?(state.pending_introductions, norm(c.name)),
+      do: %IntroductionDismissed{scene_id: c.scene_id, name: c.name},
+      else: []
+  end
 
   # CommitPacket needs two guards (idempotency + membership) plus decomposition.
   def execute(%__MODULE__{} = state, %CommitPacket{} = c) do
@@ -280,7 +312,20 @@ defmodule Polyphony.Scene do
   def apply(%__MODULE__{} = state, %SceneClosed{}), do: %{state | status: :closed}
 
   def apply(%__MODULE__{} = state, %CharacterEntered{} = e) do
-    %{state | members: MapSet.put(state.members, e.character_id)}
+    %{
+      state
+      | members: MapSet.put(state.members, e.character_id),
+        # Entering resolves any pending proposal for that name.
+        pending_introductions: MapSet.delete(state.pending_introductions, norm(e.character_id))
+    }
+  end
+
+  def apply(%__MODULE__{} = state, %IntroductionProposed{name: n}) do
+    %{state | pending_introductions: MapSet.put(state.pending_introductions, norm(n))}
+  end
+
+  def apply(%__MODULE__{} = state, %IntroductionDismissed{name: n}) do
+    %{state | pending_introductions: MapSet.delete(state.pending_introductions, norm(n))}
   end
 
   def apply(%__MODULE__{} = state, %CharacterExited{} = e) do
@@ -300,4 +345,7 @@ defmodule Polyphony.Scene do
   end
 
   def apply(%__MODULE__{} = state, _event), do: state
+
+  # Normalize a character name/id for pending-introduction dedupe (case-insensitive).
+  defp norm(name), do: name |> to_string() |> String.trim() |> String.downcase()
 end
