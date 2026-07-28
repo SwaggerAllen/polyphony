@@ -12,10 +12,28 @@ defmodule PolyphonyWeb.PlayLive do
   """
   use PolyphonyWeb, :live_view
 
-  alias Polyphony.{App, Broadcast, Context, Library, MembershipSet, Owner, SceneControl}
+  alias Polyphony.{
+    App,
+    Broadcast,
+    Context,
+    Library,
+    MembershipSet,
+    Owner,
+    SceneControl,
+    TurnOrder
+  }
+
   alias Polyphony.Context.Store
   alias Polyphony.Director.BeatOps
-  alias Polyphony.Commands.{CommitPacket, DeclareTurnOrder, EnterCharacter, DismissIntroduction}
+
+  alias Polyphony.Commands.{
+    CommitPacket,
+    DeclareTurnOrder,
+    EnterCharacter,
+    DismissIntroduction,
+    SetControlMode
+  }
+
   alias Polyphony.Authoring.{CharacterSheet, Stub, StubGen}
 
   alias Polyphony.Events.{
@@ -37,6 +55,7 @@ defmodule PolyphonyWeb.PlayLive do
        topic: nil,
        waiting: :you,
        introductions: [],
+       control_modes: %{},
        premise: ""
      )}
   end
@@ -83,6 +102,7 @@ defmodule PolyphonyWeb.PlayLive do
       roster: roster,
       next_beat: next_beat,
       premise: scene_premise(plain),
+      control_modes: Map.new(roster, fn c -> {c, TurnOrder.control_mode(plain, c)} end),
       # The Director's pending introductions — author-facing tooling, so only the
       # omniscient view shows the queue (and each carries how it resolves).
       introductions: intro_queue(socket, plain)
@@ -280,6 +300,20 @@ defmodule PolyphonyWeb.PlayLive do
     {:noreply, push_patch(socket, to: to)}
   end
 
+  def handle_event("set_control", %{"character" => character, "control" => control}, socket)
+      when control in ~w(autonomous assisted user_controlled) do
+    safe(socket, fn ->
+      :ok =
+        App.dispatch(%SetControlMode{
+          scene_id: socket.assigns.scene_id,
+          character_id: character,
+          control: control
+        })
+
+      {:noreply, reload(socket)}
+    end)
+  end
+
   def handle_event("continue", _params, socket) do
     safe(socket, fn ->
       scene_id = socket.assigns.scene_id
@@ -395,6 +429,9 @@ defmodule PolyphonyWeb.PlayLive do
   defp event_beat(%{beat: b}) when is_integer(b), do: b
   defp event_beat(_), do: 0
 
+  # A character's control mode, defaulting to autonomous (matches the beat walk).
+  defp control_of(modes, character), do: Map.get(modes, character) || "autonomous"
+
   # ── Render ─────────────────────────────────────────────────────────────────────
 
   def render(assigns) do
@@ -411,6 +448,24 @@ defmodule PolyphonyWeb.PlayLive do
           </select>
         </form>
       </div>
+
+      <details :if={@viewer == :omniscient and @roster != []} class="card cast-panel">
+        <summary>Cast &amp; control <span class="faint">— who drives each character</span></summary>
+        <ul class="rel-list">
+          <li :for={c <- @roster} class="row rel-item">
+            <span><%= c %></span>
+            <span class="spacer"></span>
+            <form phx-change="set_control">
+              <input type="hidden" name="character" value={c} />
+              <select name="control" style="width:auto;">
+                <option value="autonomous" selected={control_of(@control_modes, c) == "autonomous"}>Automated</option>
+                <option value="assisted" selected={control_of(@control_modes, c) == "assisted"}>Draft &amp; approve</option>
+                <option value="user_controlled" selected={control_of(@control_modes, c) == "user_controlled"}>I write their turns</option>
+              </select>
+            </form>
+          </li>
+        </ul>
+      </details>
 
       <div class="card transcript-card">
         <div id="transcript" class="transcript" phx-hook="Autoscroll">
