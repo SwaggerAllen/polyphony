@@ -2,7 +2,7 @@ defmodule PolyphonyWeb.PlayComposeLiveTest do
   @moduledoc "The composer's ✨ Expand button drafts a turn from the character's view (§11)."
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Context}
+  alias Polyphony.{App, Context, Library, Owner}
   alias Polyphony.Context.Store
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
@@ -44,6 +44,32 @@ defmodule PolyphonyWeb.PlayComposeLiveTest do
 
     # Nothing was committed — the draft only populates the composer.
     refute render(view) =~ "phx-value-packet"
+  end
+
+  test "Expand rebuilds a cold context (ETS cache miss) instead of erroring", %{
+    conn: conn,
+    user: user
+  } do
+    # A scene whose per-character context was never cached (e.g. after a restart), but
+    # the character exists in the author's library so the sheet is resolvable.
+    Library.put(%{
+      owner: Owner.of(user),
+      kind: "character",
+      payload: %CharacterSheet{name: "mira", premise: "A wary tidewarden.", status: :full}
+    })
+
+    scene = "cold-" <> Integer.to_string(System.unique_integer([:positive]))
+    :ok = App.dispatch(%OpenScene{scene_id: scene, opened_beat: 0})
+    :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: "mira", beat: 1})
+    # NOTE: no Store.put — the context cache is cold.
+
+    {:ok, view, _html} = live(conn, ~p"/play/#{scene}?as=mira")
+    view |> element("#say-input") |> render_hook("compose", %{"text" => "greet them"})
+    # Rebuilding a cold context does real embed + retrieval work, so allow more time.
+    render_async(view, 2_000)
+
+    assert_push_event(view, "set_composer", %{text: text})
+    assert is_binary(text) and String.trim(text) != ""
   end
 
   test "the composer commits a whole turn — thoughts and actions, not only speech", %{conn: conn} do

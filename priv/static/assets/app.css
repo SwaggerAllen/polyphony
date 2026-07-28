@@ -1341,7 +1341,9 @@ pre {
 .debug-drawer-head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: .4rem;
+  row-gap: .35rem;
   padding: .5rem .6rem;
   border-bottom: 1px solid var(--border);
 }
