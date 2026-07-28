@@ -10,13 +10,27 @@ defmodule PolyphonyWeb.LibraryLive do
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
 
   def mount(_params, _session, socket) do
-    {:ok, socket |> assign(page_title: "Library") |> load()}
+    {:ok, socket |> assign(page_title: "Library", filter: "all", query: "") |> load()}
   end
 
   defp load(socket) do
     owner = Owner.of(socket.assigns.current_user)
     entries = Library.list_for_owner(owner)
-    assign(socket, owner: owner, entries: entries)
+    socket |> assign(owner: owner, entries: entries) |> assign_shown()
+  end
+
+  # The visible slice: filter the loaded owned entries by kind, and a
+  # case-insensitive substring match on the (decoded) name.
+  defp assign_shown(socket) do
+    %{entries: entries, filter: filter, query: query} = socket.assigns
+    q = query |> to_string() |> String.trim() |> String.downcase()
+
+    shown =
+      entries
+      |> Enum.filter(fn e -> filter in ["all", e.kind] end)
+      |> Enum.filter(fn e -> q == "" or String.contains?(String.downcase(entry_name(e)), q) end)
+
+    assign(socket, :shown, shown)
   end
 
   def handle_event("new", %{"kind" => kind, "name" => name}, socket) when name != "" do
@@ -29,6 +43,13 @@ defmodule PolyphonyWeb.LibraryLive do
 
   def handle_event("new", _params, socket),
     do: {:noreply, put_flash(socket, :error, "Give it a name first.")}
+
+  def handle_event("filter", params, socket) do
+    {:noreply,
+     socket
+     |> assign(filter: params["kind"] || "all", query: params["q"] || "")
+     |> assign_shown()}
+  end
 
   def handle_event("visibility", %{"eid" => id, "visibility" => vis}, socket) do
     safe(socket, fn ->
@@ -79,7 +100,19 @@ defmodule PolyphonyWeb.LibraryLive do
 
     <div :if={@entries == []} class="list-empty">Nothing here yet. Create a character or a campaign to begin.</div>
 
-    <div :for={e <- @entries} class="card">
+    <form :if={@entries != []} id="library-filter" phx-change="filter" class="row library-filter">
+      <select name="kind" style="width:auto;">
+        <option value="all" selected={@filter == "all"}>All types</option>
+        <option value="character" selected={@filter == "character"}>Characters</option>
+        <option value="world_bible" selected={@filter == "world_bible"}>World bibles</option>
+        <option value="campaign" selected={@filter == "campaign"}>Campaigns</option>
+      </select>
+      <input type="text" name="q" value={@query} placeholder="Search by name…" style="flex:1;" phx-debounce="200" />
+    </form>
+
+    <div :if={@entries != [] and @shown == []} class="list-empty">No matching items. Try a different type or search.</div>
+
+    <div :for={e <- @shown} class="card">
       <div class="row">
         <div>
           <h3><%= entry_name(e) %> <span class="faint">· <%= e.kind %></span></h3>

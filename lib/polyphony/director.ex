@@ -77,7 +77,11 @@ defmodule Polyphony.Director do
       |> Map.put_new(:thinking, true)
       |> Enum.into([])
 
-    with {:ok, text} <- provider.complete(messages, call_opts),
+    metered =
+      Keyword.put(call_opts, :provider, provider) ++
+        for(k <- [:user_id, :campaign_id, :usage_kind], v = Map.get(opts, k), do: {k, v})
+
+    with {:ok, text} <- Polyphony.LLM.call(messages, metered),
          {:ok, data} <- Jason.decode(text),
          {:ok, decision} <- Decision.parse(data) do
       {:ok, decision}

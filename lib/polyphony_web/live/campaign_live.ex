@@ -24,7 +24,9 @@ defmodule PolyphonyWeb.CampaignLive do
   defp load(socket) do
     payload = Library.payload(socket.assigns.entry)
     owner = Owner.of(socket.assigns.current_user)
-    owned_chars = Library.list_for_owner(owner) |> Enum.filter(&(&1.kind == "character"))
+    owned = Library.list_for_owner(owner)
+    owned_chars = Enum.filter(owned, &(&1.kind == "character"))
+    bibles = Enum.filter(owned, &(&1.kind == "world_bible"))
 
     cast =
       Enum.filter(owned_chars, fn c ->
@@ -32,7 +34,25 @@ defmodule PolyphonyWeb.CampaignLive do
         n in (payload[:character_ids] || [])
       end)
 
-    assign(socket, payload: payload, owner: owner, cast: cast, scenes: payload[:scenes] || [])
+    assign(socket,
+      payload: payload,
+      owner: owner,
+      cast: cast,
+      scenes: payload[:scenes] || [],
+      bibles: bibles,
+      bible_id: payload[:bible_id],
+      bible_name: bible_label(bibles, payload[:bible_id])
+    )
+  end
+
+  def handle_event("select_world", %{"bible_id" => id}, socket) do
+    safe(socket, fn ->
+      bible_id = if id == "", do: nil, else: String.to_integer(id)
+      payload = Map.put(socket.assigns.payload, :bible_id, bible_id)
+      {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+
+      {:noreply, socket |> assign(entry: entry) |> load() |> put_flash(:info, "World updated.")}
+    end)
   end
 
   def handle_event("start_scene", _params, socket) do
@@ -118,6 +138,24 @@ defmodule PolyphonyWeb.CampaignLive do
     </div>
 
     <div class="card">
+      <div class="row">
+        <h3>World</h3>
+        <div class="spacer"></div>
+        <span class="faint"><%= @bible_name || "no world attached" %></span>
+      </div>
+      <p class="dim">The world bible grounds the setting for this campaign's scenes and its published snapshot.</p>
+      <form id="campaign-world" phx-change="select_world">
+        <select name="bible_id" style="width:auto;">
+          <option value="">— none —</option>
+          <option :for={b <- @bibles} value={b.id} selected={@bible_id == b.id}><%= bible_label_of(b) %></option>
+        </select>
+      </form>
+      <p :if={@bibles == []} class="faint">
+        No world bibles yet — create one in the <a href={~p"/library"}>Library</a>.
+      </p>
+    </div>
+
+    <div class="card">
       <h3>Scenes</h3>
       <div :if={@scenes == []} class="faint">No scenes yet. Start one above.</div>
       <ul>
@@ -131,6 +169,22 @@ defmodule PolyphonyWeb.CampaignLive do
     case Library.payload(entry) do
       %{name: n} when is_binary(n) and n != "" -> n
       _ -> "char-#{entry.id}"
+    end
+  end
+
+  defp bible_label(_bibles, nil), do: nil
+
+  defp bible_label(bibles, id) do
+    case Enum.find(bibles, &(&1.id == id)) do
+      nil -> nil
+      entry -> bible_label_of(entry)
+    end
+  end
+
+  defp bible_label_of(entry) do
+    case Library.payload(entry) do
+      %{name: n} when is_binary(n) and n != "" -> n
+      _ -> "Untitled world (##{entry.id})"
     end
   end
 end

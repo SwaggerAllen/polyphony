@@ -46,7 +46,7 @@ defmodule Polyphony.Generation do
   end
 
   defp attempt(provider, messages, opts, retries_left) do
-    case provider.complete(messages, opts) do
+    case Polyphony.LLM.call(messages, Keyword.put(opts, :provider, provider)) do
       {:ok, text} ->
         handle_text(provider, messages, opts, retries_left, text)
 

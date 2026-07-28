@@ -88,7 +88,11 @@ defmodule Polyphony.Authoring.Stub do
     ]
 
     with {:ok, text} <-
-           provider.complete(messages, response: :sheet, model: Keyword.get(opts, :model)),
+           Polyphony.LLM.call(
+             messages,
+             [provider: provider, response: :sheet, model: Keyword.get(opts, :model)] ++
+               Keyword.take(opts, [:user_id, :campaign_id, :usage_kind])
+           ),
          {:ok, data} <- Jason.decode(text) do
       {:ok, data}
     end
