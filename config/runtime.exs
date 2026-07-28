@@ -88,6 +88,10 @@ if config_env() == :prod do
   workhorse = System.get_env("DEEPINFRA_MODEL") || deepinfra[:model] || models[:workhorse]
   heavy = System.get_env("DEEPINFRA_MODEL_HEAVY") || models[:heavy] || workhorse
 
+  embed_model =
+    System.get_env("DEEPINFRA_EMBED_MODEL") || deepinfra[:embed_model] ||
+      "BAAI/bge-large-en-v1.5"
+
   # Surface full exception + stacktrace on 5xx pages during bring-up. Defaults on;
   # set SHOW_ERROR_DETAILS=false before the app is public (stacktraces leak
   # internals). See PolyphonyWeb.ErrorHTML.
@@ -126,7 +130,13 @@ if config_env() == :prod do
         System.get_env("DEEPINFRA_BASE_URL") || deepinfra[:base_url] ||
           "https://api.deepinfra.com",
       api_key: System.get_env("DEEPINFRA_API_KEY"),
-      model: workhorse
+      model: workhorse,
+      embed_model: embed_model
     ],
     models: %{workhorse: workhorse, heavy: heavy}
+
+  # Real embeddings in prod (dev/test stay on the offline MockEmbedder). Shares the
+  # DeepInfra connection config above; ⚠ the embed model must be 1024-dim to match
+  # the summary embedding column (see config/config.exs).
+  config :polyphony, :embedder, Polyphony.SceneClose.DeepInfraEmbedder
 end
