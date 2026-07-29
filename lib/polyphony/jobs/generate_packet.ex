@@ -230,6 +230,9 @@ defmodule Polyphony.Jobs.GeneratePacket do
     # Bill the cast turn to the campaign owner (§B5); nil ids record nothing.
     |> maybe_put(:user_id, args["user_id"])
     |> maybe_put(:campaign_id, args["campaign_id"])
+    # Debug trace attribution (scene-scoped LLM capture).
+    |> maybe_put(:scene_id, args["scene_id"])
+    |> maybe_put(:debug_subject, args["character_id"])
   end
 
   defp maybe_put(opts, _key, nil), do: opts

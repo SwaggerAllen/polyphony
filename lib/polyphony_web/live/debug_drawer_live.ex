@@ -23,6 +23,7 @@ defmodule PolyphonyWeb.DebugDrawerLive do
      |> assign(:count, length(recent))
      |> assign(:heavy, DebugFlags.get(:force_heavy))
      |> assign(:events, DebugFlags.get(:events))
+     |> assign(:trace, DebugFlags.get(:trace))
      |> stream(:logs, recent), layout: false}
   end
 
@@ -51,6 +52,11 @@ defmodule PolyphonyWeb.DebugDrawerLive do
   # Toggle the play view's raw event / beat-boundary stream (broadcast to it).
   def handle_event("toggle_events", _params, socket) do
     {:noreply, assign(socket, :events, DebugFlags.toggle(:events))}
+  end
+
+  # Toggle capturing actual LLM requests/responses into the play view's debug pane.
+  def handle_event("toggle_trace", _params, socket) do
+    {:noreply, assign(socket, :trace, DebugFlags.toggle(:trace))}
   end
 
   @impl true
@@ -85,6 +91,14 @@ defmodule PolyphonyWeb.DebugDrawerLive do
             title="Show the raw event / beat-boundary stream in the scene pane"
           >
             Events: <%= if @events, do: "on", else: "off" %>
+          </button>
+          <button
+            type="button"
+            class={"btn sm #{if @trace, do: "", else: "ghost"}"}
+            phx-click="toggle_trace"
+            title="Capture actual LLM requests/responses into the scene pane"
+          >
+            Trace: <%= if @trace, do: "on", else: "off" %>
           </button>
           <button type="button" class="btn sm ghost" id="debug-copy">Copy</button>
           <button type="button" class="btn sm ghost" phx-click="clear">Clear</button>

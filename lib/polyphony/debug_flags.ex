@@ -12,11 +12,13 @@ defmodule Polyphony.DebugFlags do
 
     * `:force_heavy` — route every chat generation to the heavy model (§9).
     * `:events` — swap the play view's scene pane to the raw event/beat-boundary stream.
+    * `:trace` — capture the actual LLM requests/responses (`Polyphony.DebugTap`) and
+      show them in the play view's debug pane.
 
   Debug-only; keep the drawer off in public prod (see `Polyphony.DebugLog`).
   """
   @topic "debug:flags"
-  @flags %{force_heavy: :force_heavy_model, events: :debug_events}
+  @flags %{force_heavy: :force_heavy_model, events: :debug_events, trace: :debug_trace}
 
   @doc "Current value of a flag (defaults to false)."
   def get(flag), do: Application.get_env(:polyphony, key!(flag), false)
