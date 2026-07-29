@@ -92,6 +92,12 @@ if config_env() == :prod do
     System.get_env("DEEPINFRA_EMBED_MODEL") || deepinfra[:embed_model] ||
       "BAAI/bge-large-en-v1.5"
 
+  director_max_tokens =
+    case System.get_env("DIRECTOR_MAX_TOKENS") do
+      nil -> Keyword.get(llm, :director_max_tokens, 2048)
+      raw -> String.to_integer(raw)
+    end
+
   # Surface full exception + stacktrace on 5xx pages during bring-up. Defaults on;
   # set SHOW_ERROR_DETAILS=false before the app is public (stacktraces leak
   # internals). See PolyphonyWeb.ErrorHTML.
@@ -133,7 +139,8 @@ if config_env() == :prod do
       model: workhorse,
       embed_model: embed_model
     ],
-    models: %{workhorse: workhorse, heavy: heavy}
+    models: %{workhorse: workhorse, heavy: heavy},
+    director_max_tokens: director_max_tokens
 
   # Real embeddings in prod (dev/test stay on the offline MockEmbedder). Shares the
   # DeepInfra connection config above; ⚠ the embed model must be 1024-dim to match
