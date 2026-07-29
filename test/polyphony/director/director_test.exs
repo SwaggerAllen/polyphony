@@ -110,6 +110,27 @@ defmodule Polyphony.DirectorTest do
     assert {:error, :invalid_decision} = decide(respond_with: {:ok, ~s({"control":"nonsense"})})
   end
 
+  test "a malformed (decode-failing) response self-corrects on the next attempt" do
+    # First reply is prose that won't decode; the retry returns valid JSON.
+    {:ok, agent} = Agent.start_link(fn -> 0 end)
+
+    reply = fn _messages ->
+      case Agent.get_and_update(agent, &{&1, &1 + 1}) do
+        0 -> {:ok, "**Cast:** Lydia, Todd"}
+        _ -> {:ok, decision_json(%{"cast" => [%{"character_id" => "lydia"}]})}
+      end
+    end
+
+    assert {:ok, resolved} = decide(respond_with: reply)
+    assert Enum.map(resolved.cast, & &1.character_id) == ["lydia"]
+  end
+
+  test "a persistent decode failure is a distinct error, not treated as empty" do
+    # Always prose — decode always fails; distinct from an empty/blank response.
+    assert {:error, {:director, :invalid_json}} =
+             decide(respond_with: {:ok, "not json at all"})
+  end
+
   test "the judgment prompt spells out the JSON contract (so the model can't free-form prose)" do
     test = self()
 

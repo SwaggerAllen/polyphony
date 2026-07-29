@@ -94,8 +94,13 @@ defmodule Polyphony.Jobs.RunBeat do
     end
   end
 
+  # Empty/refusal: nothing to correct — a stronger model may simply comply.
   defp retry_on_heavy?({:director, :empty_response}), do: true
   defp retry_on_heavy?({:director, {:refusal, _}}), do: true
+  # Malformed JSON that survived the Director's own self-correction: a stronger model
+  # is more likely to emit valid, schema-shaped JSON.
+  defp retry_on_heavy?({:director, :invalid_json}), do: true
+  defp retry_on_heavy?(:invalid_decision), do: true
   defp retry_on_heavy?(_), do: false
 
   defp heavy_model, do: get_in(Application.get_env(:polyphony, :llm, []), [:models, :heavy])
