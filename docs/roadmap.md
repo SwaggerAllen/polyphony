@@ -464,6 +464,29 @@ Promoted from "business-model-gated" because three separate threads lean on it.
 1. **Generation-quality pillars** (author-preference conditioning: pacing, prose density,
    interiority, tonal rules) — highest impact because every user feels it every turn, and Tier 1
    makes it measurable. This is the flywheel: measure → tune → measure.
+   - **Prose-first generation + structured extraction** ⬜ **Planned — not yet designed.** Today a
+     character turn is generated *as* a `TurnPacket` JSON (moves segmented as the model writes),
+     which fights the model's grain — it produces flatter prose, and the model keeps wanting to
+     emit prose anyway (the empty/markdown-response saga). The direction: **let the model write
+     natural prose attached to a character, then split it into moves** (thought / speech / action)
+     in a second, lightweight step. Prose reads better, and it removes a whole class of
+     JSON-compliance failures. **The non-negotiable constraint:** the visibility guarantee (rule 3
+     — dramatic irony is *structural*) turns on the exact bits hardest to infer from free prose —
+     whisper vs. aloud, and addressee. So the split must **never infer** audibility/addressing: the
+     generator marks those explicitly with lightweight, unambiguous markup (the composer's
+     `(whisper to NAME: …)` convention already exists in `SayParser`/`TurnEdit`, and the §20
+     ingestion layer already does prose→moves for *user* input — extend that machinery, don't build
+     new). Recommended shape: **prose with minimal safety-markup → deterministic extractor**, not
+     free prose → an LLM guesser. If a second LLM pass is used at all, constrain it to **extraction
+     only** (verbatim spans + labels, never rewriting — paraphrase breaks verbatim integrity and
+     the "prose the user read is canonical" property), and *still* have the generator mark whispers
+     so no fallible step ever *decides* who-hears-what. Scope note: **character turns only** — the
+     Director's output is a decision (cast/control/world-events), not prose anyone reads, so it
+     stays JSON. Likely simplifies `self_state` (demeanor rides the narration; mood/intention shrink
+     to a small sidecar or vanish). **Validate with the Tier-1 branch-and-compare harness** (same
+     scene, JSON-first vs. prose-first-then-split, human picks) — the quality delta *is* the
+     justification, so measure it before committing. Replay-safe: both steps live in the generation
+     job and produce the same committed move-events.
 2. **Moderation surface** — pulled forward because it **gates everything social/public below**
    (spectating-as-product, marketplace, creator economy, public profiles). Report queue,
    takedown, the report-pierces-visibility model, admin audit log. (Some of this is already in v1
