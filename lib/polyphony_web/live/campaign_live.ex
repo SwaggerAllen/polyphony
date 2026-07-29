@@ -11,6 +11,7 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Director.SceneBrief
+  alias Polyphony.LLM.Settings
 
   def mount(%{"id" => id}, _session, socket) do
     entry = Library.get(id)
@@ -54,7 +55,8 @@ defmodule PolyphonyWeb.CampaignLive do
       scenes: payload[:scenes] || [],
       bibles: bibles,
       bible_id: world_id,
-      bible_name: bible_label(bibles, world_id)
+      bible_name: bible_label(bibles, world_id),
+      llm: Settings.from_payload(payload)
     )
   end
 
@@ -91,10 +93,21 @@ defmodule PolyphonyWeb.CampaignLive do
 
   def handle_event("update_details", params, socket) do
     safe(socket, fn ->
+      defaults = Settings.defaults()
+
+      llm = %{
+        director_thinking: params["director_thinking"] == "true",
+        director_max_tokens:
+          parse_int(params["director_max_tokens"], defaults.director_max_tokens),
+        character_max_tokens:
+          parse_int(params["character_max_tokens"], defaults.character_max_tokens)
+      }
+
       payload =
         socket.assigns.payload
         |> Map.put(:name, params["name"] || "")
         |> Map.put(:premise, params["premise"] || "")
+        |> Map.put(:llm, llm)
 
       {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
       {:noreply, socket |> assign(entry: entry) |> load()}
@@ -195,6 +208,13 @@ defmodule PolyphonyWeb.CampaignLive do
   defp maybe_payload(nil), do: nil
   defp maybe_payload(entry), do: Library.payload(entry)
 
+  defp parse_int(value, default) do
+    case Integer.parse(to_string(value || "")) do
+      {n, _} when n > 0 -> n
+      _ -> default
+    end
+  end
+
   def render(assigns) do
     ~H"""
     <h1><%= if @payload[:name] in [nil, ""], do: "Untitled campaign", else: @payload[:name] %></h1>
@@ -205,6 +225,22 @@ defmodule PolyphonyWeb.CampaignLive do
         <input type="text" name="name" value={@payload[:name]} placeholder="Name this campaign…" phx-debounce="blur" />
         <label>Premise <span class="faint">(what the story is about)</span></label>
         <textarea name="premise" phx-debounce="blur"><%= @payload[:premise] %></textarea>
+
+        <details style="margin-top:.6rem;">
+          <summary class="faint" style="cursor:pointer;">Model tuning <span class="faint">(advanced — Director &amp; character generation)</span></summary>
+          <label class="row" style="gap:.4rem; margin-top:.4rem;">
+            <input type="checkbox" name="director_thinking" value="true" checked={@llm.director_thinking} style="width:auto;" />
+            <span>Director reasoning (“thinking”) — off keeps the whole budget for the decision JSON</span>
+          </label>
+          <div class="row" style="gap:1rem; margin-top:.4rem; flex-wrap:wrap;">
+            <label>Director max tokens
+              <input type="number" name="director_max_tokens" value={@llm.director_max_tokens} min="256" step="128" phx-debounce="blur" style="width:8rem;" />
+            </label>
+            <label>Character max tokens
+              <input type="number" name="character_max_tokens" value={@llm.character_max_tokens} min="256" step="128" phx-debounce="blur" style="width:8rem;" />
+            </label>
+          </div>
+        </details>
       </form>
     </div>
 

@@ -41,11 +41,53 @@ defmodule Polyphony.LLM.DeepInfra do
       |> put_thinking(Keyword.get(opts, :thinking, false))
       |> Map.merge(Map.new(Keyword.get(opts, :extra_body, [])))
 
-    with {:ok, json} <- post(cfg, body),
-         {:ok, decoded} <- Jason.decode(json),
-         {:ok, content} <- extract_content(decoded) do
-      {:ok, content}
+    case post(cfg, body) do
+      {:ok, json} ->
+        case Jason.decode(json) do
+          {:ok, decoded} ->
+            case extract_content(decoded) do
+              {:ok, content} ->
+                {:ok, content}
+
+              {:error, reason} = err ->
+                log_bad_response(model, body, decoded, reason)
+                err
+            end
+
+          {:error, reason} ->
+            Logger.warning(
+              "[deepinfra] non-JSON response model=#{model}: #{String.slice(json, 0, 400)}"
+            )
+
+            {:error, reason}
+        end
+
+      {:error, {:http_status, status, resp}} = err ->
+        Logger.warning(
+          "[deepinfra] HTTP #{status} model=#{model}: #{String.slice(to_string(resp), 0, 400)}"
+        )
+
+        err
+
+      {:error, {:transport, reason}} = err ->
+        Logger.warning("[deepinfra] transport error model=#{model}: #{inspect(reason)}")
+        err
     end
+  end
+
+  # The diagnostic log for an empty/malformed model response: the fields that reveal
+  # *why* — finish_reason ("length" ⇒ truncated by max_tokens), usage (tokens actually
+  # produced), whether thinking was disabled, the cap sent, and the message object
+  # itself (an empty `content`, or a stray `reasoning`/other field).
+  defp log_bad_response(model, body, decoded, reason) do
+    choice = decoded |> Map.get("choices", []) |> List.first() || %{}
+
+    Logger.warning(
+      "[deepinfra] bad response model=#{model} reason=#{inspect(reason)} " <>
+        "finish_reason=#{inspect(choice["finish_reason"])} usage=#{inspect(decoded["usage"])} " <>
+        "sent_thinking=#{inspect(Map.get(body, :chat_template_kwargs))} sent_max_tokens=#{body.max_tokens} " <>
+        "message=#{inspect(choice["message"], limit: 30, printable_limit: 600)}"
+    )
   end
 
   # Qwen3.5 ships thinking on; the OpenAI-compatible way to turn it off is the

@@ -171,7 +171,8 @@ defmodule Polyphony.Jobs.GeneratePacket do
       control: parse_control(args["control"]),
       # Keep the campaign-owner attribution flowing to the next slot (§B5).
       user_id: args["user_id"],
-      campaign_id: args["campaign_id"]
+      campaign_id: args["campaign_id"],
+      character_max_tokens: args["character_max_tokens"]
     ]
   end
 
@@ -225,7 +226,8 @@ defmodule Polyphony.Jobs.GeneratePacket do
     []
     |> maybe_put(:provider, BeatOps.resolve_provider(args["provider"]))
     |> maybe_put(:model, args["model"])
-    |> maybe_put(:max_tokens, args["max_tokens"])
+    # Character output-token budget from the campaign LLM settings (§9).
+    |> maybe_put(:max_tokens, args["character_max_tokens"] || args["max_tokens"])
     |> maybe_put(:thinking, args["thinking"])
     # Bill the cast turn to the campaign owner (§B5); nil ids record nothing.
     |> maybe_put(:user_id, args["user_id"])

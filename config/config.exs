@@ -62,11 +62,10 @@ config :polyphony, :llm,
   models: %{
     workhorse: "Qwen/Qwen3.5-35B-A3B",
     heavy: "Qwen/Qwen3.5-397B-A17B"
-  },
-  # The Director decides with thinking on (§3); the reasoning trace shares the output
-  # budget, so its cap must be generous or the JSON comes back empty/truncated. Tunable
-  # via DIRECTOR_MAX_TOKENS (config/runtime.exs).
-  director_max_tokens: 2048
+  }
+
+# Per-campaign LLM tuning (Director thinking + token budgets) lives on the campaign,
+# not in env — see `Polyphony.LLM.Settings`, edited from the campaign screen.
 
 # Embedding provider. Defaults to the offline deterministic mock everywhere; prod
 # swaps in the real DeepInfra embedder in config/runtime.exs.
