@@ -166,11 +166,7 @@ defmodule Polyphony.Context do
         render_membership(Map.get(opts, :members, []), Map.get(opts, :exits, [])),
         section("Scene so far", live),
         section("Current state", Map.get(opts, :current_state)),
-        Map.get(
-          opts,
-          :turn_instruction,
-          "It is your turn. Respond with a single valid TurnPacket JSON object."
-        )
+        Map.get(opts, :turn_instruction, default_turn_instruction())
       ]
       |> compact_join()
 
@@ -178,6 +174,20 @@ defmodule Polyphony.Context do
       %{role: "system", content: ctx.prefix},
       %{role: "user", content: volatile}
     ]
+  end
+
+  # The TurnPacket JSON contract, spelled out (and paired with the provider's JSON
+  # mode) so the model emits the object we parse rather than free-forming prose.
+  defp default_turn_instruction do
+    """
+    It is your turn. Respond with ONLY a single JSON object — no prose, no markdown, no \
+    code fences, no reasoning — of exactly this shape:
+    {"moves": [{"seq": 1, "type": "thought" | "speech" | "action", "content": "<text>", \
+    "addressed_to": ["<name>"], "audibility": "normal" | "private"}],
+     "self_state": {"mood_felt": "<...>", "demeanor": "<...>", "intention": "<...>", "position": "<...>"}}
+    Order moves by `seq`. `addressed_to`/`audibility` apply to speech only (use \
+    "private" for a whisper). Omit fields you don't need.\
+    """
   end
 
   # ── Token budgeting (§9: budget by tokens, drop oldest-first) ───────────────

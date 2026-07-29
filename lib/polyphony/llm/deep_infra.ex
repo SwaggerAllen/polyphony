@@ -28,18 +28,8 @@ defmodule Polyphony.LLM.DeepInfra do
   @impl true
   def complete(messages, opts \\ []) do
     cfg = config()
-    model = Keyword.get(opts, :model) || cfg[:model] || raise("no model configured")
-
-    body =
-      %{
-        model: model,
-        messages: messages,
-        max_tokens: Keyword.get(opts, :max_tokens, @default_max_tokens),
-        temperature: Keyword.get(opts, :temperature, 0.8),
-        stream: false
-      }
-      |> put_thinking(Keyword.get(opts, :thinking, false))
-      |> Map.merge(Map.new(Keyword.get(opts, :extra_body, [])))
+    body = build_body(messages, opts, cfg)
+    model = body.model
 
     case post(cfg, body) do
       {:ok, json} ->
@@ -75,6 +65,24 @@ defmodule Polyphony.LLM.DeepInfra do
     end
   end
 
+  @doc false
+  # The request body sent to the chat endpoint. Public for testing the JSON-mode /
+  # thinking / token-budget wiring without a network round-trip.
+  def build_body(messages, opts, cfg \\ config()) do
+    model = Keyword.get(opts, :model) || cfg[:model] || raise("no model configured")
+
+    %{
+      model: model,
+      messages: messages,
+      max_tokens: Keyword.get(opts, :max_tokens, @default_max_tokens),
+      temperature: Keyword.get(opts, :temperature, 0.8),
+      stream: false
+    }
+    |> put_thinking(Keyword.get(opts, :thinking, false))
+    |> put_response_format(Keyword.get(opts, :response))
+    |> Map.merge(Map.new(Keyword.get(opts, :extra_body, [])))
+  end
+
   # The diagnostic log for an empty/malformed model response: the fields that reveal
   # *why* — finish_reason ("length" ⇒ truncated by max_tokens), usage (tokens actually
   # produced), whether thinking was disabled, the cap sent, and the message object
@@ -96,6 +104,15 @@ defmodule Polyphony.LLM.DeepInfra do
 
   defp put_thinking(body, false),
     do: Map.put(body, :chat_template_kwargs, %{enable_thinking: false})
+
+  # Every structured caller (Director decision, character TurnPacket, authoring sheets)
+  # passes a `:response` tag — force OpenAI-compatible JSON mode so the model can't
+  # free-form markdown/prose instead of the JSON object we parse. `nil` (a plain prose
+  # call) leaves the response unconstrained.
+  defp put_response_format(body, nil), do: body
+
+  defp put_response_format(body, _tag),
+    do: Map.put(body, :response_format, %{type: "json_object"})
 
   defp extract_content(%{"choices" => [%{"message" => %{"content" => content}} | _]})
        when is_binary(content) and content != "",
