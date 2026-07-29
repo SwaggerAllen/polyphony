@@ -92,12 +92,30 @@ defmodule Polyphony.Director do
     end
   end
 
+  # The decision JSON contract. Kept explicit in the final message (and paired with the
+  # provider's JSON mode) because the model otherwise free-forms markdown prose — the
+  # `**Cast:** …` responses that fail `Jason.decode`.
+  @decision_format """
+  Respond with ONLY a single JSON object — no prose, no markdown, no code fences, no \
+  reasoning — of exactly this shape:
+  {"control": "continue" | "yield_to_user",
+   "cast": [{"character_id": "<one of the exact ids listed above>", "pacing_note": "<optional short note>"}],
+   "world_events": [{"content": "<something that happens in the world, or omit>"}],
+   "introductions": [{"name": "<name>", "reason": "<why, or omit>"}],
+   "proposal_rulings": [{"actor_id": "<id>", "accept": true, "reason": "<why>"}]}
+  Empty arrays are fine. `cast` must use the exact character ids from the roster above.\
+  """
+
   defp forwarded_prompt([]),
-    do: "No proposals need arbitration. Decide the cast, any world events, and control flow."
+    do:
+      "No proposals need arbitration. Decide the cast, any world events, and control flow.\n\n" <>
+        @decision_format
 
   defp forwarded_prompt(proposals) do
     lines = Enum.map_join(proposals, "\n", fn p -> "- #{p.actor_id}: #{p.detail || p.target}" end)
-    "Rule on these proposals, then decide cast, world events, and control flow:\n" <> lines
+
+    "Rule on these proposals, then decide cast, world events, and control flow:\n" <>
+      lines <> "\n\n" <> @decision_format
   end
 
   # ── Merge the two stages into one plan ──────────────────────────────────────

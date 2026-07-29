@@ -109,4 +109,21 @@ defmodule Polyphony.DirectorTest do
   test "an invalid decision is surfaced as an error, not a crash" do
     assert {:error, :invalid_decision} = decide(respond_with: {:ok, ~s({"control":"nonsense"})})
   end
+
+  test "the judgment prompt spells out the JSON contract (so the model can't free-form prose)" do
+    test = self()
+
+    capture = fn messages ->
+      send(test, {:messages, messages})
+      {:ok, decision_json()}
+    end
+
+    assert {:ok, _} = decide(respond_with: capture)
+
+    assert_received {:messages, messages}
+    text = messages |> Enum.map_join("\n", & &1.content)
+    assert text =~ "Respond with ONLY a single JSON object"
+    assert text =~ ~s("control")
+    assert text =~ ~s("cast")
+  end
 end
