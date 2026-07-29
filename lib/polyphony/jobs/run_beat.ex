@@ -95,6 +95,12 @@ defmodule Polyphony.Jobs.RunBeat do
 
   defp heavy_model, do: get_in(Application.get_env(:polyphony, :llm, []), [:models, :heavy])
 
+  # Output-token budget for the Director's decision — must cover the reasoning trace
+  # plus the decision JSON. Config-tunable (`DIRECTOR_MAX_TOKENS`); generous default.
+  defp director_max_tokens do
+    get_in(Application.get_env(:polyphony, :llm, []), [:director_max_tokens]) || 2048
+  end
+
   # ── Drive the outcome ────────────────────────────────────────────────────────
 
   defp drive(:changed, _resolved, args, scene_id, beat, depth, max_depth) do
@@ -149,6 +155,9 @@ defmodule Polyphony.Jobs.RunBeat do
       scene_id: scene_id,
       beat: beat,
       provider: BeatOps.resolve_provider(args["provider"]),
+      # The Director decides with **thinking on** (§3), and the reasoning trace shares
+      # the output budget — so a small cap yields empty/truncated JSON. Give it room.
+      max_tokens: director_max_tokens(),
       cast_hint: members,
       control_hint: parse_control(args["control_hint"]),
       # Bill the Director's judgment to the campaign owner (§B5); nil ids record nothing.
