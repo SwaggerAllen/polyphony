@@ -14,6 +14,7 @@ defmodule Polyphony.Application do
         Polyphony.Repo,
         Polyphony.Context.Store,
         {Phoenix.PubSub, name: Polyphony.PubSub},
+        Polyphony.DebugTap,
         {Oban, Application.fetch_env!(:polyphony, Oban)},
         Polyphony.App,
         Polyphony.Broadcast.Publisher,

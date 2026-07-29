@@ -23,7 +23,7 @@ defmodule Polyphony.LLM do
   """
   require Logger
 
-  alias Polyphony.Costs
+  alias Polyphony.{Costs, DebugFlags, DebugTap}
   alias Polyphony.LLM.Provider
 
   @default_rate_per_1k 100
@@ -36,6 +36,7 @@ defmodule Polyphony.LLM do
       provider = Keyword.get(opts, :provider) || Provider.default()
       result = provider.complete(messages, opts)
       meter(result, messages, opts)
+      trace(messages, result, opts)
       result
     else
       # Circuit breaker (§B5): an attributed caller over a hard cap doesn't spend.
@@ -87,6 +88,24 @@ defmodule Polyphony.LLM do
   end
 
   defp meter(_error, _messages, _opts), do: :ok
+
+  # Debug capture (bring-up): the actual request + response for a scene generation, when
+  # the :trace flag is on. Best-effort; only scene-scoped calls (they carry :scene_id).
+  defp trace(messages, result, opts) do
+    if opts[:scene_id] && DebugFlags.get(:trace) do
+      DebugTap.record(%{
+        scene_id: opts[:scene_id],
+        subject: opts[:debug_subject] || opts[:usage_kind] || "generation",
+        params: Keyword.take(opts, [:model, :thinking, :max_tokens, :response, :usage_kind]),
+        request: messages,
+        response: result
+      })
+    end
+
+    :ok
+  rescue
+    _ -> :ok
+  end
 
   defp record(amount, opts) do
     if opts[:user_id] || opts[:campaign_id] do

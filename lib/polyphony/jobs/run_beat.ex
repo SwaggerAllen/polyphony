@@ -154,7 +154,8 @@ defmodule Polyphony.Jobs.RunBeat do
       # Bill the Director's judgment to the campaign owner (§B5); nil ids record nothing.
       user_id: args["user_id"],
       campaign_id: args["campaign_id"],
-      usage_kind: "director"
+      usage_kind: "director",
+      debug_subject: "director"
     ]
   end
 

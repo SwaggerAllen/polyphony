@@ -16,6 +16,7 @@ defmodule PolyphonyWeb.PlayLive do
     App,
     Broadcast,
     Context,
+    DebugFlags,
     Failures,
     Library,
     MembershipSet,
@@ -26,6 +27,7 @@ defmodule PolyphonyWeb.PlayLive do
   }
 
   alias Polyphony.Context.{Store, PgvectorRetriever}
+  alias Polyphony.DebugTap
   alias Polyphony.Director.{BeatOps, SceneBrief}
 
   alias Polyphony.Commands.{
@@ -53,6 +55,11 @@ defmodule PolyphonyWeb.PlayLive do
   alias PolyphonyWeb.TurnEdit
 
   def mount(%{"scene_id" => scene_id}, _session, socket) do
+    if connected?(socket) do
+      DebugFlags.subscribe()
+      DebugTap.subscribe(scene_id)
+    end
+
     {:ok,
      assign(socket,
        scene_id: scene_id,
@@ -64,6 +71,10 @@ defmodule PolyphonyWeb.PlayLive do
        failures: [],
        editing: nil,
        composing: false,
+       debug_events: DebugFlags.get(:events),
+       debug_trace: DebugFlags.get(:trace),
+       raw_events: [],
+       traces: [],
        premise: ""
      )}
   end
@@ -107,6 +118,9 @@ defmodule PolyphonyWeb.PlayLive do
 
     assign(socket,
       messages: messages,
+      raw_events: events,
+      traces:
+        if(socket.assigns.debug_trace, do: DebugTap.recent(socket.assigns.scene_id), else: []),
       roster: roster,
       next_beat: next_beat,
       premise: scene_premise(plain),
@@ -613,6 +627,24 @@ defmodule PolyphonyWeb.PlayLive do
     {:noreply, append(socket, msg)}
   end
 
+  # Debug drawer toggled a scene-pane view — reflect it (reload so the data is fresh).
+  def handle_info({:debug_flag, :events, value}, socket),
+    do: {:noreply, socket |> assign(debug_events: value) |> reload()}
+
+  def handle_info({:debug_flag, :trace, value}, socket),
+    do: {:noreply, socket |> assign(debug_trace: value) |> reload()}
+
+  def handle_info({:debug_flag, _flag, _value}, socket), do: {:noreply, socket}
+
+  # A new LLM request/response was captured for this scene — refresh the trace list.
+  def handle_info({:debug_trace, _scene_id}, socket) do
+    if socket.assigns.debug_trace do
+      {:noreply, assign(socket, traces: DebugTap.recent(socket.assigns.scene_id))}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # A just-generated introduction is now :full — admit them.
@@ -771,6 +803,39 @@ defmodule PolyphonyWeb.PlayLive do
   defp event_beat(%{beat: b}) when is_integer(b), do: b
   defp event_beat(_), do: 0
 
+  # Debug view (author-only): the event's struct name and a compact dump of its fields.
+  defp debug_kind(e) when is_struct(e), do: e.__struct__ |> Module.split() |> List.last()
+  defp debug_kind(_), do: "?"
+
+  defp debug_detail(e) when is_struct(e) do
+    e
+    |> Map.from_struct()
+    |> Map.drop([:scene_id, :beat])
+    |> inspect(pretty: false, limit: 12, printable_limit: 240)
+    |> String.slice(0, 400)
+  end
+
+  defp debug_detail(other), do: inspect(other)
+
+  # LLM trace rendering (author debug pane).
+  defp trace_model(params), do: to_string(params[:model] || "workhorse")
+
+  defp trace_outcome({:ok, _}), do: "ok"
+  defp trace_outcome({:error, reason}), do: "ERROR #{inspect(reason)}"
+  defp trace_outcome(_), do: "?"
+
+  defp trace_request(messages) when is_list(messages) do
+    Enum.map_join(messages, "\n\n", fn m ->
+      "[#{m[:role] || m["role"]}]\n#{m[:content] || m["content"]}"
+    end)
+  end
+
+  defp trace_request(other), do: inspect(other)
+
+  defp trace_response({:ok, text}), do: text
+  defp trace_response({:error, reason}), do: "ERROR: " <> inspect(reason)
+  defp trace_response(other), do: inspect(other)
+
   # A character's control mode, defaulting to autonomous (matches the beat walk).
   defp control_of(modes, character), do: Map.get(modes, character) || "autonomous"
 
@@ -856,6 +921,32 @@ defmodule PolyphonyWeb.PlayLive do
 
       <div class="card transcript-card">
         <div id="transcript" class="transcript" phx-hook="Autoscroll">
+          <%= if @viewer == :omniscient and (@debug_events or @debug_trace) do %>
+            <%= if @debug_trace do %>
+              <div class="faint" style="padding:.3rem 0;">Debug: LLM calls — <%= length(@traces) %> (newest first)</div>
+              <details :for={t <- @traces} style="font-family:monospace; font-size:.78rem; margin:.15rem 0;">
+                <summary style="cursor:pointer;"><%= trace_outcome(t.response) %> · <strong><%= t.subject %></strong> · <%= trace_model(t.params) %></summary>
+                <div class="faint" style="margin:.2rem 0;">params: <%= inspect(t.params) %></div>
+                <div style="margin:.2rem 0;">request:</div>
+                <pre style="white-space:pre-wrap; word-break:break-word; max-height:16rem; overflow:auto; background:var(--bg-2); padding:.4rem; border-radius:6px;"><%= trace_request(t.request) %></pre>
+                <div style="margin:.2rem 0;">response:</div>
+                <pre style="white-space:pre-wrap; word-break:break-word; max-height:16rem; overflow:auto; background:var(--bg-2); padding:.4rem; border-radius:6px;"><%= trace_response(t.response) %></pre>
+              </details>
+            <% end %>
+            <%= if @debug_events do %>
+              <div class="faint" style="padding:.3rem 0;">Debug: raw event stream — <%= length(@raw_events) %> events</div>
+              <div
+                :for={{seq, e} <- @raw_events}
+                class="row"
+                style="gap:.5rem; font-family:monospace; font-size:.78rem; align-items:baseline;"
+              >
+                <span class="faint" style="min-width:2.4rem; text-align:right;"><%= seq %></span>
+                <span class="faint" style="min-width:1.8rem;">b<%= event_beat(e) %></span>
+                <span style="min-width:11rem; font-weight:600;"><%= debug_kind(e) %></span>
+                <span style="white-space:pre-wrap; word-break:break-word;"><%= debug_detail(e) %></span>
+              </div>
+            <% end %>
+          <% else %>
           <div :for={{block, i} <- Enum.with_index(turn_blocks(@messages))} id={"blk-#{i}"} class="turn-block">
             <div :for={m <- block.msgs}><%= render_move(m) %></div>
 
@@ -884,6 +975,7 @@ defmodule PolyphonyWeb.PlayLive do
               </div>
             </form>
           </div>
+          <% end %>
         </div>
       </div>
 
