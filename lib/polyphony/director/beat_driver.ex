@@ -134,7 +134,9 @@ defmodule Polyphony.Director.BeatDriver do
       "control" => control_str(opts[:control]),
       # Carry the campaign-owner attribution so the cast turn bills the owner (§B5).
       "user_id" => opts[:user_id],
-      "campaign_id" => opts[:campaign_id]
+      "campaign_id" => opts[:campaign_id],
+      # Campaign LLM tuning: the character's output-token budget (§9).
+      "character_max_tokens" => opts[:character_max_tokens]
     }
     |> GeneratePacket.new()
     |> Oban.insert!()

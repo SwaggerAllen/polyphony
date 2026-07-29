@@ -1,8 +1,8 @@
 defmodule Polyphony.Jobs.RunBeatMaxTokensTest do
-  @moduledoc "The Director decides with a generous output budget (thinking shares it, §3)."
+  @moduledoc "The Director decides with the campaign's LLM settings (thinking off, generous budget)."
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, Repo}
+  alias Polyphony.{App, Library, Repo}
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Jobs.RunBeat
 
@@ -28,13 +28,7 @@ defmodule Polyphony.Jobs.RunBeatMaxTokensTest do
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     previous = Application.get_env(:polyphony, :llm)
-
-    Application.put_env(:polyphony, :llm,
-      provider: CapturingDirector,
-      models: %{},
-      director_max_tokens: 3000
-    )
-
+    Application.put_env(:polyphony, :llm, provider: CapturingDirector, models: %{})
     Application.put_env(:polyphony, :test_reporter, self())
 
     on_exit(fn ->
@@ -45,9 +39,16 @@ defmodule Polyphony.Jobs.RunBeatMaxTokensTest do
     :ok
   end
 
-  test "the Director call carries the configured max_tokens" do
-    scene = "rbmt-" <> Integer.to_string(System.unique_integer([:positive]))
-    :ok = App.dispatch(%OpenScene{scene_id: scene, opened_beat: 0})
+  test "the Director call carries the campaign's token budget and thinking setting" do
+    campaign =
+      Library.put(%{
+        owner_id: "1",
+        kind: "campaign",
+        payload: %{llm: %{director_max_tokens: 3000, director_thinking: false}}
+      })
+
+    scene = "rbs-" <> Integer.to_string(System.unique_integer([:positive]))
+    :ok = App.dispatch(%OpenScene{scene_id: scene, campaign_id: campaign.id, opened_beat: 0})
     :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: "mira", beat: 1})
 
     Oban.Testing.with_testing_mode(:inline, fn ->
@@ -56,5 +57,6 @@ defmodule Polyphony.Jobs.RunBeatMaxTokensTest do
 
     assert_received {:director_opts, opts}
     assert Keyword.get(opts, :max_tokens) == 3000
+    assert Keyword.get(opts, :thinking) == false
   end
 end

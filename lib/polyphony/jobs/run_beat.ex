@@ -29,6 +29,7 @@ defmodule Polyphony.Jobs.RunBeat do
   alias Polyphony.Director
   alias Polyphony.Director.{BeatDriver, BeatOps, BeatPolicy, Proposal, SceneBrief}
   alias Polyphony.Director.Commands.OpenBeat
+  alias Polyphony.LLM.Settings
 
   @doc "Kick off (or resume) the beat loop for a scene."
   def enqueue(args) do
@@ -39,13 +40,17 @@ defmodule Polyphony.Jobs.RunBeat do
   def perform(%Oban.Job{args: args}) do
     scene_id = args["scene_id"]
     args = put_attribution(args, scene_id)
+    # Per-campaign LLM tuning (§9), resolved fresh each beat so a campaign-screen edit
+    # takes effect next beat. Character budget rides args to the cast jobs.
+    settings = Settings.for_scene(scene_id)
+    args = Map.put(args, "character_max_tokens", settings.character_max_tokens)
     beat = args["beat"]
     depth = args["depth"] || 0
     max_depth = args["max_depth"] || BeatPolicy.default_max_depth()
 
     members = BeatOps.members_now(scene_id, beat)
 
-    case decide_with_fallback(decide_opts(args, scene_id, beat, members), beat) do
+    case decide_with_fallback(decide_opts(args, scene_id, beat, members, settings), beat) do
       {:ok, resolved} ->
         BeatOps.author_world_events(resolved.world_events, scene_id, beat)
         BeatOps.author_introductions(Map.get(resolved, :introductions, []), scene_id, beat)
@@ -95,12 +100,6 @@ defmodule Polyphony.Jobs.RunBeat do
 
   defp heavy_model, do: get_in(Application.get_env(:polyphony, :llm, []), [:models, :heavy])
 
-  # Output-token budget for the Director's decision — must cover the reasoning trace
-  # plus the decision JSON. Config-tunable (`DIRECTOR_MAX_TOKENS`); generous default.
-  defp director_max_tokens do
-    get_in(Application.get_env(:polyphony, :llm, []), [:director_max_tokens]) || 2048
-  end
-
   # ── Drive the outcome ────────────────────────────────────────────────────────
 
   defp drive(:changed, _resolved, args, scene_id, beat, depth, max_depth) do
@@ -137,13 +136,14 @@ defmodule Polyphony.Jobs.RunBeat do
       max_depth: max_depth,
       control: resolved.control,
       user_id: args["user_id"],
-      campaign_id: args["campaign_id"]
+      campaign_id: args["campaign_id"],
+      character_max_tokens: args["character_max_tokens"]
     )
   end
 
   # ── Args ─────────────────────────────────────────────────────────────────────
 
-  defp decide_opts(args, scene_id, beat, members) do
+  defp decide_opts(args, scene_id, beat, members, settings) do
     [
       proposals: parse_proposals(args["proposals"]),
       options: parse_options(args["options"]),
@@ -155,9 +155,10 @@ defmodule Polyphony.Jobs.RunBeat do
       scene_id: scene_id,
       beat: beat,
       provider: BeatOps.resolve_provider(args["provider"]),
-      # The Director decides with **thinking on** (§3), and the reasoning trace shares
-      # the output budget — so a small cap yields empty/truncated JSON. Give it room.
-      max_tokens: director_max_tokens(),
+      # Director thinking + token budget from the campaign's LLM settings (§9). With
+      # thinking on, the reasoning trace shares the budget, so keep the cap generous.
+      thinking: settings.director_thinking,
+      max_tokens: settings.director_max_tokens,
       cast_hint: members,
       control_hint: parse_control(args["control_hint"]),
       # Bill the Director's judgment to the campaign owner (§B5); nil ids record nothing.
