@@ -31,6 +31,7 @@ defmodule Polyphony.LLM.Mock do
       :relationships -> {:ok, relationships_json(messages)}
       :boundaries -> {:ok, boundaries_json(messages)}
       :reciprocals -> {:ok, reciprocals_json(messages, opts)}
+      :regards -> {:ok, regards_json(messages, opts)}
       :mentions -> {:ok, mentions_json(messages)}
       :field -> {:ok, summary_text(messages)}
       :gate -> {:ok, gate_answer(messages)}
@@ -145,6 +146,18 @@ defmodule Polyphony.LLM.Mock do
     count = Keyword.get(opts, :count, 3)
 
     Jason.encode!(for i <- 0..(max(count, 1) - 1), do: lorem(seed + i * 3, 2))
+  end
+
+  # A lorem regard object keyed by each target's name (Authoring.regard_map). The names
+  # are passed via `:targets` since the Mock builds the object from the exact keys.
+  defp regards_json(messages, opts) do
+    seed = :erlang.phash2(messages)
+
+    opts
+    |> Keyword.get(:targets, [])
+    |> Enum.with_index()
+    |> Map.new(fn {name, i} -> {to_string(name), lorem(seed + i * 3, 2)} end)
+    |> Jason.encode!()
   end
 
   # A couple of lorem "mentioned character" names (Authoring.extract_mentions).

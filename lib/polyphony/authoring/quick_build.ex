@@ -31,7 +31,7 @@ defmodule Polyphony.Authoring.QuickBuild do
 
   alias Polyphony.Library
   alias Polyphony.Authoring.{Autofill, CharacterSheet, Stub, WorldBible}
-  alias Polyphony.Authoring.CharacterSheet.Relationship
+  alias Polyphony.Authoring.CharacterSheet.{Boundary, Relationship}
 
   @doc """
   Build a world, a cast, and a premise from seeds. `opts`:
@@ -71,10 +71,19 @@ defmodule Polyphony.Authoring.QuickBuild do
   # with what it got so one flaky generation doesn't discard the whole build.
   defp build_characters(owner, seeds, bible_id, world_ctx, meter) do
     {entries, failed} =
-      Enum.reduce(seeds, {[], []}, fn seed, {ok, bad} ->
-        case Autofill.generate_all(:character, seed, %{}, [world: world_ctx] ++ meter) do
+      seeds
+      |> Enum.with_index()
+      |> Enum.reduce({[], []}, fn {seed, i}, {ok, bad} ->
+        brief = brief_with_roster(seed, seeds, i)
+
+        case Autofill.generate_all(:character, brief, %{}, [world: world_ctx] ++ meter) do
           {:ok, fields} when map_size(fields) > 0 ->
-            {ok ++ [put(owner, "character", to_character_sheet(fields, bible_id))], bad}
+            sheet = %CharacterSheet{
+              to_character_sheet(fields, bible_id)
+              | boundaries: gen_boundaries(fields, world_ctx, meter)
+            }
+
+            {ok ++ [put(owner, "character", sheet)], bad}
 
           {:ok, _empty} ->
             {ok, bad ++ [{seed, :blank_generation}]}
@@ -88,6 +97,36 @@ defmodule Polyphony.Authoring.QuickBuild do
       entries != [] -> {:ok, entries, failed}
       seeds == [] -> {:ok, [], []}
       true -> {:error, {:all_characters_failed, failed}}
+    end
+  end
+
+  # Ground each character in the rest of the ensemble so a relationship the seed states
+  # ("secretly in love with Jack") is honored rather than rationalized away by a model
+  # that has no idea Jack is a castmate. The character's own seed stays primary; the
+  # others are context.
+  defp brief_with_roster(seed, seeds, i) do
+    case seeds |> List.delete_at(i) |> Enum.reject(&(String.trim(&1) == "")) do
+      [] ->
+        seed
+
+      others ->
+        seed <>
+          "\n\nEnsemble context — this character shares the story with: " <>
+          Enum.map_join(others, "; ", & &1) <>
+          ". If this character's own description above names or implies a relationship, " <>
+          "attraction, or history with any of them, honor it exactly — do not soften, " <>
+          "professionalize, or rewrite it."
+    end
+  end
+
+  # Boundaries, the same way the sheet editor's "Generate all fields" does — via
+  # `Autofill.suggest_boundaries`, grounded in the just-generated fields and the world.
+  # Best-effort: a failed suggestion leaves the character with no boundaries rather than
+  # failing the build (the author can add them by hand or ✨ Suggest in the editor).
+  defp gen_boundaries(fields, world_ctx, meter) do
+    case Autofill.suggest_boundaries(fields, [world: world_ctx] ++ meter) do
+      {:ok, list} -> Enum.map(list, &Boundary.from_map/1)
+      {:error, _} -> []
     end
   end
 

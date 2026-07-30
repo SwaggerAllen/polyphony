@@ -8,6 +8,7 @@ defmodule Polyphony.Authoring.QuickBuildTest do
 
   alias Polyphony.{Library, Owner, Repo}
   alias Polyphony.Authoring.{CharacterSheet, QuickBuild, WorldBible}
+  alias Polyphony.Authoring.CharacterSheet.Boundary
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -39,13 +40,18 @@ defmodule Polyphony.Authoring.QuickBuildTest do
       assert %CharacterSheet{status: :full} = sheet
       assert sheet.world_bible_id == result.bible.id
       assert sheet.premise not in [nil, ""]
+      # Boundaries are generated too (same as the editor's "Generate all fields").
+      assert sheet.boundaries != []
+      assert Enum.all?(sheet.boundaries, &match?(%Boundary{}, &1))
     end
 
-    # Cross-linked: each character regards the other, by stable id (not just name).
+    # Cross-linked: each character regards the other, by stable id AND with a role
+    # (a non-empty descriptor) — not a bare, role-less link.
     [a, b] = result.characters
     sheet_a = Library.payload(a)
     assert [rel] = sheet_a.relationships
     assert rel.target_id == b.id
+    assert rel.descriptor not in [nil, ""]
 
     # A premise came back.
     assert is_binary(result.premise) and result.premise != ""
@@ -156,9 +162,12 @@ defmodule Polyphony.Authoring.QuickBuildTest do
 
     @impl true
     def complete(messages, opts) do
-      text = Enum.map_join(messages, " ", & &1.content)
+      # Only the character's OWN seed counts — not another character named in the
+      # ensemble-context roster (which is appended after "Ensemble context").
+      primary =
+        messages |> Enum.map_join(" ", & &1.content) |> String.split("Ensemble context") |> hd()
 
-      if Keyword.get(opts, :response) == :autofill and String.contains?(text, "BOOMCHAR") do
+      if Keyword.get(opts, :response) == :autofill and String.contains?(primary, "BOOMCHAR") do
         {:ok, "{}"}
       else
         Polyphony.LLM.Mock.complete(messages, opts)

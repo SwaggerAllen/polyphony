@@ -79,6 +79,40 @@ defmodule Polyphony.Authoring.CharacterSheet do
             on_pressure: String.t() | nil,
             category: Polyphony.Content.category() | nil
           }
+
+    @doc """
+    Build a boundary from a string-keyed map (the shape `Autofill.suggest_boundaries`
+    returns and the editor form submits): `topic`, `stance`, `condition`, `on_pressure`,
+    `category`. Unknown/blank stance ⇒ `:closed`; unknown/blank category ⇒ `nil`; blank
+    condition / on_pressure ⇒ `nil`. Shared by the sheet editor and Quick Build so the
+    AI-suggested and hand-entered paths stay in lockstep.
+    """
+    @spec from_map(map()) :: t()
+    def from_map(m) when is_map(m) do
+      %__MODULE__{
+        topic: String.trim(to_string(m["topic"] || m[:topic] || "")),
+        stance: parse_stance(m["stance"] || m[:stance]),
+        condition: blank_to_nil(m["condition"] || m[:condition]),
+        on_pressure: blank_to_nil(m["on_pressure"] || m[:on_pressure]),
+        category: parse_category(m["category"] || m[:category])
+      }
+    end
+
+    defp parse_stance("open"), do: :open
+    defp parse_stance("conditional"), do: :conditional
+    defp parse_stance(_), do: :closed
+
+    defp parse_category("sexual"), do: :sexual
+    defp parse_category("graphic_violence"), do: :graphic_violence
+    defp parse_category("other"), do: :other
+    defp parse_category(_), do: nil
+
+    defp blank_to_nil(v) do
+      case String.trim(to_string(v || "")) do
+        "" -> nil
+        s -> s
+      end
+    end
   end
 
   @derive Jason.Encoder
