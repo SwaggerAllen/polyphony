@@ -189,8 +189,9 @@ defmodule Polyphony.Context do
     {"moves": [{"seq": 1, "type": "thought" | "speech" | "action", "content": "<text>", \
     "addressed_to": ["<name>"], "audibility": "normal" | "private"}],
      "self_state": {"mood_felt": "<...>", "demeanor": "<...>", "intention": "<...>", "position": "<...>"}}
-    Order moves by `seq`. `addressed_to`/`audibility` apply to speech only (use \
-    "private" for a whisper). Omit fields you don't need.\
+    Order moves by `seq`. Write `action` content in the third person, starting with your \
+    own name (e.g. "Lydia reaches out…"), never first person. `addressed_to`/`audibility` \
+    apply to speech only (use "private" for a whisper). Omit fields you don't need.\
     """
   end
 

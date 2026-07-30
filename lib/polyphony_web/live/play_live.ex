@@ -1200,6 +1200,16 @@ defmodule PolyphonyWeb.PlayLive do
     """
   end
 
+  # An action reads as narration: prepend the actor's name only if the content doesn't
+  # already begin with it, so third-person model output isn't doubled.
+  defp action_text(name, content) do
+    trimmed = String.trim_leading(content)
+
+    if name != "" and String.starts_with?(String.downcase(trimmed), String.downcase(name)),
+      do: trimmed,
+      else: String.trim("#{name} #{trimmed}")
+  end
+
   # Render a broadcaster message (kind + payload with atom keys) as a transcript line.
   defp render_move(%{kind: "SpeechUttered", payload: p}) do
     assigns = %{p: p, whisper: to_string(p[:audibility]) == "private"}
@@ -1217,8 +1227,12 @@ defmodule PolyphonyWeb.PlayLive do
   end
 
   defp render_move(%{kind: "ActionTaken", payload: p}) do
-    assigns = %{p: p}
-    ~H|<div class="move action"><%= @p[:character_id] %> <%= @p[:content] %></div>|
+    # Actions are narration, not dialogue — italic prose, no "Name:" prefix. The model
+    # writes them in the third person already naming the actor ("Todd snaps his head…"),
+    # so prefixing the name unconditionally produced "Todd Todd …"; only prepend it when
+    # the content doesn't already open with it (e.g. a first-person "I reach out…").
+    assigns = %{text: action_text(to_string(p[:character_id]), to_string(p[:content]))}
+    ~H|<div class="move action"><%= @text %></div>|
   end
 
   defp render_move(%{kind: "WorldEventOccurred", payload: p}) do
