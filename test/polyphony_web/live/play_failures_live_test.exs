@@ -42,4 +42,35 @@ defmodule PolyphonyWeb.PlayFailuresLiveTest do
     {:ok, _mira, mira_html} = live(conn, ~p"/play/#{s}?as=mira")
     refute mira_html =~ "Couldn&#39;t generate"
   end
+
+  test "a beat-less scene-close failure sorts to the end, not the top", %{conn: conn} do
+    s = scene()
+
+    # A turn failure at beat 3…
+    Failures.record(%{
+      scene_id: s,
+      beat: 3,
+      subject: "midbeat",
+      operation: :generation,
+      kind: :error,
+      reason: "boom",
+      worker: Polyphony.Jobs.GeneratePacket,
+      args: %{"scene_id" => s}
+    })
+
+    # …and a scene-close failure with no beat (arc extraction), which happens after the scene.
+    Failures.record(%{
+      scene_id: s,
+      subject: "closeup",
+      operation: :arc,
+      kind: :error,
+      reason: "boom",
+      worker: Polyphony.Jobs.ExtractArc,
+      args: %{"scene_id" => s}
+    })
+
+    {:ok, _view, html} = live(conn, ~p"/play/#{s}")
+    # The beated failure renders before the beat-less one.
+    assert :binary.match(html, "midbeat") < :binary.match(html, "closeup")
+  end
 end

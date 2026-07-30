@@ -1052,7 +1052,12 @@ defmodule PolyphonyWeb.PlayLive do
   # each failure placed at the beat it occurred (after that beat's turns) rather than in a
   # standalone pane — so a transient error and its Retry sit where they happened and vanish
   # when retried. Event blocks (no beat of their own) inherit the last turn's beat so they
-  # keep their place. `failures` is [] for non-omniscient viewers, so nothing shows there.
+  # keep their place.
+  #
+  # A failure carries the beat it was *emitted for* — never the live beat at render time.
+  # Beat-less failures are the scene-close operations (arc extraction, summarization), which
+  # happen after the scene, so they sort to the END, not the top and not "wherever the scene
+  # is now." `failures` is [] for non-omniscient viewers, so nothing shows there.
   defp transcript_items(messages, failures) do
     {blocks, _} =
       messages
@@ -1062,12 +1067,16 @@ defmodule PolyphonyWeb.PlayLive do
         {Map.put(b, :eff_beat, eff), eff}
       end)
 
-    items = Enum.map(blocks, &{:block, &1}) ++ Enum.map(failures, &{:fail, &1})
+    {beated, beatless} = Enum.split_with(failures, & &1.beat)
 
-    Enum.sort_by(items, fn
-      {:block, b} -> {b.eff_beat, 0}
-      {:fail, f} -> {f.beat || 0, 1}
-    end)
+    positioned =
+      (Enum.map(blocks, &{:block, &1}) ++ Enum.map(beated, &{:fail, &1}))
+      |> Enum.sort_by(fn
+        {:block, b} -> {b.eff_beat, 0}
+        {:fail, f} -> {f.beat, 1}
+      end)
+
+    positioned ++ Enum.map(beatless, &{:fail, &1})
   end
 
   defp turn_blocks(messages) do
