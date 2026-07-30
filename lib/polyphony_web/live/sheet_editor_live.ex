@@ -800,25 +800,31 @@ defmodule PolyphonyWeb.SheetEditorLive do
       </ul>
 
       <form id="boundary-form" phx-submit="add_boundary" style="margin-top:.5rem;">
-        <div class="row">
-          <input type="text" name="topic" placeholder="Topic (e.g. physical intimacy, killing)" style="flex:1;" autocomplete="off" />
-          <select name="stance" style="width:auto;">
+        <label>Topic
+          <input type="text" name="topic" placeholder="e.g. physical intimacy, killing" autocomplete="off" />
+        </label>
+        <label>Stance
+          <select name="stance">
             <option value="closed">Hard line — will not</option>
             <option value="conditional">Conditional — until…</option>
             <option value="open">Open to it</option>
           </select>
-          <select name="category" style="width:auto;">
+        </label>
+        <label>Category <span class="faint">(optional — a campaign's ceiling can cap it)</span>
+          <select name="category">
             <option value="">No category</option>
             <option value="sexual">Sexual</option>
             <option value="graphic_violence">Graphic violence</option>
             <option value="other">Other</option>
           </select>
-        </div>
-        <div class="row" style="margin-top:.4rem;">
-          <input type="text" name="condition" placeholder="Condition — until what happens? (conditional only)" style="flex:1;" />
-          <input type="text" name="on_pressure" placeholder="When pushed… (optional)" style="flex:1;" />
-          <button class="btn" type="submit">Add</button>
-        </div>
+        </label>
+        <label>Condition <span class="faint">(conditional only — until what happens?)</span>
+          <input type="text" name="condition" placeholder="e.g. once trust is earned" />
+        </label>
+        <label>When pushed <span class="faint">(optional — how they react under pressure)</span>
+          <input type="text" name="on_pressure" placeholder="e.g. deflects with a joke" />
+        </label>
+        <button class="btn" type="submit" style="margin-top:.6rem;">Add boundary</button>
       </form>
     </div>
     """
