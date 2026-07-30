@@ -89,20 +89,50 @@ defmodule Polyphony.Authoring.QuickBuildTest do
     # Stubs are still off the campaign roster — only the main cast is returned.
     assert length(result.characters) == 2
 
-    # Each stub is pending, linked to the world, and carries an inbound relationship
-    # back toward the character that introduced it.
+    # Each stub is pending, linked to the world, and its inbound relationships all point
+    # back at the main cast that introduced it.
+    main_ids = Enum.map(result.characters, & &1.id)
+
     for stub <- stubs do
       sheet = Library.payload(stub)
       assert sheet.status == :stub
       assert sheet.world_bible_id == result.bible.id
-      assert [%{target_id: back_id}] = sheet.relationships
-      assert back_id in Enum.map(result.characters, & &1.id)
+      assert sheet.relationships != []
+      assert Enum.all?(sheet.relationships, &(&1.target_id in main_ids))
     end
 
     # A main character links to at least one off-screen stub (target_id set to a stub).
     stub_ids = MapSet.new(stubs, & &1.id)
     main = Library.payload(hd(result.characters))
     assert Enum.any?(main.relationships, &(&1.target_id in stub_ids))
+  end
+
+  test "an off-screen person named by two characters collapses into one shared stub",
+       %{owner: owner} do
+    # Identical seeds ⇒ identical generated sheets ⇒ both characters propose the same
+    # off-screen names (the Mock is deterministic in the prompt), so they must dedupe.
+    {:ok, result} =
+      QuickBuild.build(
+        owner: owner,
+        world_seed: "a walled city",
+        character_seeds: ["a twin", "a twin"],
+        suggest_offscreen: true,
+        provider: Polyphony.LLM.Mock
+      )
+
+    chars = Enum.filter(Library.list_for_owner(owner), &(&1.kind == "character"))
+    stubs = Enum.filter(chars, &match?(%CharacterSheet{status: :stub}, Library.payload(&1)))
+    main_ids = Enum.sort(Enum.map(result.characters, & &1.id))
+
+    # No duplicate stub names — the shared people were reused, not re-created.
+    stub_names = Enum.map(stubs, &String.downcase(Library.payload(&1).name))
+    assert stub_names == Enum.uniq(stub_names)
+
+    # A shared stub links back to BOTH twins (one inbound relationship each).
+    assert Enum.any?(stubs, fn stub ->
+             ids = Library.payload(stub).relationships |> Enum.map(& &1.target_id) |> Enum.sort()
+             ids == main_ids
+           end)
   end
 
   test "off-screen suggestions are off by default (cast-only interlink)", %{owner: owner} do

@@ -77,32 +77,50 @@ defmodule Polyphony.Authoring.QuickBuild do
   # Wire each character's relationships: a directional link toward every other built
   # character (with an asymmetrical regard and the target's stable id set), plus —
   # when `suggest?` — AI-suggested off-screen people stubbed like the sheet editor does
-  # on save. Best-effort per character: a failed call leaves that character less-linked
-  # rather than aborting the whole build.
+  # on save. A `stubs` registry (normalized name → id) is threaded across the cast so
+  # an off-screen person two characters both name collapses into ONE shared stub that
+  # links back to each of them. Best-effort per character: a failed call leaves that
+  # character less-linked rather than aborting the whole build.
   defp wire_cast(entries, suggest?, bible_id, owner, meter) do
     named = Enum.map(entries, fn e -> {e, Library.payload(e)} end)
     cast_names = MapSet.new(for {_e, s} <- named, present?(s.name), do: norm(s.name))
 
-    Enum.map(named, fn {entry, sheet} ->
-      others = for {o, os} <- named, o.id != entry.id, do: {o.id, os.name}
-      cast_rels = if others == [], do: [], else: cast_regards(sheet, others, meter)
+    {updated, _stubs} =
+      Enum.reduce(named, {[], %{}}, fn {entry, sheet}, {acc, stubs} ->
+        others = for {o, os} <- named, o.id != entry.id, do: {o.id, os.name}
+        cast_rels = if others == [], do: [], else: cast_regards(sheet, others, meter)
 
-      offscreen =
-        if suggest?,
-          do: suggest_and_stub(entry.id, sheet, cast_rels, cast_names, bible_id, owner, meter),
-          else: []
+        {offscreen, stubs} =
+          if suggest?,
+            do:
+              suggest_and_stub(
+                entry.id,
+                sheet,
+                cast_rels,
+                cast_names,
+                bible_id,
+                owner,
+                meter,
+                stubs
+              ),
+            else: {[], stubs}
 
-      case cast_rels ++ offscreen do
-        [] ->
-          entry
+        entry =
+          case cast_rels ++ offscreen do
+            [] ->
+              entry
 
-        rels ->
-          {:ok, updated} =
-            Library.update_payload(entry.id, %CharacterSheet{sheet | relationships: rels})
+            rels ->
+              {:ok, u} =
+                Library.update_payload(entry.id, %CharacterSheet{sheet | relationships: rels})
 
-          updated
-      end
-    end)
+              u
+          end
+
+        {[entry | acc], stubs}
+      end)
+
+    Enum.reverse(updated)
   end
 
   defp cast_regards(sheet, others, meter) do
@@ -122,10 +140,9 @@ defmodule Polyphony.Authoring.QuickBuild do
 
   # Ask for off-screen relationships and stub the new people (§B8). Cast members are
   # excluded (passed as `existing`, and belt-and-suspenders filtered by name), so this
-  # only ever creates genuinely new stubs. Each stub carries the inbound relationship
-  # back toward this character, seeded with the source's regard as a placeholder — the
-  # same pre-reciprocal state the editor produces before its async reciprocal pass.
-  defp suggest_and_stub(self_id, sheet, cast_rels, cast_names, bible_id, owner, meter) do
+  # only ever creates genuinely new stubs. Returns `{outbound_rels, stubs}` — the
+  # updated registry so later characters reuse a stub already created for the same name.
+  defp suggest_and_stub(self_id, sheet, cast_rels, cast_names, bible_id, owner, meter, stubs) do
     current = %{
       "name" => sheet.name,
       "premise" => sheet.premise,
@@ -139,29 +156,63 @@ defmodule Polyphony.Authoring.QuickBuild do
         |> Enum.reject(
           &(norm(&1["target"]) == "" or MapSet.member?(cast_names, norm(&1["target"])))
         )
-        |> Enum.map(fn s ->
-          inbound = %Relationship{
-            target: sheet.name,
-            target_id: self_id,
-            descriptor: s["descriptor"],
-            reciprocal: s["descriptor"]
+        |> Enum.reduce({[], stubs}, fn s, {rels, stubs} ->
+          {stub_id, stubs} = resolve_stub(s, self_id, sheet.name, bible_id, owner, stubs)
+
+          rel = %Relationship{
+            target: s["target"],
+            target_id: stub_id,
+            descriptor: s["descriptor"]
           }
 
-          stub =
-            put(
-              owner,
-              "character",
-              Stub.new(s["target"], s["descriptor"],
-                relationships: [inbound],
-                world_bible_id: bible_id
-              )
-            )
-
-          %Relationship{target: s["target"], target_id: stub.id, descriptor: s["descriptor"]}
+          {rels ++ [rel], stubs}
         end)
 
       {:error, _} ->
-        []
+        {[], stubs}
+    end
+  end
+
+  # Reuse an existing stub for this name (appending the new inbound regard), or create
+  # one. Each stub carries the inbound relationship back toward the introducing
+  # character, seeded with the source's regard as a placeholder — the same pre-reciprocal
+  # state the editor produces before its async reciprocal pass.
+  defp resolve_stub(s, self_id, self_name, bible_id, owner, stubs) do
+    inbound = %Relationship{
+      target: self_name,
+      target_id: self_id,
+      descriptor: s["descriptor"],
+      reciprocal: s["descriptor"]
+    }
+
+    case Map.get(stubs, norm(s["target"])) do
+      nil ->
+        stub =
+          put(
+            owner,
+            "character",
+            Stub.new(s["target"], s["descriptor"],
+              relationships: [inbound],
+              world_bible_id: bible_id
+            )
+          )
+
+        {stub.id, Map.put(stubs, norm(s["target"]), stub.id)}
+
+      id ->
+        append_inbound(id, inbound)
+        {id, stubs}
+    end
+  end
+
+  # Append an inbound relationship to an already-created stub, unless one from that same
+  # character is already present (idempotent).
+  defp append_inbound(id, inbound) do
+    with entry when not is_nil(entry) <- Library.get(id),
+         %CharacterSheet{} = sheet <- Library.payload(entry),
+         rels <- sheet.relationships || [],
+         false <- Enum.any?(rels, &(&1.target_id == inbound.target_id)) do
+      Library.update_payload(id, %CharacterSheet{sheet | relationships: rels ++ [inbound]})
     end
   end
 
