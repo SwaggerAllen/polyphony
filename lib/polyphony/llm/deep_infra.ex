@@ -123,7 +123,48 @@ defmodule Polyphony.LLM.DeepInfra do
 
   defp extract_content(other), do: {:error, {:unexpected_response, other}}
 
-  defp post(cfg, body) do
+  # DeepInfra 429s with `engine_overloaded` ("Model busy, retry later") and times out
+  # under load. Those are transient, so retry with exponential backoff before failing
+  # the beat. Runs in the (background) generation job, so a few seconds of sleep is fine.
+  # `:max_retries` / `:retry_base_ms` are config-tunable.
+  defp post(cfg, body), do: with_retry(cfg, fn -> request(cfg, body) end)
+
+  @doc false
+  # The retry loop, over an injectable request thunk (so it's testable without a socket).
+  def with_retry(cfg, request_fun, attempt \\ 0) do
+    case request_fun.() do
+      {:ok, resp} ->
+        {:ok, resp}
+
+      {:error, reason} = err ->
+        max = cfg[:max_retries] || 3
+
+        if attempt < max and transient?(reason) do
+          delay = (cfg[:retry_base_ms] || 1000) * Integer.pow(2, attempt)
+
+          Logger.info(
+            "[deepinfra] #{transient_label(reason)}; retry #{attempt + 1}/#{max} in #{delay}ms"
+          )
+
+          if delay > 0, do: Process.sleep(delay)
+          with_retry(cfg, request_fun, attempt + 1)
+        else
+          err
+        end
+    end
+  end
+
+  @doc false
+  # 429 (rate limit / overloaded) and 5xx are transient; so are transport failures
+  # (timeout, connection reset). A 4xx that isn't 429 is a real request error — no retry.
+  def transient?({:http_status, status, _}), do: status == 429 or status >= 500
+  def transient?({:transport, _}), do: true
+  def transient?(_), do: false
+
+  defp transient_label({:http_status, status, _}), do: "HTTP #{status}"
+  defp transient_label({:transport, reason}), do: "transport #{inspect(reason)}"
+
+  defp request(cfg, body) do
     url = String.to_charlist((cfg[:base_url] || "https://api.deepinfra.com") <> @default_path)
     api_key = cfg[:api_key] || System.get_env("DEEPINFRA_API_KEY") || ""
 
@@ -132,10 +173,10 @@ defmodule Polyphony.LLM.DeepInfra do
       {~c"accept", ~c"application/json"}
     ]
 
-    request = {url, headers, ~c"application/json", Jason.encode!(body)}
+    http_request = {url, headers, ~c"application/json", Jason.encode!(body)}
     http_opts = [timeout: cfg[:timeout] || 60_000, ssl: ssl_opts(cfg)]
 
-    case :httpc.request(:post, request, http_opts, body_format: :binary) do
+    case :httpc.request(:post, http_request, http_opts, body_format: :binary) do
       {:ok, {{_v, 200, _r}, _h, resp}} ->
         {:ok, resp}
 
