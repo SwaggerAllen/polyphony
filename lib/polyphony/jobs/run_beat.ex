@@ -51,6 +51,8 @@ defmodule Polyphony.Jobs.RunBeat do
       # default. `model` is the workhorse both tiers run on; `heavy_model` the fallback.
       |> Map.put("character_model", settings.model)
       |> Map.put("heavy_model", settings.heavy_model)
+      # DeepInfra scheduling tier (§9): priority jumps the queue during overload.
+      |> Map.put("service_tier", settings.service_tier)
 
     beat = args["beat"]
     depth = args["depth"] || 0
@@ -154,7 +156,8 @@ defmodule Polyphony.Jobs.RunBeat do
       campaign_id: args["campaign_id"],
       character_max_tokens: args["character_max_tokens"],
       character_model: args["character_model"],
-      heavy_model: args["heavy_model"]
+      heavy_model: args["heavy_model"],
+      service_tier: args["service_tier"]
     )
   end
 
@@ -178,6 +181,8 @@ defmodule Polyphony.Jobs.RunBeat do
       max_tokens: settings.director_max_tokens,
       # The campaign's workhorse model (nil ⇒ the provider's global default).
       model: settings.model,
+      # DeepInfra scheduling tier for the Director call (nil ⇒ standard).
+      service_tier: settings.service_tier,
       cast_hint: members,
       control_hint: parse_control(args["control_hint"]),
       # Bill the Director's judgment to the campaign owner (§B5); nil ids record nothing.

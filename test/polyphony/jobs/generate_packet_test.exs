@@ -103,13 +103,15 @@ defmodule Polyphony.Jobs.GeneratePacketTest do
       "beat" => 2,
       "packet_id" => scene <> "-2-mira",
       "model" => "campaign/Better-70B",
-      "heavy_model" => "campaign/Heavy-405B"
+      "heavy_model" => "campaign/Heavy-405B",
+      "service_tier" => "priority"
     }
 
     assert :ok = perform_job(GeneratePacket, args)
 
     assert_received {:char_opts, opts}
     assert Keyword.get(opts, :model) == "campaign/Better-70B"
+    assert Keyword.get(opts, :service_tier) == "priority"
   end
 
   test "a persistent refusal cancels the job rather than looping (§12)" do

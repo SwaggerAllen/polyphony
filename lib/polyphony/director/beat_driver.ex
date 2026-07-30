@@ -140,7 +140,9 @@ defmodule Polyphony.Director.BeatDriver do
       # the provider's global default.
       "character_max_tokens" => opts[:character_max_tokens],
       "model" => opts[:character_model],
-      "heavy_model" => opts[:heavy_model]
+      "heavy_model" => opts[:heavy_model],
+      # DeepInfra scheduling tier (§9): carried so the whole cast shares the campaign's.
+      "service_tier" => opts[:service_tier]
     }
     |> GeneratePacket.new()
     |> Oban.insert!()

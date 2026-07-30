@@ -80,6 +80,7 @@ defmodule Polyphony.LLM.DeepInfra do
     }
     |> put_thinking(Keyword.get(opts, :thinking, false))
     |> put_response_format(Keyword.get(opts, :response))
+    |> put_service_tier(Keyword.get(opts, :service_tier))
     |> Map.merge(Map.new(Keyword.get(opts, :extra_body, [])))
   end
 
@@ -113,6 +114,15 @@ defmodule Polyphony.LLM.DeepInfra do
 
   defp put_response_format(body, _tag),
     do: Map.put(body, :response_format, %{type: "json_object"})
+
+  # DeepInfra service tiers schedule the request: `priority` jumps ahead of standard
+  # traffic (faster TTFT during peak demand, avoiding `engine_overloaded`) at 1.5×;
+  # `flex` is cheaper (0.8×) but slower/occasionally unavailable. Unset ⇒ the field is
+  # omitted and DeepInfra uses `standard`. A campaign choice, resolved per beat.
+  defp put_service_tier(body, tier) when tier in ["priority", "flex", "standard"],
+    do: Map.put(body, :service_tier, tier)
+
+  defp put_service_tier(body, _), do: body
 
   defp extract_content(%{"choices" => [%{"message" => %{"content" => content}} | _]})
        when is_binary(content) and content != "",

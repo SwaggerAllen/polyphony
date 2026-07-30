@@ -59,4 +59,16 @@ defmodule Polyphony.LLM.SettingsTest do
     assert settings.model == nil
     assert settings.heavy_model == nil
   end
+
+  test "service_tier defaults to nil and accepts only the known DeepInfra tiers" do
+    assert Settings.defaults().service_tier == nil
+
+    for tier <- ["standard", "priority", "flex"] do
+      assert Settings.from_payload(%{llm: %{service_tier: tier}}).service_tier == tier
+    end
+
+    # An unknown / stale value coerces back to nil (⇒ standard), never onto the wire.
+    assert Settings.from_payload(%{llm: %{service_tier: "platinum"}}).service_tier == nil
+    assert Settings.from_payload(%{"llm" => %{"service_tier" => ""}}).service_tier == nil
+  end
 end

@@ -183,7 +183,8 @@ defmodule Polyphony.Jobs.GeneratePacket do
       # the workhorse/heavy models. `advance` re-keys `model` → `character_model`.
       character_max_tokens: args["character_max_tokens"],
       character_model: args["model"],
-      heavy_model: args["heavy_model"]
+      heavy_model: args["heavy_model"],
+      service_tier: args["service_tier"]
     ]
   end
 
@@ -240,6 +241,8 @@ defmodule Polyphony.Jobs.GeneratePacket do
     # The campaign's heavy model for the refusal fallback (§9). Inert to the provider —
     # `retry_on_heavy_model` reads it, then strips it before the swap call.
     |> maybe_put(:heavy_model, args["heavy_model"])
+    # DeepInfra scheduling tier (§9): a real body field, carried onto the refusal retry.
+    |> maybe_put(:service_tier, args["service_tier"])
     # Character output-token budget from the campaign LLM settings (§9).
     |> maybe_put(:max_tokens, args["character_max_tokens"] || args["max_tokens"])
     |> maybe_put(:thinking, args["thinking"])

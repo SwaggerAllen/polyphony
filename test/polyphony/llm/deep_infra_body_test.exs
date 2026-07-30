@@ -30,4 +30,17 @@ defmodule Polyphony.LLM.DeepInfraBodyTest do
     assert body.max_tokens == 3000
     assert body.model == "test-model"
   end
+
+  test "a valid service_tier rides the body; anything else is omitted" do
+    priority = DeepInfra.build_body(@messages, [service_tier: "priority"], @cfg)
+    assert priority.service_tier == "priority"
+
+    # Unset ⇒ omitted (DeepInfra defaults to standard).
+    unset = DeepInfra.build_body(@messages, [], @cfg)
+    refute Map.has_key?(unset, :service_tier)
+
+    # A stray value never reaches the wire.
+    bogus = DeepInfra.build_body(@messages, [service_tier: "platinum"], @cfg)
+    refute Map.has_key?(bogus, :service_tier)
+  end
 end

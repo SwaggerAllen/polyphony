@@ -47,6 +47,12 @@ without a code change:
 > the escape hatch when a model's serverless pool is overloaded (a 429 with
 > `engine_overloaded`): move that campaign to a better-provisioned model without a
 > redeploy. Takes effect on the next beat.
+>
+> **Service tier.** The same screen picks DeepInfra's per-request scheduling tier —
+> `priority` (schedules ahead of standard traffic; the direct fix for
+> `engine_overloaded` under peak load, ~1.5× price), `flex` (cheaper, best-effort),
+> or `standard` (the default; sent as no tier). Set on the campaign's `:llm` payload
+> and applied to every generation it makes. Availability varies by model.
 - `DEEPINFRA_EMBED_MODEL` — optional; the embedding model for pgvector memory
   (defaults to `BAAI/bge-large-en-v1.5`). ⚠ **Must be 1024-dim** to match the
   `character_scene_summaries.embedding` column — a different-dimension model needs

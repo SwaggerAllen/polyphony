@@ -104,7 +104,9 @@ defmodule PolyphonyWeb.CampaignLive do
           parse_int(params["character_max_tokens"], defaults.character_max_tokens),
         # Blank ⇒ nil ⇒ the deployment's global default model (DEEPINFRA_MODEL / heavy).
         model: blank_to_nil(params["model"]),
-        heavy_model: blank_to_nil(params["heavy_model"])
+        heavy_model: blank_to_nil(params["heavy_model"]),
+        # DeepInfra scheduling tier; Settings coerces an unknown value back to nil.
+        service_tier: blank_to_nil(params["service_tier"])
       }
 
       payload =
@@ -267,8 +269,17 @@ defmodule PolyphonyWeb.CampaignLive do
               <input type="text" name="heavy_model" value={@llm.heavy_model} placeholder={@global_models.heavy || "DEEPINFRA_MODEL_HEAVY"} phx-debounce="blur" style="width:100%;" />
             </label>
           </div>
+          <div class="row" style="gap:1rem; margin-top:.4rem; flex-wrap:wrap;">
+            <label>Service tier <span class="faint">(DeepInfra scheduling)</span>
+              <select name="service_tier" style="width:12rem;">
+                <option value="" selected={@llm.service_tier in [nil, ""]}>Standard (default, 1×)</option>
+                <option value="priority" selected={@llm.service_tier == "priority"}>Priority (jump the queue, 1.5×)</option>
+                <option value="flex" selected={@llm.service_tier == "flex"}>Flex (cheaper, slower, 0.8×)</option>
+              </select>
+            </label>
+          </div>
           <p class="faint" style="margin-top:.3rem;">
-            Point a campaign at a better-provisioned DeepInfra model when the default's serverless pool is overloaded (429 <code>engine_overloaded</code>). Takes effect on the next beat.
+            Point a campaign at a better-provisioned DeepInfra model, or set <strong>Priority</strong> to schedule ahead of standard traffic, when the default is overloaded (429 <code>engine_overloaded</code>). Takes effect on the next beat.
           </p>
         </details>
       </form>

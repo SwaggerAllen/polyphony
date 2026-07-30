@@ -96,7 +96,15 @@ defmodule Polyphony.LLM do
       DebugTap.record(%{
         scene_id: opts[:scene_id],
         subject: opts[:debug_subject] || opts[:usage_kind] || "generation",
-        params: Keyword.take(opts, [:model, :thinking, :max_tokens, :response, :usage_kind]),
+        params:
+          Keyword.take(opts, [
+            :model,
+            :thinking,
+            :max_tokens,
+            :response,
+            :usage_kind,
+            :service_tier
+          ]),
         request: messages,
         response: result
       })

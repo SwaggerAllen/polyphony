@@ -20,6 +20,11 @@ defmodule Polyphony.LLM.Settings do
   Both nil-default, so an unset campaign behaves exactly as before — the model is
   resolved by the provider/job from app env, not overridden here.
 
+  `service_tier` picks how DeepInfra schedules the request — `"priority"` jumps ahead
+  of standard traffic (the escape hatch for `engine_overloaded` under peak load, at a
+  price premium), `"flex"` is cheaper but slower/best-effort, `"standard"` (or nil) is
+  the default. Applies to every generation the campaign makes.
+
   Resolved fresh per beat, so an edit takes effect on the next beat — no restart.
   """
   require Logger
@@ -32,7 +37,8 @@ defmodule Polyphony.LLM.Settings do
           director_max_tokens: pos_integer(),
           character_max_tokens: pos_integer(),
           model: String.t() | nil,
-          heavy_model: String.t() | nil
+          heavy_model: String.t() | nil,
+          service_tier: String.t() | nil
         }
 
   # Director thinking defaults OFF: with thinking on, the reasoning trace shares the
@@ -43,8 +49,12 @@ defmodule Polyphony.LLM.Settings do
     director_max_tokens: 2048,
     character_max_tokens: 1024,
     model: nil,
-    heavy_model: nil
+    heavy_model: nil,
+    service_tier: nil
   }
+
+  # The DeepInfra scheduling tiers; anything else coerces back to nil (⇒ standard).
+  @service_tiers ~w(standard priority flex)
 
   @doc "The default settings (no campaign / unset)."
   @spec defaults() :: t()
@@ -104,6 +114,15 @@ defmodule Polyphony.LLM.Settings do
   # A model id is a free-form string; blank (an unset form field) means "use the global
   # default", so it coerces back to nil rather than an empty override.
   defp coerce(key, value) when key in [:model, :heavy_model], do: to_model(value)
+
+  # A service tier must be one of the known DeepInfra values; anything else ⇒ nil (the
+  # default `standard` scheduling), so a stale/garbage value can't ride into the body.
+  defp coerce(:service_tier, value) do
+    case to_model(value) do
+      tier when tier in @service_tiers -> tier
+      _ -> nil
+    end
+  end
 
   defp truthy(v) when v in [true, "true", "on", "1", 1], do: true
   defp truthy(_), do: false
