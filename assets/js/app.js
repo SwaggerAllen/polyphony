@@ -30,15 +30,29 @@ Hooks.Autoscroll = {
 // paragraphs are fully readable. Used by the block-field editor.
 Hooks.AutoGrow = {
   grow() {
+    // A hidden textarea (inside a collapsed <details>) has scrollHeight 0; measuring it
+    // would set height:0, so it shows collapsed when re-opened. Skip until it's visible —
+    // the details `toggle` handler re-grows it on open.
+    if (this.el.offsetParent === null) return
+    // Setting height:auto momentarily collapses the textarea to one row; across many
+    // fields that collapse/expand yanks the whole page. Preserve the scroll position
+    // around the reflow so growing never scrolls the page.
+    const y = window.scrollY
     this.el.style.height = "auto"
     this.el.style.height = this.el.scrollHeight + "px"
+    this.last = this.el.value
+    if (window.scrollY !== y) window.scrollTo(window.scrollX, y)
   },
   mounted() {
+    this.last = this.el.value
     this.grow()
     this.el.addEventListener("input", () => this.grow())
   },
   updated() {
-    this.grow()
+    // Only re-measure when the value actually changed. A re-render that merely flipped a
+    // Generate button's label must NOT trigger a collapse/expand (the disruptive scroll
+    // the user saw on every generate click and completion).
+    if (this.el.value !== this.last) this.grow()
   },
 }
 
@@ -105,6 +119,22 @@ Hooks.CopyText = {
     })
   },
 }
+
+// When a collapsible section (<details>) opens, re-measure the auto-growing textareas
+// inside it — they couldn't be sized while hidden. `toggle` doesn't bubble, so listen in
+// the capture phase.
+document.addEventListener(
+  "toggle",
+  (e) => {
+    const d = e.target
+    if (d.tagName !== "DETAILS" || !d.open) return
+    d.querySelectorAll("textarea.para-input").forEach((ta) => {
+      ta.style.height = "auto"
+      ta.style.height = ta.scrollHeight + "px"
+    })
+  },
+  true,
+)
 
 // Confirm before following a link that opts in via data-confirm (used to guard
 // navigation away from an editor with unsaved changes). Capture phase so it runs

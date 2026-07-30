@@ -79,9 +79,13 @@ defmodule PolyphonyWeb.BlockField do
 
   def block_field(assigns) do
     ~H"""
-    <div class="field-block">
-      <div class="row gen-label">
-        <span><%= @label %> <span :if={@hint} class="faint"><%= @hint %></span></span>
+    <details class="field-block" open>
+      <summary class="field-summary">
+        <span class="field-title"><%= @label %></span>
+        <span :if={@hint} class="faint"><%= @hint %></span>
+      </summary>
+
+      <div class="row gen-label field-actions">
         <span class="spacer"></span>
         <button
           type="button"
@@ -112,7 +116,7 @@ defmodule PolyphonyWeb.BlockField do
           class="para-input"
           rows="1"
           phx-hook="AutoGrow"
-          phx-debounce="blur"
+          phx-debounce="600"
           placeholder={"New #{@unit}…"}
         ><%= b %></textarea>
         <div class="para-controls">
@@ -143,7 +147,7 @@ defmodule PolyphonyWeb.BlockField do
       <button type="button" class="btn xs ghost add-para" phx-click="add_block" phx-value-field={@field}>
         + <%= @unit %>
       </button>
-    </div>
+    </details>
     """
   end
 end

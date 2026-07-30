@@ -1320,6 +1320,58 @@ input:focus, textarea:focus, select:focus {
   margin-bottom: 1.25rem;
 }
 
+/* Collapsible sections (block fields + the Boundaries/Relationships cards). Native
+   <details>; a rotating ▸ marker replaces the default triangle. Content collapses under
+   the heading so a long sheet stays navigable. */
+
+.field-summary, .card-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  flex-wrap: wrap;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+}
+
+.field-summary::-webkit-details-marker, .card-summary::-webkit-details-marker {
+  display: none;
+}
+
+.field-summary::before, .card-summary::before {
+  content: "▸";
+  color: var(--fg-faint);
+  font-size: .8em;
+  transition: transform .12s ease;
+  display: inline-block;
+}
+
+details[open] > .field-summary::before, details[open] > .card-summary::before {
+  transform: rotate(90deg);
+}
+
+.field-summary {
+  margin-bottom: .3rem;
+  color: var(--fg-dim);
+}
+
+.field-summary .field-title {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.card-summary {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--fg);
+}
+
+.field-actions {
+  margin-top: .2rem;
+}
+
 .para {
   display: flex;
   gap: .35rem;

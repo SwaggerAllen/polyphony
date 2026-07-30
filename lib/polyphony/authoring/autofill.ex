@@ -193,6 +193,85 @@ defmodule Polyphony.Authoring.Autofill do
   end
 
   @doc """
+  Propose **boundaries** (lines the character holds, §A3 — played as scene beats, never
+  filters) from their fields + context. Returns
+  `{:ok, [%{"topic","stance","condition","on_pressure","category"}]}`; `:existing`
+  topics are shown as "don't repeat" and filtered out. `stance` ∈ closed|conditional|open;
+  `category` ∈ sexual|graphic_violence|other|"" (blank ⇒ pure characterization).
+  """
+  @spec suggest_boundaries(map(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  def suggest_boundaries(current, opts \\ []) do
+    current = stringify(current)
+
+    existing_topics =
+      opts[:existing] |> List.wrap() |> Enum.map(&boundary_topic/1) |> Enum.reject(&(&1 == ""))
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author populate a role-play character's boundaries — lines " <>
+            "this character holds in the story. A refusal is played as a scene beat, never a " <>
+            "content filter. Propose 2–4 boundaries true to who they are. Return ONLY a JSON " <>
+            "array of objects, each with keys \"topic\" (what the line is about), \"stance\" " <>
+            "(\"closed\" = hard line, \"conditional\" = holds until earned in the story, " <>
+            "\"open\" = fine with it), \"condition\" (for conditional — what must happen first, " <>
+            "else \"\"), \"on_pressure\" (how they react when pushed, optional), and " <>
+            "\"category\" (\"sexual\", \"graphic_violence\", \"other\", or \"\" for pure " <>
+            "characterization). Do NOT repeat a topic already listed."
+      },
+      %{
+        role: "user",
+        content:
+          context_block(context(opts)) <>
+            character_block(current) <> existing_boundaries_block(existing_topics)
+      }
+    ]
+
+    with {:ok, text} <-
+           Polyphony.LLM.call(messages, [response: :boundaries] ++ meter_opts(opts)),
+         {:ok, list} <- decode_array(text) do
+      excluded = existing_topics |> Enum.map(&normalize_name/1) |> MapSet.new()
+
+      boundaries =
+        list
+        |> Enum.filter(&is_map/1)
+        |> Enum.map(&normalize_boundary/1)
+        |> Enum.reject(
+          &(&1["topic"] == "" or MapSet.member?(excluded, normalize_name(&1["topic"])))
+        )
+        |> Enum.uniq_by(&normalize_name(&1["topic"]))
+
+      {:ok, boundaries}
+    end
+  end
+
+  @stances ~w(closed conditional open)
+  @categories ~w(sexual graphic_violence other)
+
+  defp normalize_boundary(item) do
+    stance = item["stance"] |> to_string() |> String.trim() |> String.downcase()
+    category = item["category"] |> to_string() |> String.trim() |> String.downcase()
+
+    %{
+      "topic" => String.trim(to_string(item["topic"] || "")),
+      "stance" => if(stance in @stances, do: stance, else: "closed"),
+      "condition" => String.trim(to_string(item["condition"] || "")),
+      "on_pressure" => String.trim(to_string(item["on_pressure"] || "")),
+      "category" => if(category in @categories, do: category, else: "")
+    }
+  end
+
+  defp boundary_topic(%{topic: t}), do: to_string(t || "")
+  defp boundary_topic(%{"topic" => t}), do: to_string(t || "")
+  defp boundary_topic(_), do: ""
+
+  defp existing_boundaries_block([]), do: ""
+
+  defp existing_boundaries_block(topics),
+    do: "\n\nAlready has boundaries about (do not repeat): " <> Enum.join(topics, ", ") <> "."
+
+  @doc """
   Generate the **reciprocal** of each relationship — how the *other* person regards
   the source character, given how the source regards them. Relationships are usually
   asymmetrical (a "mentor" is regarded back as a "student"), so a stub seeded from a

@@ -29,6 +29,7 @@ defmodule Polyphony.LLM.Mock do
       :sheet -> {:ok, sheet_json(messages)}
       :autofill -> {:ok, autofill_json(messages, opts)}
       :relationships -> {:ok, relationships_json(messages)}
+      :boundaries -> {:ok, boundaries_json(messages)}
       :reciprocals -> {:ok, reciprocals_json(messages, opts)}
       :mentions -> {:ok, mentions_json(messages)}
       :field -> {:ok, summary_text(messages)}
@@ -112,6 +113,29 @@ defmodule Polyphony.LLM.Mock do
         %{target: capitalize(lorem(seed + i * 4, 1)), descriptor: lorem(seed + i * 4 + 1, 2)}
       end
     )
+  end
+
+  # A couple of lorem boundaries (Authoring.suggest_boundaries): varied stances, one
+  # conditional with a condition, one categorized — enough to exercise the mapping.
+  defp boundaries_json(messages) do
+    seed = :erlang.phash2(messages)
+
+    Jason.encode!([
+      %{
+        topic: lorem(seed, 2),
+        stance: "closed",
+        condition: "",
+        on_pressure: lorem(seed + 1, 3),
+        category: ""
+      },
+      %{
+        topic: lorem(seed + 2, 2),
+        stance: "conditional",
+        condition: lorem(seed + 3, 3),
+        on_pressure: "",
+        category: "other"
+      }
+    ])
   end
 
   # `count` lorem reciprocal descriptors, in order (Authoring.reciprocal_roles). The
