@@ -24,6 +24,12 @@ config :polyphony, drain_on_shutdown: false
 # Deterministic, network-free provider for tests.
 config :polyphony, :llm, provider: Polyphony.LLM.Stub
 
+# Cold-cache context rebuilds (character + Director brief) use the DB-free static
+# retriever in tests, so a rebuild triggered off the test process (e.g. inside a RunBeat
+# Oban job) doesn't reach for pgvector through a sandbox it can't see. Tests that assert
+# on real pgvector retrieval call `materialize` with `PgvectorRetriever` explicitly.
+config :polyphony, :rebuild_retriever, Polyphony.Context.StaticRetriever
+
 # The endpoint serves in tests so the Wallaby feature tests can drive it over a
 # real browser; the in-process LiveView/Conn tests ignore the listener. The SQL
 # sandbox plug (enabled below) lets a browser request share the test's sandboxed

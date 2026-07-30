@@ -120,6 +120,9 @@ defmodule Polyphony.Director.BeatDriver do
   # ── Acting on a slot ──────────────────────────────────────────────────────────
 
   defp enqueue_generate(scene_id, beat, character_id, draft?, opts) do
+    # Tell the play view which character is generating now (blocks input, shows who).
+    Broadcast.announce_progress(scene_id, :generating, subject: character_id, beat: beat)
+
     %{
       "scene_id" => scene_id,
       "beat" => beat,
@@ -149,6 +152,8 @@ defmodule Polyphony.Director.BeatDriver do
   end
 
   defp await_user(scene_id, beat, character_id) do
+    Broadcast.announce_progress(scene_id, :awaiting_user, subject: character_id, beat: beat)
+
     Phoenix.PubSub.broadcast(@pubsub, Broadcast.topic(scene_id, :omniscient), {
       :polyphony_event,
       %{
@@ -175,6 +180,7 @@ defmodule Polyphony.Director.BeatDriver do
       })
 
     if next == :continue do
+      # Another beat runs immediately — the next RunBeat announces :director itself.
       RunBeat.enqueue(%{
         "scene_id" => scene_id,
         "beat" => beat + 1,
@@ -183,6 +189,10 @@ defmodule Polyphony.Director.BeatDriver do
         "provider" => provider_arg(opts[:provider]),
         "control_hint" => control_str(opts[:control])
       })
+    else
+      # The beat settled and nothing follows — the loop is idle, the reliable "done"
+      # signal the transcript stream never carried.
+      Broadcast.announce_progress(scene_id, :idle, beat: beat)
     end
   end
 

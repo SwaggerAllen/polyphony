@@ -11,7 +11,7 @@ defmodule Polyphony.Director.SceneBriefTest do
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
-  alias Polyphony.Context.{PgvectorRetriever, StaticRetriever}
+  alias Polyphony.Context.PgvectorRetriever
   alias Polyphony.Director.BeatOps
   alias Polyphony.ReadModels.SceneSummary
   alias Polyphony.SceneClose.MockEmbedder
@@ -64,12 +64,9 @@ defmodule Polyphony.Director.SceneBriefTest do
 
   describe "cold cache (a restart wiped the frozen brief mid-scene)" do
     setup do
+      # The cold-cache rebuild uses the static retriever in tests (config/test.exs), so
+      # this parity check (world/premise/roster) needs no DB and no pgvector.
       :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-      # Rebuild parity (world/premise/roster) is independent of the cross-scene summary
-      # retriever, so use the DB-free static one — the pgvector path is covered by the
-      # cross-scene describe below.
-      Application.put_env(:polyphony, :scene_brief_retriever, StaticRetriever)
-      on_exit(fn -> Application.delete_env(:polyphony, :scene_brief_retriever) end)
     end
 
     test "messages/3 rebuilds world + premise + cast from the campaign, not just the roster" do

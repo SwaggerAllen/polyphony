@@ -44,6 +44,35 @@ defmodule Polyphony.Broadcast do
   def topic(scene_id, :omniscient), do: "scene:#{scene_id}:omniscient"
   def topic(scene_id, {:character, id}), do: "scene:#{scene_id}:character:#{id}"
 
+  # ── Beat-loop progress (not fiction — a scene-wide activity signal) ─────────────
+  #
+  # Which step of the beat loop is running right now (the Director deciding, a named
+  # character generating, waiting on the user, or idle). Every viewer subscribes so the
+  # play view can show *what's happening when* and block input while a beat runs — this
+  # is the reliable "done" signal the transcript stream never carried (a beat closes on
+  # the beat_ref stream, which the per-viewer transport doesn't publish).
+
+  @type phase :: :director | :generating | :awaiting_user | :idle
+
+  @doc "The scene-wide progress topic — viewer-independent (it's activity, not content)."
+  @spec progress_topic(term()) :: String.t()
+  def progress_topic(scene_id), do: "scene:#{scene_id}:progress"
+
+  @doc "Announce the current beat-loop phase to every viewer of the scene (best-effort)."
+  @spec announce_progress(term(), phase(), keyword()) :: :ok
+  def announce_progress(scene_id, phase, opts \\ []) do
+    Phoenix.PubSub.broadcast(
+      Polyphony.PubSub,
+      progress_topic(scene_id),
+      {:scene_progress,
+       %{scene_id: scene_id, phase: phase, subject: opts[:subject], beat: opts[:beat]}}
+    )
+
+    :ok
+  rescue
+    _ -> :ok
+  end
+
   @doc """
   The `{topic, message}` pairs to publish for one committed event: one per viewer
   who can see it. The omniscient viewer plus every character in `roster` is a

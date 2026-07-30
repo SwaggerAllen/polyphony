@@ -20,6 +20,13 @@ defmodule Polyphony.Context.Rebuild do
   alias Polyphony.Context.PgvectorRetriever
   alias Polyphony.Events.SceneOpened
 
+  @doc """
+  The retriever a cold-cache rebuild (character or Director) pulls long-tail memory
+  with. Defaults to pgvector (matching scene-open); env-swappable — like `:embedder` —
+  so tests can use the DB-free static retriever without hitting the sandbox off-process.
+  """
+  def retriever, do: Application.get_env(:polyphony, :rebuild_retriever, PgvectorRetriever)
+
   @doc "Rebuild `character_id`'s scene context from the log + library, or `:error`."
   @spec for_character(term(), term()) :: {:ok, Polyphony.Context.SceneContext.t()} | :error
   def for_character(scene_id, character_id) do
@@ -32,8 +39,8 @@ defmodule Polyphony.Context.Rebuild do
           sheet: sheet,
           premise: opened.premise || "",
           world_bible: world_bible(scene_id),
-          # Long-tail memory from pgvector (no-ops to [] without egress / on failure).
-          retriever: PgvectorRetriever
+          # Long-tail memory (pgvector by default; no-ops to [] without egress / on failure).
+          retriever: retriever()
         )
 
       {:ok, ctx}

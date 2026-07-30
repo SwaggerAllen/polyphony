@@ -58,6 +58,9 @@ defmodule PolyphonyWeb.PlayLive do
     if connected?(socket) do
       DebugFlags.subscribe()
       DebugTap.subscribe(scene_id)
+      # Beat-loop activity (Director deciding / who's generating / idle) — every viewer
+      # subscribes so the indicator is accurate and input can be blocked while a beat runs.
+      Phoenix.PubSub.subscribe(Polyphony.PubSub, Broadcast.progress_topic(scene_id))
     end
 
     {:ok,
@@ -66,6 +69,7 @@ defmodule PolyphonyWeb.PlayLive do
        page_title: "Play",
        topic: nil,
        waiting: :you,
+       progress: %{phase: :idle, subject: nil},
        introductions: [],
        control_modes: %{},
        failures: [],
@@ -359,33 +363,13 @@ defmodule PolyphonyWeb.PlayLive do
   # Speak as the current viewer character. Aloud vs. whisper is inferred from the text
   # (see `SayParser`), so a single submission can carry both.
   def handle_event("say", %{"text" => text}, socket) do
-    safe(socket, fn ->
-      # The composer parses the whole turn (speech + whisper, plus thinks:/does: from
-      # an expanded draft), same format as the transcript's turn editor (`TurnEdit`).
-      case {socket.assigns.speaker, TurnEdit.parse(text)} do
-        {nil, _} ->
-          {:noreply, put_flash(socket, :error, "Switch to a character above to speak.")}
-
-        {_as, {[], _self_state}} ->
-          {:noreply, put_flash(socket, :error, "Type something to say.")}
-
-        {as, {moves, self_state}} ->
-          beat = socket.assigns.next_beat
-          packet = %TurnPacket{moves: moves, self_state: self_state}
-
-          :ok =
-            App.dispatch(%CommitPacket{
-              scene_id: socket.assigns.scene_id,
-              character_id: as,
-              beat: beat,
-              packet_id: BeatOps.packet_id(socket.assigns.scene_id, beat, as),
-              packet: packet,
-              edited: true
-            })
-
-          {:noreply, socket |> assign(next_beat: beat + 1) |> reload()}
-      end
-    end)
+    # Block player speech while a beat is advancing (defense in depth; the Send button
+    # is also disabled) — a mid-beat commit would land in the wrong beat.
+    if beat_busy?(socket.assigns.progress) do
+      {:noreply, put_flash(socket, :error, "Hold on — the scene is still advancing.")}
+    else
+      say(socket, text)
+    end
   end
 
   def handle_event("say", _params, socket),
@@ -395,27 +379,11 @@ defmodule PolyphonyWeb.PlayLive do
   # seeded by whatever they've typed (expanded/polished) or from scratch if empty. The
   # result is pushed back into the composer to edit before sending — never auto-committed.
   def handle_event("compose", %{"text" => draft}, socket) do
-    safe(socket, fn ->
-      case socket.assigns.speaker do
-        nil ->
-          {:noreply, put_flash(socket, :error, "Switch to a character above to speak.")}
-
-        as ->
-          scene_id = socket.assigns.scene_id
-          roster = socket.assigns.roster
-          user = socket.assigns.current_user
-          premise = socket.assigns.premise
-          sheet = character_sheet(socket, as)
-          bible = campaign_world_bible(socket)
-
-          {:noreply,
-           socket
-           |> assign(composing: true)
-           |> start_async(:compose, fn ->
-             compose_draft(scene_id, as, sheet, premise, bible, roster, draft, user)
-           end)}
-      end
-    end)
+    if beat_busy?(socket.assigns.progress) do
+      {:noreply, put_flash(socket, :error, "Hold on — the scene is still advancing.")}
+    else
+      compose(socket, draft)
+    end
   end
 
   def handle_event("view_as", %{"as" => as}, socket) do
@@ -554,21 +522,30 @@ defmodule PolyphonyWeb.PlayLive do
   end
 
   def handle_event("continue", _params, socket) do
-    safe(socket, fn ->
-      scene_id = socket.assigns.scene_id
-      beat = socket.assigns.next_beat
-      roster = socket.assigns.roster
+    cond do
+      beat_busy?(socket.assigns.progress) ->
+        {:noreply, put_flash(socket, :error, "The scene is already advancing.")}
 
-      if roster == [] do
+      socket.assigns.roster == [] ->
         {:noreply, put_flash(socket, :error, "No cast present to continue with.")}
-      else
-        # Declare the beat's turn order (roster order), then let the Oban Director loop
-        # cast the autonomous members. Events stream back over the broadcaster.
-        :ok = App.dispatch(%DeclareTurnOrder{scene_id: scene_id, beat: beat, order: roster})
-        SceneControl.continue(scene_id, beat, args: %{"control_hint" => "yield_to_user"})
-        {:noreply, socket |> assign(waiting: :director, next_beat: beat + 1)}
-      end
-    end)
+
+      true ->
+        safe(socket, fn ->
+          scene_id = socket.assigns.scene_id
+          beat = socket.assigns.next_beat
+          roster = socket.assigns.roster
+
+          # Declare the beat's turn order (roster order), then let the Oban Director loop
+          # cast the autonomous members. Events stream back over the broadcaster.
+          :ok = App.dispatch(%DeclareTurnOrder{scene_id: scene_id, beat: beat, order: roster})
+          SceneControl.continue(scene_id, beat, args: %{"control_hint" => "yield_to_user"})
+          # Optimistically show "director" immediately; the job's own announces refine it
+          # (which character is generating) and clear it on settle.
+          {:noreply,
+           socket
+           |> assign(progress: %{phase: :director, subject: nil}, next_beat: beat + 1)}
+        end)
+    end
   end
 
   # ── Director introductions (resolve the pending queue) ─────────────────────────
@@ -617,7 +594,13 @@ defmodule PolyphonyWeb.PlayLive do
   def handle_info({:polyphony_event, %{type: "generation.failed"}}, socket) do
     # A turn couldn't be generated — stop waiting and surface the open failure
     # (reload picks it up from the Failures store) instead of failing silently.
-    {:noreply, socket |> assign(waiting: :you) |> reload()}
+    {:noreply, socket |> assign(waiting: :you, progress: idle()) |> reload()}
+  end
+
+  # Beat-loop activity: reflect what's running now (Director / a character / idle) so the
+  # indicator is accurate and input stays blocked until the beat truly settles.
+  def handle_info({:scene_progress, %{phase: phase} = p}, socket) do
+    {:noreply, assign(socket, progress: %{phase: phase, subject: p[:subject]})}
   end
 
   def handle_info({:polyphony_event, %{type: "packet.superseded"}}, socket) do
@@ -717,6 +700,64 @@ defmodule PolyphonyWeb.PlayLive do
   def handle_async(:compose, _result, socket) do
     {:noreply,
      socket |> assign(composing: false) |> put_flash(:error, "Couldn't draft a turn. Try again.")}
+  end
+
+  # Commit the player's typed turn (§A1). Grouped here (not among the handle_events) so
+  # the two "say" clauses stay adjacent.
+  defp say(socket, text) do
+    safe(socket, fn ->
+      # The composer parses the whole turn (speech + whisper, plus thinks:/does: from
+      # an expanded draft), same format as the transcript's turn editor (`TurnEdit`).
+      case {socket.assigns.speaker, TurnEdit.parse(text)} do
+        {nil, _} ->
+          {:noreply, put_flash(socket, :error, "Switch to a character above to speak.")}
+
+        {_as, {[], _self_state}} ->
+          {:noreply, put_flash(socket, :error, "Type something to say.")}
+
+        {as, {moves, self_state}} ->
+          beat = socket.assigns.next_beat
+          packet = %TurnPacket{moves: moves, self_state: self_state}
+
+          :ok =
+            App.dispatch(%CommitPacket{
+              scene_id: socket.assigns.scene_id,
+              character_id: as,
+              beat: beat,
+              packet_id: BeatOps.packet_id(socket.assigns.scene_id, beat, as),
+              packet: packet,
+              edited: true
+            })
+
+          {:noreply, socket |> assign(next_beat: beat + 1) |> reload()}
+      end
+    end)
+  end
+
+  # Kick off the async Expand draft (§11) for the acting character, from their sheet +
+  # filtered view. Grouped here (not among the handle_events) to keep the clauses tidy.
+  defp compose(socket, draft) do
+    safe(socket, fn ->
+      case socket.assigns.speaker do
+        nil ->
+          {:noreply, put_flash(socket, :error, "Switch to a character above to speak.")}
+
+        as ->
+          scene_id = socket.assigns.scene_id
+          roster = socket.assigns.roster
+          user = socket.assigns.current_user
+          premise = socket.assigns.premise
+          sheet = character_sheet(socket, as)
+          bible = campaign_world_bible(socket)
+
+          {:noreply,
+           socket
+           |> assign(composing: true)
+           |> start_async(:compose, fn ->
+             compose_draft(scene_id, as, sheet, premise, bible, roster, draft, user)
+           end)}
+      end
+    end)
   end
 
   # Draft a turn from the character's filtered view (§11) — steered by the player's
@@ -988,6 +1029,32 @@ defmodule PolyphonyWeb.PlayLive do
   # demeanor — serialized one move per line (see `TurnEdit`), not just its spoken lines.
   defp turn_text(block), do: TurnEdit.serialize(block.msgs)
 
+  # ── Beat-loop progress ─────────────────────────────────────────────────────────
+
+  defp idle, do: %{phase: :idle, subject: nil}
+
+  # "Busy" for the sake of blocking input: a beat is actively running (the Director is
+  # deciding, or a character is generating). `:awaiting_user` is *not* busy — that's the
+  # user's own slot — and `:idle` means the loop has settled.
+  defp beat_busy?(%{phase: phase}), do: phase in [:director, :generating]
+  defp beat_busy?(_), do: false
+
+  # The `.waiting` CSS variant (dot colour): the Director is accent-2, a cast turn accent.
+  defp progress_state(%{phase: :generating}), do: "cast"
+  defp progress_state(_), do: "director"
+
+  defp progress_label(%{phase: :director}), do: "The director is setting the scene…"
+
+  defp progress_label(%{phase: :generating, subject: c}) when is_binary(c) and c != "",
+    do: "#{c} is writing their turn…"
+
+  defp progress_label(%{phase: :generating}), do: "A character is writing their turn…"
+
+  defp progress_label(%{phase: :awaiting_user, subject: c}) when is_binary(c) and c != "",
+    do: "Waiting for you to write #{c}…"
+
+  defp progress_label(_), do: "Working…"
+
   # A short, human reason for a failure line — the model's reason if any, else the kind.
   defp failure_reason(%{reason: r}) when is_binary(r) and r != "", do: r
   defp failure_reason(%{kind: k}) when is_binary(k) and k != "", do: String.replace(k, "_", " ")
@@ -1120,7 +1187,8 @@ defmodule PolyphonyWeb.PlayLive do
       </div>
 
       <div class="composer card">
-        <.waiting :if={@waiting == :director} state="director" label="The cast is responding…" />
+        <.waiting :if={beat_busy?(@progress)} state={progress_state(@progress)} label={progress_label(@progress)} />
+        <.waiting :if={not beat_busy?(@progress) and @waiting == :director} state="director" label="Rerolling…" />
         <form id="say-form" phx-submit="say">
           <textarea
             :if={@speaker}
@@ -1130,6 +1198,7 @@ defmodule PolyphonyWeb.PlayLive do
             class="say-input"
             phx-hook="ComposerInput"
             autocomplete="off"
+            disabled={beat_busy?(@progress)}
             placeholder={"Speak as #{@speaker}…  ·  whisper with (whisper to NAME: …)"}
           ></textarea>
           <div class="row composer-actions">
@@ -1141,13 +1210,13 @@ defmodule PolyphonyWeb.PlayLive do
               type="button"
               class="btn ghost sm"
               data-composer-expand="true"
-              disabled={@composing}
+              disabled={@composing or beat_busy?(@progress)}
               title="Draft or expand this turn for you — you can edit it before sending"
             >
               <%= if @composing, do: "✨ …", else: "✨ Expand" %>
             </button>
-            <button class="btn ghost sm" type="button" phx-click="continue">Continue</button>
-            <button :if={@speaker} class="btn" type="submit">Send</button>
+            <button class="btn ghost sm" type="button" phx-click="continue" disabled={beat_busy?(@progress)}>Continue</button>
+            <button :if={@speaker} class="btn" type="submit" disabled={beat_busy?(@progress)}>Send</button>
           </div>
         </form>
       </div>

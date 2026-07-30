@@ -63,22 +63,28 @@ defmodule Polyphony.Generation.PacketSchemaTest do
              })
   end
 
-  test "addressed_to on a non-speech move is rejected (§6.4: speech-only)" do
+  test "addressed_to on a non-speech move is stripped, not rejected (§6.4: speech-only)" do
+    # The model habitually tags thoughts/actions with speech-only fields; normalize them
+    # away rather than reject-and-retry (a wasted generation on nearly every turn).
     data = %{
       "moves" => [%{"seq" => 1, "type" => "action", "content" => "nods", "addressed_to" => ["b"]}]
     }
 
-    assert {:error, _} = PacketSchema.parse(data)
+    assert {:ok, %{moves: [move]}} = PacketSchema.parse(data)
+    assert move.type == :action
+    assert move.addressed_to == []
   end
 
-  test "private audibility on a non-speech move is rejected" do
+  test "private audibility on a non-speech move is normalized to :normal, not rejected" do
     data = %{
       "moves" => [
         %{"seq" => 1, "type" => "thought", "content" => "psst", "audibility" => "private"}
       ]
     }
 
-    assert {:error, _} = PacketSchema.parse(data)
+    assert {:ok, %{moves: [move]}} = PacketSchema.parse(data)
+    assert move.type == :thought
+    assert move.audibility == :normal
   end
 
   test "error_messages renders human-readable errors for the corrective retry" do
