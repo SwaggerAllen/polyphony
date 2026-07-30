@@ -19,10 +19,14 @@ defmodule Polyphony.Authoring.QuickBuild do
   It's a stateless orchestrator over `Autofill` + `Library`; the LiveView owns the
   async/UI and attaches the results (bible id, character ids, premise) to the campaign.
 
-  Returns `{:ok, %{bible: entry, characters: [entry], premise: string}}` — `characters`
-  is the **main cast** (stubs land in the library but aren't in the campaign roster).
-  Provider and usage-attribution opts (`:provider`, `:user_id`, `:campaign_id`) pass
-  straight through to the metered LLM calls.
+  Returns `{:ok, %{bible: entry, characters: [entry], premise: string, failed: [...]}}` —
+  `characters` is the **main cast** (stubs land in the library but aren't in the campaign
+  roster); `failed` is a list of `{seed, reason}` for any character seed the provider
+  couldn't generate. A single character failing does **not** abort the build — the world,
+  the characters that succeeded, and the premise are kept, and the failures are surfaced
+  so the author can retry just those. The build only errors outright if *every* character
+  seed fails (or the world / premise call does). Provider and usage-attribution opts
+  (`:provider`, `:user_id`, `:campaign_id`) pass straight through to the metered LLM calls.
   """
 
   alias Polyphony.Library
@@ -50,28 +54,41 @@ defmodule Polyphony.Authoring.QuickBuild do
     with {:ok, world_fields} <- Autofill.generate_all(:world_bible, world_seed, %{}, meter),
          bible_entry <- put(owner, "world_bible", to_world_bible(world_fields)),
          world_ctx = world_context(world_fields),
-         {:ok, char_entries} <- build_characters(owner, seeds, bible_entry.id, world_ctx, meter),
+         {:ok, char_entries, failed} <-
+           build_characters(owner, seeds, bible_entry.id, world_ctx, meter),
          char_entries <- wire_cast(char_entries, suggest?, bible_entry.id, owner, meter),
          {:ok, premise} <-
            Autofill.generate_campaign_premise(
              [world: world_ctx, cast: cast_summaries(char_entries)] ++ meter
            ) do
-      {:ok, %{bible: bible_entry, characters: char_entries, premise: premise}}
+      {:ok, %{bible: bible_entry, characters: char_entries, premise: premise, failed: failed}}
     end
   end
 
-  # Generate each character in turn, short-circuiting on the first failure.
+  # Generate each character, keeping the ones that succeed and collecting `{seed, reason}`
+  # for the ones that don't — a blank result (valid response, no usable fields) counts as
+  # a failure too. Errors outright only if *every* seed failed; a partial success proceeds
+  # with what it got so one flaky generation doesn't discard the whole build.
   defp build_characters(owner, seeds, bible_id, world_ctx, meter) do
-    Enum.reduce_while(seeds, {:ok, []}, fn seed, {:ok, acc} ->
-      case Autofill.generate_all(:character, seed, %{}, [world: world_ctx] ++ meter) do
-        {:ok, fields} ->
-          entry = put(owner, "character", to_character_sheet(fields, bible_id))
-          {:cont, {:ok, acc ++ [entry]}}
+    {entries, failed} =
+      Enum.reduce(seeds, {[], []}, fn seed, {ok, bad} ->
+        case Autofill.generate_all(:character, seed, %{}, [world: world_ctx] ++ meter) do
+          {:ok, fields} when map_size(fields) > 0 ->
+            {ok ++ [put(owner, "character", to_character_sheet(fields, bible_id))], bad}
 
-        {:error, _} = err ->
-          {:halt, err}
-      end
-    end)
+          {:ok, _empty} ->
+            {ok, bad ++ [{seed, :blank_generation}]}
+
+          {:error, reason} ->
+            {ok, bad ++ [{seed, reason}]}
+        end
+      end)
+
+    cond do
+      entries != [] -> {:ok, entries, failed}
+      seeds == [] -> {:ok, [], []}
+      true -> {:error, {:all_characters_failed, failed}}
+    end
   end
 
   # Wire each character's relationships: a directional link toward every other built

@@ -150,6 +150,53 @@ defmodule Polyphony.Authoring.QuickBuildTest do
     assert Enum.all?(chars, &match?(%CharacterSheet{status: :full}, Library.payload(&1)))
   end
 
+  defmodule OneBadProvider do
+    @moduledoc "Mock, except a character brief containing BOOMCHAR generates blank (a failure)."
+    @behaviour Polyphony.LLM.Provider
+
+    @impl true
+    def complete(messages, opts) do
+      text = Enum.map_join(messages, " ", & &1.content)
+
+      if Keyword.get(opts, :response) == :autofill and String.contains?(text, "BOOMCHAR") do
+        {:ok, "{}"}
+      else
+        Polyphony.LLM.Mock.complete(messages, opts)
+      end
+    end
+  end
+
+  test "a single character failure keeps the world, the rest of the cast, and the premise",
+       %{owner: owner} do
+    {:ok, result} =
+      QuickBuild.build(
+        owner: owner,
+        world_seed: "a harbor city",
+        character_seeds: ["a good sailor", "BOOMCHAR the doomed"],
+        provider: OneBadProvider
+      )
+
+    # The world, the one good character, and the premise survive.
+    assert %WorldBible{} = Library.payload(result.bible)
+    assert length(result.characters) == 1
+    assert result.premise != ""
+
+    # The failed seed is reported, not silently dropped.
+    assert [{"BOOMCHAR the doomed", :blank_generation}] = result.failed
+  end
+
+  test "the build errors only when every character seed fails", %{owner: owner} do
+    assert {:error, {:all_characters_failed, failed}} =
+             QuickBuild.build(
+               owner: owner,
+               world_seed: "a harbor city",
+               character_seeds: ["BOOMCHAR one", "BOOMCHAR two"],
+               provider: OneBadProvider
+             )
+
+    assert length(failed) == 2
+  end
+
   test "a blank character list still builds a world and premise", %{owner: owner} do
     {:ok, result} =
       QuickBuild.build(
