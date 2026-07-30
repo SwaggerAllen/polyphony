@@ -26,7 +26,7 @@ defmodule Polyphony.Director.SceneBrief do
 
   alias Polyphony.Authoring.{WorldBible, CharacterSheet}
   alias Polyphony.Context
-  alias Polyphony.Context.{PgvectorRetriever, Rebuild, SceneContext, Store, StaticRetriever}
+  alias Polyphony.Context.{Rebuild, SceneContext, Store, StaticRetriever}
   alias Polyphony.Director.BeatOps
   alias Polyphony.Packets
   alias Polyphony.ReadModels.SceneSummary
@@ -149,7 +149,7 @@ defmodule Polyphony.Director.SceneBrief do
           world_bible: Rebuild.world_bible(scene_id),
           premise: Map.get(opened, :premise),
           roster: Rebuild.roster(scene_id),
-          retriever: rebuild_retriever()
+          retriever: Rebuild.retriever()
         ).prefix
 
       _ ->
@@ -158,12 +158,6 @@ defmodule Polyphony.Director.SceneBrief do
   rescue
     _ -> nil
   end
-
-  # The cross-scene summary retriever for a cold-cache rebuild. Defaults to pgvector
-  # (matching scene-open); env-swappable — like `:embedder` — so a DB-free test can use
-  # the static retriever.
-  defp rebuild_retriever,
-    do: Application.get_env(:polyphony, :scene_brief_retriever, PgvectorRetriever)
 
   defp render_prefix(meta) do
     [
