@@ -33,10 +33,13 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     camp = campaign(user)
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
 
+    # Add a second character row (starts with one), then submit both.
+    view |> element("button[phx-click=add_seed]") |> render_click()
+
     view
     |> form("#quick-build", %{
       "world_seed" => "a rain-drowned harbor city",
-      "character_seeds" => "a disgraced harbor-master\nthe collector who bought her past"
+      "char_seed" => ["a disgraced harbor-master", "the collector who bought her past"]
     })
     |> render_submit()
 
@@ -61,6 +64,24 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     # The cast now renders with edit links into the character editor.
     [cid | _] = payload[:character_ids]
     assert html =~ ~s(href="/authoring/character/#{cid}")
+  end
+
+  test "character rows can be added and removed", %{conn: conn, user: user} do
+    camp = campaign(user)
+    {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}")
+
+    # Starts with a single row.
+    assert length(Regex.scan(~r/name="char_seed\[\]"/, html)) == 1
+
+    view |> element("button[phx-click=add_seed]") |> render_click()
+    view |> element("button[phx-click=add_seed]") |> render_click()
+    assert length(Regex.scan(~r/name="char_seed\[\]"/, render(view))) == 3
+
+    view
+    |> element("button[phx-click=remove_seed][phx-value-index='1']")
+    |> render_click()
+
+    assert length(Regex.scan(~r/name="char_seed\[\]"/, render(view))) == 2
   end
 
   test "the world card links into the bible editor once a world is attached",

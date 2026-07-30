@@ -21,7 +21,14 @@ defmodule PolyphonyWeb.CampaignLive do
     if entry && entry.kind == "campaign" do
       {:ok,
        socket
-       |> assign(page_title: "Campaign", entry: entry, building: false, expanding_premise: false)
+       |> assign(
+         page_title: "Campaign",
+         entry: entry,
+         building: false,
+         expanding_premise: false,
+         qb_world: "",
+         qb_seeds: [""]
+       )
        |> load()}
     else
       {:ok, socket |> put_flash(:error, "Campaign not found.") |> redirect(to: ~p"/library")}
@@ -139,13 +146,32 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
+  # Keep the Quick Build form's fields in the socket so add/remove-row re-renders don't
+  # drop what's been typed. Blurring an input (phx-debounce="blur") syncs it here.
+  def handle_event("sync_quick_build", params, socket) do
+    {:noreply,
+     assign(socket,
+       qb_world: params["world_seed"] || socket.assigns.qb_world,
+       qb_seeds: seeds_param(params["char_seed"], socket.assigns.qb_seeds)
+     )}
+  end
+
+  def handle_event("add_seed", _params, socket) do
+    {:noreply, assign(socket, qb_seeds: socket.assigns.qb_seeds ++ [""])}
+  end
+
+  def handle_event("remove_seed", %{"index" => i}, socket) do
+    seeds = List.delete_at(socket.assigns.qb_seeds, String.to_integer(i))
+    {:noreply, assign(socket, qb_seeds: if(seeds == [], do: [""], else: seeds))}
+  end
+
   # Quick Build: from a world seed and one seed per character, generate a world, a cast,
   # cross-linked relationships, and a premise — all persisted — then attach them here.
   def handle_event("quick_build", params, socket) do
     safe(socket, fn ->
       seeds =
-        (params["character_seeds"] || "")
-        |> String.split("\n")
+        params["char_seed"]
+        |> List.wrap()
         |> Enum.map(&String.trim/1)
         |> Enum.reject(&(&1 == ""))
 
@@ -268,7 +294,7 @@ defmodule PolyphonyWeb.CampaignLive do
 
     {:noreply,
      socket
-     |> assign(entry: entry, building: false)
+     |> assign(entry: entry, building: false, qb_world: "", qb_seeds: [""])
      |> load()
      |> put_flash(
        :info,
@@ -368,6 +394,12 @@ defmodule PolyphonyWeb.CampaignLive do
   defp reason({:exit, r}), do: r
   defp reason(other), do: other
 
+  # The `char_seed[]` params: a list when several rows exist, a bare string for one,
+  # nil when the form omitted them (a change from another field) — fall back then.
+  defp seeds_param(list, _fallback) when is_list(list), do: list
+  defp seeds_param(str, _fallback) when is_binary(str), do: [str]
+  defp seeds_param(_, fallback), do: fallback
+
   def render(assigns) do
     ~H"""
     <h1><%= if @payload[:name] in [nil, ""], do: "Untitled campaign", else: @payload[:name] %></h1>
@@ -436,25 +468,48 @@ defmodule PolyphonyWeb.CampaignLive do
         every editor — cross-link the cast's relationships, and draft a premise. Everything lands
         in your Library, ready to open and flesh out.
       </p>
-      <form id="quick-build" phx-submit="quick_build">
+      <form id="quick-build" phx-submit="quick_build" phx-change="sync_quick_build">
         <label>World seed <span class="faint">(setting, tone, a hook)</span></label>
         <textarea
           name="world_seed"
           rows="2"
+          phx-debounce="blur"
           placeholder="e.g. A rain-drowned harbor city where debts are paid in memories."
-        ></textarea>
-        <label style="margin-top:.5rem;">Characters <span class="faint">(one concept per line)</span></label>
-        <textarea
-          name="character_seeds"
-          rows="4"
-          placeholder={"e.g.\nA disgraced harbor-master who sold her own past\nThe collector who bought it"}
-        ></textarea>
-        <button class="btn" type="submit" style="margin-top:.6rem;" disabled={@building}>
-          <%= if @building, do: "✨ Building…", else: "✨ Quick build" %>
+        ><%= @qb_world %></textarea>
+
+        <label style="margin-top:.5rem;">Characters <span class="faint">(one concept each)</span></label>
+        <div :for={{seed, i} <- Enum.with_index(@qb_seeds)} class="row rel-add" style="margin-top:.35rem;">
+          <input
+            type="text"
+            name="char_seed[]"
+            value={seed}
+            phx-debounce="blur"
+            placeholder="e.g. a disgraced harbor-master who sold her own past"
+            style="flex:1;"
+          />
+          <button
+            type="button"
+            class="btn danger sm"
+            phx-click="remove_seed"
+            phx-value-index={i}
+            disabled={length(@qb_seeds) <= 1}
+            title="Remove this character"
+          >
+            ✕
+          </button>
+        </div>
+        <button type="button" class="btn xs ghost" phx-click="add_seed" style="margin-top:.35rem;">
+          + character
         </button>
-        <span :if={@building} class="faint" style="margin-left:.5rem;">
-          Generating world, cast, and premise — this can take a moment.
-        </span>
+
+        <div class="row" style="margin-top:.7rem;">
+          <button class="btn" type="submit" disabled={@building}>
+            <%= if @building, do: "✨ Building…", else: "✨ Quick build" %>
+          </button>
+          <span :if={@building} class="faint" style="margin-left:.5rem;">
+            Generating world, cast, and premise — this can take a moment.
+          </span>
+        </div>
       </form>
     </details>
 
