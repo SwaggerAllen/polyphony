@@ -7,21 +7,26 @@ defmodule Polyphony.Authoring.QuickBuild do
     2. generates each **character** grounded in that world (✨ Generate-all, status
        `:full`, linked to the bible),
     3. cross-links the cast — every character gets a directional relationship toward
-       each other one (`Autofill.regard_map`, so the regards are asymmetrical), and
-    4. drafts a **campaign premise** grounded in the world and cast.
+       each other one (`Autofill.regard_map`, so the regards are asymmetrical),
+    4. optionally **stubs off-screen people** — with `:suggest_offscreen`, each
+       character also gets AI-suggested relationships (mentors, rivals, family), the
+       new names created as pending stubs (§B8) exactly as the sheet editor does on
+       save, and
+    5. drafts a **campaign premise** grounded in the world and cast.
 
   Everything is persisted to the author's `Library` as ordinary owned entries — the
   same kinds the editors produce — so each can be opened and fleshed out afterwards.
   It's a stateless orchestrator over `Autofill` + `Library`; the LiveView owns the
   async/UI and attaches the results (bible id, character ids, premise) to the campaign.
 
-  Returns `{:ok, %{bible: entry, characters: [entry], premise: string}}`. Provider and
-  usage-attribution opts (`:provider`, `:user_id`, `:campaign_id`) pass straight
-  through to the metered LLM calls.
+  Returns `{:ok, %{bible: entry, characters: [entry], premise: string}}` — `characters`
+  is the **main cast** (stubs land in the library but aren't in the campaign roster).
+  Provider and usage-attribution opts (`:provider`, `:user_id`, `:campaign_id`) pass
+  straight through to the metered LLM calls.
   """
 
   alias Polyphony.Library
-  alias Polyphony.Authoring.{Autofill, CharacterSheet, WorldBible}
+  alias Polyphony.Authoring.{Autofill, CharacterSheet, Stub, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.Relationship
 
   @doc """
@@ -30,6 +35,8 @@ defmodule Polyphony.Authoring.QuickBuild do
     * `:owner` — the `%Owner{}` (required); every entry is stored under it.
     * `:world_seed` — free-text brief for the world (may be blank).
     * `:character_seeds` — a list of free-text briefs, one per character.
+    * `:suggest_offscreen` — also stub AI-suggested off-screen people per character
+      (default `false`).
     * `:provider` / `:user_id` / `:campaign_id` — metering passthrough.
   """
   @spec build(keyword()) :: {:ok, map()} | {:error, term()}
@@ -37,13 +44,14 @@ defmodule Polyphony.Authoring.QuickBuild do
     owner = Keyword.fetch!(opts, :owner)
     world_seed = to_string(opts[:world_seed] || "")
     seeds = opts[:character_seeds] |> List.wrap() |> Enum.reject(&(String.trim(&1) == ""))
+    suggest? = Keyword.get(opts, :suggest_offscreen, false)
     meter = Keyword.take(opts, [:provider, :user_id, :campaign_id])
 
     with {:ok, world_fields} <- Autofill.generate_all(:world_bible, world_seed, %{}, meter),
          bible_entry <- put(owner, "world_bible", to_world_bible(world_fields)),
          world_ctx = world_context(world_fields),
          {:ok, char_entries} <- build_characters(owner, seeds, bible_entry.id, world_ctx, meter),
-         char_entries <- link_cast(char_entries, meter),
+         char_entries <- wire_cast(char_entries, suggest?, bible_entry.id, owner, meter),
          {:ok, premise} <-
            Autofill.generate_campaign_premise(
              [world: world_ctx, cast: cast_summaries(char_entries)] ++ meter
@@ -66,23 +74,29 @@ defmodule Polyphony.Authoring.QuickBuild do
     end)
   end
 
-  # Give each character a directional relationship toward every other built character,
-  # with a generated (asymmetrical) regard and the target's stable id already set.
-  # Best-effort per character: a failed regard call leaves that character un-linked
+  # Wire each character's relationships: a directional link toward every other built
+  # character (with an asymmetrical regard and the target's stable id set), plus —
+  # when `suggest?` — AI-suggested off-screen people stubbed like the sheet editor does
+  # on save. Best-effort per character: a failed call leaves that character less-linked
   # rather than aborting the whole build.
-  defp link_cast(entries, meter) do
+  defp wire_cast(entries, suggest?, bible_id, owner, meter) do
     named = Enum.map(entries, fn e -> {e, Library.payload(e)} end)
+    cast_names = MapSet.new(for {_e, s} <- named, present?(s.name), do: norm(s.name))
 
     Enum.map(named, fn {entry, sheet} ->
       others = for {o, os} <- named, o.id != entry.id, do: {o.id, os.name}
+      cast_rels = if others == [], do: [], else: cast_regards(sheet, others, meter)
 
-      case others do
+      offscreen =
+        if suggest?,
+          do: suggest_and_stub(entry.id, sheet, cast_rels, cast_names, bible_id, owner, meter),
+          else: []
+
+      case cast_rels ++ offscreen do
         [] ->
           entry
 
-        _ ->
-          rels = regards(sheet, others, meter)
-
+        rels ->
           {:ok, updated} =
             Library.update_payload(entry.id, %CharacterSheet{sheet | relationships: rels})
 
@@ -91,7 +105,7 @@ defmodule Polyphony.Authoring.QuickBuild do
     end)
   end
 
-  defp regards(sheet, others, meter) do
+  defp cast_regards(sheet, others, meter) do
     names = Enum.map(others, fn {_id, name} -> name end)
     source = %{"name" => sheet.name, "premise" => sheet.premise}
 
@@ -105,6 +119,55 @@ defmodule Polyphony.Authoring.QuickBuild do
       %Relationship{target: name, target_id: id, descriptor: Map.get(regard, name, "")}
     end
   end
+
+  # Ask for off-screen relationships and stub the new people (§B8). Cast members are
+  # excluded (passed as `existing`, and belt-and-suspenders filtered by name), so this
+  # only ever creates genuinely new stubs. Each stub carries the inbound relationship
+  # back toward this character, seeded with the source's regard as a placeholder — the
+  # same pre-reciprocal state the editor produces before its async reciprocal pass.
+  defp suggest_and_stub(self_id, sheet, cast_rels, cast_names, bible_id, owner, meter) do
+    current = %{
+      "name" => sheet.name,
+      "premise" => sheet.premise,
+      "temperament" => sheet.temperament,
+      "backstory" => sheet.backstory
+    }
+
+    case Autofill.suggest_relationships(current, [existing: cast_rels] ++ meter) do
+      {:ok, suggestions} ->
+        suggestions
+        |> Enum.reject(
+          &(norm(&1["target"]) == "" or MapSet.member?(cast_names, norm(&1["target"])))
+        )
+        |> Enum.map(fn s ->
+          inbound = %Relationship{
+            target: sheet.name,
+            target_id: self_id,
+            descriptor: s["descriptor"],
+            reciprocal: s["descriptor"]
+          }
+
+          stub =
+            put(
+              owner,
+              "character",
+              Stub.new(s["target"], s["descriptor"],
+                relationships: [inbound],
+                world_bible_id: bible_id
+              )
+            )
+
+          %Relationship{target: s["target"], target_id: stub.id, descriptor: s["descriptor"]}
+        end)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  defp norm(name), do: name |> to_string() |> String.trim() |> String.downcase()
+
+  defp present?(v), do: is_binary(v) and String.trim(v) != ""
 
   defp cast_summaries(entries) do
     for e <- entries do

@@ -69,6 +69,57 @@ defmodule Polyphony.Authoring.QuickBuildTest do
     assert Enum.count(entries, &(&1.kind == "world_bible")) == 1
   end
 
+  test "with off-screen suggestions on, each character stubs extra people", %{owner: owner} do
+    {:ok, result} =
+      QuickBuild.build(
+        owner: owner,
+        world_seed: "a rain-drowned harbor city",
+        character_seeds: ["a disgraced harbor-master", "the collector who bought her past"],
+        suggest_offscreen: true,
+        provider: Polyphony.LLM.Mock
+      )
+
+    chars = Enum.filter(Library.list_for_owner(owner), &(&1.kind == "character"))
+    stubs = Enum.filter(chars, &match?(%CharacterSheet{status: :stub}, Library.payload(&1)))
+
+    # The two main cast plus stubbed off-screen people.
+    assert length(chars) > 2
+    assert stubs != []
+
+    # Stubs are still off the campaign roster — only the main cast is returned.
+    assert length(result.characters) == 2
+
+    # Each stub is pending, linked to the world, and carries an inbound relationship
+    # back toward the character that introduced it.
+    for stub <- stubs do
+      sheet = Library.payload(stub)
+      assert sheet.status == :stub
+      assert sheet.world_bible_id == result.bible.id
+      assert [%{target_id: back_id}] = sheet.relationships
+      assert back_id in Enum.map(result.characters, & &1.id)
+    end
+
+    # A main character links to at least one off-screen stub (target_id set to a stub).
+    stub_ids = MapSet.new(stubs, & &1.id)
+    main = Library.payload(hd(result.characters))
+    assert Enum.any?(main.relationships, &(&1.target_id in stub_ids))
+  end
+
+  test "off-screen suggestions are off by default (cast-only interlink)", %{owner: owner} do
+    {:ok, _result} =
+      QuickBuild.build(
+        owner: owner,
+        world_seed: "a quiet village",
+        character_seeds: ["a baker", "a constable"],
+        provider: Polyphony.LLM.Mock
+      )
+
+    chars = Enum.filter(Library.list_for_owner(owner), &(&1.kind == "character"))
+    # Exactly the two main cast — no stubs.
+    assert length(chars) == 2
+    assert Enum.all?(chars, &match?(%CharacterSheet{status: :full}, Library.payload(&1)))
+  end
+
   test "a blank character list still builds a world and premise", %{owner: owner} do
     {:ok, result} =
       QuickBuild.build(

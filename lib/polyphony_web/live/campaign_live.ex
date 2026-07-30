@@ -27,7 +27,8 @@ defmodule PolyphonyWeb.CampaignLive do
          building: false,
          expanding_premise: false,
          qb_world: "",
-         qb_seeds: [""]
+         qb_seeds: [""],
+         qb_suggest: true
        )
        |> load()}
     else
@@ -152,7 +153,8 @@ defmodule PolyphonyWeb.CampaignLive do
     {:noreply,
      assign(socket,
        qb_world: params["world_seed"] || socket.assigns.qb_world,
-       qb_seeds: seeds_param(params["char_seed"], socket.assigns.qb_seeds)
+       qb_seeds: seeds_param(params["char_seed"], socket.assigns.qb_seeds),
+       qb_suggest: params["suggest_offscreen"] == "true"
      )}
   end
 
@@ -180,6 +182,7 @@ defmodule PolyphonyWeb.CampaignLive do
           owner: socket.assigns.owner,
           world_seed: params["world_seed"] || "",
           character_seeds: seeds,
+          suggest_offscreen: params["suggest_offscreen"] == "true",
           campaign_id: socket.assigns.entry.id
         ] ++ meter_attribution(socket)
 
@@ -294,7 +297,7 @@ defmodule PolyphonyWeb.CampaignLive do
 
     {:noreply,
      socket
-     |> assign(entry: entry, building: false, qb_world: "", qb_seeds: [""])
+     |> assign(entry: entry, building: false, qb_world: "", qb_seeds: [""], qb_suggest: true)
      |> load()
      |> put_flash(
        :info,
@@ -501,6 +504,11 @@ defmodule PolyphonyWeb.CampaignLive do
         <button type="button" class="btn xs ghost" phx-click="add_seed" style="margin-top:.35rem;">
           + character
         </button>
+
+        <label class="row" style="gap:.4rem; margin-top:.6rem;">
+          <input type="checkbox" name="suggest_offscreen" value="true" checked={@qb_suggest} style="width:auto;" />
+          <span>Also suggest off-screen relationships <span class="faint">(stubs mentors, rivals &amp; family for each character)</span></span>
+        </label>
 
         <div class="row" style="margin-top:.7rem;">
           <button class="btn" type="submit" disabled={@building}>
