@@ -42,18 +42,22 @@ defmodule Polyphony.Suggest do
 
     gen_opts = gen_opts(opts)
 
-    packets =
-      1..count
-      |> Enum.map(fn i -> draft(base, i, Map.get(opts, :steer), gen_opts) end)
-      |> Enum.flat_map(fn
-        {:ok, packet} -> [packet]
-        {:error, _} -> []
-      end)
+    results = Enum.map(1..count, fn i -> draft(base, i, Map.get(opts, :steer), gen_opts) end)
 
-    case packets do
-      [] -> {:error, :no_variants}
+    case for({:ok, p} <- results, do: p) do
+      [] -> {:error, {:no_variants, first_error(results)}}
       list -> {:ok, list}
     end
+  end
+
+  # The reason a draft failed — surfaced so a caller (the Expand button) can show *why*,
+  # not a generic "couldn't draft". With `count > 1` this is the first failure; the
+  # single-draft Expand path has exactly one.
+  defp first_error(results) do
+    Enum.find_value(results, :unknown, fn
+      {:error, reason} -> reason
+      _ -> false
+    end)
   end
 
   defp draft(base, i, steer, gen_opts) do

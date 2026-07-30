@@ -70,7 +70,7 @@ defmodule Polyphony.Generation.PacketSchema do
 
   defp move_changeset(move, params) do
     move
-    |> cast(params, [:seq, :type, :content, :addressed_to, :audibility])
+    |> cast(drop_unknown_audibility(params), [:seq, :type, :content, :addressed_to, :audibility])
     |> validate_required([:seq, :type, :content])
     |> validate_change(:content, fn :content, c ->
       if String.trim(c) == "", do: [content: "must not be blank"], else: []
@@ -150,8 +150,27 @@ defmodule Polyphony.Generation.PacketSchema do
   def error_messages(%Ecto.Changeset{} = cs) do
     cs
     |> traverse_errors(fn {msg, opts} ->
-      Enum.reduce(opts, msg, fn {k, v}, acc -> String.replace(acc, "%{#{k}}", to_string(v)) end)
+      Enum.reduce(opts, msg, fn {k, v}, acc -> String.replace(acc, "%{#{k}}", err_value(v)) end)
     end)
     |> inspect()
   end
+
+  # An Ecto.Enum cast error carries the parameterized `:type` tuple as an opt, which has
+  # no `String.Chars` — a bare `to_string/1` crashes the whole (async) generation task on
+  # any bad enum value. Fall back to `inspect/1` for anything not plainly stringable.
+  defp err_value(v) when is_binary(v) or is_atom(v) or is_number(v), do: to_string(v)
+  defp err_value(v), do: inspect(v)
+
+  # The model occasionally emits an audibility outside the enum ("public", "loud", …).
+  # Drop it so the move defaults to :normal rather than failing the whole packet on a cast
+  # error (which would otherwise force a corrective re-generation). A speech move meant to
+  # whisper still uses "private"; anything unrecognized is simply audible.
+  defp drop_unknown_audibility(params) when is_map(params) do
+    case params[:audibility] || params["audibility"] do
+      v when v in [nil, "normal", "private", :normal, :private] -> params
+      _ -> params |> Map.delete(:audibility) |> Map.delete("audibility")
+    end
+  end
+
+  defp drop_unknown_audibility(params), do: params
 end

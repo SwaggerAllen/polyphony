@@ -93,4 +93,25 @@ defmodule Polyphony.Generation.PacketSchemaTest do
     assert is_binary(msg)
     assert msg =~ "move"
   end
+
+  test "error_messages doesn't crash on an Ecto.Enum cast error (the type opt isn't stringable)" do
+    # A bad `type` produces an enum cast error whose opts carry the parameterized type
+    # tuple; error_messages must render it (for the retry) instead of raising.
+    {:error, cs} =
+      PacketSchema.parse(%{"moves" => [%{"seq" => 1, "type" => "singing", "content" => "la"}]})
+
+    msg = PacketSchema.error_messages(cs)
+    assert is_binary(msg)
+  end
+
+  test "an out-of-range audibility is dropped (defaults to :normal), not a cast failure" do
+    data = %{
+      "moves" => [
+        %{"seq" => 1, "type" => "speech", "content" => "Hi", "audibility" => "public"}
+      ]
+    }
+
+    assert {:ok, %{moves: [move]}} = PacketSchema.parse(data)
+    assert move.audibility == :normal
+  end
 end

@@ -72,6 +72,25 @@ defmodule PolyphonyWeb.PlayComposeLiveTest do
     assert is_binary(text) and String.trim(text) != ""
   end
 
+  defmodule Rate429Provider do
+    @behaviour Polyphony.LLM.Provider
+    @impl true
+    def complete(_messages, _opts),
+      do: {:error, {:http_status, 429, ~s({"error":{"code":"engine_overloaded"}})}}
+  end
+
+  test "a failed Expand shows a specific reason, not a generic error", %{conn: conn} do
+    scene = scene_with_mira()
+    Application.put_env(:polyphony, :llm, provider: Rate429Provider)
+
+    {:ok, view, _html} = live(conn, ~p"/play/#{scene}?as=mira")
+    view |> element("#say-input") |> render_hook("compose", %{"text" => "greet them"})
+    render_async(view)
+
+    # The rate-limit reason is surfaced through Suggest → compose_error, not swallowed.
+    assert render(view) =~ "rate-limited"
+  end
+
   test "the composer commits a whole turn — thoughts and actions, not only speech", %{conn: conn} do
     scene = scene_with_mira()
     {:ok, view, _html} = live(conn, ~p"/play/#{scene}?as=mira")
