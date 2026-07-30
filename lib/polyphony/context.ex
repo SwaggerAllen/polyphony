@@ -176,9 +176,13 @@ defmodule Polyphony.Context do
     ]
   end
 
-  # The TurnPacket JSON contract, spelled out (and paired with the provider's JSON
-  # mode) so the model emits the object we parse rather than free-forming prose.
-  defp default_turn_instruction do
+  @doc """
+  The TurnPacket JSON contract, spelled out (and paired with the provider's JSON mode)
+  so the model emits the object we parse rather than free-forming prose. Public so a
+  degraded/uncached turn (`BeatOps.messages_for` fallback) can still state the schema —
+  otherwise the model, told only "respond with a TurnPacket", invents its own shape.
+  """
+  def default_turn_instruction do
     """
     It is your turn. Respond with ONLY a single JSON object — no prose, no markdown, no \
     code fences, no reasoning — of exactly this shape:
