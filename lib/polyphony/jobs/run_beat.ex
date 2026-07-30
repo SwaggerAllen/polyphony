@@ -43,14 +43,26 @@ defmodule Polyphony.Jobs.RunBeat do
     # Per-campaign LLM tuning (§9), resolved fresh each beat so a campaign-screen edit
     # takes effect next beat. Character budget rides args to the cast jobs.
     settings = Settings.for_scene(scene_id)
-    args = Map.put(args, "character_max_tokens", settings.character_max_tokens)
+
+    args =
+      args
+      |> Map.put("character_max_tokens", settings.character_max_tokens)
+      # The campaign's chosen models ride to the cast jobs; nil ⇒ the provider's global
+      # default. `model` is the workhorse both tiers run on; `heavy_model` the fallback.
+      |> Map.put("character_model", settings.model)
+      |> Map.put("heavy_model", settings.heavy_model)
+      # DeepInfra scheduling tier (§9): priority jumps the queue during overload.
+      |> Map.put("service_tier", settings.service_tier)
+
     beat = args["beat"]
     depth = args["depth"] || 0
     max_depth = args["max_depth"] || BeatPolicy.default_max_depth()
 
     members = BeatOps.members_now(scene_id, beat)
 
-    case decide_with_fallback(decide_opts(args, scene_id, beat, members, settings), beat) do
+    heavy = settings.heavy_model || heavy_model()
+
+    case decide_with_fallback(decide_opts(args, scene_id, beat, members, settings), beat, heavy) do
       {:ok, resolved} ->
         BeatOps.author_world_events(resolved.world_events, scene_id, beat)
         BeatOps.author_introductions(Map.get(resolved, :introductions, []), scene_id, beat)
@@ -79,15 +91,15 @@ defmodule Polyphony.Jobs.RunBeat do
   # (§12; a known Qwen quirk) — which stalls Continue. Retry once on the heavy model,
   # the same model-swap the cast path uses for refusals. Rate-limit / transport
   # errors are NOT retried here (that's the separate 429-handling concern).
-  defp decide_with_fallback(opts, beat) do
+  defp decide_with_fallback(opts, beat, heavy) do
     case Director.decide(opts) do
       {:ok, resolved} ->
         {:ok, resolved}
 
       {:error, reason} ->
-        if retry_on_heavy?(reason) && heavy_model() do
-          Logger.info("director #{inspect(reason)} at beat #{beat}; retrying on the heavy model")
-          Director.decide(Keyword.put(opts, :model, heavy_model()))
+        if retry_on_heavy?(reason) && heavy do
+          Logger.info("director #{inspect(reason)} at beat #{beat}; retrying on #{heavy}")
+          Director.decide(Keyword.put(opts, :model, heavy))
         else
           {:error, reason}
         end
@@ -142,7 +154,10 @@ defmodule Polyphony.Jobs.RunBeat do
       control: resolved.control,
       user_id: args["user_id"],
       campaign_id: args["campaign_id"],
-      character_max_tokens: args["character_max_tokens"]
+      character_max_tokens: args["character_max_tokens"],
+      character_model: args["character_model"],
+      heavy_model: args["heavy_model"],
+      service_tier: args["service_tier"]
     )
   end
 
@@ -164,6 +179,10 @@ defmodule Polyphony.Jobs.RunBeat do
       # thinking on, the reasoning trace shares the budget, so keep the cap generous.
       thinking: settings.director_thinking,
       max_tokens: settings.director_max_tokens,
+      # The campaign's workhorse model (nil ⇒ the provider's global default).
+      model: settings.model,
+      # DeepInfra scheduling tier for the Director call (nil ⇒ standard).
+      service_tier: settings.service_tier,
       cast_hint: members,
       control_hint: parse_control(args["control_hint"]),
       # Bill the Director's judgment to the campaign owner (§B5); nil ids record nothing.

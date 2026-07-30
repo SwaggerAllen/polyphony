@@ -80,6 +80,7 @@ defmodule Polyphony.LLM.DeepInfra do
     }
     |> put_thinking(Keyword.get(opts, :thinking, false))
     |> put_response_format(Keyword.get(opts, :response))
+    |> put_service_tier(Keyword.get(opts, :service_tier))
     |> Map.merge(Map.new(Keyword.get(opts, :extra_body, [])))
   end
 
@@ -114,6 +115,15 @@ defmodule Polyphony.LLM.DeepInfra do
   defp put_response_format(body, _tag),
     do: Map.put(body, :response_format, %{type: "json_object"})
 
+  # DeepInfra service tiers schedule the request: `priority` jumps ahead of standard
+  # traffic (faster TTFT during peak demand, avoiding `engine_overloaded`) at 1.5×;
+  # `flex` is cheaper (0.8×) but slower/occasionally unavailable. Unset ⇒ the field is
+  # omitted and DeepInfra uses `standard`. A campaign choice, resolved per beat.
+  defp put_service_tier(body, tier) when tier in ["priority", "flex", "standard"],
+    do: Map.put(body, :service_tier, tier)
+
+  defp put_service_tier(body, _), do: body
+
   defp extract_content(%{"choices" => [%{"message" => %{"content" => content}} | _]})
        when is_binary(content) and content != "",
        do: {:ok, content}
@@ -123,7 +133,48 @@ defmodule Polyphony.LLM.DeepInfra do
 
   defp extract_content(other), do: {:error, {:unexpected_response, other}}
 
-  defp post(cfg, body) do
+  # DeepInfra 429s with `engine_overloaded` ("Model busy, retry later") and times out
+  # under load. Those are transient, so retry with exponential backoff before failing
+  # the beat. Runs in the (background) generation job, so a few seconds of sleep is fine.
+  # `:max_retries` / `:retry_base_ms` are config-tunable.
+  defp post(cfg, body), do: with_retry(cfg, fn -> request(cfg, body) end)
+
+  @doc false
+  # The retry loop, over an injectable request thunk (so it's testable without a socket).
+  def with_retry(cfg, request_fun, attempt \\ 0) do
+    case request_fun.() do
+      {:ok, resp} ->
+        {:ok, resp}
+
+      {:error, reason} = err ->
+        max = cfg[:max_retries] || 3
+
+        if attempt < max and transient?(reason) do
+          delay = (cfg[:retry_base_ms] || 1000) * Integer.pow(2, attempt)
+
+          Logger.info(
+            "[deepinfra] #{transient_label(reason)}; retry #{attempt + 1}/#{max} in #{delay}ms"
+          )
+
+          if delay > 0, do: Process.sleep(delay)
+          with_retry(cfg, request_fun, attempt + 1)
+        else
+          err
+        end
+    end
+  end
+
+  @doc false
+  # 429 (rate limit / overloaded) and 5xx are transient; so are transport failures
+  # (timeout, connection reset). A 4xx that isn't 429 is a real request error — no retry.
+  def transient?({:http_status, status, _}), do: status == 429 or status >= 500
+  def transient?({:transport, _}), do: true
+  def transient?(_), do: false
+
+  defp transient_label({:http_status, status, _}), do: "HTTP #{status}"
+  defp transient_label({:transport, reason}), do: "transport #{inspect(reason)}"
+
+  defp request(cfg, body) do
     url = String.to_charlist((cfg[:base_url] || "https://api.deepinfra.com") <> @default_path)
     api_key = cfg[:api_key] || System.get_env("DEEPINFRA_API_KEY") || ""
 
@@ -132,10 +183,10 @@ defmodule Polyphony.LLM.DeepInfra do
       {~c"accept", ~c"application/json"}
     ]
 
-    request = {url, headers, ~c"application/json", Jason.encode!(body)}
+    http_request = {url, headers, ~c"application/json", Jason.encode!(body)}
     http_opts = [timeout: cfg[:timeout] || 60_000, ssl: ssl_opts(cfg)]
 
-    case :httpc.request(:post, request, http_opts, body_format: :binary) do
+    case :httpc.request(:post, http_request, http_opts, body_format: :binary) do
       {:ok, {{_v, 200, _r}, _h, resp}} ->
         {:ok, resp}
 

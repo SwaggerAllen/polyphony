@@ -56,7 +56,8 @@ defmodule PolyphonyWeb.CampaignLive do
       bibles: bibles,
       bible_id: world_id,
       bible_name: bible_label(bibles, world_id),
-      llm: Settings.from_payload(payload)
+      llm: Settings.from_payload(payload),
+      global_models: global_models()
     )
   end
 
@@ -100,7 +101,12 @@ defmodule PolyphonyWeb.CampaignLive do
         director_max_tokens:
           parse_int(params["director_max_tokens"], defaults.director_max_tokens),
         character_max_tokens:
-          parse_int(params["character_max_tokens"], defaults.character_max_tokens)
+          parse_int(params["character_max_tokens"], defaults.character_max_tokens),
+        # Blank ⇒ nil ⇒ the deployment's global default model (DEEPINFRA_MODEL / heavy).
+        model: blank_to_nil(params["model"]),
+        heavy_model: blank_to_nil(params["heavy_model"]),
+        # DeepInfra scheduling tier; Settings coerces an unknown value back to nil.
+        service_tier: blank_to_nil(params["service_tier"])
       }
 
       payload =
@@ -215,6 +221,21 @@ defmodule PolyphonyWeb.CampaignLive do
     end
   end
 
+  defp blank_to_nil(value) do
+    case String.trim(to_string(value || "")) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  # The deployment's global default models, shown as placeholders so an author can see
+  # what a campaign falls back to when its model fields are left blank.
+  defp global_models do
+    llm = Application.get_env(:polyphony, :llm, [])
+    workhorse = get_in(llm, [:deepinfra, :model]) || get_in(llm, [:models, :workhorse])
+    %{workhorse: workhorse, heavy: get_in(llm, [:models, :heavy])}
+  end
+
   def render(assigns) do
     ~H"""
     <h1><%= if @payload[:name] in [nil, ""], do: "Untitled campaign", else: @payload[:name] %></h1>
@@ -240,6 +261,26 @@ defmodule PolyphonyWeb.CampaignLive do
               <input type="number" name="character_max_tokens" value={@llm.character_max_tokens} min="256" step="128" phx-debounce="blur" style="width:8rem;" />
             </label>
           </div>
+          <div class="row" style="gap:1rem; margin-top:.4rem; flex-wrap:wrap;">
+            <label style="flex:1; min-width:16rem;">Model <span class="faint">(Director + cast; blank = deployment default)</span>
+              <input type="text" name="model" value={@llm.model} placeholder={@global_models.workhorse || "DEEPINFRA_MODEL"} phx-debounce="blur" style="width:100%;" />
+            </label>
+            <label style="flex:1; min-width:16rem;">Heavy fallback model <span class="faint">(refusal / empty retries)</span>
+              <input type="text" name="heavy_model" value={@llm.heavy_model} placeholder={@global_models.heavy || "DEEPINFRA_MODEL_HEAVY"} phx-debounce="blur" style="width:100%;" />
+            </label>
+          </div>
+          <div class="row" style="gap:1rem; margin-top:.4rem; flex-wrap:wrap;">
+            <label>Service tier <span class="faint">(DeepInfra scheduling)</span>
+              <select name="service_tier" style="width:12rem;">
+                <option value="" selected={@llm.service_tier in [nil, ""]}>Standard (default, 1×)</option>
+                <option value="priority" selected={@llm.service_tier == "priority"}>Priority (jump the queue, 1.5×)</option>
+                <option value="flex" selected={@llm.service_tier == "flex"}>Flex (cheaper, slower, 0.8×)</option>
+              </select>
+            </label>
+          </div>
+          <p class="faint" style="margin-top:.3rem;">
+            Point a campaign at a better-provisioned DeepInfra model, or set <strong>Priority</strong> to schedule ahead of standard traffic, when the default is overloaded (429 <code>engine_overloaded</code>). Takes effect on the next beat.
+          </p>
         </details>
       </form>
     </div>

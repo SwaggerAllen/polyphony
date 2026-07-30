@@ -79,10 +79,17 @@ defmodule Polyphony.Jobs.GeneratePacket do
   end
 
   defp retry_on_heavy_model(messages, opts, {scene_id, character_id, beat, packet_id}) do
-    heavy = get_in(Application.get_env(:polyphony, :llm, []), [:models, :heavy])
+    # The campaign's heavy model wins; nil ⇒ the global `[:models, :heavy]`. The
+    # `:heavy_model` opt is stripped before the provider call — it's routing, not a body
+    # field. Falling back to the *same* model (heavy unset) would spin the refusal, so
+    # only swap when a distinct heavy model exists.
+    heavy =
+      opts[:heavy_model] || get_in(Application.get_env(:polyphony, :llm, []), [:models, :heavy])
+
+    provider_opts = Keyword.delete(opts, :heavy_model)
     Logger.info("refusal for #{character_id}@#{beat}; retrying on #{heavy}")
 
-    case Generation.generate(messages, Keyword.put(opts, :model, heavy)) do
+    case Generation.generate(messages, Keyword.put(provider_opts, :model, heavy)) do
       {:ok, packet} ->
         commit(scene_id, character_id, beat, packet_id, packet)
         :committed
@@ -172,7 +179,12 @@ defmodule Polyphony.Jobs.GeneratePacket do
       # Keep the campaign-owner attribution flowing to the next slot (§B5).
       user_id: args["user_id"],
       campaign_id: args["campaign_id"],
-      character_max_tokens: args["character_max_tokens"]
+      # Keep the campaign LLM tuning flowing to the next slot (§9): token budget and
+      # the workhorse/heavy models. `advance` re-keys `model` → `character_model`.
+      character_max_tokens: args["character_max_tokens"],
+      character_model: args["model"],
+      heavy_model: args["heavy_model"],
+      service_tier: args["service_tier"]
     ]
   end
 
@@ -226,6 +238,11 @@ defmodule Polyphony.Jobs.GeneratePacket do
     []
     |> maybe_put(:provider, BeatOps.resolve_provider(args["provider"]))
     |> maybe_put(:model, args["model"])
+    # The campaign's heavy model for the refusal fallback (§9). Inert to the provider —
+    # `retry_on_heavy_model` reads it, then strips it before the swap call.
+    |> maybe_put(:heavy_model, args["heavy_model"])
+    # DeepInfra scheduling tier (§9): a real body field, carried onto the refusal retry.
+    |> maybe_put(:service_tier, args["service_tier"])
     # Character output-token budget from the campaign LLM settings (§9).
     |> maybe_put(:max_tokens, args["character_max_tokens"] || args["max_tokens"])
     |> maybe_put(:thinking, args["thinking"])
