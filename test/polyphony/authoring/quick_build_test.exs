@@ -1,0 +1,85 @@
+defmodule Polyphony.Authoring.QuickBuildTest do
+  @moduledoc """
+  Quick Build scaffolds a whole campaign from seeds: a world bible, one character per
+  seed line (grounded in the world, cross-linked), and a premise — all persisted to the
+  author's library. Driven by the offline Mock so generation is deterministic.
+  """
+  use ExUnit.Case, async: false
+
+  alias Polyphony.{Library, Owner, Repo}
+  alias Polyphony.Authoring.{CharacterSheet, QuickBuild, WorldBible}
+
+  setup do
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    previous = Application.get_env(:polyphony, :llm)
+    Application.put_env(:polyphony, :llm, provider: Polyphony.LLM.Mock)
+    on_exit(fn -> Application.put_env(:polyphony, :llm, previous) end)
+    %{owner: Owner.user("quick-build-#{System.unique_integer([:positive])}")}
+  end
+
+  test "builds a world, a cast, cross-links relationships, and a premise", %{owner: owner} do
+    {:ok, result} =
+      QuickBuild.build(
+        owner: owner,
+        world_seed: "a rain-drowned harbor city",
+        character_seeds: ["a disgraced harbor-master", "the collector who bought her past"],
+        provider: Polyphony.LLM.Mock
+      )
+
+    # A world bible, persisted and returned.
+    assert %WorldBible{} = wb = Library.payload(result.bible)
+    assert wb.name not in [nil, ""]
+    assert Library.get(result.bible.id).kind == "world_bible"
+
+    # One :full character per seed line, linked to the world.
+    assert length(result.characters) == 2
+
+    for entry <- result.characters do
+      sheet = Library.payload(entry)
+      assert %CharacterSheet{status: :full} = sheet
+      assert sheet.world_bible_id == result.bible.id
+      assert sheet.premise not in [nil, ""]
+    end
+
+    # Cross-linked: each character regards the other, by stable id (not just name).
+    [a, b] = result.characters
+    sheet_a = Library.payload(a)
+    assert [rel] = sheet_a.relationships
+    assert rel.target_id == b.id
+
+    # A premise came back.
+    assert is_binary(result.premise) and result.premise != ""
+  end
+
+  test "the whole cast lands in the owner's library", %{owner: owner} do
+    before = Enum.count(Library.list_for_owner(owner))
+
+    {:ok, _result} =
+      QuickBuild.build(
+        owner: owner,
+        world_seed: "neon arcology",
+        character_seeds: ["a courier", "a fixer", "a ghost"],
+        provider: Polyphony.LLM.Mock
+      )
+
+    entries = Library.list_for_owner(owner)
+    # 1 world + 3 characters added.
+    assert Enum.count(entries) == before + 4
+    assert Enum.count(entries, &(&1.kind == "character")) == 3
+    assert Enum.count(entries, &(&1.kind == "world_bible")) == 1
+  end
+
+  test "a blank character list still builds a world and premise", %{owner: owner} do
+    {:ok, result} =
+      QuickBuild.build(
+        owner: owner,
+        world_seed: "a quiet village",
+        character_seeds: [],
+        provider: Polyphony.LLM.Mock
+      )
+
+    assert result.characters == []
+    assert %WorldBible{} = Library.payload(result.bible)
+    assert result.premise != ""
+  end
+end
