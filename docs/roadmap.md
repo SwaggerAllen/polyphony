@@ -156,6 +156,14 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   `:stub` is refused (`{:error, :stub_needs_promotion}`) until promoted (§B8). `continue/3` is
   the empty user turn — kicks a beat run with no committed packet so the Director casts and
   proceeds (`:enqueue` injectable for tests). *Deferred:* the UI buttons.
+  - **One-beat Continue vs. Auto/Play (⬜ planned).** A user Continue now advances **exactly
+    one beat**: its `control_hint: "yield_to_user"` is honored as authoritative over the
+    model's own `control` (`RunBeat.cap_to_one_beat/2`), so the loop can't self-chain a
+    string of autonomous beats per click (membership truncation still runs — that re-decides
+    the same exchange, capped by depth, not `control`). The autonomous multi-beat path is
+    still fully built (the Director's `control: continue` + the `BeatPolicy` depth cap of 3);
+    it just needs a deliberate **"Auto"/"Play" control** in the Play view that fires
+    `continue` *without* the yield hint, letting the cast run up to the cap hands-free.
 - **B8 — Character stubs.** ✅ **Done.** `CharacterSheet` gains `status: :stub | :proposed |
   :full` + a one-line `role`. `Polyphony.Authoring.Stub`: `new/3` makes a stub (name + role +
   inbound relationships, no sheet); `promote/2` generates a full sheet from the stub + context

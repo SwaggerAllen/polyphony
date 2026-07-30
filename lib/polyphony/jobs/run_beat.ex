@@ -68,6 +68,7 @@ defmodule Polyphony.Jobs.RunBeat do
 
     case decide_with_fallback(decide_opts(args, scene_id, beat, members, settings), beat, heavy) do
       {:ok, resolved} ->
+        resolved = cap_to_one_beat(resolved, args)
         BeatOps.author_world_events(resolved.world_events, scene_id, beat)
         BeatOps.author_introductions(Map.get(resolved, :introductions, []), scene_id, beat)
 
@@ -122,6 +123,21 @@ defmodule Polyphony.Jobs.RunBeat do
   defp retry_on_heavy?(_), do: false
 
   defp heavy_model, do: get_in(Application.get_env(:polyphony, :llm, []), [:models, :heavy])
+
+  # A user-initiated Continue means "advance one beat, then hand back to me". When it
+  # carries an explicit `yield_to_user` hint, honor it as authoritative over the model's
+  # own `control`, so the loop doesn't self-chain further autonomous beats. Membership
+  # truncation still runs — it re-decides the *same* exchange against a changed roster,
+  # governed by the depth cap, not `control` — so a mid-beat exit is handled but the beat
+  # doesn't spawn a fresh autonomous one. A future "Auto/Play" control omits the hint and
+  # lets the Director pace up to the depth cap (see docs/roadmap.md).
+  defp cap_to_one_beat(resolved, args) do
+    if args["control_hint"] in ["yield_to_user", :yield_to_user] do
+      %{resolved | control: :yield_to_user}
+    else
+      resolved
+    end
+  end
 
   # ── Drive the outcome ────────────────────────────────────────────────────────
 
