@@ -75,26 +75,24 @@ defmodule Polyphony.Generation.PacketSchema do
     |> validate_change(:content, fn :content, c ->
       if String.trim(c) == "", do: [content: "must not be blank"], else: []
     end)
-    |> validate_speech_only_fields()
+    |> normalize_speech_only_fields()
   end
 
-  # addressed_to and :private audibility only belong on speech (§6.4).
-  defp validate_speech_only_fields(changeset) do
-    type = get_field(changeset, :type)
-    addressed = get_field(changeset, :addressed_to) || []
-    audibility = get_field(changeset, :audibility)
-
-    changeset =
-      if type != :speech and addressed != [] do
-        add_error(changeset, :addressed_to, "only speech moves may be addressed")
-      else
+  # addressed_to and :private audibility only belong on speech (§6.4). The model routinely
+  # tags thoughts and actions with them anyway; rather than *reject* — which forces a
+  # whole corrective re-generation on nearly every turn (see the beat log: every cast
+  # member's first attempt round-trips) — normalize them away on non-speech moves. They
+  # carry no meaning off a speech line: a thought's privacy comes from its type, and an
+  # action is public narration. The stored packet still upholds the speech-only invariant.
+  defp normalize_speech_only_fields(changeset) do
+    case get_field(changeset, :type) do
+      :speech ->
         changeset
-      end
 
-    if type != :speech and audibility == :private do
-      add_error(changeset, :audibility, "only speech moves may be private")
-    else
-      changeset
+      _ ->
+        changeset
+        |> put_change(:addressed_to, [])
+        |> put_change(:audibility, :normal)
     end
   end
 
