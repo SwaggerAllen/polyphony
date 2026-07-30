@@ -68,4 +68,15 @@ defmodule Polyphony.SuggestTest do
   test "requires a context" do
     assert_raise ArgumentError, fn -> Suggest.variants(provider: Mock) end
   end
+
+  defmodule FailProvider do
+    @behaviour Polyphony.LLM.Provider
+    @impl true
+    def complete(_messages, _opts), do: {:error, {:http_status, 429, "busy"}}
+  end
+
+  test "surfaces the underlying failure reason when no variant succeeds" do
+    assert {:error, {:no_variants, {:provider, {:http_status, 429, "busy"}}}} =
+             Suggest.variants(context: context(), provider: FailProvider, count: 1)
+  end
 end

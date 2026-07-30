@@ -697,6 +697,18 @@ defmodule PolyphonyWeb.PlayLive do
     {:noreply, socket |> assign(composing: false) |> push_event("set_composer", %{text: text})}
   end
 
+  def handle_async(:compose, {:ok, {:error, reason}}, socket) do
+    {:noreply, socket |> assign(composing: false) |> put_flash(:error, compose_error(reason))}
+  end
+
+  # The async task itself crashed (e.g. a raise in the generation path).
+  def handle_async(:compose, {:exit, reason}, socket) do
+    {:noreply,
+     socket
+     |> assign(composing: false)
+     |> put_flash(:error, "The draft crashed: #{short_reason(reason)}. Try again.")}
+  end
+
   def handle_async(:compose, _result, socket) do
     {:noreply,
      socket |> assign(composing: false) |> put_flash(:error, "Couldn't draft a turn. Try again.")}
@@ -759,6 +771,46 @@ defmodule PolyphonyWeb.PlayLive do
       end
     end)
   end
+
+  # A human, specific message for an Expand failure, mapped from the underlying
+  # generation error (surfaced through `Suggest.variants`) — so the player knows whether
+  # to retry, edit, or wait, instead of a blanket "couldn't draft".
+  defp compose_error({:no_variants, reason}), do: compose_error(reason)
+
+  defp compose_error({:provider, {:http_status, 429, _}}),
+    do: "The model is busy right now (rate-limited). Give it a moment and hit Expand again."
+
+  defp compose_error({:provider, {:http_status, status, _}}),
+    do: "The model returned an error (HTTP #{status}). Try Expand again."
+
+  defp compose_error({:provider, {:transport, :timeout}}),
+    do: "The draft timed out before the model responded. Try Expand again."
+
+  defp compose_error({:provider, {:transport, reason}}),
+    do: "Couldn't reach the model (#{short_reason(reason)}). Try Expand again."
+
+  defp compose_error({:provider, :cost_cap_reached}), do: cost_cap_message()
+  defp compose_error(:cost_cap_reached), do: cost_cap_message()
+
+  defp compose_error({:refusal, _}),
+    do:
+      "The model declined to write this turn. Edit your draft or the character's setup, then try again."
+
+  defp compose_error({:empty_response, _}),
+    do: "The model returned an empty response. Hit Expand again — this usually clears on a retry."
+
+  defp compose_error({:schema_invalid, _}),
+    do: "The draft didn't match the required format after a couple of tries. Hit Expand again."
+
+  defp compose_error(other), do: "Couldn't draft a turn: #{short_reason(other)}. Try again."
+
+  defp cost_cap_message,
+    do: "You've hit the spending cap for this campaign — raise it in settings to keep generating."
+
+  # A compact, flash-safe rendering of an arbitrary error term (a 429 body or a stacktrace
+  # can be huge).
+  defp short_reason(reason) when is_binary(reason), do: String.slice(reason, 0, 160)
+  defp short_reason(reason), do: reason |> inspect() |> String.slice(0, 160)
 
   # Draft a turn from the character's filtered view (§11) — steered by the player's
   # partial text if any, else generated fresh. Never omniscient (a suggestion can't
