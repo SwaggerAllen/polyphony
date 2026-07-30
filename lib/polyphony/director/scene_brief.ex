@@ -26,7 +26,7 @@ defmodule Polyphony.Director.SceneBrief do
 
   alias Polyphony.Authoring.{WorldBible, CharacterSheet}
   alias Polyphony.Context
-  alias Polyphony.Context.{SceneContext, Store, StaticRetriever}
+  alias Polyphony.Context.{PgvectorRetriever, Rebuild, SceneContext, Store, StaticRetriever}
   alias Polyphony.Director.BeatOps
   alias Polyphony.Packets
   alias Polyphony.ReadModels.SceneSummary
@@ -134,9 +134,36 @@ defmodule Polyphony.Director.SceneBrief do
   defp frozen_prefix(scene_id) do
     case Store.fetch(scene_id, SceneSummary.omniscient_key()) do
       {:ok, %SceneContext{prefix: prefix}} -> prefix
-      :error -> nil
+      :error -> rebuilt_prefix(scene_id)
     end
   end
+
+  # Cold cache (e.g. a node restart wiped ETS mid-scene): rebuild the frozen brief from
+  # durable data — the campaign's world, premise, and whole cast — and re-cache, so the
+  # Director keeps full parity with the characters (§9) instead of degrading to roster +
+  # transcript only. The per-character counterpart is `Context.Rebuild`.
+  defp rebuilt_prefix(scene_id) do
+    case Rebuild.opened(scene_id) do
+      %{} = opened ->
+        materialize(scene_id,
+          world_bible: Rebuild.world_bible(scene_id),
+          premise: Map.get(opened, :premise),
+          roster: Rebuild.roster(scene_id),
+          retriever: rebuild_retriever()
+        ).prefix
+
+      _ ->
+        nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  # The cross-scene summary retriever for a cold-cache rebuild. Defaults to pgvector
+  # (matching scene-open); env-swappable — like `:embedder` — so a DB-free test can use
+  # the static retriever.
+  defp rebuild_retriever,
+    do: Application.get_env(:polyphony, :scene_brief_retriever, PgvectorRetriever)
 
   defp render_prefix(meta) do
     [

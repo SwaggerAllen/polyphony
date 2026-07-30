@@ -5,13 +5,13 @@ defmodule Polyphony.Director.SceneBriefTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, Repo}
+  alias Polyphony.{App, Library, Repo}
   alias Polyphony.Authoring.{WorldBible, CharacterSheet}
   alias Polyphony.Director.SceneBrief
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
-  alias Polyphony.Context.PgvectorRetriever
+  alias Polyphony.Context.{PgvectorRetriever, StaticRetriever}
   alias Polyphony.Director.BeatOps
   alias Polyphony.ReadModels.SceneSummary
   alias Polyphony.SceneClose.MockEmbedder
@@ -59,6 +59,60 @@ defmodule Polyphony.Director.SceneBriefTest do
       [_system, %{content: user}] = SceneBrief.messages(s, ["Mira"])
       assert user =~ "World: Duskhaven"
       assert user =~ "Mira"
+    end
+  end
+
+  describe "cold cache (a restart wiped the frozen brief mid-scene)" do
+    setup do
+      :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+      # Rebuild parity (world/premise/roster) is independent of the cross-scene summary
+      # retriever, so use the DB-free static one — the pgvector path is covered by the
+      # cross-scene describe below.
+      Application.put_env(:polyphony, :scene_brief_retriever, StaticRetriever)
+      on_exit(fn -> Application.delete_env(:polyphony, :scene_brief_retriever) end)
+    end
+
+    test "messages/3 rebuilds world + premise + cast from the campaign, not just the roster" do
+      # A campaign in the library: a world bible and two authored cast sheets.
+      bible_entry = Library.put(%{owner_id: "1", kind: "world_bible", payload: bible()})
+
+      mira =
+        Library.put(%{
+          owner_id: "1",
+          kind: "character",
+          payload: %CharacterSheet{name: "Mira", status: :full, premise: "a tidewarden"}
+        })
+
+      campaign =
+        Library.put(%{
+          owner_id: "1",
+          kind: "campaign",
+          payload: %{
+            character_ids: [mira.id],
+            bible_id: bible_entry.id,
+            premise: "A parley at the tideline."
+          }
+        })
+
+      s = scene()
+
+      :ok =
+        App.dispatch(%OpenScene{
+          scene_id: s,
+          campaign_id: campaign.id,
+          premise: "A parley at the tideline.",
+          opened_beat: 0
+        })
+
+      :ok = App.dispatch(%EnterCharacter{scene_id: s, character_id: "Mira", beat: 1})
+
+      # No materialize/2 was ever called for this scene — the frozen brief is absent,
+      # exactly as after a restart. The Director must still get full parity.
+      [_system, %{content: user}] = SceneBrief.messages(s, ["Mira"])
+
+      assert user =~ "World: Duskhaven"
+      assert user =~ "Scene: A parley at the tideline."
+      assert user =~ "Mira — a tidewarden"
     end
   end
 

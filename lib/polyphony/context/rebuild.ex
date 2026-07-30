@@ -23,15 +23,15 @@ defmodule Polyphony.Context.Rebuild do
   @doc "Rebuild `character_id`'s scene context from the log + library, or `:error`."
   @spec for_character(term(), term()) :: {:ok, Polyphony.Context.SceneContext.t()} | :error
   def for_character(scene_id, character_id) do
-    with %SceneOpened{} = opened <- scene_opened(scene_id),
-         %CharacterSheet{} = sheet <- sheet_for(opened.campaign_id, character_id) do
+    with %SceneOpened{} = opened <- opened(scene_id),
+         %CharacterSheet{} = sheet <- find_sheet(roster(scene_id), character_id) do
       ctx =
         Context.materialize(
           scene_id: scene_id,
           character_id: to_string(character_id),
           sheet: sheet,
           premise: opened.premise || "",
-          world_bible: world_bible(opened.campaign_id),
+          world_bible: world_bible(scene_id),
           # Long-tail memory from pgvector (no-ops to [] without egress / on failure).
           retriever: PgvectorRetriever
         )
@@ -50,39 +50,42 @@ defmodule Polyphony.Context.Rebuild do
       :error
   end
 
-  # The scene's opening event (campaign_id + premise) — the first event on the stream.
-  defp scene_opened(scene_id) do
+  @doc "The scene's opening event (campaign_id + premise), or nil. The first on the stream."
+  @spec opened(term()) :: SceneOpened.t() | nil
+  def opened(scene_id) do
     case Commanded.EventStore.stream_forward(App, scene_id, 0, 8) do
       {:error, _} -> nil
       stream -> Enum.find_value(stream, fn e -> match?(%SceneOpened{}, e.data) && e.data end)
     end
+  rescue
+    _ -> nil
   end
 
-  # The campaign's authored cast, matched to the scene's character id by *name* (ids in
-  # the scene are character names). Case-insensitive so "Lydia"/"lydia" resolve alike.
-  defp sheet_for(nil, _character_id), do: nil
-
-  defp sheet_for(campaign_id, character_id) do
-    key = character_id |> to_string() |> String.downcase()
-
-    with campaign when not is_nil(campaign) <- Library.get(campaign_id),
+  @doc """
+  The scene's campaign cast as authored sheets (the durable source of the frozen
+  context both the cast and the Director condition on). Empty when there's no campaign.
+  """
+  @spec roster(term()) :: [CharacterSheet.t()]
+  def roster(scene_id) do
+    with %SceneOpened{campaign_id: cid} when not is_nil(cid) <- opened(scene_id),
+         campaign when not is_nil(campaign) <- Library.get(cid),
          %{} = payload <- Library.payload(campaign) do
       (payload[:character_ids] || payload["character_ids"] || [])
       |> Enum.map(&(&1 |> normalize_id() |> get_entry()))
       |> Enum.map(&entry_payload/1)
-      |> Enum.find(fn
-        %CharacterSheet{name: n} -> is_binary(n) and String.downcase(n) == key
-        _ -> false
-      end)
+      |> Enum.filter(&match?(%CharacterSheet{}, &1))
     else
-      _ -> nil
+      _ -> []
     end
+  rescue
+    _ -> []
   end
 
-  defp world_bible(nil), do: nil
-
-  defp world_bible(campaign_id) do
-    with campaign when not is_nil(campaign) <- Library.get(campaign_id),
+  @doc "The scene's campaign world bible (`%WorldBible{}`), or nil."
+  @spec world_bible(term()) :: term() | nil
+  def world_bible(scene_id) do
+    with %SceneOpened{campaign_id: cid} when not is_nil(cid) <- opened(scene_id),
+         campaign when not is_nil(campaign) <- Library.get(cid),
          %{} = payload <- Library.payload(campaign),
          bid when not is_nil(bid) <- payload[:bible_id] || payload["bible_id"],
          entry when not is_nil(entry) <- get_entry(normalize_id(bid)) do
@@ -90,6 +93,18 @@ defmodule Polyphony.Context.Rebuild do
     else
       _ -> nil
     end
+  rescue
+    _ -> nil
+  end
+
+  # Match a scene character id (a *name*) to its sheet in the roster, case-insensitively.
+  defp find_sheet(roster, character_id) do
+    key = character_id |> to_string() |> String.downcase()
+
+    Enum.find(roster, fn
+      %CharacterSheet{name: n} -> is_binary(n) and String.downcase(n) == key
+      _ -> false
+    end)
   end
 
   defp get_entry(nil), do: nil
