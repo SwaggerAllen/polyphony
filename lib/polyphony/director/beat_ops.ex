@@ -10,7 +10,7 @@ defmodule Polyphony.Director.BeatOps do
   """
 
   alias Polyphony.{App, Context, MembershipSet, Packets}
-  alias Polyphony.Context.Store
+  alias Polyphony.Context.{Rebuild, Store}
   alias Polyphony.Commands.{RecordWorldEvent, ExitCharacter, CloseScene, ProposeIntroduction}
   alias Polyphony.Director.Proposal
 
@@ -130,16 +130,32 @@ defmodule Polyphony.Director.BeatOps do
           Context.to_messages(ctx, live_events: live, members: members)
 
         :error ->
-          [
-            %{role: "system", content: "You are #{character_id}."},
-            %{
-              role: "user",
-              content: "It is your turn. Respond with a valid TurnPacket JSON object."
-            }
-          ]
+          # Cache cold — e.g. a node restart wiped ETS mid-scene. Rebuild the frozen
+          # context from durable data (sheet + premise + world from the campaign,
+          # long-tail from pgvector) and re-cache, so the turn conditions on the real
+          # character instead of a bare stub. Only the truly-unresolvable case (no
+          # campaign sheet) drops to the fallback — which still states the schema.
+          case Rebuild.for_character(scene_id, character_id) do
+            {:ok, ctx} ->
+              Store.put(scene_id, character_id, ctx)
+              Context.to_messages(ctx, live_events: live, members: members)
+
+            :error ->
+              fallback_messages(character_id)
+          end
       end
 
     base ++ pacing(pacing_note)
+  end
+
+  # Last resort (no resolvable sheet): still spell out the TurnPacket schema, so the
+  # model can't free-form a foreign JSON shape (the `schema_invalid` failure mode a
+  # bare "respond with a TurnPacket" prompt produced).
+  defp fallback_messages(character_id) do
+    [
+      %{role: "system", content: "You are #{character_id}."},
+      %{role: "user", content: Context.default_turn_instruction()}
+    ]
   end
 
   defp pacing(note) when is_binary(note) and note != "",
