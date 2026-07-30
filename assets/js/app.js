@@ -89,6 +89,23 @@ Hooks.ComposerInput = {
   },
 }
 
+// Copy the text of another element to the clipboard. `data-copy-target` names the id
+// of the source element; its textContent is copied (so hidden/collapsed content comes
+// along). Used by the scene debug-timeline "Copy debug" button.
+Hooks.CopyText = {
+  mounted() {
+    this.el.addEventListener("click", () => {
+      const src = document.getElementById(this.el.dataset.copyTarget)
+      if (!src) return
+      navigator.clipboard.writeText(src.textContent || "").then(() => {
+        const original = this.el.textContent
+        this.el.textContent = "Copied!"
+        setTimeout(() => (this.el.textContent = original), 1200)
+      })
+    })
+  },
+}
+
 // Confirm before following a link that opts in via data-confirm (used to guard
 // navigation away from an editor with unsaved changes). Capture phase so it runs
 // before the browser navigates; the attribute is only rendered when there's

@@ -75,6 +75,8 @@ defmodule PolyphonyWeb.PlayLive do
        debug_trace: DebugFlags.get(:trace),
        raw_events: [],
        traces: [],
+       debug_feed: [],
+       debug_feed_text: "",
        premise: ""
      )}
   end
@@ -108,19 +110,23 @@ defmodule PolyphonyWeb.PlayLive do
   end
 
   defp reload(socket) do
-    events = stored_with_seq(socket.assigns.scene_id)
+    scene_id = socket.assigns.scene_id
+    events = stored_with_seq(scene_id)
     plain = Enum.map(events, &elem(&1, 1))
     member_at? = plain |> MembershipSet.from_events() |> MembershipSet.member_at_fun()
     messages = Broadcast.replay(events, socket.assigns.viewer, member_at?, 0)
 
     next_beat = 1 + Enum.max([0 | Enum.map(plain, &event_beat/1)])
-    roster = BeatOps.members_now(socket.assigns.scene_id, max(next_beat - 1, 1))
+    roster = BeatOps.members_now(scene_id, max(next_beat - 1, 1))
+
+    traces = if socket.assigns.debug_trace, do: DebugTap.recent(scene_id), else: []
+    failures = open_failures(socket)
+    feed = debug_feed(socket, traces, failures)
 
     assign(socket,
       messages: messages,
       raw_events: events,
-      traces:
-        if(socket.assigns.debug_trace, do: DebugTap.recent(socket.assigns.scene_id), else: []),
+      traces: traces,
       roster: roster,
       next_beat: next_beat,
       premise: scene_premise(plain),
@@ -128,7 +134,9 @@ defmodule PolyphonyWeb.PlayLive do
       # The Director's pending introductions — author-facing tooling, so only the
       # omniscient view shows the queue (and each carries how it resolves).
       introductions: intro_queue(socket, plain),
-      failures: open_failures(socket)
+      failures: failures,
+      debug_feed: feed,
+      debug_feed_text: feed_text(feed)
     )
   end
 
@@ -803,6 +811,111 @@ defmodule PolyphonyWeb.PlayLive do
   defp event_beat(%{beat: b}) when is_integer(b), do: b
   defp event_beat(_), do: 0
 
+  # ── Debug timeline (author-only) ─────────────────────────────────────────────
+  #
+  # LLM calls, raw events, and errors interleaved on one wall-clock timeline so the
+  # author can read *what happened when*. Built only for the omniscient view with a
+  # debug pane on; each source is gated on its own toggle, and errors ride along
+  # whenever the pane is open. Oldest → newest (matches the transcript's autoscroll).
+
+  defp debug_feed(socket, traces, failures) do
+    if socket.assigns.viewer == :omniscient and
+         (socket.assigns.debug_events or socket.assigns.debug_trace) do
+      events =
+        if socket.assigns.debug_events, do: event_feed_items(socket.assigns.scene_id), else: []
+
+      calls = if socket.assigns.debug_trace, do: trace_feed_items(traces), else: []
+      errors = error_feed_items(failures)
+
+      Enum.sort_by(events ++ calls ++ errors, & &1.at_ms)
+    else
+      []
+    end
+  end
+
+  defp event_feed_items(scene_id) do
+    scene_id
+    |> stored_recorded()
+    |> Enum.map(fn {seq, e, at} ->
+      %{
+        kind: :event,
+        at_ms: to_ms(at),
+        seq: seq,
+        beat: event_beat(e),
+        label: debug_kind(e),
+        detail: debug_detail(e)
+      }
+    end)
+  end
+
+  defp trace_feed_items(traces) do
+    Enum.map(traces, fn t ->
+      %{
+        kind: :trace,
+        at_ms: to_ms(Map.get(t, :at)),
+        subject: t.subject,
+        model: trace_model(t.params),
+        outcome: trace_outcome(t.response),
+        params: inspect(t.params),
+        request: trace_request(t.request),
+        response: trace_response(t.response),
+        is_error: match?({:error, _}, t.response)
+      }
+    end)
+  end
+
+  defp error_feed_items(failures) do
+    Enum.map(failures, fn f ->
+      %{
+        kind: :error,
+        at_ms: to_ms(Map.get(f, :inserted_at)),
+        subject: f.subject || "a turn",
+        beat: f.beat,
+        detail: failure_reason(f)
+      }
+    end)
+  end
+
+  # Read the scene stream keeping each event's log position and wall-clock stamp — the
+  # extra axis the interleaved timeline sorts on (prod's EventStore stamps `created_at`).
+  defp stored_recorded(scene_id) do
+    case Commanded.EventStore.stream_forward(App, scene_id) do
+      {:error, _} -> []
+      stream -> Enum.map(stream, fn e -> {e.stream_version, e.data, Map.get(e, :created_at)} end)
+    end
+  end
+
+  # Normalize every source's timestamp to unix-ms for one comparable sort key; a missing
+  # stamp sorts to the front (stable sort keeps such items in their source order).
+  defp to_ms(%DateTime{} = dt), do: DateTime.to_unix(dt, :millisecond)
+
+  defp to_ms(%NaiveDateTime{} = ndt),
+    do: ndt |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix(:millisecond)
+
+  defp to_ms(ms) when is_integer(ms), do: ms
+  defp to_ms(_), do: 0
+
+  # A compact HH:MM:SS (UTC) label for a timeline entry.
+  defp at_label(ms) when is_integer(ms) and ms > 0,
+    do: ms |> DateTime.from_unix!(:millisecond) |> Calendar.strftime("%H:%M:%S")
+
+  defp at_label(_), do: "—"
+
+  # A plain-text rendering of the whole timeline, stashed hidden for the Copy button so
+  # collapsed <details> content comes along too (paste-to-report friendly).
+  defp feed_text(feed), do: Enum.map_join(feed, "\n\n", &entry_text/1)
+
+  defp entry_text(%{kind: :event} = e),
+    do: "[#{at_label(e.at_ms)}] EVENT ##{e.seq} b#{e.beat} #{e.label}\n#{e.detail}"
+
+  defp entry_text(%{kind: :trace} = t),
+    do:
+      "[#{at_label(t.at_ms)}] LLM #{t.subject} · #{t.model} · #{t.outcome}\n" <>
+        "params: #{t.params}\nrequest:\n#{t.request}\nresponse:\n#{t.response}"
+
+  defp entry_text(%{kind: :error} = e),
+    do: "[#{at_label(e.at_ms)}] ERROR #{e.subject} b#{e.beat}\n#{e.detail}"
+
   # Debug view (author-only): the event's struct name and a compact dump of its fields.
   defp debug_kind(e) when is_struct(e), do: e.__struct__ |> Module.split() |> List.last()
   defp debug_kind(_), do: "?"
@@ -887,6 +1000,15 @@ defmodule PolyphonyWeb.PlayLive do
     <div class="play">
       <div class="row play-head">
         <h1>Scene</h1>
+        <button
+          :if={@viewer == :omniscient and (@debug_events or @debug_trace)}
+          id="scene-debug-copy-btn"
+          type="button"
+          class="btn ghost sm"
+          phx-hook="CopyText"
+          data-copy-target="scene-debug-copy"
+          title="Copy the debug timeline to paste elsewhere"
+        >Copy debug</button>
         <div class="spacer"></div>
         <form id="viewer-form" phx-change="view_as">
           <label class="faint" style="display:inline; margin-right:.4rem;">Viewing as</label>
@@ -922,30 +1044,16 @@ defmodule PolyphonyWeb.PlayLive do
       <div class="card transcript-card">
         <div id="transcript" class="transcript" phx-hook="Autoscroll">
           <%= if @viewer == :omniscient and (@debug_events or @debug_trace) do %>
-            <%= if @debug_trace do %>
-              <div class="faint" style="padding:.3rem 0;">Debug: LLM calls — <%= length(@traces) %> (newest first)</div>
-              <details :for={t <- @traces} style="font-family:monospace; font-size:.78rem; margin:.15rem 0;">
-                <summary style="cursor:pointer;"><%= trace_outcome(t.response) %> · <strong><%= t.subject %></strong> · <%= trace_model(t.params) %></summary>
-                <div class="faint" style="margin:.2rem 0;">params: <%= inspect(t.params) %></div>
-                <div style="margin:.2rem 0;">request:</div>
-                <pre style="white-space:pre-wrap; word-break:break-word; max-height:16rem; overflow:auto; background:var(--bg-2); padding:.4rem; border-radius:6px;"><%= trace_request(t.request) %></pre>
-                <div style="margin:.2rem 0;">response:</div>
-                <pre style="white-space:pre-wrap; word-break:break-word; max-height:16rem; overflow:auto; background:var(--bg-2); padding:.4rem; border-radius:6px;"><%= trace_response(t.response) %></pre>
-              </details>
-            <% end %>
-            <%= if @debug_events do %>
-              <div class="faint" style="padding:.3rem 0;">Debug: raw event stream — <%= length(@raw_events) %> events</div>
-              <div
-                :for={{seq, e} <- @raw_events}
-                class="row"
-                style="gap:.5rem; font-family:monospace; font-size:.78rem; align-items:baseline;"
-              >
-                <span class="faint" style="min-width:2.4rem; text-align:right;"><%= seq %></span>
-                <span class="faint" style="min-width:1.8rem;">b<%= event_beat(e) %></span>
-                <span style="min-width:11rem; font-weight:600;"><%= debug_kind(e) %></span>
-                <span style="white-space:pre-wrap; word-break:break-word;"><%= debug_detail(e) %></span>
+            <div class="dbg-head faint">
+              Debug timeline — <%= length(@debug_feed) %> entries
+              <span class="faint">· raw event stream + LLM calls + errors, oldest first (UTC)</span>
+            </div>
+            <pre id="scene-debug-copy" hidden><%= @debug_feed_text %></pre>
+            <div id="debug-timeline">
+              <div :for={entry <- @debug_feed} class={"dbg-entry dbg-#{entry.kind}"}>
+                <%= render_debug_entry(entry) %>
               </div>
-            <% end %>
+            </div>
           <% else %>
           <div :for={{block, i} <- Enum.with_index(turn_blocks(@messages))} id={"blk-#{i}"} class="turn-block">
             <div :for={m <- block.msgs}><%= render_move(m) %></div>
@@ -1044,6 +1152,51 @@ defmodule PolyphonyWeb.PlayLive do
         </form>
       </div>
     </div>
+    """
+  end
+
+  # One debug-timeline entry, stacked (never a horizontal table — unreadable on mobile):
+  # a wrapping meta line, then the detail below it. Entries are separated by a rule via
+  # `.dbg-entry`'s bottom border.
+  defp render_debug_entry(%{kind: :event} = assigns) do
+    ~H"""
+    <div class="dbg-meta">
+      <span class="dbg-time"><%= at_label(@at_ms) %></span>
+      <span class="dbg-tag ev">event</span>
+      <span class="faint">#<%= @seq %> · b<%= @beat %></span>
+      <strong><%= @label %></strong>
+    </div>
+    <pre class="dbg-detail"><%= @detail %></pre>
+    """
+  end
+
+  defp render_debug_entry(%{kind: :trace} = assigns) do
+    ~H"""
+    <details>
+      <summary>
+        <span class="dbg-time"><%= at_label(@at_ms) %></span>
+        <span class={"dbg-tag llm #{if @is_error, do: "err"}"}>LLM</span>
+        <strong><%= @subject %></strong>
+        <span class="faint"><%= @model %> · <%= @outcome %></span>
+      </summary>
+      <div class="dbg-kv faint">params: <%= @params %></div>
+      <div class="dbg-label">request</div>
+      <pre class="dbg-detail"><%= @request %></pre>
+      <div class="dbg-label">response</div>
+      <pre class="dbg-detail"><%= @response %></pre>
+    </details>
+    """
+  end
+
+  defp render_debug_entry(%{kind: :error} = assigns) do
+    ~H"""
+    <div class="dbg-meta">
+      <span class="dbg-time"><%= at_label(@at_ms) %></span>
+      <span class="dbg-tag err">error</span>
+      <strong><%= @subject %></strong>
+      <span :if={@beat} class="faint">b<%= @beat %></span>
+    </div>
+    <div class="dbg-detail err"><%= @detail %></div>
     """
   end
 
