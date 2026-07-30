@@ -281,6 +281,17 @@ resume/raise-cap surface, **B6** export/download hooks, **B9** delete-confirmati
 **B4** notification-prefs UI); and the standing invariant that any *new* event type or
 `Costs`/retrieval/generation seam gets checked for a live caller, not just a test.
 
+**Interactive user-controlled turns (backend-built, FE-unwired) — deliberately deferred.**
+The beat loop fully supports a `user_controlled` slot: `BeatDriver` pauses at that
+character (`awaiting.user` broadcast) and `submit_user_turn`/`pass_turn` resume the walk.
+But the Play composer never consumes that pause — it always does a *free* `CommitPacket`
+at `next_beat`, so setting a character to "I write their turns" has no interactive effect,
+and speaking as a character the Director also drives produces a double turn. Wiring it
+(surface the paused slot; route the composer's Send → `submit_user_turn`, add Pass; show
+whose turn it is) is the path to "I play my character, the AI plays the rest" and to
+multiplayer. Left as-is by choice for now — the workaround is to not speak as a character
+you want the cast to drive.
+
 ---
 
 ## Frontend (LiveView) — FS view inventory

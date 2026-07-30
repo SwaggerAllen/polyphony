@@ -57,6 +57,41 @@ defmodule PolyphonyWeb.PlayTurnsLiveTest do
     |> Enum.map(& &1.content)
   end
 
+  defp commit_action(scene, character, content) do
+    packet = %TurnPacket{
+      moves: [%Move{seq: 1, type: :action, content: content}],
+      self_state: %SelfState{}
+    }
+
+    :ok =
+      App.dispatch(%CommitPacket{
+        scene_id: scene,
+        character_id: character,
+        beat: 1,
+        packet_id: BeatOps.packet_id(scene, 1, character),
+        packet: packet,
+        edited: true
+      })
+  end
+
+  test "an action already naming the actor isn't doubled; a bare one gets the name", %{conn: conn} do
+    scene = "turn-" <> Integer.to_string(System.unique_integer([:positive]))
+    :ok = App.dispatch(%OpenScene{scene_id: scene, opened_beat: 0})
+    :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: "Todd", beat: 1})
+    :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: "Lydia", beat: 1})
+
+    commit_action(scene, "Todd", "Todd snaps his head toward her.")
+    commit_action(scene, "Lydia", "reaches out a trembling hand.")
+
+    {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+    # Third-person content that already opens with the name is shown as-is (no "Todd Todd").
+    assert html =~ "Todd snaps his head toward her."
+    refute html =~ "Todd Todd"
+    # A bare action gets the actor's name prepended.
+    assert html =~ "Lydia reaches out a trembling hand."
+  end
+
   test "turn controls are author-only", %{conn: conn} do
     scene = scene_with_turn("Original line.")
 
