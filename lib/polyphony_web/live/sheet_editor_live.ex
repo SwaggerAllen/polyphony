@@ -836,8 +836,13 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
       <div :if={@boundaries == []} class="faint">No boundaries yet.</div>
       <ul class="rel-list">
-        <li :for={{b, i} <- Enum.with_index(@boundaries)} class="row rel-item">
-          <span><%= boundary_line(b) %></span>
+        <li :for={{b, i} <- Enum.with_index(@boundaries)} class="row rel-item boundary-item">
+          <div class="boundary-parts">
+            <div class="boundary-topic"><strong><%= b.topic %></strong> — <%= stance_label(b.stance) %></div>
+            <div :if={condition_bit(b)} class="faint"><%= condition_bit(b) %></div>
+            <div :if={pressure_bit(b)} class="faint"><%= pressure_bit(b) %></div>
+            <div :if={category_bit(b)} class="faint"><%= category_bit(b) %></div>
+          </div>
           <span class="spacer"></span>
           <button type="button" class="btn danger sm" phx-click="remove_boundary" phx-value-index={i}>Remove</button>
         </li>
@@ -914,15 +919,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
       </datalist>
     </details>
     """
-  end
-
-  # Human-readable one-line summary of a boundary for the list.
-  defp boundary_line(%Boundary{} = b) do
-    extras =
-      [condition_bit(b), pressure_bit(b), category_bit(b)] |> Enum.reject(&is_nil/1)
-
-    suffix = if extras == [], do: "", else: " · " <> Enum.join(extras, " · ")
-    "#{b.topic} — #{stance_label(b.stance)}" <> suffix
   end
 
   defp stance_label(:open), do: "open to it"

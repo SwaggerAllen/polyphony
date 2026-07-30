@@ -952,14 +952,16 @@ input:focus, textarea:focus, select:focus {
   overflow-y: auto;
 }
 
-.play .fail-panel {
-  flex: 0 0 auto;
-  max-height: 30vh;
-  overflow-y: auto;
-  border-color: var(--bad);
+.move.failure {
+  color: var(--bad);
 }
 
-.move.failure {
+/* An inline generation failure, sitting in the transcript at the beat it occurred. */
+
+.turn-fail {
+  border-left: 3px solid var(--bad);
+  padding: .35rem 0 .35rem .6rem;
+  margin: .35rem 0;
   color: var(--bad);
 }
 
@@ -1310,6 +1312,28 @@ input:focus, textarea:focus, select:focus {
 .rel-add {
   gap: .5rem;
   margin-top: .5rem;
+}
+
+/* Library entry controls sit on their own wrapping row under the name, so the
+   edit/archive/delete buttons never overflow the card on a narrow screen. */
+
+.entry-actions {
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-top: .35rem;
+}
+
+/* A boundary rendered as stacked parts (topic, condition, pressure, category), each on
+   its own line — far easier to read than one dense · -separated string. */
+
+.boundary-item {
+  align-items: flex-start;
+}
+
+.boundary-parts {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
 }
 
 /* Block-field editor: paragraphs as focus-styled, auto-growing textareas that read
