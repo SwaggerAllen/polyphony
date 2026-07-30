@@ -21,6 +21,16 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
   defp character(user, sheet),
     do: Library.put(%{owner: Owner.of(user), kind: "character", payload: sheet})
 
+  test "each prose field is a collapsible section", %{conn: conn, user: user} do
+    entry = character(user, %CharacterSheet{name: "Mira", status: :full})
+    {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+    # Block fields render inside open <details> with a summary heading, so a long sheet
+    # can be collapsed section-by-section.
+    assert html =~ ~s(<details class="field-block")
+    assert html =~ ~s(<span class="field-title">Backstory</span>)
+  end
+
   test "a multi-paragraph field loads as separate blocks", %{conn: conn, user: user} do
     entry =
       character(user, %CharacterSheet{

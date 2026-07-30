@@ -831,9 +831,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
       </form>
     </div>
 
-    <div class="card">
-      <div class="row">
-        <h3>Boundaries</h3>
+    <details class="card" open>
+      <summary class="card-summary">Boundaries</summary>
+      <div class="row" style="margin-top:.4rem;">
         <div class="spacer"></div>
         <button
           type="button"
@@ -887,11 +887,11 @@ defmodule PolyphonyWeb.SheetEditorLive do
         </label>
         <button class="btn" type="submit" style="margin-top:.6rem;">Add boundary</button>
       </form>
-    </div>
+    </details>
 
-    <div class="card">
-      <div class="row">
-        <h3>Relationships</h3>
+    <details class="card" open>
+      <summary class="card-summary">Relationships</summary>
+      <div class="row" style="margin-top:.4rem;">
         <div class="spacer"></div>
         <button
           type="button"
@@ -929,7 +929,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
       <datalist id="char-names">
         <option :for={n <- @char_names} value={n}></option>
       </datalist>
-    </div>
+    </details>
     """
   end
 

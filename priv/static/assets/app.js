@@ -8731,6 +8731,7 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
   };
   Hooks2.AutoGrow = {
     grow() {
+      if (this.el.offsetParent === null) return;
       const y = window.scrollY;
       this.el.style.height = "auto";
       this.el.style.height = this.el.scrollHeight + "px";
@@ -8798,6 +8799,18 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
       });
     }
   };
+  document.addEventListener(
+    "toggle",
+    (e) => {
+      const d = e.target;
+      if (d.tagName !== "DETAILS" || !d.open) return;
+      d.querySelectorAll("textarea.para-input").forEach((ta) => {
+        ta.style.height = "auto";
+        ta.style.height = ta.scrollHeight + "px";
+      });
+    },
+    true
+  );
   window.addEventListener(
     "click",
     (e) => {
