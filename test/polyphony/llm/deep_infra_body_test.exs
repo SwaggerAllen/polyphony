@@ -17,6 +17,18 @@ defmodule Polyphony.LLM.DeepInfraBodyTest do
     refute Map.has_key?(body, :response_format)
   end
 
+  test "a prose response tag (:field) does NOT force JSON mode" do
+    # An authoring paragraph regenerate asks for plain prose; forcing json_object here
+    # made the model wrap its paragraph in an object. It must stay unconstrained.
+    body = DeepInfra.build_body(@messages, [response: :field], @cfg)
+    refute Map.has_key?(body, :response_format)
+  end
+
+  test "a JSON authoring tag (:sheet) still forces JSON mode" do
+    body = DeepInfra.build_body(@messages, [response: :sheet], @cfg)
+    assert body.response_format == %{type: "json_object"}
+  end
+
   test "thinking is disabled via the chat-template kwarg unless explicitly on" do
     off = DeepInfra.build_body(@messages, [], @cfg)
     assert off.chat_template_kwargs == %{enable_thinking: false}

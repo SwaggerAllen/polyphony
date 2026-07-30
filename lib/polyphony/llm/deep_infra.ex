@@ -106,14 +106,17 @@ defmodule Polyphony.LLM.DeepInfra do
   defp put_thinking(body, false),
     do: Map.put(body, :chat_template_kwargs, %{enable_thinking: false})
 
-  # Every structured caller (Director decision, character TurnPacket, authoring sheets)
-  # passes a `:response` tag — force OpenAI-compatible JSON mode so the model can't
-  # free-form markdown/prose instead of the JSON object we parse. `nil` (a plain prose
-  # call) leaves the response unconstrained.
-  defp put_response_format(body, nil), do: body
+  # Response tags whose reply is a JSON **object** we parse (Director decision, character
+  # TurnPacket, structured authoring). For these, force OpenAI-compatible JSON mode so the
+  # model can't free-form markdown/prose. Prose tags (`:field` — a regenerated sheet
+  # paragraph) must NOT be forced into JSON, or the model wraps the paragraph in an object
+  # (e.g. `{"thought_process": …}`) to satisfy the format, and the field fills with junk.
+  @json_responses ~w(decision turn_packet autofill sheet relationships reciprocals mentions)a
 
-  defp put_response_format(body, _tag),
+  defp put_response_format(body, tag) when tag in @json_responses,
     do: Map.put(body, :response_format, %{type: "json_object"})
+
+  defp put_response_format(body, _tag), do: body
 
   # DeepInfra service tiers schedule the request: `priority` jumps ahead of standard
   # traffic (faster TTFT during peak demand, avoiding `engine_overloaded`) at 1.5×;
