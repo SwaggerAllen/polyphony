@@ -342,45 +342,42 @@ defmodule Polyphony.Authoring.Autofill do
   def regard_map(source, targets, opts) do
     source = stringify(source)
     self_name = to_string(source["name"] || "this character")
-
-    listed =
-      targets
-      |> Enum.with_index(1)
-      |> Enum.map_join("\n", fn {t, i} -> "#{i}. #{t}" end)
+    listed = Enum.map_join(targets, "\n", &"- #{&1}")
 
     messages = [
       %{
         role: "system",
         content:
-          "You are helping an author connect a role-play cast. For each numbered person " <>
-            "below, write how #{self_name} regards them — a short phrase (\"old rival\", " <>
-            "\"the sister she failed\", \"a debt she can't repay\"), true to the character " <>
-            "and the setting. Return ONLY a JSON array of short strings — one per person, in " <>
-            "the SAME order, no names, no keys."
+          "You are helping an author connect a role-play cast. For each person listed, " <>
+            "write how #{self_name} regards them — a short phrase (\"old rival\", \"the sister " <>
+            "she failed\", \"a debt she can't repay\"), true to the character and the setting. " <>
+            "Return ONLY a JSON object mapping each person's EXACT name to that phrase, e.g. " <>
+            "{\"Jack\": \"old rival\", \"Mara\": \"trusted lieutenant\"}. Every listed person " <>
+            "must appear as a key; do not add anyone else."
       },
       %{
         role: "user",
         content:
           source_block(source) <>
-            "People #{self_name} knows:\n" <> listed <> "\n\nReturn the JSON array."
+            "People #{self_name} knows:\n" <> listed <> "\n\nReturn the JSON object."
       }
     ]
 
-    # Shares the `:reciprocals` response shape (an ordered JSON array of short strings),
-    # so the Mock and the DeepInfra JSON allowlist already handle it.
-    call = [response: :reciprocals, count: length(targets)]
+    # An OBJECT keyed by name (not an ordered array) — this is what DeepInfra's forced
+    # `json_object` mode actually returns, so it parses cleanly, and matching by name is
+    # robust to the model reordering or renaming. `:targets` lets the Mock echo the keys.
+    call = [response: :regards, targets: targets]
 
     with {:ok, text} <- Polyphony.LLM.call(messages, call ++ meter_opts(opts)),
-         {:ok, list} <- decode_array(text) do
+         {:ok, obj} when is_map(obj) <- decode_object(text) do
+      by_name = Map.new(obj, fn {k, v} -> {normalize_name(k), v} end)
+
       map =
-        targets
-        |> Enum.zip(list ++ List.duplicate(nil, max(length(targets) - length(list), 0)))
-        |> Enum.reduce(%{}, fn {target, raw}, acc ->
-          case String.trim(to_string(raw || "")) do
-            "" -> acc
-            r -> Map.put(acc, to_string(target), r)
-          end
-        end)
+        for target <- targets,
+            r = String.trim(to_string(Map.get(by_name, normalize_name(target)) || "")),
+            r != "",
+            into: %{},
+            do: {to_string(target), r}
 
       {:ok, map}
     end

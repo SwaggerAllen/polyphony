@@ -261,18 +261,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
         "" ->
           {:noreply, put_flash(socket, :error, "Give the boundary a topic.")}
 
-        topic ->
-          boundary = %Boundary{
-            topic: topic,
-            stance: parse_stance(params["stance"]),
-            condition: blank_to_nil(params["condition"]),
-            on_pressure: blank_to_nil(params["on_pressure"]),
-            category: parse_category(params["category"])
-          }
-
+        _topic ->
           {:noreply,
            socket
-           |> assign(boundaries: socket.assigns.boundaries ++ [boundary])
+           |> assign(boundaries: socket.assigns.boundaries ++ [Boundary.from_map(params)])
            |> touch()}
       end
     end)
@@ -377,16 +369,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
         {:noreply, put_flash(socket, :info, "No boundaries suggested.")}
 
       list ->
-        boundaries =
-          Enum.map(list, fn b ->
-            %Boundary{
-              topic: b["topic"],
-              stance: parse_stance(b["stance"]),
-              condition: blank_to_nil(b["condition"]),
-              on_pressure: blank_to_nil(b["on_pressure"]),
-              category: parse_category(b["category"])
-            }
-          end)
+        boundaries = Enum.map(list, &Boundary.from_map/1)
 
         {:noreply,
          socket
@@ -959,15 +942,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   defp category_bit(%Boundary{category: nil}), do: nil
   defp category_bit(%Boundary{category: cat}), do: "capped by #{cat}"
-
-  defp parse_stance("open"), do: :open
-  defp parse_stance("conditional"), do: :conditional
-  defp parse_stance(_), do: :closed
-
-  defp parse_category("sexual"), do: :sexual
-  defp parse_category("graphic_violence"), do: :graphic_violence
-  defp parse_category("other"), do: :other
-  defp parse_category(_), do: nil
 
   defp blank_to_nil(value) do
     case String.trim(to_string(value || "")) do

@@ -111,7 +111,7 @@ defmodule Polyphony.LLM.DeepInfra do
   # model can't free-form markdown/prose. Prose tags (`:field` — a regenerated sheet
   # paragraph) must NOT be forced into JSON, or the model wraps the paragraph in an object
   # (e.g. `{"thought_process": …}`) to satisfy the format, and the field fills with junk.
-  @json_responses ~w(decision turn_packet autofill sheet relationships reciprocals mentions boundaries)a
+  @json_responses ~w(decision turn_packet autofill sheet relationships reciprocals mentions boundaries regards)a
 
   defp put_response_format(body, tag) when tag in @json_responses,
     do: Map.put(body, :response_format, %{type: "json_object"})
