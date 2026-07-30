@@ -54,6 +54,36 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
     assert Library.payload(Library.get(entry.id)).backstory == "Raised at sea.\n\nLost her ship."
   end
 
+  test "a pending stub's role is editable and persists on save", %{conn: conn, user: user} do
+    entry =
+      character(user, %CharacterSheet{
+        name: "Bram",
+        role: "old rival",
+        status: :stub
+      })
+
+    {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+    # The pending stub exposes an editable role, pre-filled with the inherited one.
+    assert html =~ "pending"
+    assert html =~ ~s(name="role")
+
+    # Correct the role, then save.
+    view |> form("#stub-role-form") |> render_change(%{"role" => "estranged mentor"})
+    view |> form("form[phx-submit=save]", %{"name" => "Bram"}) |> render_submit()
+
+    saved = Library.payload(Library.get(entry.id))
+    assert saved.role == "estranged mentor"
+    # Saving finalizes the stub.
+    assert saved.status == :full
+  end
+
+  test "a full character shows no pending role editor", %{conn: conn, user: user} do
+    entry = character(user, %CharacterSheet{name: "Mira", status: :full})
+    {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+    refute html =~ ~s(name="role")
+  end
+
   test "expand appends a paragraph without touching the others", %{conn: conn, user: user} do
     entry = character(user, %CharacterSheet{name: "Mira", backstory: "Only para.", status: :full})
     {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")

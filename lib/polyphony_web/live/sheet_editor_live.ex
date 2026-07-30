@@ -56,6 +56,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
          entry: entry,
          sheet: sheet,
          name: sheet.name || "",
+         role: sheet.role || "",
          blocks: blocks_from_sheet(sheet),
          generating: MapSet.new(),
          saved: false,
@@ -81,6 +82,13 @@ defmodule PolyphonyWeb.SheetEditorLive do
     {:noreply, socket |> assign_form(params) |> touch()}
   end
 
+  # Edit a pending stub's one-line role (how they fit / how the source regards them). It
+  # seeds ✨ Generate and is persisted on Save, so authors can correct a stub the Director
+  # or a relationship proposed with a wrong role before finalizing it.
+  def handle_event("set_role", %{"role" => role}, socket) do
+    {:noreply, socket |> assign(role: role) |> touch()}
+  end
+
   def handle_event("save", params, socket) do
     safe(socket, fn ->
       %{current_user: user, entry: %{id: id}} = socket.assigns
@@ -99,6 +107,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
       sheet = %CharacterSheet{
         socket.assigns.sheet
         | name: name,
+          role: blank_to_nil(socket.assigns.role),
           premise: join_blocks(blocks["premise"]),
           appearance: join_blocks(blocks["appearance"]),
           voice: join_blocks(blocks["voice"]),
@@ -414,7 +423,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
     [
       world: socket.assigns.world_context,
       relations: socket.assigns.relations_context,
-      role: socket.assigns.sheet.role,
+      # The live, possibly-edited role (falls back to the stub's inherited one).
+      role: blank_to_nil(socket.assigns.role) || socket.assigns.sheet.role,
       usage_kind: "authoring"
     ] ++ user_attribution(socket)
   end
@@ -692,9 +702,20 @@ defmodule PolyphonyWeb.SheetEditorLive do
     <div :if={@sheet.status != :full} class="card">
       <p class="dim">
         This character is <strong>pending</strong> — it came from another character's
-        relationships<span :if={@sheet.role not in [nil, ""]}> as their <em><%= @sheet.role %></em></span>.
-        Fill in the fields below (write them yourself or use ✨ Generate) and Save to finish it.
+        relationships. Set their role, fill in the fields below (write them yourself or
+        use ✨ Generate), and Save to finish it.
       </p>
+      <form id="stub-role-form" phx-change="set_role">
+        <label>Role <span class="faint">(one line — how they fit; seeds ✨ Generate)</span></label>
+        <input
+          type="text"
+          name="role"
+          value={@role}
+          placeholder="e.g. estranged mentor, harbor smuggler"
+          autocomplete="off"
+          phx-debounce="blur"
+        />
+      </form>
     </div>
 
     <div class="card gen-brief">
@@ -772,10 +793,14 @@ defmodule PolyphonyWeb.SheetEditorLive do
         </li>
       </ul>
 
-      <form id="rel-form" phx-submit="add_relationship" class="row rel-add">
-        <input type="text" name="target" list="char-names" placeholder="Character name…" autocomplete="off" />
-        <input type="text" name="descriptor" placeholder="how they regard them (e.g. estranged mentor)" style="flex:1;" />
-        <button class="btn" type="submit">Add</button>
+      <form id="rel-form" phx-submit="add_relationship" class="rel-add">
+        <label>Character <span class="faint">(existing name, or a new one to stub)</span>
+          <input type="text" name="target" list="char-names" placeholder="Character name…" autocomplete="off" />
+        </label>
+        <label>How they regard them
+          <input type="text" name="descriptor" placeholder="e.g. estranged mentor" />
+        </label>
+        <button class="btn" type="submit" style="margin-top:.4rem;">Add relationship</button>
       </form>
       <datalist id="char-names">
         <option :for={n <- @char_names} value={n}></option>
