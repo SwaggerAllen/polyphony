@@ -12,6 +12,7 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Context.{Store, PgvectorRetriever}
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Authoring.{Autofill, CharacterSheet, QuickBuild}
+  alias Polyphony.Content.CampaignConfig
   alias Polyphony.Director.SceneBrief
   alias Polyphony.LLM.Settings
 
@@ -70,7 +71,8 @@ defmodule PolyphonyWeb.CampaignLive do
       bible_id: world_id,
       bible_name: bible_label(bibles, world_id),
       llm: Settings.from_payload(payload),
-      global_models: global_models()
+      global_models: global_models(),
+      content: CampaignConfig.from_payload(payload)
     )
   end
 
@@ -128,6 +130,25 @@ defmodule PolyphonyWeb.CampaignLive do
         |> Map.put(:premise, params["premise"] || "")
         |> Map.put(:llm, llm)
 
+      {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+      {:noreply, socket |> assign(entry: entry) |> load()}
+    end)
+  end
+
+  # Per-campaign content ceiling (§A5, layer 2). The `adult_content` master gates the
+  # three category sub-toggles; with it off the register is empty regardless. This caps
+  # every character's categorized boundaries at scene assembly (a disabled category is
+  # forced closed) and sets the published content label.
+  def handle_event("update_content", params, socket) do
+    safe(socket, fn ->
+      config = %CampaignConfig{
+        adult_content: params["adult_content"] == "true",
+        sexual: params["sexual"] == "true",
+        graphic_violence: params["graphic_violence"] == "true",
+        other: params["other"] == "true"
+      }
+
+      payload = Map.put(socket.assigns.payload, :content_config, config)
       {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
       {:noreply, socket |> assign(entry: entry) |> load()}
     end)
@@ -217,11 +238,12 @@ defmodule PolyphonyWeb.CampaignLive do
           })
 
         sheets = Enum.map(ready, &Library.payload/1)
+        content_config = CampaignConfig.from_payload(payload)
 
         for {c, sheet} <- Enum.zip(ready, sheets) do
           name = char_name(c)
           :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: name, beat: 1})
-          seed_context(scene_id, name, sheet, premise, bible)
+          seed_context(scene_id, name, sheet, premise, bible, content_config)
         end
 
         # The Director's omniscient brief: the world, the premise, the whole cast, and
@@ -257,7 +279,8 @@ defmodule PolyphonyWeb.CampaignLive do
           published_beat: 0,
           bible: bible,
           characters: characters,
-          arc: []
+          arc: [],
+          content: CampaignConfig.from_payload(payload)
         },
         visibility: "public"
       )
@@ -317,7 +340,7 @@ defmodule PolyphonyWeb.CampaignLive do
      |> put_flash(:error, "Quick build failed: #{inspect(reason(result))}")}
   end
 
-  defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible) do
+  defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible, content_config) do
     ctx =
       Context.materialize(
         scene_id: scene_id,
@@ -325,6 +348,9 @@ defmodule PolyphonyWeb.CampaignLive do
         sheet: sheet,
         premise: premise,
         world_bible: bible,
+        # The campaign content ceiling (§A5): caps this character's categorized
+        # boundaries and renders the enabled register into their frozen prefix.
+        content_config: content_config,
         # Retrieve this character's own distant-scene summaries from pgvector
         # (no-ops to [] without egress / when the embed fails).
         retriever: PgvectorRetriever
@@ -333,7 +359,7 @@ defmodule PolyphonyWeb.CampaignLive do
     Store.put(scene_id, name, ctx)
   end
 
-  defp seed_context(_scene_id, _name, _other, _premise, _bible), do: :ok
+  defp seed_context(_scene_id, _name, _other, _premise, _bible, _content_config), do: :ok
 
   defp maybe_payload(nil), do: nil
   defp maybe_payload(entry), do: Library.payload(entry)
@@ -478,6 +504,30 @@ defmodule PolyphonyWeb.CampaignLive do
             Point a campaign at a better-provisioned DeepInfra model, or set <strong>Priority</strong> to schedule ahead of standard traffic, when the default is overloaded (429 <code>engine_overloaded</code>). Takes effect on the next beat.
           </p>
         </details>
+      </form>
+
+      <form id="campaign-content" phx-change="update_content" style="margin-top:.8rem;">
+        <label class="row" style="gap:.4rem;">
+          <input type="checkbox" name="adult_content" value="true" checked={@content.adult_content} style="width:auto;" />
+          <span><strong>Allow adult content</strong> <span class="faint">(18+ — the campaign ceiling; off keeps every scene all-ages)</span></span>
+        </label>
+        <div :if={@content.adult_content} class="row" style="gap:1.2rem; margin-top:.4rem; margin-left:1.4rem; flex-wrap:wrap;">
+          <label class="row" style="gap:.35rem;">
+            <input type="checkbox" name="sexual" value="true" checked={@content.sexual} style="width:auto;" />
+            <span>Sexual</span>
+          </label>
+          <label class="row" style="gap:.35rem;">
+            <input type="checkbox" name="graphic_violence" value="true" checked={@content.graphic_violence} style="width:auto;" />
+            <span>Graphic violence</span>
+          </label>
+          <label class="row" style="gap:.35rem;">
+            <input type="checkbox" name="other" value="true" checked={@content.other} style="width:auto;" />
+            <span>Other mature themes</span>
+          </label>
+        </div>
+        <p class="faint" style="margin-top:.3rem;">
+          A character boundary tagged with a category is <strong>forced closed</strong> in play unless that category is enabled here — the campaign ceiling caps characterization, never the reverse (§A5). Currently: <strong><%= CampaignConfig.label(@content) %></strong>. Takes effect on the next scene.
+        </p>
       </form>
     </div>
 

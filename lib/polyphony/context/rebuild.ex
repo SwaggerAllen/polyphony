@@ -17,6 +17,7 @@ defmodule Polyphony.Context.Rebuild do
 
   alias Polyphony.{App, Context, Library}
   alias Polyphony.Authoring.CharacterSheet
+  alias Polyphony.Content.CampaignConfig
   alias Polyphony.Context.PgvectorRetriever
   alias Polyphony.Events.SceneOpened
 
@@ -39,6 +40,9 @@ defmodule Polyphony.Context.Rebuild do
           sheet: sheet,
           premise: opened.premise || "",
           world_bible: world_bible(scene_id),
+          # Re-apply the campaign content ceiling (§A5) so a rebuilt context caps the
+          # same boundaries as the original seed — a cache wipe must not re-open them.
+          content_config: content_config(scene_id),
           # Long-tail memory (pgvector by default; no-ops to [] without egress / on failure).
           retriever: retriever()
         )
@@ -86,6 +90,20 @@ defmodule Polyphony.Context.Rebuild do
     end
   rescue
     _ -> []
+  end
+
+  @doc "The scene's campaign content config (§A5), or the all-off default."
+  @spec content_config(term()) :: CampaignConfig.t()
+  def content_config(scene_id) do
+    with %SceneOpened{campaign_id: cid} when not is_nil(cid) <- opened(scene_id),
+         campaign when not is_nil(campaign) <- Library.get(cid),
+         %{} = payload <- Library.payload(campaign) do
+      CampaignConfig.from_payload(payload)
+    else
+      _ -> %CampaignConfig{}
+    end
+  rescue
+    _ -> %CampaignConfig{}
   end
 
   @doc "The scene's campaign world bible (`%WorldBible{}`), or nil."

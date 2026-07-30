@@ -40,9 +40,14 @@ defmodule Polyphony.Authoring.QuickBuildTest do
       assert %CharacterSheet{status: :full} = sheet
       assert sheet.world_bible_id == result.bible.id
       assert sheet.premise not in [nil, ""]
-      # Boundaries are generated too (same as the editor's "Generate all fields").
+      # Boundaries are generated too (same as the editor's "Generate all fields"), and
+      # every generated one is a conditional slow-burn with a real condition.
       assert sheet.boundaries != []
-      assert Enum.all?(sheet.boundaries, &match?(%Boundary{}, &1))
+
+      assert Enum.all?(
+               sheet.boundaries,
+               &match?(%Boundary{stance: :conditional, condition: c} when c not in [nil, ""], &1)
+             )
     end
 
     # Cross-linked: each character regards the other, by stable id AND with a role

@@ -1048,6 +1048,33 @@ defmodule PolyphonyWeb.PlayLive do
   # Group the flat message stream into blocks: a character's turn (one committed
   # packet, all its moves) carries edit/reroll/delete affordances; everything else
   # (world events, entrances) is a plain block.
+  # The transcript as an ordered list of `{:block, block}` and `{:fail, failure}` items,
+  # each failure placed at the beat it occurred (after that beat's turns) rather than in a
+  # standalone pane — so a transient error and its Retry sit where they happened and vanish
+  # when retried. Event blocks (no beat of their own) inherit the last turn's beat so they
+  # keep their place.
+  #
+  # A failure without a beat is a scene-close operation (arc extraction, summarization);
+  # those are emitted at the scene's current beat, so they default to `current_beat` and
+  # land with the latest action rather than at the top. `failures` is [] for non-omniscient
+  # viewers, so nothing shows there.
+  defp transcript_items(messages, failures, current_beat) do
+    {blocks, _} =
+      messages
+      |> turn_blocks()
+      |> Enum.map_reduce(0, fn b, last ->
+        eff = b.beat || last
+        {Map.put(b, :eff_beat, eff), eff}
+      end)
+
+    items = Enum.map(blocks, &{:block, &1}) ++ Enum.map(failures, &{:fail, &1})
+
+    Enum.sort_by(items, fn
+      {:block, b} -> {b.eff_beat, 0}
+      {:fail, f} -> {f.beat || current_beat, 1}
+    end)
+  end
+
   defp turn_blocks(messages) do
     messages
     |> Enum.reduce([], fn m, acc ->
@@ -1174,34 +1201,47 @@ defmodule PolyphonyWeb.PlayLive do
               </div>
             </div>
           <% else %>
-          <div :for={{block, i} <- Enum.with_index(turn_blocks(@messages))} id={"blk-#{i}"} class="turn-block">
-            <div :for={m <- block.msgs}><%= render_move(m) %></div>
+          <%= for {item, i} <- Enum.with_index(transcript_items(@messages, @failures, max(@next_beat - 1, 0))) do %>
+            <%= case item do %>
+              <% {:block, block} -> %>
+                <div id={"blk-#{i}"} class="turn-block">
+                  <div :for={m <- block.msgs}><%= render_move(m) %></div>
 
-            <div
-              :if={@viewer == :omniscient and block.type == :turn and @editing != block.packet_id}
-              class="turn-controls"
-            >
-              <button class="btn ghost xs" phx-click="reroll_turn" phx-value-beat={block.beat} phx-value-character={block.character}>Reroll</button>
-              <button class="btn ghost xs" phx-click="edit_turn" phx-value-packet={block.packet_id}>Edit</button>
-              <button class="btn danger xs" phx-click="delete_turn" phx-value-beat={block.beat} phx-value-character={block.character} phx-value-packet={block.packet_id} data-confirm="Remove this turn?">Delete</button>
-            </div>
+                  <div
+                    :if={@viewer == :omniscient and block.type == :turn and @editing != block.packet_id}
+                    class="turn-controls"
+                  >
+                    <button class="btn ghost xs" phx-click="reroll_turn" phx-value-beat={block.beat} phx-value-character={block.character}>Reroll</button>
+                    <button class="btn ghost xs" phx-click="edit_turn" phx-value-packet={block.packet_id}>Edit</button>
+                    <button class="btn danger xs" phx-click="delete_turn" phx-value-beat={block.beat} phx-value-character={block.character} phx-value-packet={block.packet_id} data-confirm="Remove this turn?">Delete</button>
+                  </div>
 
-            <form
-              :if={@viewer == :omniscient and block.type == :turn and @editing == block.packet_id}
-              id={"edit-#{block.packet_id}"}
-              phx-submit="save_edit"
-              class="turn-edit"
-            >
-              <input type="hidden" name="beat" value={block.beat} />
-              <input type="hidden" name="character" value={block.character} />
-              <input type="hidden" name="packet" value={block.packet_id} />
-              <textarea name="text" rows="2" class="say-input"><%= turn_text(block) %></textarea>
-              <div class="row" style="margin-top:.35rem;">
-                <button class="btn xs" type="submit">Save</button>
-                <button class="btn ghost xs" type="button" phx-click="cancel_edit">Cancel</button>
-              </div>
-            </form>
-          </div>
+                  <form
+                    :if={@viewer == :omniscient and block.type == :turn and @editing == block.packet_id}
+                    id={"edit-#{block.packet_id}"}
+                    phx-submit="save_edit"
+                    class="turn-edit"
+                  >
+                    <input type="hidden" name="beat" value={block.beat} />
+                    <input type="hidden" name="character" value={block.character} />
+                    <input type="hidden" name="packet" value={block.packet_id} />
+                    <textarea name="text" rows="2" class="say-input"><%= turn_text(block) %></textarea>
+                    <div class="row" style="margin-top:.35rem;">
+                      <button class="btn xs" type="submit">Save</button>
+                      <button class="btn ghost xs" type="button" phx-click="cancel_edit">Cancel</button>
+                    </div>
+                  </form>
+                </div>
+              <% {:fail, f} -> %>
+                <div id={"fail-#{i}"} class="turn-block turn-fail">
+                  <span>⚠ Couldn't generate <strong><%= f.subject || "a turn" %></strong>
+                    <span class="faint">— <%= failure_reason(f) %></span></span>
+                  <div :if={f.retryable} class="row" style="margin-top:.35rem;">
+                    <button class="btn sm" phx-click="retry_failure" phx-value-id={f.id}>Retry</button>
+                  </div>
+                </div>
+            <% end %>
+          <% end %>
           <% end %>
         </div>
       </div>
@@ -1221,19 +1261,6 @@ defmodule PolyphonyWeb.PlayLive do
             <button :if={i.resolution.status != :ready} class="btn sm" phx-click="intro_generate" phx-value-name={i.name}>Generate &amp; admit</button>
             <button class="btn ghost sm" phx-click="intro_edit" phx-value-name={i.name}>Edit</button>
             <button class="btn danger sm" phx-click="intro_dismiss" phx-value-name={i.name}>Dismiss</button>
-          </li>
-        </ul>
-      </div>
-
-      <div :if={@failures != []} class="card fail-panel">
-        <ul class="rel-list">
-          <li :for={f <- @failures} class="row rel-item">
-            <span>
-              ⚠ Couldn't generate <strong><%= f.subject || "a turn" %></strong>
-              <span class="faint">— <%= failure_reason(f) %></span>
-            </span>
-            <span class="spacer"></span>
-            <button :if={f.retryable} class="btn sm" phx-click="retry_failure" phx-value-id={f.id}>Retry</button>
           </li>
         </ul>
       </div>

@@ -254,11 +254,14 @@ defmodule PolyphonyWeb.LibraryLive do
     <div :if={@entries != [] and @groups == []} class="list-empty">No matching items. Try a different type or search.</div>
 
     <div :for={g <- @groups} class="card world-group">
-      <div :if={g.world} class="row group-head">
-        <h3><%= entry_name(g.world) %> <span class="faint">· world</span></h3>
-        <.visibility_badge visibility={g.world.visibility} />
-        <div class="spacer"></div>
-        <.entry_controls entry={g.world} />
+      <div :if={g.world} class="group-head">
+        <div class="row">
+          <h3><%= entry_name(g.world) %> <span class="faint">· world</span></h3>
+          <.visibility_badge visibility={g.world.visibility} />
+        </div>
+        <div class="row entry-actions">
+          <.entry_controls entry={g.world} />
+        </div>
       </div>
       <div :if={is_nil(g.world)} class="row group-head">
         <h3 class="faint">No world</h3>
@@ -266,12 +269,15 @@ defmodule PolyphonyWeb.LibraryLive do
 
       <div :if={g.members == []} class="faint member-empty">Nothing in this world yet.</div>
       <ul class="member-list">
-        <li :for={m <- g.members} class="row member">
-          <span><%= entry_name(m) %> <span class="faint">· <%= m.kind %></span></span>
-          <span :if={pending?(m)} class="badge stub">pending</span>
-          <.visibility_badge visibility={m.visibility} />
-          <div class="spacer"></div>
-          <.entry_controls entry={m} />
+        <li :for={m <- g.members} class="member">
+          <div class="row">
+            <span><%= entry_name(m) %> <span class="faint">· <%= m.kind %></span></span>
+            <span :if={pending?(m)} class="badge stub">pending</span>
+            <.visibility_badge visibility={m.visibility} />
+          </div>
+          <div class="row entry-actions">
+            <.entry_controls entry={m} />
+          </div>
         </li>
       </ul>
     </div>

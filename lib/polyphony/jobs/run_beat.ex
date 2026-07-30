@@ -24,7 +24,8 @@ defmodule Polyphony.Jobs.RunBeat do
 
   require Logger
 
-  alias Polyphony.{App, Broadcast}
+  alias Polyphony.{App, Broadcast, Content, Library}
+  alias Polyphony.Content.CampaignConfig
   alias Polyphony.Costs.Attribution
   alias Polyphony.Director
   alias Polyphony.Director.{BeatDriver, BeatOps, BeatPolicy, Proposal, SceneBrief}
@@ -39,7 +40,7 @@ defmodule Polyphony.Jobs.RunBeat do
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     scene_id = args["scene_id"]
-    args = put_attribution(args, scene_id)
+    args = args |> put_attribution(scene_id) |> put_content_register()
     # Per-campaign LLM tuning (§9), resolved fresh each beat so a campaign-screen edit
     # takes effect next beat. Character budget rides args to the cast jobs.
     settings = Settings.for_scene(scene_id)
@@ -243,6 +244,35 @@ defmodule Polyphony.Jobs.RunBeat do
   end
 
   defp register_arg(args), do: args["content_register"] || []
+
+  # Resolve the effective content register once (per beat chain) from the campaign's
+  # content config (§A5), so the Director is told the same ceiling the cast context was
+  # capped by. Rides args as category strings and carries forward to self-chained beats.
+  # `campaign_id` is already on args (put_attribution); nil-safe → empty register.
+  defp put_content_register(args) do
+    if Map.has_key?(args, "content_register") do
+      args
+    else
+      register =
+        args["campaign_id"]
+        |> campaign_content_config()
+        |> Content.register(attested: true)
+        |> Enum.map(&to_string/1)
+
+      Map.put(args, "content_register", register)
+    end
+  end
+
+  defp campaign_content_config(nil), do: %CampaignConfig{}
+
+  defp campaign_content_config(campaign_id) do
+    case Library.get(campaign_id) do
+      %{} = entry -> CampaignConfig.from_payload(Library.payload(entry))
+      _ -> %CampaignConfig{}
+    end
+  rescue
+    _ -> %CampaignConfig{}
+  end
 
   defp next_beat_args(args, scene_id, beat, depth) do
     args

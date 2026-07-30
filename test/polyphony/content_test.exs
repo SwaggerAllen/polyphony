@@ -24,6 +24,25 @@ defmodule Polyphony.ContentTest do
     test "the default config enables nothing" do
       assert CampaignConfig.enabled(%CampaignConfig{}) == []
     end
+
+    test "from_payload reads the stored config, defaulting for legacy campaigns" do
+      config = %CampaignConfig{adult_content: true, sexual: true}
+      assert CampaignConfig.from_payload(%{content_config: config}) == config
+      # A campaign that predates the setting (or a plain-map payload) → all-off default.
+      assert CampaignConfig.from_payload(%{name: "old"}) == %CampaignConfig{}
+
+      assert CampaignConfig.from_payload(%{
+               content_config: %{"adult_content" => true, "other" => true}
+             }) ==
+               %CampaignConfig{adult_content: true, other: true}
+    end
+
+    test "label summarizes the enabled register" do
+      assert CampaignConfig.label(%CampaignConfig{}) == "No adult content"
+
+      assert CampaignConfig.label(%CampaignConfig{adult_content: true, sexual: true}) ==
+               "Adult content: sexual"
+    end
   end
 
   describe "Floor.register/1 — the outermost 18+ ceiling" do

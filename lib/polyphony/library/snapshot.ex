@@ -38,6 +38,9 @@ defmodule Polyphony.Library.Snapshot do
             bible: nil,
             characters: [],
             arc: [],
+            # The campaign's content ceiling (§A5) at publish — records what the published
+            # snapshot permitted, so a consumer/fork carries the same governance label.
+            content: nil,
             include_proposed: false,
             derived_from_id: nil,
             derived_from_version: nil
@@ -73,6 +76,7 @@ defmodule Polyphony.Library.Snapshot do
       bible: Map.get(attrs, :bible),
       characters: Map.get(attrs, :characters, []),
       arc: resolve_arc(Map.get(attrs, :arc, []), published_beat, include_proposed),
+      content: Map.get(attrs, :content),
       include_proposed: include_proposed
     }
   end
