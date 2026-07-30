@@ -35,4 +35,28 @@ defmodule Polyphony.LLM.SettingsTest do
     settings = Settings.from_payload(%{llm: %{director_max_tokens: "not-a-number"}})
     assert settings.director_max_tokens == 2048
   end
+
+  test "model + heavy_model default to nil (use the deployment's global default)" do
+    assert Settings.defaults().model == nil
+    assert Settings.defaults().heavy_model == nil
+  end
+
+  test "campaign model overrides are carried through (both string and atom keys)" do
+    atoms =
+      Settings.from_payload(%{llm: %{model: "org/Good-70B", heavy_model: "org/Bigger-405B"}})
+
+    assert atoms.model == "org/Good-70B"
+    assert atoms.heavy_model == "org/Bigger-405B"
+
+    strings = Settings.from_payload(%{"llm" => %{"model" => "org/Good-70B"}})
+    assert strings.model == "org/Good-70B"
+    # Unset heavy stays nil, not the workhorse.
+    assert strings.heavy_model == nil
+  end
+
+  test "a blank model field coerces back to nil (not an empty override)" do
+    settings = Settings.from_payload(%{llm: %{model: "   ", heavy_model: ""}})
+    assert settings.model == nil
+    assert settings.heavy_model == nil
+  end
 end

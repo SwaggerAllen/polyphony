@@ -72,6 +72,46 @@ defmodule Polyphony.Jobs.GeneratePacketTest do
     assert thoughts == 1, "the packet must be committed exactly once"
   end
 
+  defmodule CapturingProvider do
+    @behaviour Polyphony.LLM.Provider
+
+    @impl true
+    def complete(_messages, opts) do
+      if pid = Application.get_env(:polyphony, :test_reporter),
+        do: send(pid, {:char_opts, opts})
+
+      {:ok, Polyphony.LLM.Stub.canned_packet_json()}
+    end
+  end
+
+  test "a character generation carries the campaign's chosen model (§9)" do
+    prev = Application.get_env(:polyphony, :llm)
+    Application.put_env(:polyphony, :llm, Keyword.put(prev, :provider, CapturingProvider))
+    Application.put_env(:polyphony, :test_reporter, self())
+
+    on_exit(fn ->
+      Application.put_env(:polyphony, :llm, prev)
+      Application.delete_env(:polyphony, :test_reporter)
+    end)
+
+    scene = "job-scene-" <> Integer.to_string(System.unique_integer([:positive]))
+    open_scene_with(scene, ["mira"])
+
+    args = %{
+      "scene_id" => scene,
+      "character_id" => "mira",
+      "beat" => 2,
+      "packet_id" => scene <> "-2-mira",
+      "model" => "campaign/Better-70B",
+      "heavy_model" => "campaign/Heavy-405B"
+    }
+
+    assert :ok = perform_job(GeneratePacket, args)
+
+    assert_received {:char_opts, opts}
+    assert Keyword.get(opts, :model) == "campaign/Better-70B"
+  end
+
   test "a persistent refusal cancels the job rather than looping (§12)" do
     prev = Application.get_env(:polyphony, :llm)
 

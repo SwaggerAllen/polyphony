@@ -58,5 +58,28 @@ defmodule Polyphony.Jobs.RunBeatMaxTokensTest do
     assert_received {:director_opts, opts}
     assert Keyword.get(opts, :max_tokens) == 3000
     assert Keyword.get(opts, :thinking) == false
+    # No campaign model set ⇒ the Director opts carry nil, so the provider falls back
+    # to its global default.
+    assert Keyword.get(opts, :model) == nil
+  end
+
+  test "the Director call carries the campaign's chosen workhorse model" do
+    campaign =
+      Library.put(%{
+        owner_id: "1",
+        kind: "campaign",
+        payload: %{llm: %{model: "org/Better-70B"}}
+      })
+
+    scene = "rbs-" <> Integer.to_string(System.unique_integer([:positive]))
+    :ok = App.dispatch(%OpenScene{scene_id: scene, campaign_id: campaign.id, opened_beat: 0})
+    :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: "mira", beat: 1})
+
+    Oban.Testing.with_testing_mode(:inline, fn ->
+      RunBeat.enqueue(%{"scene_id" => scene, "beat" => 2, "control_hint" => "yield_to_user"})
+    end)
+
+    assert_received {:director_opts, opts}
+    assert Keyword.get(opts, :model) == "org/Better-70B"
   end
 end

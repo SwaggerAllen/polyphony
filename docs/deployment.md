@@ -35,9 +35,18 @@ config is env-driven (`config/runtime.exs`), so you configure it from App Platfo
 without a code change:
 
 - **`DEEPINFRA_API_KEY`** — secret; the adapter sends it as the bearer token.
-- **`DEEPINFRA_MODEL`** — the **workhorse** model, used on every turn.
+- **`DEEPINFRA_MODEL`** — the **workhorse** model, used on every turn. This is the
+  deployment-wide default; a campaign can override it (see below).
 - **`DEEPINFRA_MODEL_HEAVY`** — reserved for character/world generation and the
-  refusal model-swap (falls back to the workhorse if unset).
+  refusal/empty model-swap (falls back to the workhorse if unset).
+
+> **Per-campaign override.** These two env vars set the *global* default. A campaign
+> can point its Director + cast at a different model — and its own heavy fallback —
+> from **Model tuning** on the campaign screen (`:llm` on the campaign payload;
+> `Polyphony.LLM.Settings`). Leave a field blank to inherit the env default. This is
+> the escape hatch when a model's serverless pool is overloaded (a 429 with
+> `engine_overloaded`): move that campaign to a better-provisioned model without a
+> redeploy. Takes effect on the next beat.
 - `DEEPINFRA_EMBED_MODEL` — optional; the embedding model for pgvector memory
   (defaults to `BAAI/bge-large-en-v1.5`). ⚠ **Must be 1024-dim** to match the
   `character_scene_summaries.embedding` column — a different-dimension model needs
