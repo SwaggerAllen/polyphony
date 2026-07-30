@@ -1197,8 +1197,8 @@ defmodule PolyphonyWeb.PlayLive do
             rows="1"
             class="say-input"
             phx-hook="ComposerInput"
+            phx-update="ignore"
             autocomplete="off"
-            disabled={beat_busy?(@progress)}
             placeholder={"Speak as #{@speaker}…  ·  whisper with (whisper to NAME: …)"}
           ></textarea>
           <div class="row composer-actions">

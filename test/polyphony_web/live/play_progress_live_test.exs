@@ -26,12 +26,12 @@ defmodule PolyphonyWeb.PlayProgressLiveTest do
     refute render(view) =~ "writing their turn"
     refute has_element?(view, "button[type=submit][disabled]")
 
-    # Director deciding → shown, and both Send and the composer are blocked.
+    # Director deciding → shown, and Send is blocked (the composer stays editable so the
+    # player can draft their next line; the disabled Send + a server guard block sending).
     Broadcast.announce_progress(s, :director, beat: 2)
     html = render(view)
     assert html =~ "The director is setting the scene"
     assert has_element?(view, "button[type=submit][disabled]")
-    assert has_element?(view, "#say-input[disabled]")
 
     # A named character generating → named, still blocked.
     Broadcast.announce_progress(s, :generating, subject: "Todd", beat: 2)
@@ -44,6 +44,5 @@ defmodule PolyphonyWeb.PlayProgressLiveTest do
     refute html =~ "writing their turn"
     refute html =~ "setting the scene"
     refute has_element?(view, "button[type=submit][disabled]")
-    refute has_element?(view, "#say-input[disabled]")
   end
 end
