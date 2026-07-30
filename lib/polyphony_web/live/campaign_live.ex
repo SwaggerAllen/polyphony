@@ -6,10 +6,12 @@ defmodule PolyphonyWeb.CampaignLive do
   """
   use PolyphonyWeb, :live_view
 
+  require Logger
+
   alias Polyphony.{Library, Owner, Context, App}
   alias Polyphony.Context.{Store, PgvectorRetriever}
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
-  alias Polyphony.Authoring.CharacterSheet
+  alias Polyphony.Authoring.{Autofill, CharacterSheet, QuickBuild}
   alias Polyphony.Director.SceneBrief
   alias Polyphony.LLM.Settings
 
@@ -17,7 +19,18 @@ defmodule PolyphonyWeb.CampaignLive do
     entry = Library.get(id)
 
     if entry && entry.kind == "campaign" do
-      {:ok, socket |> assign(page_title: "Campaign", entry: entry) |> load()}
+      {:ok,
+       socket
+       |> assign(
+         page_title: "Campaign",
+         entry: entry,
+         building: false,
+         expanding_premise: false,
+         qb_world: "",
+         qb_seeds: [""],
+         qb_suggest: true
+       )
+       |> load()}
     else
       {:ok, socket |> put_flash(:error, "Campaign not found.") |> redirect(to: ~p"/library")}
     end
@@ -120,6 +133,66 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
+  # ✨ Expand the premise: deepen whatever's saved, grounded in the world + cast.
+  def handle_event("expand_premise", _params, socket) do
+    safe(socket, fn ->
+      opts =
+        [current: socket.assigns.payload[:premise] || ""] ++
+          premise_context(socket) ++ meter_attribution(socket)
+
+      {:noreply,
+       socket
+       |> assign(expanding_premise: true)
+       |> start_async(:premise, fn -> Autofill.generate_campaign_premise(opts) end)}
+    end)
+  end
+
+  # Keep the Quick Build form's fields in the socket so add/remove-row re-renders don't
+  # drop what's been typed. Blurring an input (phx-debounce="blur") syncs it here.
+  def handle_event("sync_quick_build", params, socket) do
+    {:noreply,
+     assign(socket,
+       qb_world: params["world_seed"] || socket.assigns.qb_world,
+       qb_seeds: seeds_param(params["char_seed"], socket.assigns.qb_seeds),
+       qb_suggest: params["suggest_offscreen"] == "true"
+     )}
+  end
+
+  def handle_event("add_seed", _params, socket) do
+    {:noreply, assign(socket, qb_seeds: socket.assigns.qb_seeds ++ [""])}
+  end
+
+  def handle_event("remove_seed", %{"index" => i}, socket) do
+    seeds = List.delete_at(socket.assigns.qb_seeds, String.to_integer(i))
+    {:noreply, assign(socket, qb_seeds: if(seeds == [], do: [""], else: seeds))}
+  end
+
+  # Quick Build: from a world seed and one seed per character, generate a world, a cast,
+  # cross-linked relationships, and a premise — all persisted — then attach them here.
+  def handle_event("quick_build", params, socket) do
+    safe(socket, fn ->
+      seeds =
+        params["char_seed"]
+        |> List.wrap()
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(&(&1 == ""))
+
+      opts =
+        [
+          owner: socket.assigns.owner,
+          world_seed: params["world_seed"] || "",
+          character_seeds: seeds,
+          suggest_offscreen: params["suggest_offscreen"] == "true",
+          campaign_id: socket.assigns.entry.id
+        ] ++ meter_attribution(socket)
+
+      {:noreply,
+       socket
+       |> assign(building: true)
+       |> start_async(:quick_build, fn -> QuickBuild.build(opts) end)}
+    end)
+  end
+
   def handle_event("start_scene", _params, socket) do
     safe(socket, fn ->
       %{entry: entry, payload: payload, cast: cast} = socket.assigns
@@ -193,6 +266,54 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
+  def handle_async(:premise, {:ok, {:ok, text}}, socket) do
+    payload = Map.put(socket.assigns.payload, :premise, text)
+    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+
+    {:noreply, socket |> assign(entry: entry, expanding_premise: false) |> load()}
+  end
+
+  def handle_async(:premise, result, socket) do
+    Logger.warning("[campaign] premise generation failed: #{inspect(result)}")
+
+    {:noreply,
+     socket
+     |> assign(expanding_premise: false)
+     |> put_flash(:error, "Premise generation failed: #{inspect(reason(result))}")}
+  end
+
+  def handle_async(:quick_build, {:ok, {:ok, result}}, socket) do
+    %{bible: bible, characters: chars, premise: premise} = result
+    existing = cast_ids(socket.assigns.payload)
+    ids = Enum.uniq(existing ++ Enum.map(chars, & &1.id))
+
+    payload =
+      socket.assigns.payload
+      |> Map.put(:bible_id, bible.id)
+      |> Map.put(:character_ids, ids)
+      |> Map.put(:premise, premise)
+
+    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+
+    {:noreply,
+     socket
+     |> assign(entry: entry, building: false, qb_world: "", qb_seeds: [""], qb_suggest: true)
+     |> load()
+     |> put_flash(
+       :info,
+       "Built a world, #{length(chars)} character(s), and a premise. Open each to flesh it out."
+     )}
+  end
+
+  def handle_async(:quick_build, result, socket) do
+    Logger.warning("[campaign] quick build failed: #{inspect(result)}")
+
+    {:noreply,
+     socket
+     |> assign(building: false)
+     |> put_flash(:error, "Quick build failed: #{inspect(reason(result))}")}
+  end
+
   defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible) do
     ctx =
       Context.materialize(
@@ -236,6 +357,52 @@ defmodule PolyphonyWeb.CampaignLive do
     %{workhorse: workhorse, heavy: get_in(llm, [:models, :heavy])}
   end
 
+  # Grounding for premise generation: the attached world (as the editor display map)
+  # and the cast's names + one-line premises.
+  defp premise_context(socket) do
+    world =
+      case socket.assigns.bible_id && Library.get(socket.assigns.bible_id) do
+        %{} = entry -> world_display(Library.payload(entry))
+        _ -> nil
+      end
+
+    cast =
+      for c <- socket.assigns.cast do
+        s = Library.payload(c)
+        %{"name" => char_name(c), "premise" => Map.get(s, :premise)}
+      end
+
+    [world: world, cast: cast]
+  end
+
+  defp world_display(wb) do
+    %{
+      "name" => Map.get(wb, :name) || "",
+      "setting" => Map.get(wb, :setting) || "",
+      "tone" => Map.get(wb, :tone) || "",
+      "rules" => Enum.join(Map.get(wb, :rules) || [], "\n"),
+      "starting_canon" => Enum.join(Map.get(wb, :starting_canon) || [], "\n")
+    }
+  end
+
+  # Usage attribution for a metered generation call (provider defaults in Autofill).
+  defp meter_attribution(socket) do
+    case socket.assigns.current_user do
+      %{id: id} -> [user_id: id]
+      _ -> []
+    end
+  end
+
+  defp reason({:ok, {:error, r}}), do: r
+  defp reason({:exit, r}), do: r
+  defp reason(other), do: other
+
+  # The `char_seed[]` params: a list when several rows exist, a bare string for one,
+  # nil when the form omitted them (a change from another field) — fall back then.
+  defp seeds_param(list, _fallback) when is_list(list), do: list
+  defp seeds_param(str, _fallback) when is_binary(str), do: [str]
+  defp seeds_param(_, fallback), do: fallback
+
   def render(assigns) do
     ~H"""
     <h1><%= if @payload[:name] in [nil, ""], do: "Untitled campaign", else: @payload[:name] %></h1>
@@ -244,7 +411,19 @@ defmodule PolyphonyWeb.CampaignLive do
       <form id="campaign-details" phx-change="update_details">
         <label class="gen-label"><span>Name</span></label>
         <input type="text" name="name" value={@payload[:name]} placeholder="Name this campaign…" phx-debounce="blur" />
-        <label>Premise <span class="faint">(what the story is about)</span></label>
+        <div class="row gen-label">
+          <label>Premise <span class="faint">(what the story is about)</span></label>
+          <span class="spacer"></span>
+          <button
+            type="button"
+            class="btn sm ghost"
+            phx-click="expand_premise"
+            disabled={@expanding_premise}
+            title="Deepen the premise with AI, grounded in the world and cast"
+          >
+            <%= if @expanding_premise, do: "✨ …", else: "✨ Expand" %>
+          </button>
+        </div>
         <textarea name="premise" phx-debounce="blur"><%= @payload[:premise] %></textarea>
 
         <details style="margin-top:.6rem;">
@@ -285,6 +464,63 @@ defmodule PolyphonyWeb.CampaignLive do
       </form>
     </div>
 
+    <details class="card" open={@cast == [] and @bible_id == nil}>
+      <summary class="card-summary">Quick build <span class="faint">(scaffold a world, cast &amp; premise)</span></summary>
+      <p class="dim" style="margin-top:.4rem;">
+        Seed a world and one character per line; we'll generate each — like ✨ Generate-all on
+        every editor — cross-link the cast's relationships, and draft a premise. Everything lands
+        in your Library, ready to open and flesh out.
+      </p>
+      <form id="quick-build" phx-submit="quick_build" phx-change="sync_quick_build">
+        <label>World seed <span class="faint">(setting, tone, a hook)</span></label>
+        <textarea
+          name="world_seed"
+          rows="2"
+          phx-debounce="blur"
+          placeholder="e.g. A rain-drowned harbor city where debts are paid in memories."
+        ><%= @qb_world %></textarea>
+
+        <label style="margin-top:.5rem;">Characters <span class="faint">(one concept each)</span></label>
+        <div :for={{seed, i} <- Enum.with_index(@qb_seeds)} class="row rel-add" style="margin-top:.35rem;">
+          <input
+            type="text"
+            name="char_seed[]"
+            value={seed}
+            phx-debounce="blur"
+            placeholder="e.g. a disgraced harbor-master who sold her own past"
+            style="flex:1;"
+          />
+          <button
+            type="button"
+            class="btn danger sm"
+            phx-click="remove_seed"
+            phx-value-index={i}
+            disabled={length(@qb_seeds) <= 1}
+            title="Remove this character"
+          >
+            ✕
+          </button>
+        </div>
+        <button type="button" class="btn xs ghost" phx-click="add_seed" style="margin-top:.35rem;">
+          + character
+        </button>
+
+        <label class="row" style="gap:.4rem; margin-top:.6rem;">
+          <input type="checkbox" name="suggest_offscreen" value="true" checked={@qb_suggest} style="width:auto;" />
+          <span>Also suggest off-screen relationships <span class="faint">(stubs mentors, rivals &amp; family for each character)</span></span>
+        </label>
+
+        <div class="row" style="margin-top:.7rem;">
+          <button class="btn" type="submit" disabled={@building}>
+            <%= if @building, do: "✨ Building…", else: "✨ Quick build" %>
+          </button>
+          <span :if={@building} class="faint" style="margin-left:.5rem;">
+            Generating world, cast, and premise — this can take a moment.
+          </span>
+        </div>
+      </form>
+    </details>
+
     <div class="card">
       <div class="row">
         <h3>Cast</h3>
@@ -298,6 +534,7 @@ defmodule PolyphonyWeb.CampaignLive do
           <span><%= char_name(c) %></span>
           <span :if={pending?(c)} class="badge stub">pending</span>
           <span class="spacer"></span>
+          <a class="btn ghost sm" href={~p"/authoring/character/#{c.id}"}>Edit</a>
           <button class="btn danger sm" phx-click="remove_character" phx-value-id={c.id}>Remove</button>
         </li>
       </ul>
@@ -321,7 +558,8 @@ defmodule PolyphonyWeb.CampaignLive do
       <div class="row">
         <h3>World</h3>
         <div class="spacer"></div>
-        <span class="faint"><%= @bible_name || "no world attached" %></span>
+        <a :if={@bible_id} class="btn ghost sm" href={~p"/authoring/bible/#{@bible_id}"}>Edit world</a>
+        <span :if={is_nil(@bible_id)} class="faint">no world attached</span>
       </div>
       <p class="dim">The world bible grounds the setting for this campaign's scenes and its published snapshot.</p>
       <form id="campaign-world" phx-change="select_world">

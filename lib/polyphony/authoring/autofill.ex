@@ -330,6 +330,120 @@ defmodule Polyphony.Authoring.Autofill do
   end
 
   @doc """
+  Generate how `source` regards each of the named `targets` — the directional
+  descriptor for a relationship (`source → target`). Used by Quick Build to cross-link
+  a freshly-built cast: each character gets a one-line regard toward every other. Returns
+  `{:ok, %{target_name => descriptor}}`, only the targets that came back non-empty. An
+  empty `targets` list short-circuits without a provider call.
+  """
+  @spec regard_map(map(), [String.t()], keyword()) :: {:ok, map()} | {:error, term()}
+  def regard_map(_source, [], _opts), do: {:ok, %{}}
+
+  def regard_map(source, targets, opts) do
+    source = stringify(source)
+    self_name = to_string(source["name"] || "this character")
+
+    listed =
+      targets
+      |> Enum.with_index(1)
+      |> Enum.map_join("\n", fn {t, i} -> "#{i}. #{t}" end)
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author connect a role-play cast. For each numbered person " <>
+            "below, write how #{self_name} regards them — a short phrase (\"old rival\", " <>
+            "\"the sister she failed\", \"a debt she can't repay\"), true to the character " <>
+            "and the setting. Return ONLY a JSON array of short strings — one per person, in " <>
+            "the SAME order, no names, no keys."
+      },
+      %{
+        role: "user",
+        content:
+          source_block(source) <>
+            "People #{self_name} knows:\n" <> listed <> "\n\nReturn the JSON array."
+      }
+    ]
+
+    # Shares the `:reciprocals` response shape (an ordered JSON array of short strings),
+    # so the Mock and the DeepInfra JSON allowlist already handle it.
+    call = [response: :reciprocals, count: length(targets)]
+
+    with {:ok, text} <- Polyphony.LLM.call(messages, call ++ meter_opts(opts)),
+         {:ok, list} <- decode_array(text) do
+      map =
+        targets
+        |> Enum.zip(list ++ List.duplicate(nil, max(length(targets) - length(list), 0)))
+        |> Enum.reduce(%{}, fn {target, raw}, acc ->
+          case String.trim(to_string(raw || "")) do
+            "" -> acc
+            r -> Map.put(acc, to_string(target), r)
+          end
+        end)
+
+      {:ok, map}
+    end
+  end
+
+  @doc """
+  Generate (or expand) a **campaign premise** — the one-paragraph pitch of what the
+  story is about — grounded in the campaign's world and cast. With `opts[:current]`
+  set to an existing premise, it *deepens* that premise instead of replacing it (the
+  ✨ Expand action); otherwise it writes a fresh one. `opts[:world]` is the world-bible
+  display map; `opts[:cast]` a list of `%{"name","premise"}` maps. Returns `{:ok, text}`.
+  """
+  @spec generate_campaign_premise(keyword()) :: {:ok, String.t()} | {:error, term()}
+  def generate_campaign_premise(opts \\ []) do
+    world = opts[:world]
+    cast = opts[:cast] || []
+    current = opts[:current]
+
+    instruction =
+      case current do
+        s when is_binary(s) and s != "" ->
+          "The premise so far:\n#{s}\n\nDeepen and sharpen it — raise the stakes and make " <>
+            "the central tension concrete, without contradicting what's there. Return the " <>
+            "revised premise as one paragraph."
+
+        _ ->
+          "Write the premise: one vivid paragraph naming the central tension and what's at " <>
+            "stake for this cast. Return only the paragraph."
+      end
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author frame a role-play campaign. Write a premise — what the " <>
+            "story is about — grounded in the world and cast below. Return only the prose: no " <>
+            "title, no label, no quotes, no JSON."
+      },
+      %{
+        role: "user",
+        content: world_block(world) <> campaign_cast_block(cast) <> instruction
+      }
+    ]
+
+    with {:ok, text} <- Polyphony.LLM.call(messages, [response: :field] ++ meter_opts(opts)) do
+      {:ok, String.trim(text)}
+    end
+  end
+
+  defp campaign_cast_block([]), do: ""
+
+  defp campaign_cast_block(cast) do
+    lines =
+      Enum.map_join(cast, "\n", fn c ->
+        premise = c["premise"] || c[:premise]
+        regard = if premise in [nil, ""], do: "", else: " — #{premise}"
+        "- #{c["name"] || c[:name]}#{regard}"
+      end)
+
+    "The cast:\n" <> lines <> "\n\n"
+  end
+
+  @doc """
   Extract the proper names of **people/characters** mentioned in `texts` (a scene's
   committed prose) — not places, objects, or groups. Returns `{:ok, [name]}`, de-duped
   case-insensitively. Empty input short-circuits without a provider call. The caller
