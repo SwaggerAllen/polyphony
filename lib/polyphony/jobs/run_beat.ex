@@ -24,7 +24,7 @@ defmodule Polyphony.Jobs.RunBeat do
 
   require Logger
 
-  alias Polyphony.App
+  alias Polyphony.{App, Broadcast}
   alias Polyphony.Costs.Attribution
   alias Polyphony.Director
   alias Polyphony.Director.{BeatDriver, BeatOps, BeatPolicy, Proposal, SceneBrief}
@@ -60,6 +60,10 @@ defmodule Polyphony.Jobs.RunBeat do
 
     members = BeatOps.members_now(scene_id, beat)
 
+    # The Director is deciding the beat now — tell the play view so it can show it and
+    # block input. `drive` and the cast walk take it from here (generating/idle).
+    Broadcast.announce_progress(scene_id, :director, beat: beat)
+
     heavy = settings.heavy_model || heavy_model()
 
     case decide_with_fallback(decide_opts(args, scene_id, beat, members, settings), beat, heavy) do
@@ -83,6 +87,8 @@ defmodule Polyphony.Jobs.RunBeat do
         # Director failure is the serious one (§12): retry with backoff, and if it
         # keeps failing fall back to yielding — never guess a cast.
         Logger.warning("director decision failed at beat #{beat}: #{inspect(reason)}")
+        # Clear the busy indicator; an Oban retry re-announces :director on its next run.
+        Broadcast.announce_progress(scene_id, :idle, beat: beat)
         {:error, reason}
     end
   end
@@ -125,11 +131,13 @@ defmodule Polyphony.Jobs.RunBeat do
       enqueue(next_beat_args(args, scene_id, beat, depth))
     else
       Logger.info("beat #{beat}: truncated at depth cap; yielding")
+      Broadcast.announce_progress(scene_id, :idle, beat: beat)
     end
   end
 
-  defp drive(:unchanged, %{cast: []}, _args, _scene_id, beat, _depth, _max_depth) do
+  defp drive(:unchanged, %{cast: []}, _args, scene_id, beat, _depth, _max_depth) do
     Logger.info("beat #{beat}: empty cast; yielding to user")
+    Broadcast.announce_progress(scene_id, :idle, beat: beat)
   end
 
   defp drive(:unchanged, resolved, args, scene_id, beat, depth, max_depth) do

@@ -257,10 +257,13 @@ pre { padding: .75rem; overflow-x: auto; }
    Debug drawer — a floating server-log viewer (bring-up aid, gated by
    :debug_drawer). Fixed bottom-right, out of the content flow.
    ──────────────────────────────────────────────────────────────────────────── */
-.debug-drawer { position: fixed; right: 1rem; bottom: 1rem; z-index: 9999; font-size: .8rem; }
+/* Flush to the very bottom-right corner so the collapsed opener never sits on top of
+   the composer's Send/Continue buttons. */
+.debug-drawer { position: fixed; right: 0; bottom: 0; z-index: 9999; font-size: .8rem; }
 .debug-drawer-toggle {
   background: var(--bg-3); color: var(--fg-dim); border: 1px solid var(--border);
-  border-radius: 999px; padding: .4rem .8rem; cursor: pointer;
+  border-right: none; border-bottom: none;
+  border-radius: 8px 0 0 0; padding: .35rem .6rem; cursor: pointer;
   box-shadow: 0 2px 8px rgba(0,0,0,.4);
 }
 .debug-drawer-toggle:hover { color: var(--fg); }
