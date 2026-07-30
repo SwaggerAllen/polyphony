@@ -112,7 +112,7 @@ defmodule PolyphonyWeb.BlockField do
           class="para-input"
           rows="1"
           phx-hook="AutoGrow"
-          phx-debounce="blur"
+          phx-debounce="600"
           placeholder={"New #{@unit}…"}
         ><%= b %></textarea>
         <div class="para-controls">

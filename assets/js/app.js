@@ -30,15 +30,25 @@ Hooks.Autoscroll = {
 // paragraphs are fully readable. Used by the block-field editor.
 Hooks.AutoGrow = {
   grow() {
+    // Setting height:auto momentarily collapses the textarea to one row; across many
+    // fields that collapse/expand yanks the whole page. Preserve the scroll position
+    // around the reflow so growing never scrolls the page.
+    const y = window.scrollY
     this.el.style.height = "auto"
     this.el.style.height = this.el.scrollHeight + "px"
+    this.last = this.el.value
+    if (window.scrollY !== y) window.scrollTo(window.scrollX, y)
   },
   mounted() {
+    this.last = this.el.value
     this.grow()
     this.el.addEventListener("input", () => this.grow())
   },
   updated() {
-    this.grow()
+    // Only re-measure when the value actually changed. A re-render that merely flipped a
+    // Generate button's label must NOT trigger a collapse/expand (the disruptive scroll
+    // the user saw on every generate click and completion).
+    if (this.el.value !== this.last) this.grow()
   },
 }
 

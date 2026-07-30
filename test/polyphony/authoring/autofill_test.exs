@@ -217,6 +217,59 @@ defmodule Polyphony.Authoring.AutofillTest do
     end
   end
 
+  describe "suggest_boundaries/2" do
+    test "returns normalized boundary maps (topic + valid stance/category)" do
+      assert {:ok, boundaries} =
+               Autofill.suggest_boundaries(%{"name" => "Mira", "premise" => "a wary smuggler"},
+                 provider: Polyphony.LLM.Mock
+               )
+
+      assert is_list(boundaries) and boundaries != []
+      assert Enum.all?(boundaries, &(is_binary(&1["topic"]) and &1["topic"] != ""))
+      assert Enum.all?(boundaries, &(&1["stance"] in ~w(closed conditional open)))
+
+      assert Enum.all?(
+               boundaries,
+               &(&1["category"] in ["", "sexual", "graphic_violence", "other"])
+             )
+    end
+
+    test "an out-of-range stance/category is normalized, not passed through" do
+      array =
+        {:ok,
+         Jason.encode!([
+           %{"topic" => "killing", "stance" => "maybe", "category" => "gore"}
+         ])}
+
+      assert {:ok, [b]} =
+               Autofill.suggest_boundaries(%{"name" => "Mira"},
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: array
+               )
+
+      assert b["stance"] == "closed"
+      assert b["category"] == ""
+    end
+
+    test "excludes topics the character already holds" do
+      array =
+        {:ok,
+         Jason.encode!([
+           %{"topic" => "killing", "stance" => "closed"},
+           %{"topic" => "lying", "stance" => "open"}
+         ])}
+
+      existing = [%Polyphony.Authoring.CharacterSheet.Boundary{topic: "killing", stance: :closed}]
+
+      assert {:ok, [%{"topic" => "lying"}]} =
+               Autofill.suggest_boundaries(%{"name" => "Mira"},
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: array,
+                 existing: existing
+               )
+    end
+  end
+
   describe "suggest_relationships/2" do
     test "returns target/descriptor suggestions" do
       assert {:ok, suggestions} =

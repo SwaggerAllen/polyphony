@@ -186,6 +186,56 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
 
       assert html =~ "Give the boundary a topic"
     end
+
+    # The metered suggestion write to the cost ledger logs a sandbox-ownership error from
+    # the async task (best-effort; a no-op in prod with a real connection) — capture it.
+    @tag :capture_log
+    test "✨ Suggest adds AI-proposed boundaries to the list", %{conn: conn, user: user} do
+      entry = character(user, %CharacterSheet{name: "Rell", status: :full})
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      view |> element("button[phx-click=suggest_boundaries]") |> render_click()
+      html = render_async(view)
+
+      # A suggested boundary landed (the Mock returns a conditional one held-until-earned).
+      assert html =~ "held until earned"
+
+      view |> form("form[phx-submit=save]", %{name: "Rell"}) |> render_submit()
+      assert Library.payload(Library.get(entry.id)).boundaries != []
+    end
+
+    test "Boundaries renders before Relationships", %{conn: conn, user: user} do
+      entry = character(user, %CharacterSheet{name: "Rell", status: :full})
+      {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      bnd = :binary.match(html, "Boundaries") |> elem(0)
+      rel = :binary.match(html, "Relationships") |> elem(0)
+      assert bnd < rel
+    end
+  end
+
+  describe "generate all fields" do
+    @tag :capture_log
+    test "also populates boundaries and relationships when empty", %{conn: conn, user: user} do
+      entry = character(user, %CharacterSheet{name: "", status: :full})
+      {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      # Both cards start empty.
+      assert html =~ "No relationships yet."
+      assert html =~ "No boundaries yet."
+
+      view
+      |> form("form[phx-submit=generate_all]", %{brief: "a wary harbor smuggler"})
+      |> render_submit()
+
+      # First await settles the fields task, whose completion *chains* the relationship
+      # and boundary suggestions; the second await settles those.
+      render_async(view)
+      html = render_async(view)
+
+      refute html =~ "No relationships yet."
+      refute html =~ "No boundaries yet."
+    end
   end
 
   describe "world bible editor" do

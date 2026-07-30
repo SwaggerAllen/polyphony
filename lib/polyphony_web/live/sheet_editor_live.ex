@@ -288,15 +288,38 @@ defmodule PolyphonyWeb.SheetEditorLive do
   end
 
   def handle_event("suggest_relationships", _params, socket) do
-    safe(socket, fn ->
-      current = current_values(socket)
-      opts = [existing: socket.assigns.relationships] ++ gen_opts(socket)
+    safe(socket, fn -> {:noreply, suggest_relationships(socket)} end)
+  end
 
-      {:noreply,
-       socket
-       |> mark("relationships", true)
-       |> start_async(:suggest_rel, fn -> Autofill.suggest_relationships(current, opts) end)}
-    end)
+  def handle_event("suggest_boundaries", _params, socket) do
+    safe(socket, fn -> {:noreply, suggest_boundaries(socket)} end)
+  end
+
+  defp suggest_relationships(socket) do
+    current = current_values(socket)
+    opts = [existing: socket.assigns.relationships] ++ gen_opts(socket)
+
+    socket
+    |> mark("relationships", true)
+    |> start_async(:suggest_rel, fn -> Autofill.suggest_relationships(current, opts) end)
+  end
+
+  defp suggest_boundaries(socket) do
+    current = current_values(socket)
+    opts = [existing: socket.assigns.boundaries] ++ gen_opts(socket)
+
+    socket
+    |> mark("boundaries", true)
+    |> start_async(:suggest_bnd, fn -> Autofill.suggest_boundaries(current, opts) end)
+  end
+
+  # Auto-suggest on generate-all only when the card is empty — never clobber authored ones.
+  defp maybe_suggest_relationships(socket) do
+    if socket.assigns.relationships == [], do: suggest_relationships(socket), else: socket
+  end
+
+  defp maybe_suggest_boundaries(socket) do
+    if socket.assigns.boundaries == [], do: suggest_boundaries(socket), else: socket
   end
 
   # ── Async generation results ──────────────────────────────────────────────────
@@ -308,7 +331,17 @@ defmodule PolyphonyWeb.SheetEditorLive do
       end)
 
     name = if values["name"] in [nil, ""], do: socket.assigns.name, else: values["name"]
-    {:noreply, socket |> assign(name: name, blocks: blocks) |> mark("all", false) |> touch()}
+
+    # "Generate all fields" also fills relationships and boundaries when they're empty
+    # (a fresh character), so one click drafts the whole sheet. Existing ones are left
+    # alone — the author can top them up with each card's ✨ Suggest.
+    {:noreply,
+     socket
+     |> assign(name: name, blocks: blocks)
+     |> mark("all", false)
+     |> touch()
+     |> maybe_suggest_relationships()
+     |> maybe_suggest_boundaries()}
   end
 
   def handle_async(:gen_all, result, socket), do: {:noreply, gen_failed(socket, "all", result)}
@@ -335,6 +368,39 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   def handle_async({:gen_block, f, idx}, result, socket),
     do: {:noreply, gen_failed(socket, "#{f}:#{idx}", result)}
+
+  def handle_async(:suggest_bnd, {:ok, {:ok, suggestions}}, socket) do
+    socket = mark(socket, "boundaries", false)
+
+    case suggestions do
+      [] ->
+        {:noreply, put_flash(socket, :info, "No boundaries suggested.")}
+
+      list ->
+        boundaries =
+          Enum.map(list, fn b ->
+            %Boundary{
+              topic: b["topic"],
+              stance: parse_stance(b["stance"]),
+              condition: blank_to_nil(b["condition"]),
+              on_pressure: blank_to_nil(b["on_pressure"]),
+              category: parse_category(b["category"])
+            }
+          end)
+
+        {:noreply,
+         socket
+         |> assign(boundaries: socket.assigns.boundaries ++ boundaries)
+         |> touch()
+         |> put_flash(
+           :info,
+           "Added #{length(boundaries)} suggested boundary(ies). Review and Save."
+         )}
+    end
+  end
+
+  def handle_async(:suggest_bnd, result, socket),
+    do: {:noreply, gen_failed(socket, "boundaries", result)}
 
   def handle_async(:suggest_rel, {:ok, {:ok, suggestions}}, socket) do
     socket = mark(socket, "relationships", false)
@@ -746,7 +812,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
     <div class="card">
       <form id="sheet-form" phx-submit="save" phx-change="sync">
         <label class="gen-label"><span>Name</span></label>
-        <input type="text" name="name" value={@name} phx-debounce="blur" />
+        <input type="text" name="name" value={@name} phx-debounce="600" />
 
         <.block_field
           :for={{f, label} <- field_specs()}
@@ -762,6 +828,64 @@ defmodule PolyphonyWeb.SheetEditorLive do
           <span class="spacer"></span>
           <a class="btn ghost" href={~p"/library"} data-confirm={leave_confirm(@dirty)}>Back to library</a>
         </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <h3>Boundaries</h3>
+        <div class="spacer"></div>
+        <button
+          type="button"
+          class="btn sm ghost"
+          phx-click="suggest_boundaries"
+          disabled={busy?(@generating, "boundaries")}
+        >
+          <%= if busy?(@generating, "boundaries"), do: "✨ …", else: "✨ Suggest" %>
+        </button>
+      </div>
+      <p class="dim">
+        Lines this character holds. A refusal is played as a scene beat, never a filter (§A3).
+        A <strong>conditional</strong> boundary holds until its condition is earned in the story
+        (slow burn); an optional <strong>category</strong> lets a campaign's content ceiling cap it.
+        <strong>✨ Suggest</strong> proposes boundaries true to who they are.
+      </p>
+
+      <div :if={@boundaries == []} class="faint">No boundaries yet.</div>
+      <ul class="rel-list">
+        <li :for={{b, i} <- Enum.with_index(@boundaries)} class="row rel-item">
+          <span><%= boundary_line(b) %></span>
+          <span class="spacer"></span>
+          <button type="button" class="btn danger sm" phx-click="remove_boundary" phx-value-index={i}>Remove</button>
+        </li>
+      </ul>
+
+      <form id="boundary-form" phx-submit="add_boundary" style="margin-top:.5rem;">
+        <label>Topic
+          <input type="text" name="topic" placeholder="e.g. physical intimacy, killing" autocomplete="off" />
+        </label>
+        <label>Stance
+          <select name="stance">
+            <option value="closed">Hard line — will not</option>
+            <option value="conditional">Conditional — until…</option>
+            <option value="open">Open to it</option>
+          </select>
+        </label>
+        <label>Category <span class="faint">(optional — a campaign's ceiling can cap it)</span>
+          <select name="category">
+            <option value="">No category</option>
+            <option value="sexual">Sexual</option>
+            <option value="graphic_violence">Graphic violence</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label>Condition <span class="faint">(conditional only — until what happens?)</span>
+          <input type="text" name="condition" placeholder="e.g. once trust is earned" />
+        </label>
+        <label>When pushed <span class="faint">(optional — how they react under pressure)</span>
+          <input type="text" name="on_pressure" placeholder="e.g. deflects with a joke" />
+        </label>
+        <button class="btn" type="submit" style="margin-top:.6rem;">Add boundary</button>
       </form>
     </div>
 
@@ -805,52 +929,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
       <datalist id="char-names">
         <option :for={n <- @char_names} value={n}></option>
       </datalist>
-    </div>
-
-    <div class="card">
-      <h3>Boundaries</h3>
-      <p class="dim">
-        Lines this character holds. A refusal is played as a scene beat, never a filter (§A3).
-        A <strong>conditional</strong> boundary holds until its condition is earned in the story
-        (slow burn); an optional <strong>category</strong> lets a campaign's content ceiling cap it.
-      </p>
-
-      <div :if={@boundaries == []} class="faint">No boundaries yet.</div>
-      <ul class="rel-list">
-        <li :for={{b, i} <- Enum.with_index(@boundaries)} class="row rel-item">
-          <span><%= boundary_line(b) %></span>
-          <span class="spacer"></span>
-          <button type="button" class="btn danger sm" phx-click="remove_boundary" phx-value-index={i}>Remove</button>
-        </li>
-      </ul>
-
-      <form id="boundary-form" phx-submit="add_boundary" style="margin-top:.5rem;">
-        <label>Topic
-          <input type="text" name="topic" placeholder="e.g. physical intimacy, killing" autocomplete="off" />
-        </label>
-        <label>Stance
-          <select name="stance">
-            <option value="closed">Hard line — will not</option>
-            <option value="conditional">Conditional — until…</option>
-            <option value="open">Open to it</option>
-          </select>
-        </label>
-        <label>Category <span class="faint">(optional — a campaign's ceiling can cap it)</span>
-          <select name="category">
-            <option value="">No category</option>
-            <option value="sexual">Sexual</option>
-            <option value="graphic_violence">Graphic violence</option>
-            <option value="other">Other</option>
-          </select>
-        </label>
-        <label>Condition <span class="faint">(conditional only — until what happens?)</span>
-          <input type="text" name="condition" placeholder="e.g. once trust is earned" />
-        </label>
-        <label>When pushed <span class="faint">(optional — how they react under pressure)</span>
-          <input type="text" name="on_pressure" placeholder="e.g. deflects with a joke" />
-        </label>
-        <button class="btn" type="submit" style="margin-top:.6rem;">Add boundary</button>
-      </form>
     </div>
     """
   end
