@@ -1054,11 +1054,11 @@ defmodule PolyphonyWeb.PlayLive do
   # when retried. Event blocks (no beat of their own) inherit the last turn's beat so they
   # keep their place.
   #
-  # A failure carries the beat it was *emitted for* — never the live beat at render time.
-  # Beat-less failures are the scene-close operations (arc extraction, summarization), which
-  # happen after the scene, so they sort to the END, not the top and not "wherever the scene
-  # is now." `failures` is [] for non-omniscient viewers, so nothing shows there.
-  defp transcript_items(messages, failures) do
+  # A failure without a beat is a scene-close operation (arc extraction, summarization);
+  # those are emitted at the scene's current beat, so they default to `current_beat` and
+  # land with the latest action rather than at the top. `failures` is [] for non-omniscient
+  # viewers, so nothing shows there.
+  defp transcript_items(messages, failures, current_beat) do
     {blocks, _} =
       messages
       |> turn_blocks()
@@ -1067,16 +1067,12 @@ defmodule PolyphonyWeb.PlayLive do
         {Map.put(b, :eff_beat, eff), eff}
       end)
 
-    {beated, beatless} = Enum.split_with(failures, & &1.beat)
+    items = Enum.map(blocks, &{:block, &1}) ++ Enum.map(failures, &{:fail, &1})
 
-    positioned =
-      (Enum.map(blocks, &{:block, &1}) ++ Enum.map(beated, &{:fail, &1}))
-      |> Enum.sort_by(fn
-        {:block, b} -> {b.eff_beat, 0}
-        {:fail, f} -> {f.beat, 1}
-      end)
-
-    positioned ++ Enum.map(beatless, &{:fail, &1})
+    Enum.sort_by(items, fn
+      {:block, b} -> {b.eff_beat, 0}
+      {:fail, f} -> {f.beat || current_beat, 1}
+    end)
   end
 
   defp turn_blocks(messages) do
@@ -1205,7 +1201,7 @@ defmodule PolyphonyWeb.PlayLive do
               </div>
             </div>
           <% else %>
-          <%= for {item, i} <- Enum.with_index(transcript_items(@messages, @failures)) do %>
+          <%= for {item, i} <- Enum.with_index(transcript_items(@messages, @failures, max(@next_beat - 1, 0))) do %>
             <%= case item do %>
               <% {:block, block} -> %>
                 <div id={"blk-#{i}"} class="turn-block">

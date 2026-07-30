@@ -43,14 +43,17 @@ defmodule PolyphonyWeb.PlayFailuresLiveTest do
     refute mira_html =~ "Couldn&#39;t generate"
   end
 
-  test "a beat-less scene-close failure sorts to the end, not the top", %{conn: conn} do
+  test "a beat-less scene-close failure defaults to the current beat, not the top",
+       %{conn: conn} do
     s = scene()
+    # Advance the scene's current beat to 2 so the beat-less default is distinguishable.
+    :ok = App.dispatch(%EnterCharacter{scene_id: s, character_id: "bram", beat: 2})
 
-    # A turn failure at beat 3…
+    # An early turn failure at beat 1…
     Failures.record(%{
       scene_id: s,
-      beat: 3,
-      subject: "midbeat",
+      beat: 1,
+      subject: "earlybeat",
       operation: :generation,
       kind: :error,
       reason: "boom",
@@ -58,7 +61,7 @@ defmodule PolyphonyWeb.PlayFailuresLiveTest do
       args: %{"scene_id" => s}
     })
 
-    # …and a scene-close failure with no beat (arc extraction), which happens after the scene.
+    # …and a scene-close failure with no beat (arc extraction), emitted at the current beat.
     Failures.record(%{
       scene_id: s,
       subject: "closeup",
@@ -70,7 +73,8 @@ defmodule PolyphonyWeb.PlayFailuresLiveTest do
     })
 
     {:ok, _view, html} = live(conn, ~p"/play/#{s}")
-    # The beated failure renders before the beat-less one.
-    assert :binary.match(html, "midbeat") < :binary.match(html, "closeup")
+    # The beat-less failure defaults to the current beat, so it lands after the earlier one
+    # (not pinned to the top).
+    assert :binary.match(html, "earlybeat") < :binary.match(html, "closeup")
   end
 end
