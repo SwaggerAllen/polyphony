@@ -57,6 +57,10 @@ defmodule Polyphony.DebugTap do
         [] -> []
       end
 
+    # Stamp wall-clock time so the play view can interleave this call with the event
+    # stream and errors on one timeline. Display-only (never replayed), so a clock here
+    # doesn't touch the determinism the domain guards.
+    entry = Map.put_new(entry, :at, System.system_time(:millisecond))
     :ets.insert(table, {key, Enum.take([entry | existing], @max_per_scene)})
     Phoenix.PubSub.broadcast(Polyphony.PubSub, topic(scene_id), {:debug_trace, scene_id})
     {:noreply, table}

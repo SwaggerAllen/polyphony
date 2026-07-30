@@ -574,6 +574,10 @@ video {
   display: flex;
 }
 
+.table {
+  display: table;
+}
+
 .hidden {
   display: none;
 }
@@ -887,11 +891,21 @@ input:focus, textarea:focus, select:focus {
 /* Scene view: a full-height flex column that fills the space between the header and
    the composer. Only the transcript scrolls; the header row and composer stay put. */
 
+/* Anchor the scene view to the viewport via flex all the way down (a percentage-height
+   chain fails to resolve on mobile, letting the composer scroll off). The wrap that
+   holds a scene becomes a flex column; the scene fills it; only the transcript scrolls. */
+
+.wrap:has(> .play) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .play {
   display: flex;
   flex-direction: column;
   gap: .5rem;
-  height: 100%;
+  flex: 1 1 auto;
   min-height: 0;
 }
 
@@ -1034,6 +1048,98 @@ input:focus, textarea:focus, select:focus {
   content: " (whisper)";
   color: var(--fg-faint);
   font-size: .75rem;
+}
+
+/* Debug timeline (author bring-up): LLM calls, raw events, and errors interleaved.
+   Stacked, never a horizontal table — each entry's properties wrap and a rule (the
+   bottom border) separates entries, so it stays readable on a phone. */
+
+.dbg-head {
+  padding: .3rem 0;
+  font-size: .8rem;
+  flex-wrap: wrap;
+  gap: .3rem;
+}
+
+.dbg-entry {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .78rem;
+  padding: .4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.dbg-entry summary {
+  cursor: pointer;
+}
+
+.dbg-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .35rem .5rem;
+}
+
+.dbg-entry summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .35rem .5rem;
+}
+
+.dbg-time {
+  color: var(--fg-faint);
+}
+
+.dbg-tag {
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: .02rem .35rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--fg-dim);
+  background: var(--bg-3);
+}
+
+.dbg-tag.ev {
+  color: var(--accent-2);
+}
+
+.dbg-tag.llm {
+  color: var(--accent);
+}
+
+.dbg-tag.err, .dbg-tag.llm.err {
+  color: var(--bad);
+  border-color: #522;
+}
+
+.dbg-kv, .dbg-label {
+  margin: .25rem 0 .1rem;
+}
+
+.dbg-label {
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  font-size: .68rem;
+  letter-spacing: .04em;
+}
+
+.dbg-detail {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: .15rem 0 0;
+  max-height: 18rem;
+  overflow: auto;
+  background: var(--bg-3);
+  padding: .4rem .5rem;
+  border-radius: 6px;
+}
+
+.dbg-detail.err {
+  color: var(--bad);
+  background: transparent;
+  padding: .1rem 0;
 }
 
 /* Waiting states — three distinct kinds (FS principle) */

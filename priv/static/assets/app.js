@@ -8781,6 +8781,19 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
       this.grow();
     }
   };
+  Hooks2.CopyText = {
+    mounted() {
+      this.el.addEventListener("click", () => {
+        const src = document.getElementById(this.el.dataset.copyTarget);
+        if (!src) return;
+        navigator.clipboard.writeText(src.textContent || "").then(() => {
+          const original = this.el.textContent;
+          this.el.textContent = "Copied!";
+          setTimeout(() => this.el.textContent = original, 1200);
+        });
+      });
+    }
+  };
   window.addEventListener(
     "click",
     (e) => {

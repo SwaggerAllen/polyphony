@@ -56,9 +56,40 @@ defmodule PolyphonyWeb.PlayTraceLiveTest do
     assert "mira" in subjects
 
     {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
-    assert html =~ "Debug: LLM calls"
+    assert html =~ "Debug timeline"
     assert html =~ "director"
     assert html =~ "mira"
+  end
+
+  test "the timeline interleaves events, LLM calls and errors, with a copy source", %{conn: conn} do
+    scene = "trc-" <> Integer.to_string(System.unique_integer([:positive]))
+    :ok = App.dispatch(%OpenScene{scene_id: scene, opened_beat: 0})
+    :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: "mira", beat: 1})
+
+    DebugTap.record(%{
+      scene_id: scene,
+      subject: "director",
+      params: [model: "workhorse"],
+      request: [%{role: "user", content: "decide"}],
+      response: {:ok, ~s({"control":"continue"})}
+    })
+
+    DebugTap.flush()
+
+    # Turn the Events view on too, so events + LLM calls share one timeline.
+    DebugFlags.set(:events, true)
+    on_exit(fn -> DebugFlags.set(:events, false) end)
+
+    {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+    assert html =~ "Debug timeline"
+    # An event source…
+    assert html =~ "SceneOpened"
+    # …and an LLM-call source, on the same feed.
+    assert html =~ "director"
+    # The hidden copy source carries the plain-text timeline for the Copy button.
+    assert html =~ ~s(id="scene-debug-copy")
+    assert html =~ "Copy debug"
   end
 
   test "traces are author-only — a character view never shows them", %{conn: conn} do
@@ -77,6 +108,6 @@ defmodule PolyphonyWeb.PlayTraceLiveTest do
     DebugTap.flush()
 
     {:ok, _view, html} = live(conn, ~p"/play/#{scene}?as=mira")
-    refute html =~ "Debug: LLM calls"
+    refute html =~ "Debug timeline"
   end
 end
