@@ -32,4 +32,36 @@ defmodule Polyphony.Content.CampaignConfig do
 
   def enabled(%__MODULE__{} = config),
     do: Enum.filter(Polyphony.Content.categories(), &Map.get(config, &1))
+
+  @doc """
+  Pull a config out of a campaign `Library` payload's `:content_config` field,
+  defaulting to the all-off config for a campaign that predates the setting (or one
+  stored as a plain map). The single source of truth every wiring point resolves from.
+  """
+  @spec from_payload(map() | any()) :: t()
+  def from_payload(%{content_config: %__MODULE__{} = config}), do: config
+
+  def from_payload(%{content_config: %{} = m}) do
+    %__MODULE__{
+      adult_content: !!(m[:adult_content] || m["adult_content"]),
+      sexual: !!(m[:sexual] || m["sexual"]),
+      graphic_violence: !!(m[:graphic_violence] || m["graphic_violence"]),
+      other: !!(m[:other] || m["other"])
+    }
+  end
+
+  def from_payload(_), do: %__MODULE__{}
+
+  @doc "A short human label for the campaign's maturity, for the published snapshot."
+  @spec label(t()) :: String.t()
+  def label(%__MODULE__{} = config) do
+    case enabled(config) do
+      [] -> "No adult content"
+      cats -> "Adult content: " <> Enum.map_join(cats, ", ", &category_label/1)
+    end
+  end
+
+  defp category_label(:sexual), do: "sexual"
+  defp category_label(:graphic_violence), do: "graphic violence"
+  defp category_label(:other), do: "other mature themes"
 end
