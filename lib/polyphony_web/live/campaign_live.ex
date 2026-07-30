@@ -284,6 +284,7 @@ defmodule PolyphonyWeb.CampaignLive do
 
   def handle_async(:quick_build, {:ok, {:ok, result}}, socket) do
     %{bible: bible, characters: chars, premise: premise} = result
+    failed = Map.get(result, :failed, [])
     existing = cast_ids(socket.assigns.payload)
     ids = Enum.uniq(existing ++ Enum.map(chars, & &1.id))
 
@@ -295,14 +296,16 @@ defmodule PolyphonyWeb.CampaignLive do
 
     {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
 
-    {:noreply,
-     socket
-     |> assign(entry: entry, building: false, qb_world: "", qb_seeds: [""], qb_suggest: true)
-     |> load()
-     |> put_flash(
-       :info,
-       "Built a world, #{length(chars)} character(s), and a premise. Open each to flesh it out."
-     )}
+    socket =
+      socket
+      |> assign(entry: entry, building: false, qb_world: "", qb_seeds: [""], qb_suggest: true)
+      |> load()
+      |> put_flash(
+        :info,
+        "Built a world, #{length(chars)} character(s), and a premise. Open each to flesh it out."
+      )
+
+    {:noreply, flash_failures(socket, failed)}
   end
 
   def handle_async(:quick_build, result, socket) do
@@ -396,6 +399,20 @@ defmodule PolyphonyWeb.CampaignLive do
   defp reason({:ok, {:error, r}}), do: r
   defp reason({:exit, r}), do: r
   defp reason(other), do: other
+
+  # Surface any per-character generation failures on top of the success flash, naming
+  # the seeds and the reason so the author can retry just those.
+  defp flash_failures(socket, []), do: socket
+
+  defp flash_failures(socket, failed) do
+    listed = Enum.map_join(failed, "; ", fn {seed, reason} -> "#{seed} (#{inspect(reason)})" end)
+
+    put_flash(
+      socket,
+      :error,
+      "#{length(failed)} character(s) couldn't be generated — add them by hand or retry: #{listed}"
+    )
+  end
 
   # The `char_seed[]` params: a list when several rows exist, a bare string for one,
   # nil when the form omitted them (a change from another field) — fall back then.
