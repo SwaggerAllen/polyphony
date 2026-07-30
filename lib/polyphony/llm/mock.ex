@@ -116,23 +116,21 @@ defmodule Polyphony.LLM.Mock do
     )
   end
 
-  # A couple of lorem boundaries (Authoring.suggest_boundaries): varied stances, one
-  # conditional with a condition, one categorized — enough to exercise the mapping.
+  # A couple of lorem boundaries (Authoring.suggest_boundaries): both conditional with a
+  # condition (the generation contract — §A3 slow burns), one categorized.
   defp boundaries_json(messages) do
     seed = :erlang.phash2(messages)
 
     Jason.encode!([
       %{
         topic: lorem(seed, 2),
-        stance: "closed",
-        condition: "",
-        on_pressure: lorem(seed + 1, 3),
+        condition: capitalize(lorem(seed + 1, 4)) <> ".",
+        on_pressure: lorem(seed + 2, 3),
         category: ""
       },
       %{
-        topic: lorem(seed + 2, 2),
-        stance: "conditional",
-        condition: lorem(seed + 3, 3),
+        topic: lorem(seed + 3, 2),
+        condition: capitalize(lorem(seed + 4, 4)) <> ".",
         on_pressure: "",
         category: "other"
       }

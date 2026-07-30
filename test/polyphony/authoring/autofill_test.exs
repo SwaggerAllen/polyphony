@@ -226,7 +226,9 @@ defmodule Polyphony.Authoring.AutofillTest do
 
       assert is_list(boundaries) and boundaries != []
       assert Enum.all?(boundaries, &(is_binary(&1["topic"]) and &1["topic"] != ""))
-      assert Enum.all?(boundaries, &(&1["stance"] in ~w(closed conditional open)))
+      # Generated boundaries are always conditional slow-burns, each with a condition.
+      assert Enum.all?(boundaries, &(&1["stance"] == "conditional"))
+      assert Enum.all?(boundaries, &(&1["condition"] != ""))
 
       assert Enum.all?(
                boundaries,
@@ -234,11 +236,16 @@ defmodule Polyphony.Authoring.AutofillTest do
              )
     end
 
-    test "an out-of-range stance/category is normalized, not passed through" do
+    test "any returned stance is normalized to conditional, and category to a valid one" do
       array =
         {:ok,
          Jason.encode!([
-           %{"topic" => "killing", "stance" => "maybe", "category" => "gore"}
+           %{
+             "topic" => "killing",
+             "stance" => "closed",
+             "category" => "gore",
+             "condition" => "the siege leaves no other way out"
+           }
          ])}
 
       assert {:ok, [b]} =
@@ -247,16 +254,31 @@ defmodule Polyphony.Authoring.AutofillTest do
                  respond_with: array
                )
 
-      assert b["stance"] == "closed"
+      assert b["stance"] == "conditional"
       assert b["category"] == ""
+    end
+
+    test "a boundary with no condition is dropped (never generated without one)" do
+      array =
+        {:ok,
+         Jason.encode!([
+           %{"topic" => "killing", "condition" => ""},
+           %{"topic" => "intimacy", "condition" => "once real trust is earned"}
+         ])}
+
+      assert {:ok, [%{"topic" => "intimacy"}]} =
+               Autofill.suggest_boundaries(%{"name" => "Mira"},
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: array
+               )
     end
 
     test "excludes topics the character already holds" do
       array =
         {:ok,
          Jason.encode!([
-           %{"topic" => "killing", "stance" => "closed"},
-           %{"topic" => "lying", "stance" => "open"}
+           %{"topic" => "killing", "condition" => "cornered with no way out"},
+           %{"topic" => "lying", "condition" => "to protect someone she loves"}
          ])}
 
       existing = [%Polyphony.Authoring.CharacterSheet.Boundary{topic: "killing", stance: :closed}]

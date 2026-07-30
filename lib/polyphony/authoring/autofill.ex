@@ -212,13 +212,16 @@ defmodule Polyphony.Authoring.Autofill do
         content:
           "You are helping an author populate a role-play character's boundaries — lines " <>
             "this character holds in the story. A refusal is played as a scene beat, never a " <>
-            "content filter. Propose 2–4 boundaries true to who they are. Return ONLY a JSON " <>
-            "array of objects, each with keys \"topic\" (what the line is about), \"stance\" " <>
-            "(\"closed\" = hard line, \"conditional\" = holds until earned in the story, " <>
-            "\"open\" = fine with it), \"condition\" (for conditional — what must happen first, " <>
-            "else \"\"), \"on_pressure\" (how they react when pushed, optional), and " <>
-            "\"category\" (\"sexual\", \"graphic_violence\", \"other\", or \"\" for pure " <>
-            "characterization). Do NOT repeat a topic already listed."
+            "content filter. Propose 2–4 **conditional** boundaries: lines the character holds " <>
+            "FOR NOW but that the right story development could change — slow burns, not " <>
+            "permanent hard 'no's. For each, give the condition: what must be earned or happen " <>
+            "in the story before they'd cross it. Choose topics that plausibly shift with the " <>
+            "story (intimacy, trust, loyalty, opening up, using violence, revealing a secret), " <>
+            "NOT absolute taboos. Return ONLY a JSON array of objects, each with keys \"topic\" " <>
+            "(what the line is about), \"condition\" (REQUIRED, non-empty — what must happen " <>
+            "first), \"on_pressure\" (how they react when pushed, optional), and \"category\" " <>
+            "(\"sexual\", \"graphic_violence\", \"other\", or \"\" for pure characterization). " <>
+            "Do NOT repeat a topic already listed."
       },
       %{
         role: "user",
@@ -237,8 +240,11 @@ defmodule Polyphony.Authoring.Autofill do
         list
         |> Enum.filter(&is_map/1)
         |> Enum.map(&normalize_boundary/1)
+        # A generated boundary must carry a topic AND a condition — a conditional line
+        # with nothing to earn is meaningless, so drop it rather than persist a blank.
         |> Enum.reject(
-          &(&1["topic"] == "" or MapSet.member?(excluded, normalize_name(&1["topic"])))
+          &(&1["topic"] == "" or &1["condition"] == "" or
+              MapSet.member?(excluded, normalize_name(&1["topic"])))
         )
         |> Enum.uniq_by(&normalize_name(&1["topic"]))
 
@@ -246,16 +252,17 @@ defmodule Polyphony.Authoring.Autofill do
     end
   end
 
-  @stances ~w(closed conditional open)
   @categories ~w(sexual graphic_violence other)
 
   defp normalize_boundary(item) do
-    stance = item["stance"] |> to_string() |> String.trim() |> String.downcase()
     category = item["category"] |> to_string() |> String.trim() |> String.downcase()
 
     %{
       "topic" => String.trim(to_string(item["topic"] || "")),
-      "stance" => if(stance in @stances, do: stance, else: "closed"),
+      # Generated boundaries are always **conditional** slow-burns (§A3) — an auto-proposed
+      # hard line or "open" non-boundary isn't worth surfacing; the author sets those by
+      # hand in the editor, where every stance is available.
+      "stance" => "conditional",
       "condition" => String.trim(to_string(item["condition"] || "")),
       "on_pressure" => String.trim(to_string(item["on_pressure"] || "")),
       "category" => if(category in @categories, do: category, else: "")
