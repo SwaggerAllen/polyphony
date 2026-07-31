@@ -41,6 +41,8 @@ defmodule Polyphony.Authoring.QuickBuild do
     * `:character_seeds` — a list of free-text briefs, one per character.
     * `:suggest_offscreen` — also stub AI-suggested off-screen people per character
       (default `false`).
+    * `:progress` — an optional 1-arg fn called with `%{done, total, label}` before each
+      phase (world → each character → linking → premise), for a UI progress bar.
     * `:provider` / `:user_id` / `:campaign_id` — metering passthrough.
   """
   @spec build(keyword()) :: {:ok, map()} | {:error, term()}
@@ -51,17 +53,35 @@ defmodule Polyphony.Authoring.QuickBuild do
     suggest? = Keyword.get(opts, :suggest_offscreen, false)
     meter = Keyword.take(opts, [:provider, :user_id, :campaign_id])
 
+    # Phases: the world, one per character, linking the cast, the premise.
+    report = progress_fn(Keyword.get(opts, :progress), length(seeds) + 3)
+    report.(0, "Dreaming up the world")
+
     with {:ok, world_fields} <- Autofill.generate_all(:world_bible, world_seed, %{}, meter),
-         bible_entry <- put(owner, "world_bible", to_world_bible(world_fields)),
+         bible_entry = put(owner, "world_bible", to_world_bible(world_fields)),
          world_ctx = world_context(world_fields),
          {:ok, char_entries, failed} <-
-           build_characters(owner, seeds, bible_entry.id, world_ctx, meter),
-         char_entries <- wire_cast(char_entries, suggest?, bible_entry.id, owner, meter),
+           build_characters(owner, seeds, bible_entry.id, world_ctx, meter, report),
+         _ = report.(length(seeds) + 1, "Connecting the cast"),
+         char_entries = wire_cast(char_entries, suggest?, bible_entry.id, owner, meter),
+         _ = report.(length(seeds) + 2, "Framing the premise"),
          {:ok, premise} <-
            Autofill.generate_campaign_premise(
              [world: world_ctx, cast: cast_summaries(char_entries)] ++ meter
            ) do
+      report.(length(seeds) + 3, "Done")
       {:ok, %{bible: bible_entry, characters: char_entries, premise: premise, failed: failed}}
+    end
+  end
+
+  # Wrap an optional `%{done, total, label}` callback into a `(done, label)` reporter
+  # (no-op when absent), so the build body just calls `report.(done, "…")` per phase.
+  defp progress_fn(nil, _total), do: fn _done, _label -> :ok end
+
+  defp progress_fn(fun, total) when is_function(fun, 1) do
+    fn done, label ->
+      fun.(%{done: done, total: total, label: label})
+      :ok
     end
   end
 
@@ -69,11 +89,14 @@ defmodule Polyphony.Authoring.QuickBuild do
   # for the ones that don't — a blank result (valid response, no usable fields) counts as
   # a failure too. Errors outright only if *every* seed failed; a partial success proceeds
   # with what it got so one flaky generation doesn't discard the whole build.
-  defp build_characters(owner, seeds, bible_id, world_ctx, meter) do
+  defp build_characters(owner, seeds, bible_id, world_ctx, meter, report) do
+    n = length(seeds)
+
     {entries, failed} =
       seeds
       |> Enum.with_index()
       |> Enum.reduce({[], []}, fn {seed, i}, {ok, bad} ->
+        report.(1 + i, "Writing character #{i + 1} of #{n}")
         brief = brief_with_roster(seed, seeds, i)
 
         case Autofill.generate_all(:character, brief, %{}, [world: world_ctx] ++ meter) do

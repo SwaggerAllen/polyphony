@@ -26,6 +26,7 @@ defmodule PolyphonyWeb.CampaignLive do
          page_title: "Campaign",
          entry: entry,
          building: false,
+         build_progress: nil,
          expanding_premise: false,
          qb_world: "",
          qb_seeds: [""],
@@ -198,18 +199,25 @@ defmodule PolyphonyWeb.CampaignLive do
         |> Enum.map(&String.trim/1)
         |> Enum.reject(&(&1 == ""))
 
+      lv = self()
+
       opts =
         [
           owner: socket.assigns.owner,
           world_seed: params["world_seed"] || "",
           character_seeds: seeds,
           suggest_offscreen: params["suggest_offscreen"] == "true",
-          campaign_id: socket.assigns.entry.id
+          campaign_id: socket.assigns.entry.id,
+          # The build runs in the async task; forward each phase to this LiveView.
+          progress: fn step -> send(lv, {:quick_build_progress, step}) end
         ] ++ meter_attribution(socket)
 
       {:noreply,
        socket
-       |> assign(building: true)
+       |> assign(
+         building: true,
+         build_progress: %{done: 0, total: length(seeds) + 3, label: "Starting"}
+       )
        |> start_async(:quick_build, fn -> QuickBuild.build(opts) end)}
     end)
   end
@@ -321,7 +329,14 @@ defmodule PolyphonyWeb.CampaignLive do
 
     socket =
       socket
-      |> assign(entry: entry, building: false, qb_world: "", qb_seeds: [""], qb_suggest: true)
+      |> assign(
+        entry: entry,
+        building: false,
+        build_progress: nil,
+        qb_world: "",
+        qb_seeds: [""],
+        qb_suggest: true
+      )
       |> load()
       |> put_flash(
         :info,
@@ -336,8 +351,14 @@ defmodule PolyphonyWeb.CampaignLive do
 
     {:noreply,
      socket
-     |> assign(building: false)
+     |> assign(building: false, build_progress: nil)
      |> put_flash(:error, "Quick build failed: #{inspect(reason(result))}")}
+  end
+
+  # Progress from the running Quick Build (sent by its :progress callback).
+  def handle_info({:quick_build_progress, %{} = step}, socket) do
+    {:noreply,
+     if(socket.assigns.building, do: assign(socket, build_progress: step), else: socket)}
   end
 
   defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible, content_config) do
@@ -425,6 +446,13 @@ defmodule PolyphonyWeb.CampaignLive do
   defp reason({:ok, {:error, r}}), do: r
   defp reason({:exit, r}), do: r
   defp reason(other), do: other
+
+  # The bar fills as each phase *completes*: `done` is the count finished, so the bar
+  # shows the fraction done while the label names the phase now in flight.
+  defp qb_pct(%{done: done, total: total}) when is_integer(total) and total > 0,
+    do: round(done / total * 100)
+
+  defp qb_pct(_), do: 0
 
   # Surface any per-character generation failures on top of the success flash, naming
   # the seeds and the reason so the author can retry just those.
@@ -581,8 +609,15 @@ defmodule PolyphonyWeb.CampaignLive do
           <button class="btn" type="submit" disabled={@building}>
             <%= if @building, do: "✨ Building…", else: "✨ Quick build" %>
           </button>
-          <span :if={@building} class="faint" style="margin-left:.5rem;">
-            Generating world, cast, and premise — this can take a moment.
+        </div>
+
+        <div :if={@building and @build_progress} class="qb-progress" style="margin-top:.6rem;">
+          <div class="qb-track">
+            <div class="qb-fill" style={"width:#{qb_pct(@build_progress)}%"}></div>
+          </div>
+          <span class="faint">
+            <%= @build_progress.label %>…
+            <span class="qb-count">(<%= min(@build_progress.done + 1, @build_progress.total) %>/<%= @build_progress.total %>)</span>
           </span>
         </div>
       </form>
