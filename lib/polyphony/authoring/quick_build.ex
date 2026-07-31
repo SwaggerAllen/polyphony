@@ -49,7 +49,9 @@ defmodule Polyphony.Authoring.QuickBuild do
   def build(opts) do
     owner = Keyword.fetch!(opts, :owner)
     world_seed = to_string(opts[:world_seed] || "")
-    seeds = opts[:character_seeds] |> List.wrap() |> Enum.reject(&(String.trim(&1) == ""))
+    # One character per provided seed — a blank seed is kept, generating a character
+    # freely from the world rather than dropping the row.
+    seeds = opts[:character_seeds] |> List.wrap() |> Enum.map(&to_string/1)
     suggest? = Keyword.get(opts, :suggest_offscreen, false)
     meter = Keyword.take(opts, [:provider, :user_id, :campaign_id])
 

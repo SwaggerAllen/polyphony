@@ -193,11 +193,9 @@ defmodule PolyphonyWeb.CampaignLive do
   # cross-linked relationships, and a premise — all persisted — then attach them here.
   def handle_event("quick_build", params, socket) do
     safe(socket, fn ->
-      seeds =
-        params["char_seed"]
-        |> List.wrap()
-        |> Enum.map(&String.trim/1)
-        |> Enum.reject(&(&1 == ""))
+      # Every character row becomes a character, even a blank one (it generates freely
+      # from the world) — the row count is the cast size the author asked for.
+      seeds = params["char_seed"] |> List.wrap() |> Enum.map(&String.trim/1)
 
       lv = self()
 
