@@ -258,6 +258,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .member-list .member { padding: .4rem 0 .4rem .75rem; border-bottom: 1px solid var(--border); gap: .5rem; }
 .member-list .member:last-child { border-bottom: none; }
 .member-empty { padding: .5rem 0 .25rem .75rem; }
+/* One create button per artifact type — wraps instead of overflowing on mobile. */
+.new-buttons { flex-wrap: wrap; gap: .5rem; }
 .pending-banner { border-color: var(--accent-2); }
 .intro-queue { border-color: var(--accent-2); }
 .intro-queue h3 { margin-bottom: .25rem; }

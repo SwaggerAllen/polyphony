@@ -1350,6 +1350,13 @@ input:focus, textarea:focus, select:focus {
   padding: .5rem 0 .25rem .75rem;
 }
 
+/* One create button per artifact type — wraps instead of overflowing on mobile. */
+
+.new-buttons {
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
 .pending-banner {
   border-color: var(--accent-2);
 }

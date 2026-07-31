@@ -215,15 +215,11 @@ defmodule PolyphonyWeb.LibraryLive do
     <h1>Your library</h1>
 
     <div class="card">
-      <form id="library-new" phx-submit="new" class="row">
-        <select name="kind" style="width:auto;">
-          <option value="character">New character</option>
-          <option value="world_bible">New world bible</option>
-          <option value="campaign">New campaign</option>
-        </select>
-        <button class="btn" type="submit">Create</button>
-        <span class="faint">— opens the editor, where you name it.</span>
-      </form>
+      <div class="row new-buttons">
+        <button class="btn" phx-click="new" phx-value-kind="character">＋ Character</button>
+        <button class="btn" phx-click="new" phx-value-kind="world_bible">＋ World bible</button>
+        <button class="btn" phx-click="new" phx-value-kind="campaign">＋ Campaign</button>
+      </div>
     </div>
 
     <div :if={@entries == []} class="list-empty">Nothing here yet. Create a character, world, or campaign to begin.</div>

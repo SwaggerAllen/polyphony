@@ -14,9 +14,11 @@ defmodule PolyphonyWeb.LibraryAdminLiveTest do
          %{conn: conn, user: user} do
       {:ok, view, _html} = live(conn, ~p"/library")
 
-      # No name is required — Create navigates straight to the editor.
+      # No name is required — the per-type button navigates straight to the editor.
       assert {:error, {:live_redirect, %{to: to}}} =
-               view |> form("form[phx-submit=new]", %{kind: "character"}) |> render_submit()
+               view
+               |> element("button[phx-click=new][phx-value-kind=character]")
+               |> render_click()
 
       assert [entry] = Library.list_for_owner(Owner.of(user))
       assert entry.kind == "character"
