@@ -724,13 +724,88 @@ small, .dim {
 
 .topbar nav a {
   color: var(--fg-dim);
-  margin-left: 1rem;
   font-size: .9rem;
 }
 
 .topbar nav a:hover {
   color: var(--fg);
   text-decoration: none;
+}
+
+/* Header nav: a CSS-only hamburger (checkbox hack, no JS). On a wide screen the
+   links sit inline and the ☰ toggle is hidden; on a narrow screen they collapse
+   into a dropdown the ☰ opens. Navigation is a full page load, so it resets. */
+
+.topnav {
+  position: relative;
+}
+
+.nav-toggle-cb {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.nav-toggle {
+  cursor: pointer;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--fg-dim);
+  padding: .1rem .35rem;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+}
+
+.nav-toggle:hover {
+  color: var(--fg);
+}
+
+.nav-links {
+  display: flex;
+  gap: 1rem;
+}
+
+/* Mobile: the ☰ shows and the links drop down under the header when checked. */
+
+@media (max-width: 640px) {
+  .nav-links {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + .4rem);
+    flex-direction: column;
+    gap: 0;
+    min-width: 11rem;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: .35rem 0;
+    box-shadow: 0 6px 20px rgba(0,0,0,.25);
+    z-index: 20;
+  }
+
+  .nav-links a {
+    padding: .55rem .9rem;
+    margin: 0;
+  }
+
+  .nav-links a:hover {
+    background: var(--bg-3, rgba(255,255,255,.05));
+  }
+
+  .nav-toggle-cb:checked ~ .nav-links {
+    display: flex;
+  }
+}
+
+/* Desktop: inline links, no toggle. */
+
+@media (min-width: 641px) {
+  .nav-toggle {
+    display: none;
+  }
 }
 
 /* Cards / lists */
