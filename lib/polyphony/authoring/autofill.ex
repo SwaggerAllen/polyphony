@@ -217,11 +217,17 @@ defmodule Polyphony.Authoring.Autofill do
             "permanent hard 'no's. For each, give the condition: what must be earned or happen " <>
             "in the story before they'd cross it. Choose topics that plausibly shift with the " <>
             "story (intimacy, trust, loyalty, opening up, using violence, revealing a secret), " <>
-            "NOT absolute taboos. Return ONLY a JSON array of objects, each with keys \"topic\" " <>
-            "(what the line is about), \"condition\" (REQUIRED, non-empty — what must happen " <>
-            "first), \"on_pressure\" (how they react when pushed, optional), and \"category\" " <>
-            "(\"sexual\", \"graphic_violence\", \"other\", or \"\" for pure characterization). " <>
-            "Do NOT repeat a topic already listed."
+            "NOT absolute taboos. TWO RULES: (1) The topic and its condition must share the " <>
+            "same scope. If the line is about a SPECIFIC person, name them in the topic (e.g. " <>
+            "\"Physical intimacy with Jack\") — never gate a broad, everyone topic on one " <>
+            "person's arc. If the topic is general, keep the condition general too. (2) The " <>
+            "condition must be ONE concrete development the story can clearly reach — a single " <>
+            "checkable event, not several things bundled together (avoid \"and\"/\"both\"), and " <>
+            "not a vague mood. Return ONLY a JSON array of objects, each with keys \"topic\" " <>
+            "(what the line is about), \"condition\" (REQUIRED, non-empty — the one thing that " <>
+            "must happen first), \"on_pressure\" (how they react when pushed, optional), and " <>
+            "\"category\" (\"sexual\", \"graphic_violence\", \"other\", or \"\" for pure " <>
+            "characterization). Do NOT repeat a topic already listed."
       },
       %{
         role: "user",

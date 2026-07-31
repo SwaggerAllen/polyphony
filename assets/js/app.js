@@ -40,19 +40,20 @@ Hooks.AutoGrow = {
     const y = window.scrollY
     this.el.style.height = "auto"
     this.el.style.height = this.el.scrollHeight + "px"
-    this.last = this.el.value
     if (window.scrollY !== y) window.scrollTo(window.scrollX, y)
   },
   mounted() {
-    this.last = this.el.value
     this.grow()
     this.el.addEventListener("input", () => this.grow())
   },
   updated() {
-    // Only re-measure when the value actually changed. A re-render that merely flipped a
-    // Generate button's label must NOT trigger a collapse/expand (the disruptive scroll
-    // the user saw on every generate click and completion).
-    if (this.el.value !== this.last) this.grow()
+    // Re-apply the height on EVERY patch. A LiveView DOM patch (e.g. typing in one field,
+    // or a Generate button's label flipping) syncs each textarea to the server node, which
+    // carries no inline height — so morphdom strips the height we set, collapsing every
+    // OTHER field when any one of them re-renders. grow() no-ops while hidden (collapsed
+    // <details>), preserves scroll, and its auto→scrollHeight writes are synchronous (no
+    // flicker), so re-growing here restores the size without jumping the page.
+    this.grow()
   },
 }
 

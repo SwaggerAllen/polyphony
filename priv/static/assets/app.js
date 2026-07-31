@@ -8735,16 +8735,14 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
       const y = window.scrollY;
       this.el.style.height = "auto";
       this.el.style.height = this.el.scrollHeight + "px";
-      this.last = this.el.value;
       if (window.scrollY !== y) window.scrollTo(window.scrollX, y);
     },
     mounted() {
-      this.last = this.el.value;
       this.grow();
       this.el.addEventListener("input", () => this.grow());
     },
     updated() {
-      if (this.el.value !== this.last) this.grow();
+      this.grow();
     }
   };
   Hooks2.ComposerInput = {

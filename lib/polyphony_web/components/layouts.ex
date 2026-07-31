@@ -32,17 +32,21 @@ defmodule PolyphonyWeb.Layouts do
     <header class="topbar">
       <a class="brand" href={~p"/"}>Polyphony</a>
       <div class="spacer"></div>
-      <nav>
-        <%= if @current_user do %>
-          <a href={~p"/library"}>Library</a>
-          <a href={~p"/settings"}>Settings</a>
-          <%= if @current_user.role in ["admin", "superadmin"] do %>
-            <a href={~p"/admin"}>Admin</a>
+      <nav class="topnav">
+        <input type="checkbox" id="nav-toggle" class="nav-toggle-cb" />
+        <label for="nav-toggle" class="nav-toggle" aria-label="Menu" title="Menu">☰</label>
+        <div class="nav-links">
+          <%= if @current_user do %>
+            <a href={~p"/library"}>Library</a>
+            <a href={~p"/settings"}>Settings</a>
+            <%= if @current_user.role in ["admin", "superadmin"] do %>
+              <a href={~p"/admin"}>Admin</a>
+            <% end %>
+            <a href={~p"/logout"}>@<%= @current_user.username %> · out</a>
+          <% else %>
+            <a href={~p"/login"}>Sign in</a>
           <% end %>
-          <a href={~p"/logout"}>@<%= @current_user.username %> · out</a>
-        <% else %>
-          <a href={~p"/login"}>Sign in</a>
-        <% end %>
+        </div>
       </nav>
     </header>
 
