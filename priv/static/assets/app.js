@@ -8715,6 +8715,7 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
   // js/app.js
   var csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
   var Hooks2 = {};
+  var FIELD_SIZING = typeof CSS !== "undefined" && CSS.supports && CSS.supports("field-sizing", "content");
   Hooks2.Autoscroll = {
     isPinned() {
       const el = this.el;
@@ -8731,6 +8732,7 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
   };
   Hooks2.AutoGrow = {
     grow() {
+      if (FIELD_SIZING) return;
       if (this.el.offsetParent === null) return;
       const y = window.scrollY;
       this.el.style.height = "auto";
@@ -8747,6 +8749,7 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
   };
   Hooks2.ComposerInput = {
     grow() {
+      if (FIELD_SIZING) return;
       this.el.style.height = "auto";
       this.el.style.height = this.el.scrollHeight + "px";
     },
@@ -8800,6 +8803,7 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
   document.addEventListener(
     "toggle",
     (e) => {
+      if (FIELD_SIZING) return;
       const d = e.target;
       if (d.tagName !== "DETAILS" || !d.open) return;
       d.querySelectorAll("textarea.para-input").forEach((ta) => {

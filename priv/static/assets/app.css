@@ -1287,6 +1287,7 @@ input:focus, textarea:focus, select:focus {
   max-height: 40vh;
   resize: none;
   overflow-y: auto;
+  field-sizing: content;
   line-height: 1.5;
 }
 
@@ -1516,9 +1517,13 @@ details[open] > .field-summary::before, details[open] > .card-summary::before {
 
 .para-input {
   flex: 1;
-  min-height: 0;
+  min-height: 2.4rem;
   resize: none;
   overflow: hidden;
+  /* Native content-sizing where supported (Chromium/Safari): the field grows to fit
+     its text with no JavaScript. The AutoGrow hook is a fallback for browsers without
+     it (e.g. older Firefox). */
+  field-sizing: content;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;

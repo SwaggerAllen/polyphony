@@ -239,7 +239,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .composer .row { align-items: center; }
 .say-input {
   width: 100%; min-height: 2.6rem; max-height: 40vh; resize: none; overflow-y: auto;
-  line-height: 1.5;
+  field-sizing: content; line-height: 1.5;
 }
 
 /* Authoring auto-generation: the per-field "✨ Generate" row + the brief card. */
@@ -309,7 +309,11 @@ details[open] > .field-summary::before, details[open] > .card-summary::before { 
 .field-actions { margin-top: .2rem; }
 .para { display: flex; gap: .35rem; align-items: flex-start; margin: .15rem 0; }
 .para-input {
-  flex: 1; min-height: 0; resize: none; overflow: hidden;
+  flex: 1; min-height: 2.4rem; resize: none; overflow: hidden;
+  /* Native content-sizing where supported (Chromium/Safari): the field grows to fit
+     its text with no JavaScript. The AutoGrow hook is a fallback for browsers without
+     it (e.g. older Firefox). */
+  field-sizing: content;
   background: transparent; border: 1px solid transparent; border-radius: 6px;
   padding: .4rem .5rem; line-height: 1.55;
 }
