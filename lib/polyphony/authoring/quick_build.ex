@@ -4,14 +4,16 @@ defmodule Polyphony.Authoring.QuickBuild do
   button on the campaign editor. From a world seed and one seed per character it:
 
     1. generates a **world bible** (like ✨ Generate-all on the bible editor),
-    2. generates each **character** grounded in that world (✨ Generate-all, status
-       `:full`, linked to the bible),
-    3. cross-links the cast — every character gets a directional relationship toward
-       each other one (`Autofill.regard_map`, so the regards are asymmetrical),
-    4. optionally **stubs off-screen people** — with `:suggest_offscreen`, each
-       character also gets AI-suggested relationships (mentors, rivals, family), the
-       new names created as pending stubs (§B8) exactly as the sheet editor does on
-       save, and
+    2. generates each **character** in turn, grounded in that world **and the cast built
+       so far** — the earlier characters' sheets and the off-screen people they
+       introduced — so shared world detail stays consistent instead of each character
+       independently inventing its own (status `:full`, linked to the bible),
+    3. optionally **stubs off-screen people** as it goes — with `:suggest_offscreen`,
+       each character gets AI-suggested relationships (mentors, rivals, family) created
+       as pending stubs (§B8); because they're made during generation, a later character
+       can reuse one instead of inventing a duplicate,
+    4. cross-links the cast — every character gets a directional regard toward each other
+       one (`Autofill.regard_map`, asymmetrical), and
     5. drafts a **campaign premise** grounded in the world and cast.
 
   Everything is persisted to the author's `Library` as ordinary owned entries — the
@@ -74,10 +76,10 @@ defmodule Polyphony.Authoring.QuickBuild do
         world_ctx = world_context(world_fields)
 
         {char_entries, failed} =
-          build_characters(owner, seeds, bible_entry.id, world_ctx, meter, report)
+          generate_cast(owner, seeds, bible_entry.id, world_ctx, suggest?, meter, report)
 
         report.(length(seeds) + 1, "Connecting the cast")
-        char_entries = wire_cast(char_entries, suggest?, bible_entry.id, owner, meter)
+        char_entries = interlink_cast(char_entries, meter)
 
         report.(length(seeds) + 2, "Framing the premise")
         premise = build_premise(world_ctx, char_entries, meter)
@@ -109,35 +111,98 @@ defmodule Polyphony.Authoring.QuickBuild do
     end
   end
 
-  # Generate each character, keeping the ones that succeed and collecting `{seed, reason}`
-  # for the ones that don't — a blank result (valid response, no usable fields) counts as
-  # a failure too. Always returns `{entries, failed}`: even if every character fails, the
-  # world it belongs to is still built and associated, and the failures are reported.
-  defp build_characters(owner, seeds, bible_id, world_ctx, meter, report) do
+  # Generate each character in order, GROUNDED in the cast built so far — the earlier
+  # characters' sheets and the off-screen stubs they introduced. That shared context is
+  # what stops every character from independently inventing (say) a different landlord for
+  # the same building: a person one character established is visible to the next, so names
+  # line up and the stub registry collapses them into one. Off-screen stubs are created
+  # here (not in a later pass) precisely so they're available to subsequent characters.
+  #
+  # Keeps the ones that succeed and collects `{seed, reason}` for the ones that don't (a
+  # blank result counts as a failure). Always returns `{entries, failed}` — even a fully
+  # failed cast still leaves the world built and associated.
+  defp generate_cast(owner, seeds, bible_id, world_ctx, suggest?, meter, report) do
     n = length(seeds)
 
-    seeds
-    |> Enum.with_index()
-    |> Enum.reduce({[], []}, fn {seed, i}, {ok, bad} ->
-      report.(1 + i, "Writing character #{i + 1} of #{n}")
-      brief = brief_with_roster(seed, seeds, i)
+    {built, _stubs, failed} =
+      seeds
+      |> Enum.with_index()
+      |> Enum.reduce({[], %{}, []}, fn {seed, i}, {built, stubs, failed} ->
+        report.(1 + i, "Writing character #{i + 1} of #{n}")
+        brief = brief_with_roster(seed, seeds, i)
+        opts = [world: world_ctx, relations: cast_relations(built, stubs)] ++ meter
 
-      case Autofill.generate_all(:character, brief, %{}, [world: world_ctx] ++ meter) do
-        {:ok, fields} when map_size(fields) > 0 ->
-          sheet = %CharacterSheet{
-            to_character_sheet(fields, bible_id)
-            | boundaries: gen_boundaries(fields, world_ctx, meter)
-          }
+        case Autofill.generate_all(:character, brief, %{}, opts) do
+          {:ok, fields} when map_size(fields) > 0 ->
+            sheet = %CharacterSheet{
+              to_character_sheet(fields, bible_id)
+              | boundaries: gen_boundaries(fields, world_ctx, meter)
+            }
 
-          {ok ++ [put(owner, "character", sheet)], bad}
+            entry = put(owner, "character", sheet)
 
-        {:ok, _empty} ->
-          {ok, bad ++ [{seed, :blank_generation}]}
+            {entry, stubs} =
+              maybe_stub_offscreen(entry, sheet, built, suggest?, bible_id, owner, meter, stubs)
 
-        {:error, reason} ->
-          {ok, bad ++ [{seed, reason}]}
+            {built ++ [{entry, sheet}], stubs, failed}
+
+          {:ok, _empty} ->
+            {built, stubs, failed ++ [{seed, :blank_generation}]}
+
+          {:error, reason} ->
+            {built, stubs, failed ++ [{seed, reason}]}
+        end
+      end)
+
+    {Enum.map(built, &elem(&1, 0)), failed}
+  end
+
+  # Off-screen relationships for a just-generated character, stubbed and persisted now so
+  # later characters see them. Prior main cast are excluded from suggestions (they're real
+  # characters, not off-screen stubs). Returns the (possibly-updated) entry + the grown
+  # stub registry.
+  defp maybe_stub_offscreen(entry, _sheet, _built, false, _bible_id, _owner, _meter, stubs),
+    do: {entry, stubs}
+
+  defp maybe_stub_offscreen(entry, sheet, built, true, bible_id, owner, meter, stubs) do
+    prior_names = MapSet.new(for {_e, s} <- built, present?(s.name), do: norm(s.name))
+
+    {offscreen, stubs} =
+      suggest_and_stub(entry.id, sheet, [], prior_names, bible_id, owner, meter, stubs)
+
+    entry =
+      case offscreen do
+        [] ->
+          entry
+
+        rels ->
+          elem(Library.update_payload(entry.id, %CharacterSheet{sheet | relationships: rels}), 1)
       end
-    end)
+
+    {entry, stubs}
+  end
+
+  # The cast context handed to each new character's generation: the earlier characters'
+  # sheets (so shared world detail stays consistent) and the off-screen stubs introduced
+  # so far (name + role), as the `relations` maps `Autofill` grounds generation in.
+  defp cast_relations(built, stubs) do
+    mains =
+      for {_e, s} <- built, present?(s.name) do
+        %{
+          "name" => s.name,
+          "premise" => s.premise,
+          "voice" => s.voice,
+          "temperament" => s.temperament,
+          "backstory" => s.backstory
+        }
+      end
+
+    stub_maps =
+      for {_norm, %{name: name, role: role}} <- stubs, present?(name) do
+        %{"name" => name, "descriptor" => role}
+      end
+
+    mains ++ stub_maps
   end
 
   # Ground each character in the rest of the ensemble so a relationship the seed states
@@ -170,53 +235,37 @@ defmodule Polyphony.Authoring.QuickBuild do
     end
   end
 
-  # Wire each character's relationships: a directional link toward every other built
-  # character (with an asymmetrical regard and the target's stable id set), plus —
-  # when `suggest?` — AI-suggested off-screen people stubbed like the sheet editor does
-  # on save. A `stubs` registry (normalized name → id) is threaded across the cast so
-  # an off-screen person two characters both name collapses into ONE shared stub that
-  # links back to each of them. Best-effort per character: a failed call leaves that
-  # character less-linked rather than aborting the whole build.
-  defp wire_cast(entries, suggest?, bible_id, owner, meter) do
+  # Cross-link the main cast: each character gets a directional regard toward every other
+  # built character (asymmetrical, target id set), merged on top of the off-screen
+  # relationships already set during generation. Best-effort per character: a failed
+  # regard call leaves that character less-linked rather than aborting the build.
+  defp interlink_cast(entries, meter) do
     named = Enum.map(entries, fn e -> {e, Library.payload(e)} end)
-    cast_names = MapSet.new(for {_e, s} <- named, present?(s.name), do: norm(s.name))
 
-    {updated, _stubs} =
-      Enum.reduce(named, {[], %{}}, fn {entry, sheet}, {acc, stubs} ->
-        others = for {o, os} <- named, o.id != entry.id, do: {o.id, os.name}
-        cast_rels = if others == [], do: [], else: cast_regards(sheet, others, meter)
+    Enum.map(named, fn {entry, sheet} ->
+      others = for {o, os} <- named, o.id != entry.id, do: {o.id, os.name}
 
-        {offscreen, stubs} =
-          if suggest?,
-            do:
-              suggest_and_stub(
-                entry.id,
-                sheet,
-                cast_rels,
-                cast_names,
-                bible_id,
-                owner,
-                meter,
-                stubs
-              ),
-            else: {[], stubs}
+      case others do
+        [] ->
+          entry
 
-        entry =
-          case cast_rels ++ offscreen do
-            [] ->
-              entry
+        _ ->
+          cast_rels = cast_regards(sheet, others, meter)
+          merged = merge_rels(sheet.relationships || [], cast_rels)
 
-            rels ->
-              {:ok, u} =
-                Library.update_payload(entry.id, %CharacterSheet{sheet | relationships: rels})
+          elem(
+            Library.update_payload(entry.id, %CharacterSheet{sheet | relationships: merged}),
+            1
+          )
+      end
+    end)
+  end
 
-              u
-          end
-
-        {[entry | acc], stubs}
-      end)
-
-    Enum.reverse(updated)
+  # Append the cast-link relationships that don't already target a character the sheet
+  # links to (so an off-screen suggestion that happened to name a castmate isn't doubled).
+  defp merge_rels(existing, additions) do
+    have = MapSet.new(existing, & &1.target_id)
+    existing ++ Enum.reject(additions, &MapSet.member?(have, &1.target_id))
   end
 
   defp cast_regards(sheet, others, meter) do
@@ -293,9 +342,10 @@ defmodule Polyphony.Authoring.QuickBuild do
             )
           )
 
-        {stub.id, Map.put(stubs, norm(s["target"]), stub.id)}
+        entry = %{id: stub.id, name: s["target"], role: s["descriptor"]}
+        {stub.id, Map.put(stubs, norm(s["target"]), entry)}
 
-      id ->
+      %{id: id} ->
         append_inbound(id, inbound)
         {id, stubs}
     end

@@ -118,32 +118,88 @@ defmodule Polyphony.Authoring.QuickBuildTest do
     assert Enum.any?(main.relationships, &(&1.target_id in stub_ids))
   end
 
+  defmodule SharedPersonProvider do
+    @moduledoc "Mock, but every relationship suggestion names the SAME off-screen person."
+    @behaviour Polyphony.LLM.Provider
+
+    @impl true
+    def complete(messages, opts) do
+      if Keyword.get(opts, :response) == :relationships do
+        {:ok, Jason.encode!([%{"target" => "Marek the Landlord", "descriptor" => "landlord"}])}
+      else
+        Polyphony.LLM.Mock.complete(messages, opts)
+      end
+    end
+  end
+
   test "an off-screen person named by two characters collapses into one shared stub",
        %{owner: owner} do
-    # Identical seeds ⇒ identical generated sheets ⇒ both characters propose the same
-    # off-screen names (the Mock is deterministic in the prompt), so they must dedupe.
+    # Both characters name the same off-screen person; the shared stub registry must
+    # collapse them into one stub that links back to both (not two duplicate Mareks).
     {:ok, result} =
       QuickBuild.build(
         owner: owner,
         world_seed: "a walled city",
-        character_seeds: ["a twin", "a twin"],
+        character_seeds: ["a merchant", "a guard"],
         suggest_offscreen: true,
-        provider: Polyphony.LLM.Mock
+        provider: SharedPersonProvider
       )
 
     chars = Enum.filter(Library.list_for_owner(owner), &(&1.kind == "character"))
     stubs = Enum.filter(chars, &match?(%CharacterSheet{status: :stub}, Library.payload(&1)))
     main_ids = Enum.sort(Enum.map(result.characters, & &1.id))
 
-    # No duplicate stub names — the shared people were reused, not re-created.
-    stub_names = Enum.map(stubs, &String.downcase(Library.payload(&1).name))
-    assert stub_names == Enum.uniq(stub_names)
+    # Exactly one stub — the landlord, reused, not re-created per character.
+    assert [stub] = stubs
+    assert String.downcase(Library.payload(stub).name) == "marek the landlord"
 
-    # A shared stub links back to BOTH twins (one inbound relationship each).
-    assert Enum.any?(stubs, fn stub ->
-             ids = Library.payload(stub).relationships |> Enum.map(& &1.target_id) |> Enum.sort()
-             ids == main_ids
-           end)
+    # It links back to BOTH main characters.
+    ids = Library.payload(stub).relationships |> Enum.map(& &1.target_id) |> Enum.sort()
+    assert ids == main_ids
+  end
+
+  defmodule SpyProvider do
+    @moduledoc "Mock, but echoes each character-generation prompt to the test process."
+    @behaviour Polyphony.LLM.Provider
+
+    @impl true
+    def complete(messages, opts) do
+      if Keyword.get(opts, :response) == :autofill do
+        pid = Application.get_env(:polyphony, :spy_pid)
+        if pid, do: send(pid, {:autofill, Enum.map_join(messages, " ", & &1.content)})
+      end
+
+      Polyphony.LLM.Mock.complete(messages, opts)
+    end
+  end
+
+  test "a later character is generated with the earlier cast in context", %{owner: owner} do
+    Application.put_env(:polyphony, :spy_pid, self())
+    on_exit(fn -> Application.delete_env(:polyphony, :spy_pid) end)
+
+    {:ok, result} =
+      QuickBuild.build(
+        owner: owner,
+        world_seed: "a walled city",
+        character_seeds: ["the first", "the second"],
+        provider: SpyProvider
+      )
+
+    first_name = hd(result.characters) |> Library.payload() |> Map.get(:name)
+    prompts = collect_autofill([])
+
+    # The first character's generated name only appears in a prompt if a *later*
+    # character was grounded in it — proving the cast accumulates as context.
+    assert first_name not in [nil, ""]
+    assert Enum.any?(prompts, &String.contains?(&1, first_name))
+  end
+
+  defp collect_autofill(acc) do
+    receive do
+      {:autofill, text} -> collect_autofill([text | acc])
+    after
+      0 -> acc
+    end
   end
 
   test "off-screen suggestions are off by default (cast-only interlink)", %{owner: owner} do
