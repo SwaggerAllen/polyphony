@@ -211,6 +211,58 @@ defmodule Polyphony.Authoring.QuickBuildTest do
     assert length(failed) == 2
   end
 
+  test "reports progress through each phase", %{owner: owner} do
+    me = self()
+
+    {:ok, _result} =
+      QuickBuild.build(
+        owner: owner,
+        world_seed: "a harbor city",
+        character_seeds: ["a sailor", "a fixer"],
+        provider: Polyphony.LLM.Mock,
+        progress: fn step -> send(me, {:progress, step}) end
+      )
+
+    steps = collect_progress([])
+
+    # Total is world + 2 characters + linking + premise = 5, and the bar advances to full.
+    assert Enum.all?(steps, &(&1.total == 5))
+    assert List.last(steps).done == 5
+    assert Enum.map(steps, & &1.done) == Enum.sort(Enum.map(steps, & &1.done))
+
+    labels = Enum.map(steps, & &1.label)
+    assert "Dreaming up the world" in labels
+    assert "Writing character 1 of 2" in labels
+    assert "Framing the premise" in labels
+  end
+
+  defp collect_progress(acc) do
+    receive do
+      {:progress, step} -> collect_progress([step | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
+  test "a blank seed still generates a character (one per row)", %{owner: owner} do
+    {:ok, result} =
+      QuickBuild.build(
+        owner: owner,
+        world_seed: "a harbor city",
+        # Three rows, one of them blank — all three become characters.
+        character_seeds: ["a sailor", "", "a fixer"],
+        provider: Polyphony.LLM.Mock
+      )
+
+    assert length(result.characters) == 3
+
+    for entry <- result.characters do
+      sheet = Library.payload(entry)
+      assert %CharacterSheet{status: :full} = sheet
+      assert sheet.name not in [nil, ""]
+    end
+  end
+
   test "a blank character list still builds a world and premise", %{owner: owner} do
     {:ok, result} =
       QuickBuild.build(

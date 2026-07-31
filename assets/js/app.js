@@ -9,6 +9,13 @@ const csrfToken = document
 
 const Hooks = {}
 
+// Modern browsers size textareas to their content in pure CSS (`field-sizing: content`);
+// where that's available, the auto-grow hooks below are unnecessary and stand down so
+// nothing sets an inline height (which is what morphdom used to strip, collapsing fields).
+// The JS path remains only as a fallback for browsers without field-sizing.
+const FIELD_SIZING =
+  typeof CSS !== "undefined" && CSS.supports && CSS.supports("field-sizing", "content")
+
 // Keep a scrollable transcript pinned to the bottom as new beats stream in,
 // unless the reader has scrolled up to read history.
 Hooks.Autoscroll = {
@@ -30,6 +37,7 @@ Hooks.Autoscroll = {
 // paragraphs are fully readable. Used by the block-field editor.
 Hooks.AutoGrow = {
   grow() {
+    if (FIELD_SIZING) return // CSS handles sizing — do nothing.
     // A hidden textarea (inside a collapsed <details>) has scrollHeight 0; measuring it
     // would set height:0, so it shows collapsed when re-opened. Skip until it's visible —
     // the details `toggle` handler re-grows it on open.
@@ -62,6 +70,7 @@ Hooks.AutoGrow = {
 // persistent editor fields and must never self-clear.
 Hooks.ComposerInput = {
   grow() {
+    if (FIELD_SIZING) return // CSS handles sizing; clearing the value shrinks it natively.
     this.el.style.height = "auto"
     this.el.style.height = this.el.scrollHeight + "px"
   },
@@ -127,6 +136,7 @@ Hooks.CopyText = {
 document.addEventListener(
   "toggle",
   (e) => {
+    if (FIELD_SIZING) return // CSS sizes the fields when the section becomes visible.
     const d = e.target
     if (d.tagName !== "DETAILS" || !d.open) return
     d.querySelectorAll("textarea.para-input").forEach((ta) => {
