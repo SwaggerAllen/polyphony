@@ -59,20 +59,42 @@ defmodule Polyphony.Authoring.QuickBuild do
     report = progress_fn(Keyword.get(opts, :progress), length(seeds) + 3)
     report.(0, "Dreaming up the world")
 
-    with {:ok, world_fields} <- Autofill.generate_all(:world_bible, world_seed, %{}, meter),
-         bible_entry = put(owner, "world_bible", to_world_bible(world_fields)),
-         world_ctx = world_context(world_fields),
-         {:ok, char_entries, failed} <-
-           build_characters(owner, seeds, bible_entry.id, world_ctx, meter, report),
-         _ = report.(length(seeds) + 1, "Connecting the cast"),
-         char_entries = wire_cast(char_entries, suggest?, bible_entry.id, owner, meter),
-         _ = report.(length(seeds) + 2, "Framing the premise"),
-         {:ok, premise} <-
-           Autofill.generate_campaign_premise(
-             [world: world_ctx, cast: cast_summaries(char_entries)] ++ meter
-           ) do
-      report.(length(seeds) + 3, "Done")
-      {:ok, %{bible: bible_entry, characters: char_entries, premise: premise, failed: failed}}
+    # The **world** is the only hard requirement — with nothing to attach, there's no
+    # build. Once it exists, every later step degrades rather than aborts (a failed
+    # character is reported, a failed premise falls back to blank), so the caller always
+    # gets the world + whatever cast succeeded to associate with the campaign. Previously
+    # a late failure (e.g. the premise call) discarded the whole result even though the
+    # world and characters were already persisted.
+    case Autofill.generate_all(:world_bible, world_seed, %{}, meter) do
+      {:error, reason} ->
+        {:error, {:world_failed, reason}}
+
+      {:ok, world_fields} ->
+        bible_entry = put(owner, "world_bible", to_world_bible(world_fields))
+        world_ctx = world_context(world_fields)
+
+        {char_entries, failed} =
+          build_characters(owner, seeds, bible_entry.id, world_ctx, meter, report)
+
+        report.(length(seeds) + 1, "Connecting the cast")
+        char_entries = wire_cast(char_entries, suggest?, bible_entry.id, owner, meter)
+
+        report.(length(seeds) + 2, "Framing the premise")
+        premise = build_premise(world_ctx, char_entries, meter)
+
+        report.(length(seeds) + 3, "Done")
+        {:ok, %{bible: bible_entry, characters: char_entries, premise: premise, failed: failed}}
+    end
+  end
+
+  # Best-effort premise: a provider failure falls back to blank rather than sinking the
+  # whole build (the author can ✨ Expand it on the campaign screen afterward).
+  defp build_premise(world_ctx, char_entries, meter) do
+    case Autofill.generate_campaign_premise(
+           [world: world_ctx, cast: cast_summaries(char_entries)] ++ meter
+         ) do
+      {:ok, premise} -> premise
+      {:error, _} -> ""
     end
   end
 
@@ -89,40 +111,33 @@ defmodule Polyphony.Authoring.QuickBuild do
 
   # Generate each character, keeping the ones that succeed and collecting `{seed, reason}`
   # for the ones that don't — a blank result (valid response, no usable fields) counts as
-  # a failure too. Errors outright only if *every* seed failed; a partial success proceeds
-  # with what it got so one flaky generation doesn't discard the whole build.
+  # a failure too. Always returns `{entries, failed}`: even if every character fails, the
+  # world it belongs to is still built and associated, and the failures are reported.
   defp build_characters(owner, seeds, bible_id, world_ctx, meter, report) do
     n = length(seeds)
 
-    {entries, failed} =
-      seeds
-      |> Enum.with_index()
-      |> Enum.reduce({[], []}, fn {seed, i}, {ok, bad} ->
-        report.(1 + i, "Writing character #{i + 1} of #{n}")
-        brief = brief_with_roster(seed, seeds, i)
+    seeds
+    |> Enum.with_index()
+    |> Enum.reduce({[], []}, fn {seed, i}, {ok, bad} ->
+      report.(1 + i, "Writing character #{i + 1} of #{n}")
+      brief = brief_with_roster(seed, seeds, i)
 
-        case Autofill.generate_all(:character, brief, %{}, [world: world_ctx] ++ meter) do
-          {:ok, fields} when map_size(fields) > 0 ->
-            sheet = %CharacterSheet{
-              to_character_sheet(fields, bible_id)
-              | boundaries: gen_boundaries(fields, world_ctx, meter)
-            }
+      case Autofill.generate_all(:character, brief, %{}, [world: world_ctx] ++ meter) do
+        {:ok, fields} when map_size(fields) > 0 ->
+          sheet = %CharacterSheet{
+            to_character_sheet(fields, bible_id)
+            | boundaries: gen_boundaries(fields, world_ctx, meter)
+          }
 
-            {ok ++ [put(owner, "character", sheet)], bad}
+          {ok ++ [put(owner, "character", sheet)], bad}
 
-          {:ok, _empty} ->
-            {ok, bad ++ [{seed, :blank_generation}]}
+        {:ok, _empty} ->
+          {ok, bad ++ [{seed, :blank_generation}]}
 
-          {:error, reason} ->
-            {ok, bad ++ [{seed, reason}]}
-        end
-      end)
-
-    cond do
-      entries != [] -> {:ok, entries, failed}
-      seeds == [] -> {:ok, [], []}
-      true -> {:error, {:all_characters_failed, failed}}
-    end
+        {:error, reason} ->
+          {ok, bad ++ [{seed, reason}]}
+      end
+    end)
   end
 
   # Ground each character in the rest of the ensemble so a relationship the seed states

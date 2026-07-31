@@ -162,7 +162,10 @@ defmodule Polyphony.Authoring.QuickBuildTest do
   end
 
   defmodule OneBadProvider do
-    @moduledoc "Mock, except a character brief containing BOOMCHAR generates blank (a failure)."
+    @moduledoc """
+    Mock, except an autofill brief containing BOOMCHAR generates blank (no usable fields)
+    and one containing BOOMFAIL errors outright — for exercising partial/total failure.
+    """
     @behaviour Polyphony.LLM.Provider
 
     @impl true
@@ -172,10 +175,15 @@ defmodule Polyphony.Authoring.QuickBuildTest do
       primary =
         messages |> Enum.map_join(" ", & &1.content) |> String.split("Ensemble context") |> hd()
 
-      if Keyword.get(opts, :response) == :autofill and String.contains?(primary, "BOOMCHAR") do
-        {:ok, "{}"}
-      else
-        Polyphony.LLM.Mock.complete(messages, opts)
+      cond do
+        Keyword.get(opts, :response) == :autofill and String.contains?(primary, "BOOMFAIL") ->
+          {:error, :boom}
+
+        Keyword.get(opts, :response) == :autofill and String.contains?(primary, "BOOMCHAR") ->
+          {:ok, "{}"}
+
+        true ->
+          Polyphony.LLM.Mock.complete(messages, opts)
       end
     end
   end
@@ -199,16 +207,31 @@ defmodule Polyphony.Authoring.QuickBuildTest do
     assert [{"BOOMCHAR the doomed", :blank_generation}] = result.failed
   end
 
-  test "the build errors only when every character seed fails", %{owner: owner} do
-    assert {:error, {:all_characters_failed, failed}} =
+  test "even if every character fails, the world still builds and is returned",
+       %{owner: owner} do
+    # The world is the only hard requirement — a fully-failed cast must not discard it,
+    # or the campaign loses its association to the world that did generate.
+    {:ok, result} =
+      QuickBuild.build(
+        owner: owner,
+        world_seed: "a harbor city",
+        character_seeds: ["BOOMCHAR one", "BOOMCHAR two"],
+        provider: OneBadProvider
+      )
+
+    assert %WorldBible{} = Library.payload(result.bible)
+    assert result.characters == []
+    assert length(result.failed) == 2
+  end
+
+  test "a failed world is the one thing that aborts the build", %{owner: owner} do
+    assert {:error, {:world_failed, _}} =
              QuickBuild.build(
                owner: owner,
-               world_seed: "a harbor city",
-               character_seeds: ["BOOMCHAR one", "BOOMCHAR two"],
+               world_seed: "BOOMFAIL a doomed world",
+               character_seeds: ["a sailor"],
                provider: OneBadProvider
              )
-
-    assert length(failed) == 2
   end
 
   test "reports progress through each phase", %{owner: owner} do
