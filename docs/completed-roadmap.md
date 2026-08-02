@@ -81,6 +81,21 @@ fact-injection, never extrapolation — the character reacts on screen.
 Left open, recorded in the backlog: arc extraction is unattributed (no metering, matching
 character arc), and §3.0 gating sits on top and stays deferred.
 
+### §3.0 — Arc review gates the next scene · *new (MVP)*
+Opening a new scene now requires the cast has no pending character arc and the campaign no
+pending world arc — an unreviewed proposal is a gap between the sheet generation reads and who
+the character has become. `Authoring.SceneGate.check/3` evaluates **per selected cast** (not the
+whole backlog), keyed by character **name** (the id scenes + extraction use); world arc blocks
+campaign-wide. `campaign_live`'s start-scene consults the gate before `OpenScene` and redirects
+to arc review on a block; it never affects closing a scene. Also fixed `ArcReviewLive` to resolve
+cast library-ids → names (it was querying by id and showing nothing for real campaigns) and added
+**accept-all**, the one-tap way through the gate. Refinements left open (recorded in the backlog):
+the failed-extraction and not-ready-yet async states.
+
+Also plugged two future features into `decisions.md`: **P13** a campaign companion Q&A agent
+(ask-your-story, read skills over the log/sheets/arcs with the visibility lens), and **P14**
+design-thread tooling (docs/ux access skills + the docs-in-repo-vs-hosted open question).
+
 ---
 
 ## Housekeeping

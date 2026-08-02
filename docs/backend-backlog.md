@@ -317,10 +317,18 @@ access to the frozen snapshot's embedded copies, library visibility governs the 
 Reading a published campaign never reaches the author's live world. Browse should be explicit
 about which one a reader is looking at.
 
-### 3.0 Arc review gates the next scene · **new**
+### 3.0 Arc review gates the next scene · **new** — ✅ **Shipped (MVP)**
 
 Opening a new scene requires that **every character being cast has no pending arc proposals**.
 World arc gates the whole campaign, since it feeds every generation in it.
+
+> **Shipped (MVP).** `Authoring.SceneGate.check/3` — per-cast (keyed by character *name*, the id
+> scenes and extraction use), world arc campaign-wide; `campaign_live` consults it before
+> `OpenScene` and redirects to arc review on a block; `ArcReviewLive` resolves cast ids → names
+> (it was querying by id and finding nothing) and gained **accept-all**. See `completed-roadmap.md`.
+> **Refinements not yet built:** the "extraction failed → block with retry" and "extraction still
+> running → not ready yet" async states (they need extraction status tracking). The proposal gate
+> is the correctness core; these are UX polish on top.
 
 **Why.** Every unreviewed proposal is a gap between who a character is on paper and who they've
 become in the story, and generation works from the paper. Let it run five scenes and the Director
