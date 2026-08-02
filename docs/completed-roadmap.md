@@ -96,6 +96,20 @@ Also plugged two future features into `decisions.md`: **P13** a campaign compani
 (ask-your-story, read skills over the log/sheets/arcs with the visibility lens), and **P14**
 design-thread tooling (docs/ux access skills + the docs-in-repo-vs-hosted open question).
 
+### §5.2 — Character identity migration: domain foundation · *change (partial)*
+Character `character_id` in the event log was the display name, keyed on everywhere — so a rename
+would silently corrupt references. Shipped the durable, safe **foundation** toward stable-id
+identity: (1) `Rebuild.sheet_for` resolves a scene's `character_id` to its sheet by **library id
+first**, then the legacy name match — rename-safe lookup; (2) `Scene.Cast` — a scene's id↔name
+resolver (`render_name`, `resolve_id`) with identity fallback; (3) **id→name at the prompt
+boundary** — `context` and `scene_brief` render display names from stored ids, so the LLM always
+sees names. All legacy-tolerant (an unmapped id renders as itself), so the suite stayed green.
+The **atomic mint-flip** (resolve emitted names→ids + enter characters by id + the `play_live`
+overhaul + data clear) is **deferred to the frontend rebuild** to build the play view id-native
+rather than overhaul-then-discard it — tracked in `backend-backlog.md §5.2` and the frontend
+roadmap item. Also: metering fix (arc/world-arc extraction billed to the campaign owner; latent
+`Costs.check` nil-user crash fixed).
+
 ---
 
 ## Housekeeping

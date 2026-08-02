@@ -333,6 +333,13 @@ The current LiveView is the first-cut UI; the redesign is speced in `ux/` (mocks
   kit's tokens, classes, and markup states into the components rather than re-deriving them
   (see CLAUDE.md conventions). The backend prerequisites are the `backend-backlog.md`
   immediate milestone.
+- **Build the play view id-native (finishes the identity migration).** The character-identity
+  migration (`backend-backlog.md §5.2`) deliberately stops at the domain foundation; its atomic
+  mint-flip includes a `play_live` overhaul (composer, roster options, viewer selector, whisper
+  parsing → stable ids, names for display). Do that here rather than overhaul-then-discard the
+  current LiveView — the rebuilt play view enters characters by library id, resolves emitted
+  whisper names → ids before commit, and the flip lands with dedicated whisper-routing +
+  rename-safety tests. Also clear dev/prod event streams + campaign `scenes` lists (clean-slate).
 - **Adopt a LiveView storybook so components can be reviewed in isolation.** A catalogue
   that renders each kit component and its states on its own page — the natural home for the
   kit once it's real markup, and a guard against drift (a component's states live in one

@@ -703,6 +703,14 @@ the existing suite stay green):
 5. **Open the fields.** Make `name` (and other non-boundary scalars) freely editable + arc-
    overridable, now that identity is stable.
 
+**Sequencing decision (author):** the atomic remainder (2b-emit + 3, and 4–5 on top) is
+**deferred to the frontend rebuild.** Its biggest piece is a `play_live` overhaul (composer,
+roster options, viewer selector, whisper parsing → ids) that the redesign will rewrite anyway —
+so it's built **id-native during the rebuild** rather than overhauled then discarded. The
+durable domain foundation (1, 2a, 2b-render) is banked. Corruption risk stays open but contained
+(clean-slate data, no bulk-rename flow, `name` not yet arc-overridable); **no editor stopgap
+added** by choice. The frontend-redesign roadmap item carries the flip as a requirement.
+
 ---
 
 ## 6 · Deferred, but the design leaves room
