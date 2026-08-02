@@ -525,3 +525,33 @@ author-in-the-loop; **POV/narrator** handling (does the book narrate from one ch
 projection, or omniscient? — this is the visibility model resurfacing as a craft choice);
 chapter/scene segmentation; export format (EPUB/DOCX) and the KDP path; and rights/attribution for
 forked or collaborative campaigns before anything is sold.
+
+---
+
+## P12. Configurable turn-order & failure behaviour (design spike)
+
+*A spike, not a committed feature — captured so the hardcoded choices in the beat loop don't
+calcify.* Today turn order and failure handling are one fixed policy: the Director declares a
+beat's order once, generates it serially, and a terminally-failed slot is marked skipped and the
+beat carries on (`decisions` here supersede backlog §1.4's "requeue-to-tail" as a *hardcoded*
+change). Different users want different behaviour, and the split is real:
+
+- **Fine-grained writers** want determinism: no reordering on failure, no retry surprises — the
+  order they set is the order they get, and a failure is a visible gap they resolve by hand.
+- **Solo players** mostly want one thing: **play doesn't stop.** Carry on around a failure with
+  minimal ceremony; a light auto-retry is welcome but invisible.
+- **Multiplayer** is the case that actually wants **retry mechanics for fairness** — a player's
+  turn shouldn't be silently dropped because a provider hiccuped while others got theirs — and it
+  wants more knobs still once **dice/resolution systems** (§P5) land, where turn order and
+  outcome interact with initiative and stakes.
+
+**The spike's job** is to find the smallest policy surface that covers these without a
+combinatorial mess: what's configurable at the **scene** level vs. the **beat** level, what the
+default is per use-case, and how it composes with the existing `BeatPolicy` / `BeatWalk` /
+`TurnOrder` seams rather than bolting on a parallel system. Candidate axes: reorder-on-failure
+(off / requeue-to-tail-once / requeue-until-N), give-up threshold, and auto-advance pacing
+(already latent in `BeatPolicy` depth-cap chaining, backlog §2.10).
+
+**Not now.** It wants real multiplayer and at least the first dice system to pull against, or the
+design is guesswork. Sequenced after those; the backlog's §1.4 requeue refinement is the first
+concrete policy it would formalize.

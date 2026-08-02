@@ -22,25 +22,20 @@ for the full boundary map.
 ## Immediate milestone — what the current design needs to function
 
 Most of this file is a standing backlog to schedule against feedback. This slice is different:
-it's the set that **gates the shipped frontend design**, so it's the near-term target. Ordered
-by leverage:
+it's the set that **gates the shipped frontend design**, so it's the near-term target.
 
-- **§5.1 — scene-close fan-out has no caller. ✅ Done.** The single highest-leverage fix:
-  per-character summaries and arc extraction never ran in production, so the entire memory/arc
-  layer (arc review, world arc, the casting gate, published contents) was dark. Now wired by a
-  Commanded handler on `SceneClosed`. Everything else here that touches memory lands on top of it.
-- **§1.1–1.7 — the branching + live-beat family.** Mostly already backend-complete: fork/edit
-  are built and branch-relative for free (a fork is a separate stream), lineage records the cut
-  beat, and draft accept/discard + pass-turn exist — those four are frontend-affordance work,
-  deferred with the redesign. The genuine backend items were **§1.7 per-viewer failure scoping
-  (✅ done)** and **§1.4 failed-turn requeue-to-tail** — and 1.4's stall risk doesn't exist (the
-  beat already carries on and closes on failure), leaving only an optional resilience refinement.
-- **§2.3 — scene premise & location as authored fields**, and **§2.8 — world arc.** The two §2
-  items that gate designed screens: the "Set the scene" flow needs the former; arc review, the
-  casting gate, and off-screen catch-up need the latter (and §2.8 sits on §5.1).
-- **§4b.1 / §4b.2 — account framing fixes. ✅ Done.** 18+ reframed as eligibility (with the
-  no-row / no-invite-burn guarantee pinned by a test), and the settings toggle for the
-  non-existent safety analysis removed; the §C seam stays latent.
+**Shipped** (detail in `completed-roadmap.md`): §5.1 scene-close fan-out; §1.1–1.3 branching
+family (found already complete); §1.5/§1.6 draft accept-discard + pass-turn (backend);
+§1.7 per-viewer failures; §2.3 scene premise & location; §4b.1/§4b.2 account framing.
+
+**Still open in the milestone:**
+
+- **§1.4 — failed-turn requeue-to-tail.** *Deferred by decision.* The beat already carries on
+  and closes on a terminal failure (no stall); the requeue-to-tail-once refinement is an
+  optional resilience nicety, folded into the config-spike roadmap item (`decisions.md §P12`).
+- **§2.8 — world arc.** The one substantial feature left: durable world-change entries
+  (proposed→canon, parallel to character arc) + a propagation rule so off-screen characters
+  learn world facts. Sits on §5.1 (now wired). In planning.
 
 Everything below §2.3/§2.8 in the section numbering — the rest of §2, §3's publishing cluster,
 §4 reporting, §6 deferred — is the standing backlog: real, shaped, but scheduled against user
@@ -50,123 +45,42 @@ feedback rather than blocking the current design.
 
 ## 1 · Blocking the current design
 
-### 1.1 Fork wiring — `Fork.fork/3` · **wiring + change**
-`Fork.fork/3` and `ReadModels.SceneFork` exist with no UI (§1, §12). The design puts
-"Branch from beat N" in the beat drawer.
+### 1.1 Fork wiring — `Fork.fork/3` · ✅ **Shipped** (found already complete)
+Fork truncates at the cut beat and opens live there; `Reroll`/`Edit` are branch-relative for
+free because a fork is a separate stream. "Branch from beat N" UI is frontend, deferred. See
+`completed-roadmap.md`.
 
-Two semantics the design assumes, both need confirming:
+### 1.2 Edit with tail invalidation — `Edit.edit/6` `:invalid` · ✅ **Shipped** (found already built)
+`Edit.edit/6` complete (`:valid` any beat, `:invalid` forks); no branch-relative guard needed.
+Caller (frontend) deferred. See `completed-roadmap.md`.
 
-- **Fork truncates at the cut beat, and that beat becomes live.** Branching at beat 3 of a
-  6-beat scene yields a timeline whose newest beat is 3, with beat 3's turns intact and
-  editable. Beats 4–6 are not carried over.
-- **The "latest beat only" guard is branch-relative.** `Reroll.reroll/4` is restricted to
-  the latest beat. If forks are modelled as branches inside one scene rather than as new
-  scenes, that guard likely reads scene-latest today and would refuse every reroll in a
-  branch. It needs to mean "latest beat on this branch."
+### 1.3 Lineage records the cut beat and nothing else — `ReadModels.SceneFork` · ✅ **Shipped**
+`SceneFork` records `fork_beat` and nothing else, as prescribed. The optional read-time
+"identical-so-far / changed" comparison is a small helper to add when the branch-navigator UI
+wants it — not a blocker. See `completed-roadmap.md`.
 
-Together these are what makes beat-level forking sufficient. The design deliberately has
-**no turn-level fork control**: you branch a beat, which makes it live, then reroll or edit
-the specific turn you wanted to diverge at, and beat-tail invalidation does the rest.
+### 1.4 Failed turns requeue to the end of the beat · **change** — *deferred*
+The stall this warns about doesn't exist: a terminal failure records `PacketFailed`, the walk
+treats it as terminal, and the beat carries on and closes (*fail → skipped → carry on*). The
+unbuilt part is the softer **requeue-to-tail-once** (retry the slot at the end of the beat
+before giving up, with a retry count) — a resilience refinement with a narrative cost (a
+requeued turn conditions on turns that reacted to its absence). **Folded into the config-spike
+roadmap item** (`decisions.md §P12`): turn-order and failure behaviour want to be configurable
+per scene/beat (writers who don't want reordering; solo players who just want play not to stop;
+multiplayer retry/fairness once dice land), so requeue-to-tail becomes one policy among several
+rather than a hardcoded change.
 
-> **Status — backend satisfied; only the UI is missing.** Both semantics already hold.
-> `Fork.fork/3` keeps `beat <= through_beat` (copy-on-fork), so the fork's newest beat *is*
-> the cut beat and it opens live. The "latest beat" concern is moot here: a fork is a **new
-> scene stream**, not an in-scene branch, and `Reroll`/`Edit` read `latest_beat` off *that
-> stream's* own events — already branch-relative. The remaining work ("Branch from beat N"
-> in the drawer) is frontend, deferred with the redesign.
+### 1.5 Draft accept / discard · ✅ **Shipped (backend)**
+`BeatDriver.accept_draft/2` and `discard_draft/2` complete and tested; the approve/discard card
+is frontend, deferred. See `completed-roadmap.md`.
 
-### 1.2 Edit with tail invalidation in the live beat — `Edit.edit/6` `:invalid` · **wiring**
-Built, no callers (§1, §12). Required by 1.1 — reroll only covers AI-authored turns, so
-without this you can't diverge at a turn the human wrote, and branching works for half the
-transcript. Needs the same branch-relative guard as reroll.
+### 1.6 Pass turn · ✅ **Shipped (backend)**
+`BeatDriver.pass_turn/4` complete; the composer/quick-sheet entry points are frontend, deferred.
+See `completed-roadmap.md`.
 
-> **Status — backend built; only the UI is missing.** `Edit.edit/6` is complete: `:valid`
-> supersedes in place and works on any beat (it invalidates nothing downstream); `:invalid`
-> forks at the edit point and discards the stale tail. No branch-relative guard is needed —
-> the fork is a separate stream, and the valid path is deliberately beat-agnostic. Caller
-> (frontend) deferred.
-
-### 1.3 Lineage records the cut beat and nothing else — `ReadModels.SceneFork` · **wiring**
-
-*Supersedes an earlier version of this item that proposed storing the first divergent turn
-alongside the branch point. It doesn't survive contact with editing.* Branch, change the
-last turn, then delete that turn — the stored divergence now points at a packet that is in
-neither timeline. Branch at beat 3, then delete beat 3 on the branch, and the "real"
-divergence has moved earlier. The first divergent turn is not a property of the fork; it is
-a property of the diff between two timelines as they currently stand, so storing it means
-maintaining it forever.
-
-**Record the cut beat only.** It is an immutable statement about history — this is where the
-copy was taken — and it stays true regardless of what the branch does afterwards, including
-deleting the beat it was cut at. It should not later be "corrected" to track edits.
-
-If the drawer wants to say more than that, it computes it at read time from the two
-canonical packet sets (`Packets.canonical/1`), never from a stored field. The version worth
-having is the cheapest one: **identical so far / changed** — a set comparison with no
-ordering semantics, which answers the only question that actually matters, namely whether a
-branch is still an empty copy. Anything finer can wait until someone asks for it.
-
-> **Status — the storage half is done; the read-time helper is open.** `ReadModels.SceneFork`
-> already records `fork_beat` (the cut beat) and nothing else — exactly as prescribed. The
-> optional **identical-so-far / changed** comparison over the two canonical packet sets isn't
-> built; it's a small read-time helper to add when the branch navigator UI wants it, not a
-> blocker.
-
-### 1.4 Failed turns requeue to the end of the beat · **change**
-Today a failure records and broadcasts (`Failures`, §8/§12). The design has play carry on
-around a failed turn rather than stalling on it.
-
-- Requeue the failed slot to the tail of the current beat's order.
-- **Needs a terminal give-up state.** If the requeued attempt also fails, the beat must be
-  able to close without it, or a beat can never settle. Surfaces as a retry count and a
-  final "skipped" state on the slot.
-
-> **Status — the stall doesn't exist; the requeue-to-tail is an open refinement.** The
-> critical property is already met: a terminal failure dispatches `RecordFailure`
-> (`PacketFailed`), which `BeatWalk.terminal_chars` treats as terminal, so the walk skips the
-> slot and the beat closes — `GeneratePacket` still calls `BeatDriver.advance/3` after a
-> failure. Today's model is *fail → skipped → carry on*. What's unbuilt is the softer
-> **requeue-to-tail-once** (retry the slot at the end of the beat before giving up, with a
-> retry count) — a fiction-quality improvement, since the current behaviour drops the slot on
-> the first terminal failure rather than giving it a second chance in-beat. Not a blocker;
-> worth a decision on whether the narrative cost (a requeued turn conditions on turns that
-> reacted to its absence) is worth the resilience.
-
-### 1.5 Draft accept / discard · **wiring**
-`Drafts` + `BeatDriver.accept_draft/discard_draft` exist with no affordance (§2, §12). The
-design puts control mode two taps from the transcript, so "Draft & approve" becomes
-reachable in one gesture — the approve/edit/retry/discard card has to exist or the mode is
-a dead end. These ship together.
-
-> **Status — backend built; the affordance is frontend.** `BeatDriver.accept_draft/2` and
-> `discard_draft/2` are complete and tested. What's missing is the play-view card, deferred
-> with the redesign.
-
-### 1.6 Pass turn · **wiring**
-`BeatDriver.pass_turn` exists, no control (§2, §12). Design has it in the composer beside
-"Take the turn" (player passing their own) and in the character quick sheet ("Skip her
-turn", author passing someone else's). Same call, two entry points.
-
-> **Status — backend built; the affordance is frontend.** `BeatDriver.pass_turn/4` is
-> complete. What's missing is the two composer/quick-sheet entry points, deferred with the
-> redesign.
-
-### 1.7 Failures scoped per viewer · **change** — ✅ **Done (backend)**
-`GenerationFailed` was surfaced to the omniscient viewer only (§8, §12). Rule the design
-assumes: **you see failures for characters you can act for.** A player sees their own
-character's failures and nothing else; the GM sees all. When someone else's turn fails, a
-player sees nothing — the beat simply carries on. Safe only because of 1.4 and the
-transcript tail state, which means they're never left waiting on a turn that isn't coming.
-
-> **Wired.** `Failures.broadcast/1` now fans a turn (`packet`) failure to the omniscient
-> topic **and** the failed character's own viewer topic; author-facing failures (scene-close
-> summaries, arc extraction — their subject is a viewer key, not a controllable character)
-> stay omniscient-only. `Failures.list_open/2` gained a `subject:` filter
-> (`Failure.list_open_for_subject/3`, restricted to `packet` ops), and `PlayLive.open_failures`
-> loads per-viewer: the GM sees all, a character viewer sees only their own turn failures.
-> The property is tested (broadcast reaches the right topics and no others; the scoped query
-> returns only the character's turn failures). Note this rests on 1.4's carry-on behaviour,
-> which already holds — a player never waits on a turn that isn't coming.
+### 1.7 Failures scoped per viewer · **change** — ✅ **Shipped**
+Turn failures now reach the failed character's own viewer topic (+ omniscient); author-facing
+failures stay omniscient-only; `PlayLive` loads per-viewer. See `completed-roadmap.md`.
 
 ---
 
@@ -191,26 +105,11 @@ Deferred for now by decision: the current design shows the beat as a plain rule 
 roster, and the transcript tail names only the character whose turn is live. Revisit
 together with 2.1.
 
-### 2.3 Scene premise and location as authored fields · **new** — ✅ **Done (backend)**
-`SceneOpened` carries no authored setup (§1). The design adds a **Set the scene** screen the
-GM fills in before beat 1: a **location** and a **scene premise**, plus the cast.
-
-> **Done (backend); the "Set the scene" screen is frontend.** `SceneOpened`/`OpenScene`/the
-> `Scene` aggregate already carried `premise` and `location_id`, and the premise already fed
-> generation context. This adds the missing half:
-> - **Location into context.** `Context.materialize`/`SceneContext` carry `location`, rendered
->   in the **volatile** suffix (`"Location: …"`, distinct from the world bible's `"Setting:"`)
->   so it never enters the byte-stable prefix; the Director brief (`SceneBrief`) renders it in
->   its scene-scoped prefix; `Context.Rebuild` and `SceneBrief` rebuild feed `opened.location_id`.
->   Proven end-to-end by a rebuild test (open with `location_id` → `messages_for` carries it).
-> - **Scene-aware premise Expand.** `Autofill.generate_scene_premise/1` — grounded in world,
->   cast, setting, campaign premise, and previous-scene summaries; deepens an existing premise
->   on ✨ Expand. Distinct from the campaign-level `generate_campaign_premise/1`.
->
-> Remaining (frontend, deferred): the "Set the scene" form authors `location_id`/`premise` on
-> open and the LiveView seed sites pass `location:` (today `location_id` is nil there, so the
-> domain path via `Rebuild` is the wired proof). `location_id` stays a reference field so it
-> can become a location-entity FK later without changing the event shape.
+### 2.3 Scene premise and location as authored fields · **new** — ✅ **Shipped (backend)**
+Location now feeds Director + character context (volatile suffix, `"Location: …"`); new
+scene-aware `Autofill.generate_scene_premise/1`. The "Set the scene" form + LiveView seed sites
+passing `location:` are frontend, deferred. `location_id` stays a reference field so it can
+become a location-entity FK later without changing the event shape. See `completed-roadmap.md`.
 
 - Both are Director context. Today the Director infers the situation from the world bible and
   the transcript; this gives it the GM's actual intent for *this* scene.
@@ -708,18 +607,10 @@ to a turn's editorial row now.
 
 ## 4b · Accounts
 
-### 4b.1 18+ is eligibility, not a content ceiling · **change** — ✅ **Done**
-
-The current model treats the age attestation as the first of three content layers, and
-`Content.Floor` hardcodes `attested: true` so it does nothing (§5). **That framing is wrong.**
-
-> **Done — the behaviour was already right; this corrected the framing and pinned the
-> guarantees.** `Accounts.register` already checks attestation *before* the transaction, so a
-> refusal never wrote a user row or redeemed the invite — now asserted by a test (no row for
-> the email, invite still open). `Content.Floor`, `Accounts`, and `adult_attested?/1` are
-> reframed: attestation is eligibility to hold an account, not a per-user content layer; the
-> floor's `attested` branch stays as a latent seam for future under-18 support, exercised by
-> no per-user path today.
+### 4b.1 18+ is eligibility, not a content ceiling · **change** — ✅ **Shipped**
+Reframed attestation as account eligibility (not a content layer); pinned the no-row /
+no-invite-burn guarantee with a test; `Content.Floor`'s `attested` branch stays a latent
+under-18 seam. See `completed-roadmap.md`.
 
 Under-18s cannot use Polyphony at all. Supporting them would require parental controls and
 in-house filtering — a large piece of work deferred a long way out. So:
@@ -734,21 +625,14 @@ in-house filtering — a large piece of work deferred a long way out. So:
 - The floor layer stays in the model for when under-18 support is eventually built. It just isn't
   doing per-user work today.
 
-### 4b.2 There is no automated safety analysis to opt out of · **change** — ✅ **Done**
-
-Settings should not offer a toggle for it. Scene analysis is part of the deferred under-18 work
-and doesn't exist — a switch for an absent feature is worse than no switch, and implies
-processing that isn't happening.
+### 4b.2 There is no automated safety analysis to opt out of · **change** — ✅ **Shipped**
+Removed the settings "opt out of proactive analysis" control (no automated analysis exists to
+opt out of); the §C domain seam stays latent for when the feature lands (per campaign, per the
+design). See `completed-roadmap.md`.
 
 **What will be needed later**, and shouldn't be conflated with it: an opt-in for experimental
 generation behaviour. That may belong **per campaign** rather than per account, since it changes
 how a specific story plays, and it arrives alongside a profile page.
-
-> **Done.** Removed the "Opt out of proactive analysis" control from settings (the checkbox,
-> its `handle_event`, and the Data controls card) and the moduledoc's claim that it's
-> surfaced. The §C domain seam (`Accounts.set_proactive_opt_out`, `DataAccess` gating + the
-> per-campaign pref) stays latent for when such a feature exists — at which point the design
-> places the control per campaign, not per account.
 
 ---
 
