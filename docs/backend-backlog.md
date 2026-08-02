@@ -643,6 +643,32 @@ scene.
 Everything the design does with Arc Review was decorative until this. World arc (2.8) lands on
 top of it, so this was a prerequisite for that too.
 
+### 5.2 Character identity is a name, not a stable id · **change** — ⚠️ **latent data-corruption risk**
+`character_id` in the event log is the character's **display name** — minted at
+`EnterCharacter{character_id: char_name(c)}` and keyed on with plain string equality through
+*every* play-side subsystem: scene/beat aggregates (members/cast/completed/failed sets),
+membership intervals, visibility (interior events **and** whisper `addressed_to` matching),
+`packet_id = "#{scene}-#{beat}-#{character}"` (+ reroll/next-attempt), arc `subject_id`, the
+Director roster/casting, and broadcast topics. The only id-keyed character reference in the
+codebase is `Relationship.target_id` — the pattern the rest should copy: **store the id, carry
+the name for display, resolve through the id.**
+
+**The hazard.** Renaming a character that's already in scenes silently corrupts it: cold-cache
+context rebuild (`Rebuild.find_sheet` name-matches) falls back to a bare prompt (no sheet, no
+arc, no boundaries); membership/CommitPacket guards reject the new name as `:not_a_member`;
+the character stops witnessing its pre-rename history and whispers misroute; accumulated arc is
+stranded under the old name; re-roll/edit of pre-rename turns fail on `packet_id`. Today two
+things keep the door shut: `name` is **not** in `EffectiveSheet.@overridable_scalars` (so arc
+can't rename), and there's no bulk-rename flow — **but the sheet editor writes `name`
+unconditionally with no in-play guard.**
+
+**The fix (bounded, but real).** Mint `character_id` as the library id at the single source
+(`campaign_live` scene-open + `seed_context`), add an **id↔name translation layer** where the
+fiction is rendered to / emitted by the LLM (the log stores ids; the prose still speaks names),
+simplify `find_sheet`/arc lookups to id, and provide a **dual-read shim** for legacy name-keyed
+streams/`scene_memberships`/`arc_entries.subject_id` (events are immutable — rule 6). Until it
+lands, at minimum guard the sheet editor against renaming an in-scene character.
+
 ---
 
 ## 6 · Deferred, but the design leaves room
