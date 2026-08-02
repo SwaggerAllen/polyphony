@@ -324,6 +324,24 @@ multi-beat play.
 
 ---
 
+## Frontend redesign & design-kit fidelity ⬜ **Planned**
+
+The current LiveView is the first-cut UI; the redesign is speced in `ux/` (mocks + the
+`polyphony-kit.css`/`polyphony-kit.html` component kit). Two things to do when it's built:
+
+- **Port from the kit directly, to keep design and implementation in lockstep.** Lift the
+  kit's tokens, classes, and markup states into the components rather than re-deriving them
+  (see CLAUDE.md conventions). The backend prerequisites are the `backend-backlog.md`
+  immediate milestone.
+- **Adopt a LiveView storybook so components can be reviewed in isolation.** A catalogue
+  that renders each kit component and its states on its own page — the natural home for the
+  kit once it's real markup, and a guard against drift (a component's states live in one
+  place instead of scattered across screens). `phoenix_storybook` is the leading option
+  (Surface Catalogue is the other, but it's Surface-specific); evaluate when the redesign
+  starts. Not blocking — a review/QA convenience, sequenced with the port, not before it.
+
+---
+
 ## Deferred (FS §18) — build the seam, not the feature
 
 - **Onboarding** — a tutorial campaign + info-buttons on authoring surfaces. Seam:

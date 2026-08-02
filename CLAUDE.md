@@ -17,6 +17,15 @@ Backend-first, but the LiveView frontend (`PolyphonyWeb`, Phoenix 1.8 / LiveView
 DigitalOcean App Platform. The whole domain still runs and is tested offline. See
 `docs/frontend.md` and `docs/deployment.md`.
 
+A **frontend redesign** is speced but not yet built: the `ux/` folder holds the
+design pass — static mocks (`polyphony-*.html`), a component kit
+(`polyphony-kit.css` + `polyphony-kit.html`), and `ux/README.md` (IA/copy/porting
+notes). `polyphony-kit.css` is the **single source of truth** for tokens and every
+component class. When that rework lands, port from the kit as directly as possible —
+lift its classes and markup rather than re-deriving them — so the shipped UI and the
+design don't drift. The backend work the redesign depends on is tracked in
+`docs/backend-backlog.md`.
+
 ## Commands
 
 ```bash
@@ -95,6 +104,10 @@ for it.
   supersession / fork primitives already give you before adding machinery. Re-rolls,
   edits, and forks all share the supersede-and-recommit primitive for this reason.
 - Read moduledocs — they carry the "why" and cite the design-brief sections (§n).
+- **Port the frontend from `ux/`, don't re-invent it.** New/redesigned screens take
+  their tokens and component classes from `ux/polyphony-kit.css` and their markup
+  states from the mocks — the closer the port, the less the implementation drifts from
+  the design. Define nothing screen-local that the kit already provides.
 
 ## Identity & numbering (easy to get wrong)
 
