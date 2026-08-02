@@ -1,7 +1,8 @@
 # CLAUDE.md
 
-Operational guide for working in this repo. Read `docs/architecture.md` for the
-design and `docs/roadmap.md` for what's planned.
+Operational guide for working in this repo. `docs/README.md` indexes the docs and
+says where new writing goes; read `docs/architecture.md` for the design, `docs/roadmap.md`
+for the near-term schedule, and `docs/decisions.md` for the post-v1 rationale.
 
 ## What this is
 

@@ -12,7 +12,7 @@ CSS, no behaviour. Interactivity gets rewired server-side, so what's being hande
 |---|---|
 | **`polyphony-kit.css`** | **The single source of truth.** Tokens and every component class. Each screen links it and defines nothing of its own. |
 | **`polyphony-kit.html`** | The visual catalogue — every component and state, with the rules that govern each. Read this before building anything. |
-| **`backend-asks.md`** | Everything the design needs that the backend doesn't do yet, plus scope decisions and confirmed non-asks. |
+| _(backend asks)_ | The design's backend dependencies now live in the repo docs as **`docs/backend-backlog.md`** (renamed from this folder's `backend-asks.md`), the standing engineering worklist. |
 | `polyphony-play.html` | Scene setup, both play registers, status strip, draft-in-composer, connection states, introductions |
 | `polyphony-campaign.html` | Campaign editor — Settings, World, Cast, Groups, Premise, Scenes, Quick Build |
 | `polyphony-character.html` | Character sheet — prose, facts, relationships, pressures, groups, the stub |
@@ -161,7 +161,7 @@ neighbours so windowing later is a query change, not a markup change.
 
 ---
 
-## Read `backend-asks.md` before estimating
+## Read `docs/backend-backlog.md` before estimating
 
 Several designed screens depend on work that doesn't exist. The two that gate the most:
 
@@ -176,4 +176,4 @@ single self-contained campaign with no sharing features at all.
 
 The file also records **scope decisions** (§2.7 characters don't cross campaigns, §3.1c publication
 is two independent settings) and **confirmed non-asks** — things deliberately ruled out, so nobody
-builds them speculatively.
+builds them speculatively. Its immediate-milestone section is the slice that gates these mocks.

@@ -244,7 +244,7 @@ lives in `FieldStore`, deliberately **out of** the generation schema
 
 `Polyphony.Library` is the ownership layer over authored entities — character
 sheets, world bibles, campaigns, prompt-template overrides — in `library_entries`.
-**Owner is an indirection** (`Polyphony.Owner`, a `{type, id}` value; roadmap §P2/§P8):
+**Owner is an indirection** (`Polyphony.Owner`, a `{type, id}` value; decisions §P2/§P8):
 the table stores `owner_type` + `owner_id`, and the API takes an `Owner`, a `%User{}`,
 or a bare id (coerced to `:user`, the v1 default). Every owner is a user in v1, but the
 shape is polymorphic so orgs are a later "add an owner type + permission layer" bolt-on,

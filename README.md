@@ -5,11 +5,11 @@ world agent ("Director"); the event log is the single source of truth. Each
 character sees a **filtered projection** of that log — dramatic irony is a
 structural property of the data, not a prompt instruction.
 
-> Full design rationale lives in the design brief. This README covers what is
-> **implemented so far** and how to run it. See also
-> [`docs/architecture.md`](docs/architecture.md) (how it's built),
-> [`docs/roadmap.md`](docs/roadmap.md) (what's next), and
-> [`CLAUDE.md`](CLAUDE.md) (working in the repo).
+> This README covers what is **implemented so far** and how to run it. The docs are
+> indexed in [`docs/README.md`](docs/README.md) (what lives where); the ones you'll
+> reach for most are [`docs/architecture.md`](docs/architecture.md) (how it's built),
+> [`docs/roadmap.md`](docs/roadmap.md) (what's next), [`docs/decisions.md`](docs/decisions.md)
+> (why the post-v1 plan is what it is), and [`CLAUDE.md`](CLAUDE.md) (working in the repo).
 
 ## Status
 
@@ -274,8 +274,10 @@ cluster backs both the read models (`public` schema) and the persistent event st
 
 ## What's next
 
-The frontend and deployment path are now in. Remaining work is tracked in
-[`docs/roadmap.md`](docs/roadmap.md): the post-v1 tiers (deferred inspector views,
-the notify-me-later push worker, richer authoring), plus the standing cleanups
-(bump the legacy `postgrex`/`ecto_sql` pins now that the toolchain allows it,
-optional move to ReqLLM).
+The frontend and deployment path are now in. Near-term work is scheduled in
+[`docs/roadmap.md`](docs/roadmap.md) and shaped in
+[`docs/backend-backlog.md`](docs/backend-backlog.md) (the standing worklist, with the
+milestone that gates the current design). The post-v1 tiers (deferred inspector views,
+the notify-me-later push worker, richer authoring) and their rationale live in
+[`docs/decisions.md`](docs/decisions.md). Standing cleanups: bump the legacy
+`postgrex`/`ecto_sql` pins now that the toolchain allows it, optional move to ReqLLM.

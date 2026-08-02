@@ -1,10 +1,47 @@
-# Backend asks
+# Polyphony — Backend Backlog
 
-Running list of backend work the frontend design depends on. Grown from the UX pass —
-each item says what the design needs, why, and whether it's **wiring** (code exists,
-nothing calls it), **change** (existing code needs different semantics), or **new**.
+**What this file is.** The standing engineering worklist: concrete backend work that isn't
+built yet, each item saying what's needed, why, and whether it's **wiring** (code exists,
+nothing calls it), **change** (existing code needs different semantics), or **new**. It began
+as the frontend design's list of dependencies (the UX pass, `ux/`), which is why so many items
+cite a designed screen — but it's no longer frontend-specific: it's the single home for
+"backend work we've decided we want and know the shape of."
 
-Cross-references `§n` point at the Backend Capability Catalog.
+**How it differs from its neighbours.** `decisions.md` is the *strategy* and *why* behind the
+post-v1 horizon; this file is the *worklist* — the tractable, shaped tasks that serve it.
+`roadmap.md` is the *schedule* that pulls from this list. `backend-capabilities.md` is the
+*catalog* of what already exists (and its gap register); this file is what to do about the gaps.
+When an item here is designed and dispositioned, it's ready to be scheduled. See `docs/README.md`
+for the full boundary map.
+
+**Cross-references.** `§n` markers point at the **Backend Capability Catalog**
+(`backend-capabilities.md`) — the numbered survey of existing capabilities.
+
+---
+
+## Immediate milestone — what the current design needs to function
+
+Most of this file is a standing backlog to schedule against feedback. This slice is different:
+it's the set that **gates the shipped frontend design**, so it's the near-term target. Ordered
+by leverage:
+
+- **§5.1 — scene-close fan-out has no caller.** The single highest-leverage fix: per-character
+  summaries and arc extraction never run in production, so the entire memory/arc layer (arc
+  review, world arc, the casting gate, published contents) is dark until it's wired. Everything
+  else here that touches memory lands on top of this.
+- **§1.1–1.7 — the branching + live-beat family.** Fork/edit wiring, lineage, failed-turn
+  requeue with a give-up state, draft accept/discard, pass-turn, and per-viewer failure scoping.
+  These make play and branching work as the mocks draw them.
+- **§2.3 — scene premise & location as authored fields**, and **§2.8 — world arc.** The two §2
+  items that gate designed screens: the "Set the scene" flow needs the former; arc review, the
+  casting gate, and off-screen catch-up need the latter (and §2.8 sits on §5.1).
+- **§4b.1 / §4b.2 — account framing fixes.** 18+ is eligibility, not a content layer, and there
+  is no safety-analysis toggle to offer. Both are signup/settings copy-and-semantics corrections
+  the auth screens depend on.
+
+Everything below §2.3/§2.8 in the section numbering — the rest of §2, §3's publishing cluster,
+§4 reporting, §6 deferred — is the standing backlog: real, shaped, but scheduled against user
+feedback rather than blocking the current design.
 
 ---
 
