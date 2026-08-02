@@ -1,3 +1,11 @@
+/* The design kit (ux/polyphony-kit.css), ported by `mix kit.port`. Generated —
+   edit the kit in ux/ and re-run the task. Its rules are scoped to a `.fr` frame
+   root, so they apply only inside kit-rendered subtrees and the first-cut styles
+   below keep serving the screens that haven't been ported yet. Kit selectors sit
+   a class higher than both those styles and Tailwind's utilities, which is the
+   precedence the mocks have — so this import's position doesn't decide anything. */
+@import "./kit.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

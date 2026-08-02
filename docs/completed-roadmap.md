@@ -11,6 +11,58 @@ backend task. Read newest batch first.
 
 ---
 
+## Frontend rebuild — the design-kit foundation
+
+The first slice of the frontend rebuild (`roadmap.md`, "Frontend redesign & design-kit
+fidelity"). It builds the machinery every ported screen uses; the screens themselves are
+still open.
+
+### The kit is derived from `ux/`, not copied from it
+CLAUDE.md's convention was that `ux/polyphony-kit.css` is the single source of truth and
+screens port from it — but a convention alone drifts. `mix kit.port` now *derives*
+`assets/css/kit.css` from the design file by a mechanical transform, and
+`PolyphonyWeb.KitPortTest` fails the build if the two disagree. Changing the design means
+changing `ux/`, re-running the task, and committing both; there's nothing to hand-maintain
+on the app side.
+
+The transform makes exactly two changes, both documented in `Mix.Tasks.Kit.Port`: it drops
+the kit's §11 mock chrome (wall labels around the mock frames — the kit itself says to strip
+it, and its bare `body`/`h2` rules would leak into every page), and it scopes every
+component rule to a `.fr` frame root. The scope is what makes an incremental port possible:
+`.row`, `.btn`, `.dim`, `.field` and `.dot` all collide with the first-cut design system
+still serving the unported screens, so confining the kit to kit-rendered subtrees lets
+screens move one at a time with the suite green throughout. It comes out with the last
+screen.
+
+### The kit's markup is `PolyphonyWeb.Kit`
+The other half of the port: the kit's structural idioms as function components, lifted from
+`ux/polyphony-kit.html` and the screen mocks — the perspective control, status strip,
+transcript moves, marked list items, the info affordance, the nav primitives, and the
+controls they sit in. Its one-class utilities (`.ttl`, `.mono`, `.dim`, `.lbl`) deliberately
+stay as classes in markup, exactly as the mocks write them.
+
+`PolyphonyWeb.Voice` holds the rule that makes voice colours useful: assigned by cast order,
+never chosen, wrapping past eight, and emitted as `var(--vN)` so they resolve against
+whichever register and theme the frame is in.
+
+### The catalogue: `phoenix_storybook` at `/storybook`
+One page per component, with its states and the design's reasoning. Gated by the
+`:storybook` config flag — on in dev and test, elsewhere via `STORYBOOK=true` — and it
+reads no domain data, so it needs neither database nor LLM.
+
+`PolyphonyWeb.StorybookTest` renders every story (a broken story is otherwise invisible,
+since nothing else references the catalogue) and asserts **every kit component has a page**,
+so the catalogue can't fall behind the components it documents.
+
+Assets: the storybook loads its own bundle rather than `app.css`, so
+`assets/css/storybook.css` re-imports the ported kit and deliberately leaves Tailwind's
+preflight out (a global element reset would restyle the storybook's own chrome) along with
+the first-cut design system (a component that only looks right next to legacy CSS isn't
+ported yet). Both storybook bundles are committed and covered by CI's asset-drift guard,
+like `app.{js,css}`.
+
+---
+
 ## Immediate milestone — the backend the frontend design needs
 
 The slice of `backend-backlog.md` that gated the shipped frontend design. All of it is

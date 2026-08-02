@@ -5,6 +5,9 @@ module.exports = {
     "./js/**/*.js",
     "../lib/polyphony_web.ex",
     "../lib/polyphony_web/**/*.*ex",
+    // Story files carry markup too — the catalogue's frames and the mock content
+    // inside them — so their utilities must survive the build.
+    "../storybook/**/*.exs",
   ],
   theme: {
     extend: {},

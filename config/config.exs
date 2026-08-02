@@ -121,7 +121,7 @@ config :esbuild,
   version: "0.21.5",
   polyphony: [
     args:
-      ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
+      ~w(js/app.js js/storybook.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
   ]
@@ -131,6 +131,16 @@ config :tailwind,
   polyphony: [
     args: ~w(--input=css/app.css --output=../priv/static/assets/app.css),
     cd: Path.expand("../assets", __DIR__)
+  ],
+  # The storybook loads its own bundle, not app.css (see assets/css/storybook.css).
+  storybook: [
+    args: ~w(--input=css/storybook.css --output=../priv/static/assets/storybook.css),
+    cd: Path.expand("../assets", __DIR__)
   ]
+
+# The component catalogue (PolyphonyWeb.Storybook) at /storybook. A review aid,
+# not a product surface: on in dev, off elsewhere unless STORYBOOK=true
+# (runtime.exs). It renders components only and reads no domain data.
+config :polyphony, :storybook, false
 
 import_config "#{config_env()}.exs"

@@ -21,16 +21,22 @@ config :polyphony, PolyphonyWeb.Endpoint,
   debug_errors: true,
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:polyphony, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:polyphony, ~w(--watch)]}
+    tailwind: {Tailwind, :install_and_run, [:polyphony, ~w(--watch)]},
+    storybook_tailwind: {Tailwind, :install_and_run, [:storybook, ~w(--watch)]}
   ],
   live_reload: [
     patterns: [
       ~r"priv/static/.*(js|css|png|jpeg|jpg|gif|svg)$",
-      ~r"lib/polyphony_web/.*(ex|heex)$"
+      ~r"lib/polyphony_web/.*(ex|heex)$",
+      ~r"storybook/.*\.exs$"
     ]
   ]
 
 # The debug drawer is handy while developing — stream server logs into the page.
 config :polyphony, :debug_drawer, true
+
+# The component catalogue at /storybook — always on in dev, where the kit is
+# being ported and every component wants looking at in isolation.
+config :polyphony, :storybook, true
 
 config :logger, :console, level: :info

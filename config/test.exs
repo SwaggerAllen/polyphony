@@ -24,6 +24,11 @@ config :polyphony, drain_on_shutdown: false
 # Deterministic, network-free provider for tests.
 config :polyphony, :llm, provider: Polyphony.LLM.Stub
 
+# Mount the component catalogue in tests so its routes exist and every story is
+# rendered by the suite (PolyphonyWeb.StorybookTest). It reads no domain data, so
+# it costs the suite nothing but the render.
+config :polyphony, :storybook, true
+
 # Cold-cache context rebuilds (character + Director brief) use the DB-free static
 # retriever in tests, so a rebuild triggered off the test process (e.g. inside a RunBeat
 # Oban job) doesn't reach for pgvector through a sandbox it can't see. Tests that assert

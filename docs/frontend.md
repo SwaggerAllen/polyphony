@@ -22,6 +22,29 @@ is the logging notifier. The **magic-link** sign-in surfaces its link directly o
 login page in dev (no mailer needed) — the first account to sign up becomes the
 superadmin.
 
+## The design kit
+
+The redesign speced in `ux/` is being ported screen by screen. Two files carry it:
+
+- **`assets/css/kit.css`** — generated. `mix kit.port` derives it from
+  `ux/polyphony-kit.css`, and `PolyphonyWeb.KitPortTest` fails the build if the two
+  disagree, so the design file really is the single source of truth. To change the look:
+  edit `ux/polyphony-kit.css`, run `mix kit.port`, run `mix assets.build`, commit all three.
+  Never edit the generated file.
+- **`lib/polyphony_web/components/kit.ex`** — the kit's markup as function components. A
+  ported screen calls these; it doesn't re-derive class strings, and it defines nothing
+  screen-local the kit already provides.
+
+Kit rules are scoped to a `.fr` frame root, so they apply only inside `Kit.frame/1` and the
+first-cut design system below keeps serving the screens that haven't been ported yet. That
+scope comes out with the last screen.
+
+Browse the components at **`/storybook`** (`mix phx.server`, then
+<http://localhost:4000/storybook>) — one page per component with its states. It's on in dev
+and test, and elsewhere only with `STORYBOOK=true`. `PolyphonyWeb.StorybookTest` renders
+every story and asserts every kit component has one, so the catalogue can't drift from the
+components.
+
 ## Design choices worth knowing
 
 - **Modern toolchain.** Phoenix 1.8 / LiveView 1.2 on OTP 27 / Elixir 1.17 (installed by

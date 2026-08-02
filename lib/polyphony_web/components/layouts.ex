@@ -11,6 +11,18 @@ defmodule PolyphonyWeb.Layouts do
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="csrf-token" content={get_csrf_token()} />
         <title><%= assigns[:page_title] || "Polyphony" %></title>
+        <%!-- The design kit's three faces (ux/polyphony-kit.css §2). They do semantic
+              work, not decoration: Spectral names things — screen titles, campaign and
+              scene names, character labels, Director narration — Archivo carries all
+              prose, Plex Mono the beats, ids and money. Each has a system fallback in
+              the kit's own font stacks, so the app degrades to a plain sans offline
+              rather than breaking. Self-hosting these is a worthwhile follow-up. --%>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+        />
         <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
         <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
         </script>

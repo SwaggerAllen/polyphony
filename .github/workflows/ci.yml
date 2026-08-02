@@ -58,7 +58,10 @@ jobs:
       - run: mix assets.setup
       - run: mix assets.build
       - name: Assets are up to date
-        run: git diff --exit-code priv/static/assets/app.css priv/static/assets/app.js
+        run: |
+          git diff --exit-code \
+            priv/static/assets/app.css priv/static/assets/app.js \
+            priv/static/assets/storybook.css priv/static/assets/storybook.js
 
       # The `test` alias creates + migrates the test DB (the migration enables
       # pgvector), then runs the suite. The LLM path stays offline (Mock/Stub

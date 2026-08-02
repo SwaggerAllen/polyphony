@@ -123,6 +123,11 @@ if config_env() == :prod do
          :debug_drawer,
          System.get_env("DEBUG_DRAWER", "false") in ~w(true 1)
 
+  # The component catalogue at /storybook. Off by default outside dev: it's a
+  # review surface for the design kit, not part of the product. It exposes no
+  # domain data, so turning it on is a presentation choice rather than a risk.
+  config :polyphony, :storybook, System.get_env("STORYBOOK", "false") in ~w(true 1)
+
   config :polyphony, :llm,
     provider: Polyphony.LLM.DeepInfra,
     deepinfra: [

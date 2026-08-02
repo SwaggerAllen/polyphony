@@ -324,14 +324,20 @@ multi-beat play.
 
 ---
 
-## Frontend redesign & design-kit fidelity ⬜ **Planned**
+## Frontend redesign & design-kit fidelity 🔨 **In progress**
 
 The current LiveView is the first-cut UI; the redesign is speced in `ux/` (mocks + the
-`polyphony-kit.css`/`polyphony-kit.html` component kit). Two things to do when it's built:
+`polyphony-kit.css`/`polyphony-kit.html` component kit). Three things to do:
 
-- **Port from the kit directly, to keep design and implementation in lockstep.** Lift the
-  kit's tokens, classes, and markup states into the components rather than re-deriving them
-  (see CLAUDE.md conventions). The backend prerequisites are the `backend-backlog.md`
+- **Port from the kit directly, to keep design and implementation in lockstep.** ✅ **The
+  foundation is built** — the kit's *tokens and classes* are now derived from `ux/` by
+  `mix kit.port` rather than hand-copied, and its *markup* lives in `PolyphonyWeb.Kit` as
+  function components. Detail in `completed-roadmap.md`. **Remaining: the screens.** Each
+  one ports by calling those components instead of re-deriving class strings; the kit
+  stylesheet is scoped to a `.fr` frame root so the first-cut styles keep serving the
+  screens that haven't moved yet, and that scope goes away with the last one. Screens still
+  on the first-cut UI: play, campaign, sheet editor, world bible, arc review, library,
+  browse, settings, admin. The backend prerequisites are the `backend-backlog.md`
   immediate milestone.
 - **Build the play view id-native (finishes the identity migration).** The character-identity
   migration (`backend-backlog.md §5.2`) deliberately stops at the domain foundation; its atomic
@@ -340,12 +346,12 @@ The current LiveView is the first-cut UI; the redesign is speced in `ux/` (mocks
   current LiveView — the rebuilt play view enters characters by library id, resolves emitted
   whisper names → ids before commit, and the flip lands with dedicated whisper-routing +
   rename-safety tests. Also clear dev/prod event streams + campaign `scenes` lists (clean-slate).
-- **Adopt a LiveView storybook so components can be reviewed in isolation.** A catalogue
-  that renders each kit component and its states on its own page — the natural home for the
-  kit once it's real markup, and a guard against drift (a component's states live in one
-  place instead of scattered across screens). `phoenix_storybook` is the leading option
-  (Surface Catalogue is the other, but it's Surface-specific); evaluate when the redesign
-  starts. Not blocking — a review/QA convenience, sequenced with the port, not before it.
+- **Adopt a LiveView storybook so components can be reviewed in isolation.** ✅ **Done** —
+  `phoenix_storybook` at `/storybook`, one page per kit component with its states. Gated by
+  the `:storybook` config flag (on in dev and test, elsewhere via `STORYBOOK=true`); it
+  reads no domain data. The suite renders every story and fails if a kit component has no
+  page, so the catalogue can't fall behind the components. Detail in
+  `completed-roadmap.md`.
 
 ---
 

@@ -1,0 +1,19 @@
+/* The storybook's stylesheet.
+ *
+ * PhoenixStorybook loads this instead of app.css, so anything the kit
+ * components need has to be here — but deliberately not everything app.css has.
+ *
+ * What's in: the ported design kit (the components' actual look) and Tailwind's
+ * utilities (the mocks lean on them for layout and type scale, so the ported
+ * markup does too).
+ *
+ * What's out: Tailwind's preflight (`@tailwind base`) and the first-cut design
+ * system. Preflight is a global element reset — it would restyle the storybook's
+ * own chrome, which ships its own `psb-`-prefixed CSS and doesn't want ours. The
+ * kit needs no reset of its own: its rules are scoped to `.fr` and set what they
+ * depend on. Leaving the first-cut styles out is the point of the catalogue —
+ * a component that only looks right next to legacy CSS isn't ported yet.
+ */
+@import "./kit.css";
+
+@tailwind utilities;

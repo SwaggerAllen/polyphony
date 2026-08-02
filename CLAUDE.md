@@ -37,8 +37,10 @@ mix test --only feature      # real-browser (Wallaby) E2E; excluded by default, 
 mix format                   # always run before committing
 mix compile --warnings-as-errors       # must stay clean
 mix run -e "…"               # exercise the loop offline against LLM.Mock
-mix assets.build             # rebuild priv/static/assets/app.{js,css} after touching assets/
-mix phx.server               # the LiveView frontend at :4000 (watches + rebuilds assets)
+mix assets.build             # rebuild priv/static/assets/{app,storybook}.{js,css} after assets/
+mix kit.port                 # regenerate assets/css/kit.css from ux/polyphony-kit.css
+mix phx.server               # the LiveView frontend at :4000 (watches + rebuilds assets),
+                             # and the component catalogue at :4000/storybook
 ```
 
 The frontend (`PolyphonyWeb`) is a thin Phoenix LiveView layer; `mix phx.server`
@@ -108,6 +110,12 @@ for it.
   their tokens and component classes from `ux/polyphony-kit.css` and their markup
   states from the mocks — the closer the port, the less the implementation drifts from
   the design. Define nothing screen-local that the kit already provides.
+  In practice: `assets/css/kit.css` is **generated** from the design file by `mix kit.port`
+  (never hand-edit it — a test fails if it drifts), and the kit's markup lives in
+  `PolyphonyWeb.Kit` as function components. A ported screen calls those inside a
+  `Kit.frame/1`; kit CSS applies only inside that root, which is what lets screens move one
+  at a time. Review components at `/storybook`, and give any new one a story — the suite
+  requires it.
 
 ## Identity & numbering (easy to get wrong)
 

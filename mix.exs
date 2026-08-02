@@ -73,6 +73,12 @@ defmodule Polyphony.MixProject do
       {:plug_cowboy, "~> 2.7"},
       {:phoenix_ecto, "~> 4.5"},
       {:lazy_html, ">= 0.1.0", only: :test},
+      # Component catalogue for the design kit (PolyphonyWeb.Kit). Renders each
+      # component and its states on its own page so they can be reviewed without
+      # hunting through screens — the guard against the kit and the shipped UI
+      # drifting apart. Mounted at /storybook, gated by :storybook config
+      # (dev-only by default; see config/config.exs).
+      {:phoenix_storybook, "~> 1.3"},
       # Real-browser end-to-end tests (tagged :feature, excluded by default) —
       # drives Chromium over a live LiveSocket. See test/polyphony_web/features.
       {:wallaby, "~> 0.30", runtime: false, only: :test},
@@ -106,9 +112,12 @@ defmodule Polyphony.MixProject do
       # `assets.build` produces the dev bundles; `assets.deploy` is the minified
       # + digested prod build.
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["tailwind polyphony", "esbuild polyphony"],
+      # `esbuild polyphony` emits app.js and storybook.js from one profile;
+      # Tailwind needs a profile per entry point.
+      "assets.build": ["tailwind polyphony", "tailwind storybook", "esbuild polyphony"],
       "assets.deploy": [
         "tailwind polyphony --minify",
+        "tailwind storybook --minify",
         "esbuild polyphony --minify",
         "phx.digest"
       ]
