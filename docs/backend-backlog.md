@@ -29,9 +29,12 @@ by leverage:
   per-character summaries and arc extraction never ran in production, so the entire memory/arc
   layer (arc review, world arc, the casting gate, published contents) was dark. Now wired by a
   Commanded handler on `SceneClosed`. Everything else here that touches memory lands on top of it.
-- **§1.1–1.7 — the branching + live-beat family.** Fork/edit wiring, lineage, failed-turn
-  requeue with a give-up state, draft accept/discard, pass-turn, and per-viewer failure scoping.
-  These make play and branching work as the mocks draw them.
+- **§1.1–1.7 — the branching + live-beat family.** Mostly already backend-complete: fork/edit
+  are built and branch-relative for free (a fork is a separate stream), lineage records the cut
+  beat, and draft accept/discard + pass-turn exist — those four are frontend-affordance work,
+  deferred with the redesign. The genuine backend items were **§1.7 per-viewer failure scoping
+  (✅ done)** and **§1.4 failed-turn requeue-to-tail** — and 1.4's stall risk doesn't exist (the
+  beat already carries on and closes on failure), leaving only an optional resilience refinement.
 - **§2.3 — scene premise & location as authored fields**, and **§2.8 — world arc.** The two §2
   items that gate designed screens: the "Set the scene" flow needs the former; arc review, the
   casting gate, and off-screen catch-up need the latter (and §2.8 sits on §5.1).
@@ -65,10 +68,23 @@ Together these are what makes beat-level forking sufficient. The design delibera
 **no turn-level fork control**: you branch a beat, which makes it live, then reroll or edit
 the specific turn you wanted to diverge at, and beat-tail invalidation does the rest.
 
+> **Status — backend satisfied; only the UI is missing.** Both semantics already hold.
+> `Fork.fork/3` keeps `beat <= through_beat` (copy-on-fork), so the fork's newest beat *is*
+> the cut beat and it opens live. The "latest beat" concern is moot here: a fork is a **new
+> scene stream**, not an in-scene branch, and `Reroll`/`Edit` read `latest_beat` off *that
+> stream's* own events — already branch-relative. The remaining work ("Branch from beat N"
+> in the drawer) is frontend, deferred with the redesign.
+
 ### 1.2 Edit with tail invalidation in the live beat — `Edit.edit/6` `:invalid` · **wiring**
 Built, no callers (§1, §12). Required by 1.1 — reroll only covers AI-authored turns, so
 without this you can't diverge at a turn the human wrote, and branching works for half the
 transcript. Needs the same branch-relative guard as reroll.
+
+> **Status — backend built; only the UI is missing.** `Edit.edit/6` is complete: `:valid`
+> supersedes in place and works on any beat (it invalidates nothing downstream); `:invalid`
+> forks at the edit point and discards the stale tail. No branch-relative guard is needed —
+> the fork is a separate stream, and the valid path is deliberately beat-agnostic. Caller
+> (frontend) deferred.
 
 ### 1.3 Lineage records the cut beat and nothing else — `ReadModels.SceneFork` · **wiring**
 
@@ -90,6 +106,12 @@ having is the cheapest one: **identical so far / changed** — a set comparison 
 ordering semantics, which answers the only question that actually matters, namely whether a
 branch is still an empty copy. Anything finer can wait until someone asks for it.
 
+> **Status — the storage half is done; the read-time helper is open.** `ReadModels.SceneFork`
+> already records `fork_beat` (the cut beat) and nothing else — exactly as prescribed. The
+> optional **identical-so-far / changed** comparison over the two canonical packet sets isn't
+> built; it's a small read-time helper to add when the branch navigator UI wants it, not a
+> blocker.
+
 ### 1.4 Failed turns requeue to the end of the beat · **change**
 Today a failure records and broadcasts (`Failures`, §8/§12). The design has play carry on
 around a failed turn rather than stalling on it.
@@ -99,23 +121,52 @@ around a failed turn rather than stalling on it.
   able to close without it, or a beat can never settle. Surfaces as a retry count and a
   final "skipped" state on the slot.
 
+> **Status — the stall doesn't exist; the requeue-to-tail is an open refinement.** The
+> critical property is already met: a terminal failure dispatches `RecordFailure`
+> (`PacketFailed`), which `BeatWalk.terminal_chars` treats as terminal, so the walk skips the
+> slot and the beat closes — `GeneratePacket` still calls `BeatDriver.advance/3` after a
+> failure. Today's model is *fail → skipped → carry on*. What's unbuilt is the softer
+> **requeue-to-tail-once** (retry the slot at the end of the beat before giving up, with a
+> retry count) — a fiction-quality improvement, since the current behaviour drops the slot on
+> the first terminal failure rather than giving it a second chance in-beat. Not a blocker;
+> worth a decision on whether the narrative cost (a requeued turn conditions on turns that
+> reacted to its absence) is worth the resilience.
+
 ### 1.5 Draft accept / discard · **wiring**
 `Drafts` + `BeatDriver.accept_draft/discard_draft` exist with no affordance (§2, §12). The
 design puts control mode two taps from the transcript, so "Draft & approve" becomes
 reachable in one gesture — the approve/edit/retry/discard card has to exist or the mode is
 a dead end. These ship together.
 
+> **Status — backend built; the affordance is frontend.** `BeatDriver.accept_draft/2` and
+> `discard_draft/2` are complete and tested. What's missing is the play-view card, deferred
+> with the redesign.
+
 ### 1.6 Pass turn · **wiring**
 `BeatDriver.pass_turn` exists, no control (§2, §12). Design has it in the composer beside
 "Take the turn" (player passing their own) and in the character quick sheet ("Skip her
 turn", author passing someone else's). Same call, two entry points.
 
-### 1.7 Failures scoped per viewer · **change**
-`GenerationFailed` is currently surfaced to the omniscient viewer only (§8, §12). Rule the
-design assumes: **you see failures for characters you can act for.** A player sees their own
+> **Status — backend built; the affordance is frontend.** `BeatDriver.pass_turn/4` is
+> complete. What's missing is the two composer/quick-sheet entry points, deferred with the
+> redesign.
+
+### 1.7 Failures scoped per viewer · **change** — ✅ **Done (backend)**
+`GenerationFailed` was surfaced to the omniscient viewer only (§8, §12). Rule the design
+assumes: **you see failures for characters you can act for.** A player sees their own
 character's failures and nothing else; the GM sees all. When someone else's turn fails, a
 player sees nothing — the beat simply carries on. Safe only because of 1.4 and the
 transcript tail state, which means they're never left waiting on a turn that isn't coming.
+
+> **Wired.** `Failures.broadcast/1` now fans a turn (`packet`) failure to the omniscient
+> topic **and** the failed character's own viewer topic; author-facing failures (scene-close
+> summaries, arc extraction — their subject is a viewer key, not a controllable character)
+> stay omniscient-only. `Failures.list_open/2` gained a `subject:` filter
+> (`Failure.list_open_for_subject/3`, restricted to `packet` ops), and `PlayLive.open_failures`
+> loads per-viewer: the GM sees all, a character viewer sees only their own turn failures.
+> The property is tested (broadcast reaches the right topics and no others; the scoped query
+> returns only the character's turn failures). Note this rests on 1.4's carry-on behaviour,
+> which already holds — a player never waits on a turn that isn't coming.
 
 ---
 

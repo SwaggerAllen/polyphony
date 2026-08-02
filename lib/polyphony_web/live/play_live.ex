@@ -144,11 +144,15 @@ defmodule PolyphonyWeb.PlayLive do
     )
   end
 
-  # Open generation failures for this scene — author-facing, so omniscient only.
+  # Open generation failures for this scene, scoped to the viewer (§1.7): the GM
+  # (omniscient) sees all; a character viewer sees only their own turn failures —
+  # the ones they can retry. Author-facing failures (summaries, arc) never scope to
+  # a character, so a player never sees them.
   defp open_failures(socket) do
-    if socket.assigns.viewer == :omniscient,
-      do: Failures.list_open(socket.assigns.scene_id),
-      else: []
+    case socket.assigns.viewer do
+      :omniscient -> Failures.list_open(socket.assigns.scene_id)
+      {:character, id} -> Failures.list_open(socket.assigns.scene_id, subject: id)
+    end
   end
 
   defp scene_premise(plain) do
@@ -1056,8 +1060,8 @@ defmodule PolyphonyWeb.PlayLive do
   #
   # A failure without a beat is a scene-close operation (arc extraction, summarization);
   # those are emitted at the scene's current beat, so they default to `current_beat` and
-  # land with the latest action rather than at the top. `failures` is [] for non-omniscient
-  # viewers, so nothing shows there.
+  # land with the latest action rather than at the top. A character viewer only ever gets
+  # their own turn failures (§1.7), which always carry a beat, so they sort in place.
   defp transcript_items(messages, failures, current_beat) do
     {blocks, _} =
       messages
