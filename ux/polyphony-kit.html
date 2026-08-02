@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyphony — the kit</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="polyphony-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  .swatch{height:44px;border-radius:8px;border:1px solid rgba(127,127,127,.25)}
+  code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--page-fg);
+       background:#1A1F27;padding:.1rem .3rem;border-radius:4px}
+  .spec{display:grid;gap:.75rem}
+</style>
+</head>
+<body class="antialiased">
+
+<header class="max-w-6xl mx-auto px-5 pt-12 pb-8">
+  <div class="wall mb-3">Polyphony · the kit</div>
+  <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">Every part, once</h1>
+  <p class="mt-4 max-w-2xl text-[15px] leading-relaxed note">
+    Everything in <code>polyphony-kit.css</code>, drawn. Each screen file links that stylesheet and
+    defines nothing of its own, so a change here reaches all ten. If you find yourself writing a new
+    class while porting, it belongs in the kit rather than in a screen.
+  </p>
+</header>
+
+<!-- REGISTERS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">01 · Registers</div>
+    <h2 class="text-2xl font-bold mb-3">Two registers, two themes, one token set</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      The outer decision on every screen. <code>.stage</code> is working and live — omniscient play
+      and all authoring. <code>.page</code> is reading — a player in their own head, and published
+      campaigns. Usage: <code>&lt;div class="fr stage dark"&gt;</code>
+    </p>
+  </div>
+  <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">stage · dark</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="ttl text-[16px] mb-1" style="font-weight:600">Working</div>
+        <p class="text-[13px] leading-relaxed dim mb-3">Author and GM play, campaign editor, sheets, library, admin.</p>
+        <div class="flex gap-1.5"><button class="btn btn-pri btn-sm">Primary</button><button class="btn btn-gh btn-sm">Ghost</button></div>
+      </div></div>
+    <div><div class="wall mb-2">stage · light</div>
+      <div class="fr stage light sheet p-4">
+        <div class="ttl text-[16px] mb-1" style="font-weight:600">Working</div>
+        <p class="text-[13px] leading-relaxed dim mb-3">Author and GM play, campaign editor, sheets, library, admin.</p>
+        <div class="flex gap-1.5"><button class="btn btn-pri btn-sm">Primary</button><button class="btn btn-gh btn-sm">Ghost</button></div>
+      </div></div>
+    <div><div class="wall mb-2">page · dark</div>
+      <div class="fr page dark sheet p-4">
+        <div class="ttl text-[16px] mb-1" style="font-weight:600">Reading</div>
+        <p class="text-[13px] leading-relaxed dim mb-3">Character play and published campaigns. Warmer, quieter, wider measure.</p>
+        <div class="flex gap-1.5"><button class="btn btn-pri btn-sm">Primary</button><button class="btn btn-gh btn-sm">Ghost</button></div>
+      </div></div>
+    <div><div class="wall mb-2">page · light</div>
+      <div class="fr page light sheet p-4">
+        <div class="ttl text-[16px] mb-1" style="font-weight:600">Reading</div>
+        <p class="text-[13px] leading-relaxed dim mb-3">Character play and published campaigns. Warmer, quieter, wider measure.</p>
+        <div class="flex gap-1.5"><button class="btn btn-pri btn-sm">Primary</button><button class="btn btn-gh btn-sm">Ghost</button></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- COLOUR -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">02 · Status colour</div>
+    <h2 class="text-2xl font-bold mb-3">Four semantics, and eight voices</h2>
+  </div>
+  <div class="fr stage dark sheet p-5">
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+      <div><div class="swatch mb-2" style="background:var(--lamp)"></div>
+        <div class="text-[13.5px] font-semibold mb-1">lamp — now</div>
+        <p class="text-[12.5px] leading-relaxed dim">The live turn, the current beat, generating, an unsaved draft. The only bright thing on screen, so attention has one meaning everywhere.</p></div>
+      <div><div class="swatch mb-2" style="background:var(--pencil)"></div>
+        <div class="text-[13.5px] font-semibold mb-1">pencil — correction</div>
+        <p class="text-[12.5px] leading-relaxed dim">Reroll, edit, delete, branch, whisper markers, every error. Never a primary action.</p></div>
+      <div><div class="swatch mb-2" style="background:var(--ok)"></div>
+        <div class="text-[13.5px] font-semibold mb-1">ok — done</div>
+        <p class="text-[12.5px] leading-relaxed dim">Saved, published, accepted into canon. Used sparingly; most success is silent.</p></div>
+      <div><div class="swatch mb-2" style="background:var(--secret)"></div>
+        <div class="text-[13.5px] font-semibold mb-1">secret — concealed</div>
+        <p class="text-[12.5px] leading-relaxed dim">A fact, canon entry or arc item not everyone knows. Also the audience picker and preview-as banners.</p></div>
+    </div>
+    <div class="lbl dim mb-2">Voices · assigned by cast order, never chosen</div>
+    <div class="grid grid-cols-4 sm:grid-cols-8 gap-2">
+      <div><div class="swatch" style="background:var(--v1)"></div><div class="mono text-[10px] dim mt-1">v1</div></div>
+      <div><div class="swatch" style="background:var(--v2)"></div><div class="mono text-[10px] dim mt-1">v2</div></div>
+      <div><div class="swatch" style="background:var(--v3)"></div><div class="mono text-[10px] dim mt-1">v3</div></div>
+      <div><div class="swatch" style="background:var(--v4)"></div><div class="mono text-[10px] dim mt-1">v4</div></div>
+      <div><div class="swatch" style="background:var(--v5)"></div><div class="mono text-[10px] dim mt-1">v5</div></div>
+      <div><div class="swatch" style="background:var(--v6)"></div><div class="mono text-[10px] dim mt-1">v6</div></div>
+      <div><div class="swatch" style="background:var(--v7)"></div><div class="mono text-[10px] dim mt-1">v7</div></div>
+      <div><div class="swatch" style="background:var(--v8)"></div><div class="mono text-[10px] dim mt-1">v8</div></div>
+    </div>
+    <p class="text-[12.5px] leading-relaxed dim mt-3">The same character is the same hue in the transcript, the status strip, the cast list, the picker and their sheet. Past eight it wraps.</p>
+  </div>
+</section>
+
+<!-- TYPE -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">03 · Type</div>
+    <h2 class="text-2xl font-bold mb-3">Three faces, and no italics</h2>
+  </div>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="fr stage dark sheet p-5">
+      <div class="ttl text-[26px] mb-1" style="font-weight:600">Spectral <span class="text-[13px] dim" style="font-family:var(--f-ui);font-weight:400">— .ttl</span></div>
+      <p class="text-[13px] leading-relaxed dim mb-4">Names things: screen titles, campaign and scene names, character labels, and Director narration — the one place it does body work.</p>
+      <div class="text-[16px] font-semibold mb-1">Archivo <span class="text-[13px] dim font-normal">— default</span></div>
+      <p class="text-[13px] leading-relaxed dim mb-4">Everything else, including all prose in a transcript. Chosen partly for legibility: purpose-built dyslexia faces test no better than a plain sans.</p>
+      <div class="mono text-[13px] mb-1">IBM Plex Mono <span class="dim" style="font-family:var(--f-ui);font-size:13px">— .mono / .lbl</span></div>
+      <p class="text-[13px] leading-relaxed dim">Beats, ids, money, and the small uppercase labels.</p>
+    </div>
+    <div class="fr stage dark sheet p-5">
+      <div class="lbl dim mb-3">No italic carries meaning</div>
+      <p class="text-[13.5px] leading-relaxed mb-3">Four move types used to be told apart by slant. Italics measurably impair reading for dyslexic readers, and slant is a weak signal at small sizes anyway. Each now has a structural device:</p>
+      <div class="space-y-2 text-[13px]">
+        <div class="flex gap-2.5"><span class="lbl dim shrink-0 w-20 pt-0.5">Thought</span><span class="dim">voice-coloured rule and tint</span></div>
+        <div class="flex gap-2.5"><span class="lbl dim shrink-0 w-20 pt-0.5">World event</span><span class="dim">rules above and below, hanging dash, Spectral</span></div>
+        <div class="flex gap-2.5"><span class="lbl dim shrink-0 w-20 pt-0.5">Demeanor</span><span class="dim">gutter label, one step down in contrast</span></div>
+        <div class="flex gap-2.5"><span class="lbl dim shrink-0 w-20 pt-0.5">Whisper</span><span class="dim">a coloured marker line under the speech</span></div>
+      </div>
+      <p class="text-[12.5px] leading-relaxed dim mt-3">Italic inside an author's own prose is theirs and stays. This rule is about the interface.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CONTROLS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">04 · Controls</div>
+    <h2 class="text-2xl font-bold mb-3">Buttons, pills, switches, segments</h2>
+  </div>
+  <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">.btn</div>
+      <div class="fr stage dark sheet p-4 spec">
+        <div class="flex flex-wrap gap-1.5">
+          <button class="btn btn-pri">Primary</button><button class="btn btn-gh">Ghost</button></div>
+        <div class="flex flex-wrap gap-1.5">
+          <button class="btn btn-red btn-sm">Destructive</button><button class="btn btn-off btn-sm">Unavailable</button></div>
+        <div class="flex flex-wrap gap-0.5 -ml-1">
+          <button class="btn btn-pen">Reroll</button><button class="btn btn-pen">Edit</button><button class="btn btn-pen">Delete</button></div>
+        <p class="text-[11.5px] leading-relaxed dim">The pencil row is the editorial layer. It shrinks with age — reroll only reaches the live beat.</p>
+      </div></div>
+    <div><div class="wall mb-2">.pill</div>
+      <div class="fr stage dark sheet p-4 spec">
+        <div class="flex flex-wrap gap-1.5">
+          <span class="pill dim">Neutral</span>
+          <span class="pill" style="border-color:var(--lamp);color:var(--lamp)">Now</span>
+          <span class="pill" style="border-color:var(--ok);color:var(--ok)">Done</span>
+          <span class="pill" style="border-color:var(--pencil);color:var(--pencil)">Wrong</span>
+          <span class="pill" style="border-color:var(--secret);color:var(--secret)">Secret</span>
+        </div>
+        <p class="text-[11.5px] leading-relaxed dim">Status, never an action. If it does something on tap it's a button.</p>
+      </div></div>
+    <div><div class="wall mb-2">.sw · one boolean pattern</div>
+      <div class="fr stage dark sheet p-4 spec">
+        <div class="flex items-center justify-between gap-3">
+          <div><div class="text-[13px] font-semibold">Always in mind</div>
+            <div class="text-[11px] dim">amber</div></div>
+          <span class="sw sw-on" style="--sc:var(--lamp)"><i></i></span></div>
+        <div class="flex items-center justify-between gap-3">
+          <div><div class="text-[13px] font-semibold">Secret</div>
+            <div class="text-[11px] dim">violet</div></div>
+          <span class="sw sw-on" style="--sc:var(--secret)"><i></i></span></div>
+        <div class="flex items-center justify-between gap-3">
+          <div><div class="text-[13px] font-semibold">Off</div>
+            <div class="text-[11px] dim">no colour needed</div></div>
+          <span class="sw"><i></i></span></div>
+        <p class="text-[11.5px] leading-relaxed dim">Same geometry everywhere, coloured by what it means. Right-aligned, label on the left.</p>
+      </div></div>
+    <div><div class="wall mb-2">.seg · .chk · .bar</div>
+      <div class="fr stage dark sheet p-4 spec">
+        <div class="seg"><div class="dim">Cheap</div><div class="seg-on">Balanced</div><div class="dim">Best</div></div>
+        <div class="flex items-center gap-2">
+          <span class="chk chk-on">✓</span><span class="text-[13px]">Chosen</span>
+          <span class="chk chk-via ml-2">✓</span><span class="text-[13px] dim">Via a group</span>
+          <span class="chk ml-2"></span></div>
+        <div class="bar"><i style="width:62%"></i></div>
+        <p class="text-[11.5px] leading-relaxed dim">The outlined tick is inherited and can't be individually removed — take the group off instead.</p>
+      </div></div>
+  </div>
+</section>
+
+<!-- VIEWAS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">05 · The perspective control</div>
+    <h2 class="text-2xl font-bold mb-3">The most important idiom in the product</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      Identical markup and identical position — top right of the header — on every surface with a
+      viewpoint. It drifted into three treatments during design and that was the single worst
+      consistency failure of the whole pass, so it lives here and nowhere else.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="fr stage dark sheet p-4">
+      <div class="lbl dim mb-3">Every variant</div>
+      <div class="flex flex-wrap gap-2 mb-3">
+        <span class="viewas" style="--vc:var(--bc)"><i></i>Omniscient ▾</span>
+        <span class="viewas" style="--vc:var(--lamp)"><i></i>Everyone shared ▾</span>
+        <span class="viewas" style="--vc:var(--bcm)"><i></i>Spectator ▾</span>
+        <span class="viewas" style="--vc:var(--v1)"><i></i>Wren ▾</span>
+        <span class="viewas" style="--vc:var(--v2)"><i></i>Ilias ▾</span>
+      </div>
+      <p class="text-[12.5px] leading-relaxed dim mb-2">Set <code>--vc</code> to the character's voice colour. <code>--bc</code> for omniscient, <code>--lamp</code> for limited omniscient, <code>--bcm</code> for spectator.</p>
+      <p class="text-[12.5px] leading-relaxed dim">Limited omniscient takes the reading register, not the author's — it's a way of reading, not an authoring surface.</p>
+    </div>
+    <div class="fr page dark sheet">
+      <div class="lbl dim px-4 pt-3">The standard header</div>
+      <div class="px-4 py-3 row flex items-center justify-between gap-2">
+        <div class="min-w-0"><div class="lbl dim">The Salt Line</div>
+          <div class="ttl text-[15px] mt-0.5 truncate" style="font-weight:600">The quay</div></div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span class="viewas" style="--vc:var(--v2)"><i></i>Ilias ▾</span><span class="pill">⋯</span></div>
+      </div>
+      <div class="px-4 py-3">
+        <p class="text-[12.5px] leading-relaxed dim">Campaign name small, scene location as the title, perspective control top right, overflow last. Play and the published reading screen use this markup unchanged — only the bottom bar differs.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- TRANSCRIPT -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">06 · Transcript</div>
+    <h2 class="text-2xl font-bold mb-3">Move types and the beat rule</h2>
+  </div>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="fr stage dark sheet p-4">
+      <div class="beat-rule"><span class="ttl text-[14px]" style="font-weight:600">Beat 4</span></div>
+      <div class="m-world mb-4">
+        <div class="flex gap-3"><span class="mono text-[13px] dim">—</span>
+          <div class="ttl text-[16px] leading-relaxed" style="font-weight:500">The tide bell rings twice. An arrival nobody logged.</div></div>
+        <div class="lbl dim mt-1.5 pl-6">The Director</div></div>
+      <div class="pl-3 mb-4" style="box-shadow:inset 2px 0 0 var(--v1)">
+        <div class="ttl text-[14px] mb-2" style="font-weight:600;color:var(--v1)">Wren Ashgrove</div>
+        <div class="space-y-1.5">
+          <div class="flex gap-2.5"><span class="lbl dim pt-1 w-14 shrink-0">Demeanor</span><span class="text-[14px] leading-relaxed dim">squared to the water</span></div>
+          <div class="flex gap-2.5"><span class="lbl dim pt-1 w-14 shrink-0">Speech</span><span class="text-[15px] leading-relaxed">“Nothing came in tonight.”</span></div>
+        </div>
+        <div class="m-thought mt-2.5" style="--vc:var(--v1)">
+          <div class="text-[15px] leading-relaxed">If he counts the crates, he'll know.</div>
+          <div class="lbl mt-1" style="color:var(--v1)">Thought · only Wren</div></div>
+      </div>
+      <div class="m-fail">
+        <div class="text-[14px] font-semibold mb-1">Mother Corrigan didn't generate</div>
+        <p class="text-[13px] leading-relaxed dim">Moved to the end of the beat.</p></div>
+    </div>
+    <div class="fr page dark sheet p-4">
+      <div class="beat-rule"><span class="ttl text-[14px]" style="font-weight:600">Beat 4</span></div>
+      <div class="m-world mb-5"><div class="ttl text-[18px] leading-[1.55]" style="font-weight:500">The tide bell rings twice. An arrival nobody logged.</div></div>
+      <div class="mb-5">
+        <div class="ttl text-[13px] mb-1.5" style="font-weight:600;letter-spacing:.06em;color:var(--v1)">WREN ASHGROVE</div>
+        <p class="text-[17px] leading-[1.75]">Squared to the water and not to him, she folds the manifest into her coat.</p>
+        <p class="text-[17px] leading-[1.75] mt-2.5">“Nothing came in tonight.”</p></div>
+      <div class="m-live -mx-4 px-4 py-3 rounded-xl">
+        <div class="flex items-center gap-2"><span class="dot" style="background:var(--lamp)"></span>
+          <span class="text-[14px]">Your turn.</span></div></div>
+      <p class="text-[12px] leading-relaxed dim mt-3">Same moves, reading register. Gutter labels drop away and demeanor folds into the prose.</p>
+    </div>
+  </div>
+</section>
+
+<!-- STRIP -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">07 · Status strip</div>
+    <h2 class="text-2xl font-bold mb-3">Tracker and one sentence</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      Above the composer in both registers. Slots flex, so names become initials around six and the
+      row never wraps. Past ten it scrolls and the sentence carries it.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="fr page dark sheet">
+      <div class="strip" style="border-top:none"><div class="slots">
+        <div class="slot slot-took" style="--sc:var(--v1)">WREN</div>
+        <div class="slot slot-now slot-you">YOU</div>
+        <div class="slot slot-wait">CORR</div></div>
+        <div class="text-[13px] mt-1.5" style="color:var(--lamp)">Your turn.</div></div>
+      <div class="strip"><div class="slots">
+        <div class="slot slot-now">WREN</div><div class="slot slot-wait slot-you">YOU</div>
+        <div class="slot slot-wait">CORR</div></div>
+        <div class="text-[13px] mt-1.5 dim">Wren is writing. You're next.</div></div>
+      <div class="strip"><div class="slots">
+        <div class="slot slot-took" style="--sc:var(--v1)">WREN</div>
+        <div class="slot slot-pass slot-you">YOU</div>
+        <div class="slot slot-now">CORR</div></div>
+        <div class="text-[13px] mt-1.5 dim">You passed. Mother Corrigan is taking her turn.</div></div>
+      <div class="strip"><div class="slots">
+        <div class="slot slot-took" style="--sc:var(--v1)">WREN</div>
+        <div class="slot slot-took" style="--sc:var(--v2)">YOU</div>
+        <div class="slot slot-fail">CORR</div></div>
+        <div class="flex items-center justify-between gap-2 mt-1.5">
+          <span class="text-[13px]" style="color:var(--pencil)">Her turn didn't come through.</span>
+          <span class="text-[15px] leading-none shrink-0" style="color:var(--pencil)">↓</span></div></div>
+    </div>
+    <div class="fr page dark sheet">
+      <div class="strip" style="border-top:none"><div class="slots">
+        <div class="slot slot-took" style="--sc:var(--v1)">W</div>
+        <div class="slot slot-took" style="--sc:var(--v2)">I</div>
+        <div class="slot slot-fail">C</div><div class="slot slot-now">S</div>
+        <div class="slot slot-wait slot-you">P</div><div class="slot slot-pass">O</div>
+        <div class="slot slot-wait">H</div><div class="slot slot-wait">T</div></div>
+        <div class="text-[13px] mt-1.5 dim">Sable is writing. Two turns until yours.</div></div>
+      <div class="px-4 py-3">
+        <div class="lbl dim mb-2">Slot states</div>
+        <div class="space-y-1.5 text-[12.5px] dim">
+          <div><code>.slot-took</code> filled in their voice colour — they went</div>
+          <div><code>.slot-now</code> amber — happening now</div>
+          <div><code>.slot-wait</code> outline — still to come</div>
+          <div><code>.slot-pass</code> dashed — passed</div>
+          <div><code>.slot-fail</code> pencil — didn't generate</div>
+          <div><code>.slot-you</code> ring — the viewer, composable with any of the above</div>
+        </div>
+        <p class="text-[12px] leading-relaxed dim mt-3">The strip is filtered like the transcript: a viewer only sees slots for people they know are there.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LISTS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">08 · Marked list items</div>
+    <h2 class="text-2xl font-bold mb-3">A left rule per state</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      Only one thing can own the left border, so secrecy takes it — visibility has consequences —
+      and "always in mind" is a chip, letting the two compose.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="fr stage dark sheet p-4 spec">
+      <div class="lbl dim">Facts</div>
+      <p class="text-[13.5px] leading-relaxed">She reads a manifest upside down.</p>
+      <div><p class="text-[13.5px] leading-relaxed">Signed the register since she was fourteen.</p>
+        <div class="mt-1"><span class="chip-core"><span class="dot" style="background:var(--lamp);width:5px;height:5px"></span>Always in mind</span></div></div>
+      <div class="secret"><p class="text-[13.5px] leading-relaxed">Signing for the Kestrel since March.</p>
+        <div class="flex items-center gap-1.5 mt-1"><span class="dot" style="background:var(--secret)"></span>
+          <span class="lbl" style="color:var(--secret)">Secret · 2 know</span></div></div>
+    </div>
+    <div class="fr stage dark sheet p-4 spec">
+      <div class="lbl dim">Pressures</div>
+      <div class="bound"><div class="text-[13.5px] font-semibold">Name her father</div>
+        <p class="text-[12.5px] leading-relaxed dim"><span class="lbl">until</span> someone she loves is hurt by it</p></div>
+      <div class="compel"><div class="text-[13.5px] font-semibold">Cover for her father</div>
+        <p class="text-[12.5px] leading-relaxed dim"><span class="lbl">and now</span> she lets the silences sit</p></div>
+      <p class="text-[11.5px] leading-relaxed dim">Pencil for what she won't do, violet for what she can't stop. Direction lives in the group heading, never the wording.</p>
+    </div>
+    <div class="fr stage dark sheet p-4 spec">
+      <div class="lbl dim">Arc</div>
+      <div class="prop"><p class="text-[13px] leading-relaxed">She has stopped signing in her mother's hand.</p>
+        <div class="lbl mt-0.5" style="color:var(--lamp)">Proposed</div></div>
+      <div class="canon"><p class="text-[13px] leading-relaxed">She has stopped signing in her mother's hand.</p>
+        <div class="lbl mt-0.5" style="color:var(--ok)">True since scene 3</div></div>
+      <div class="drop"><p class="text-[13px] leading-relaxed">Cover for her father.</p>
+        <div class="lbl dim mt-0.5">Broke in scene 3</div></div>
+    </div>
+    <div class="fr stage dark sheet p-4 spec">
+      <div class="lbl dim">Other</div>
+      <div class="urgent px-2.5 py-2 rounded-r-lg"><p class="text-[13px] leading-relaxed">Reported passage, or child-safety lane.</p></div>
+      <p class="text-[13px] leading-relaxed was">Replaced by an arc revision.</p>
+      <div class="arch flex items-center gap-2"><span class="av" style="background:var(--v4)"></span>
+        <span class="text-[13px]">Archived — filed, not deleted</span></div>
+      <div class="cover px-3 py-3 text-center"><span class="text-[12.5px] dim">Empty slot, awaiting content</span></div>
+      <div class="space-y-1.5"><div class="skel" style="width:92%"></div><div class="skel" style="width:64%"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- NAV & CHROME -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">09 · Navigation &amp; containers</div>
+    <h2 class="text-2xl font-bold mb-3">Tabs, jump bars, scrubbers, sheets</h2>
+  </div>
+  <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">.tabs</div>
+      <div class="fr stage dark sheet">
+        <div class="tabs"><div class="tab tab-on">Settings</div><div class="tab tab-todo">World</div>
+          <div class="tab tab-todo">Cast</div><div class="tab">Scenes</div></div>
+        <div class="px-4 py-4"><p class="text-[12.5px] leading-relaxed dim">Sectioned screens. The amber dot means unbuilt — only used on a campaign's first run.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">.jump</div>
+      <div class="fr stage dark sheet">
+        <div class="jump"><span class="on">Premise</span><span>Appearance</span><span>Voice</span>
+          <span>Facts</span><span>Ties</span><span>Pushed</span></div>
+        <div class="px-4 py-4"><p class="text-[12.5px] leading-relaxed dim">Long forms — character sheet, world bible. Sits outside the vertical scroller so it stays put and can't blow out the width.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">.scrub</div>
+      <div class="fr stage dark sheet">
+        <div class="scrub"><span>Start</span><span>Scene 1</span><span>Scene 2</span><span class="on">Now</span></div>
+        <div class="px-4 py-4"><p class="text-[12.5px] leading-relaxed dim">Winding a sheet back. One stop per closed scene — arc is extracted at scene close, so that's the only meaningful resolution.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">.sheet · .row · .field</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-2">
+          <span class="text-[13px] font-semibold">A row</span><span class="dim text-[14px]">›</span></div>
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-2">
+          <span class="text-[13px] font-semibold">Another</span><span class="pill dim">status</span></div>
+        <div class="px-4 py-3"><div class="field px-3 py-2 text-[13px] dim">A field</div></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- INFO & EMPTY -->
+<section class="max-w-6xl mx-auto px-5 pb-24">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">10 · Explanation &amp; absence</div>
+    <h2 class="text-2xl font-bold mb-3">The info drawer, empty states, toasts</h2>
+  </div>
+  <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">.info · closed</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+          <span class="flex items-center gap-1.5"><span class="lbl dim">What's true about her</span><span class="info">i</span></span>
+          <button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+        <div class="px-4 py-2.5"><p class="text-[13px] leading-relaxed">She reads a manifest upside down.</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Beside the section header, never inside a menu. Quiet enough to ignore forever, obvious enough to find once.</p>
+    </div>
+    <div><div class="wall mb-2">.info · open</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+          <span class="ttl text-[15px]" style="font-weight:600">About facts</span>
+          <span class="dim text-[17px] leading-none">×</span></div>
+        <div class="px-4 py-3 row"><p class="text-[13px] leading-relaxed">Short, flat statements that are true about her.</p></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center gap-1.5 mb-1"><span class="dot" style="background:var(--lamp)"></span>
+            <span class="text-[13px] font-semibold">Always in mind</span></div>
+          <p class="text-[13px] leading-relaxed dim">In front of her every turn. Everything else is fetched when relevant.</p></div>
+        <div class="px-4 py-3">
+          <div class="flex items-center gap-1.5 mb-1"><span class="dot" style="background:var(--secret)"></span>
+            <span class="text-[13px] font-semibold">Secret</span></div>
+          <p class="text-[13px] leading-relaxed dim">Independent of the above — she can have a secret she rarely thinks about.</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">One drawer per section, covering the concepts together. It replaces inline helper text rather than adding to it.</p>
+    </div>
+    <div><div class="wall mb-2">Empty states</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-8 text-center">
+          <div class="ttl text-[16px] mb-1.5" style="font-weight:500">Nobody is on the quay yet.</div>
+          <p class="text-[13px] leading-relaxed dim mb-4">Pick who's in the room and the Director will open the scene.</p>
+          <button class="btn btn-pri btn-sm">Open the scene</button></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Spectral headline in the fiction's voice, a plain line of explanation, one action. Never "No items found."</p>
+    </div>
+    <div><div class="wall mb-2">Toasts</div>
+      <div class="fr stage dark sheet p-3 flex items-center gap-2">
+        <span class="dot" style="background:var(--ok)"></span><span class="text-[13px]">Published</span></div>
+      <div class="fr stage dark sheet p-3 mt-2 flex items-center justify-between gap-2">
+        <span class="text-[13px]">Moved to walk-ons</span><button class="btn btn-pen btn-sm">Undo</button></div>
+      <div class="fr stage dark sheet p-3 mt-2 flex items-center gap-2">
+        <span class="dot" style="background:var(--lamp)"></span><span class="text-[13px]">Saving…</span></div>
+      <div class="fr stage dark sheet p-3 mt-2 flex items-center gap-2">
+        <span class="dot" style="background:var(--pencil)"></span><span class="text-[13px]">Couldn't save — try again</span></div>
+      <p class="text-[12px] mt-2 note">Name the action that produced them. Anything reversible carries Undo.</p>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
