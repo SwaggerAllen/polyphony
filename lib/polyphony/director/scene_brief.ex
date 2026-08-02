@@ -30,6 +30,7 @@ defmodule Polyphony.Director.SceneBrief do
   alias Polyphony.Director.BeatOps
   alias Polyphony.Packets
   alias Polyphony.ReadModels.SceneSummary
+  alias Polyphony.Scene.Cast
 
   alias Polyphony.Events.{
     SpeechUttered,
@@ -116,12 +117,15 @@ defmodule Polyphony.Director.SceneBrief do
   """
   @spec messages(term(), [term()], keyword()) :: [%{role: String.t(), content: String.t()}]
   def messages(scene_id, members, opts \\ []) do
+    # Translate stored character ids → display names for the Director (§5.2).
+    cast = Cast.for_scene(scene_id)
+
     user =
       [
         frozen_prefix(scene_id),
-        roster_line(members),
+        roster_line(members, cast),
         cast_instruction(),
-        transcript_section(scene_id)
+        transcript_section(scene_id, cast)
       ]
       |> compact_join()
 
@@ -230,8 +234,12 @@ defmodule Polyphony.Director.SceneBrief do
 
   # ── Volatile decision context ───────────────────────────────────────────────
 
-  defp roster_line([]), do: "(no characters are present)"
-  defp roster_line(members), do: "Characters present in the scene: #{Enum.join(members, ", ")}"
+  defp roster_line([], _cast), do: "(no characters are present)"
+
+  defp roster_line(members, cast),
+    do:
+      "Characters present in the scene: " <>
+        (members |> Enum.map(&Cast.render_name(cast, &1)) |> Enum.join(", "))
 
   defp cast_instruction do
     """
@@ -244,12 +252,12 @@ defmodule Polyphony.Director.SceneBrief do
 
   # The full scene, oldest first, budgeted by tokens keeping the most recent — so a
   # long scene keeps its opening context instead of dropping off a fixed window.
-  defp transcript_section(scene_id) do
+  defp transcript_section(scene_id, cast) do
     lines =
       scene_id
       |> BeatOps.stored_events()
       |> Packets.canonical()
-      |> Enum.flat_map(&transcript_line/1)
+      |> Enum.flat_map(&transcript_line(&1, cast))
       |> budget_tail(@transcript_token_budget)
 
     case lines do
@@ -274,25 +282,38 @@ defmodule Polyphony.Director.SceneBrief do
     |> elem(0)
   end
 
-  defp transcript_line(%SpeechUttered{speaker_id: s, content: c, audibility: a, addressed_to: to}) do
-    whisper = if a == :private, do: " (whispered#{addressed(to)})", else: ""
-    ["#{s}#{whisper}: #{c}"]
+  defp transcript_line(
+         %SpeechUttered{speaker_id: s, content: c, audibility: a, addressed_to: to},
+         cast
+       ) do
+    whisper = if a == :private, do: " (whispered#{addressed(to, cast)})", else: ""
+    ["#{Cast.render_name(cast, s)}#{whisper}: #{c}"]
   end
 
-  defp transcript_line(%ActionTaken{character_id: s, content: c}), do: ["#{s} #{c}"]
-  defp transcript_line(%ThoughtOccurred{character_id: s, content: c}), do: ["(#{s} thinks: #{c})"]
+  defp transcript_line(%ActionTaken{character_id: s, content: c}, cast),
+    do: ["#{Cast.render_name(cast, s)} #{c}"]
 
-  defp transcript_line(%DemeanorReported{character_id: s, demeanor: d})
+  defp transcript_line(%ThoughtOccurred{character_id: s, content: c}, cast),
+    do: ["(#{Cast.render_name(cast, s)} thinks: #{c})"]
+
+  defp transcript_line(%DemeanorReported{character_id: s, demeanor: d}, cast)
        when is_binary(d) and d != "",
-       do: ["[#{s} seems #{d}]"]
+       do: ["[#{Cast.render_name(cast, s)} seems #{d}]"]
 
-  defp transcript_line(%WorldEventOccurred{content: c}), do: ["#{c}"]
-  defp transcript_line(%CharacterEntered{character_id: s}), do: ["(#{s} enters)"]
-  defp transcript_line(%CharacterExited{character_id: s}), do: ["(#{s} leaves)"]
-  defp transcript_line(_), do: []
+  defp transcript_line(%WorldEventOccurred{content: c}, _cast), do: ["#{c}"]
 
-  defp addressed(to) when is_list(to) and to != [], do: " to #{Enum.join(to, ", ")}"
-  defp addressed(_), do: ""
+  defp transcript_line(%CharacterEntered{character_id: s}, cast),
+    do: ["(#{Cast.render_name(cast, s)} enters)"]
+
+  defp transcript_line(%CharacterExited{character_id: s}, cast),
+    do: ["(#{Cast.render_name(cast, s)} leaves)"]
+
+  defp transcript_line(_, _cast), do: []
+
+  defp addressed(to, cast) when is_list(to) and to != [],
+    do: " to #{to |> Enum.map(&Cast.render_name(cast, &1)) |> Enum.join(", ")}"
+
+  defp addressed(_, _cast), do: ""
 
   defp default_system, do: "You are the Director. Cast and pace the scene."
 
