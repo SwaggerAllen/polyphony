@@ -237,39 +237,20 @@ campaign as its prequel, and imports at setup while the target world arc is stil
 copy, not a merge. Mid-campaign import is a merge of two divergent canon histories and should
 stay out of scope regardless.
 
-### 2.8 World arc — durable world change, and who knows about it · **new**
+### 2.8 World arc — durable world change, and who knows about it · **new** — ✅ **Shipped (A–D)**
+Durable world-change entries (discovery/revision), parallel to character arc, proposed → canon
+on review, folded into the world half of context. Global facts reach everywhere; local facts
+only their scene location (§2.3); off-screen characters catch up by the fact being present in
+their next scene (facts injected, reactions played on screen — no arc extrapolation). Reuses
+`arc_entries` (`subject_type: "world"`) with `WorldArcExtractor` / `EffectiveWorldBible`;
+shipped alongside wiring canon **character** arc into generation too (it was built but only
+consumed by publishing). Review gained reject + edit. See `completed-roadmap.md`.
 
-**Higher priority than anything in 2.6/2.7, because it bites inside a single self-contained
-campaign with no import feature at all.**
-
-Today `ArcEntry` (§4) records durable change to a *character*. World canon is
-`WorldBible.starting_canon` and never changes. `WorldEventOccurred` is a moment, not a fact.
-So there is nowhere for **"the moon fell out of the sky"** to live as durable, everyone-knows-
-this canon — and no way for it to reach a character who was off-screen when it happened.
-
-The off-screen gap is structural: scene-close summaries are visibility-filtered per
-participant (§8), so a character who wasn't there gets nothing. Correct for dramatic irony,
-wrong for world-level fact. Come back five scenes later and their knowledge simply hasn't
-advanced.
-
-**Wanted:**
-
-- **World arc entries** — durable changes to the world discovered during play, parallel to
-  character arc, proposed → canon on author review. Feeds the world half of context assembly.
-- **A propagation rule.** Not every world fact is common knowledge. Some are global (the moon);
-  some are local to a place or a group (the harbourmaster was murdered — known in the port
-  district first). Minimum viable version is a global/local flag; the better version is
-  location-scoped, which arrives free with 2.3.
-
-**What this deliberately does *not* require.** No arc extrapolation. An off-screen character
-needs the *facts* injected — that's context assembly, no generation involved. How they *feel*
-about the moon falling should not be computed: **letting them react on screen to news they
-missed is better fiction than silently rewriting their sheet.** The catch-up is a scene, not a
-migration. Keeping it that way is what makes this tractable.
-
-Worth noticing: cast tiers (2.5), scene location (2.3), and world-fact propagation all get
-substantially simpler once locations are authored entities. That's three features pointing at
-the same prerequisite.
+Two follow-ups it surfaced, left open:
+- **Arc/world-arc extraction is unattributed** (no cost metering), matching character arc — a
+  pre-existing gap, not world-arc-specific.
+- **§3.0 gating** ("arc review gates the next scene", world arc gates the campaign) sits on
+  top of this and stays deferred — see below.
 
 ### 2.9 Multiplayer access grants · **new**
 Deferred. Multiplayer is currently a conceptual constraint on a single-player UI — whoever

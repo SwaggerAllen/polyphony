@@ -61,6 +61,26 @@ attestation before any write (no user row, invite not burned) — now pinned by 
 of proactive analysis" control (there is no automated analysis to opt out of); the §C domain
 seam stays latent for when the feature exists (per campaign, per the design).
 
+### §2.8 — World arc · *new (A–D)*
+Durable world change, mirroring the character-arc pipeline. Once per scene close,
+`SceneClose.WorldArcExtractor` reads the **unfiltered** stream and proposes standing world
+facts (discovery/revision), each tagged **global** or **local**; `ExtractWorldArc` fans out
+one job per scene (`extract_world/2`), keyed to the campaign. Stored by reusing `arc_entries`
+via `subject_type: "world"` + two columns (`scope`, `location_id`).
+
+Consumption (the payoff): `EffectiveWorldBible.apply/3` folds canon world facts into
+`starting_canon` in beat order — global everywhere, local only at its scene location, the
+Director (`:all`) omniscient. `Authoring.Effective` centralizes "load canon + apply" and is
+wired into both rebuild paths (`Context.Rebuild`, `SceneBrief`) and the live scene-open seeds
+(`play_live`, `campaign_live`). **This also finally wired canon *character* arc into
+generation** — `EffectiveSheet` was built but consumed only by publishing; both seams fixed
+together. Review (`ArcReviewLive`) gained a world section plus **reject** and **edit** (wording
++ scope) beyond accept, backed by `ArcEntry.reject/2` / `edit/3`. Off-screen catch-up is by
+fact-injection, never extrapolation — the character reacts on screen.
+
+Left open, recorded in the backlog: arc extraction is unattributed (no metering, matching
+character arc), and §3.0 gating sits on top and stays deferred.
+
 ---
 
 ## Housekeeping
