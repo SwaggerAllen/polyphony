@@ -56,7 +56,11 @@ defmodule Polyphony.Costs do
     campaign_cap = cap(:campaign_cap, opts)
     warn_ratio = cap(:warn_ratio, opts)
 
-    daily = spent_today(user_id, opts)
+    # Guard the nil scopes: an unattributed-to-user call (e.g. an org-owned campaign,
+    # or scene-close extraction on a campaign with no user owner) has no daily ledger
+    # to sum — querying `user_id == nil` is a forbidden nil comparison, and there's
+    # nothing to cap anyway.
+    daily = if user_id, do: spent_today(user_id, opts), else: 0
     campaign = if campaign_id, do: spent_campaign(campaign_id, opts), else: 0
 
     verdicts = [

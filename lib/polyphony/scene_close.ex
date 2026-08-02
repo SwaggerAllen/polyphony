@@ -158,7 +158,12 @@ defmodule Polyphony.SceneClose do
     repo = Keyword.get(opts, :repo) || Repo
     events = stored_events(scene_id)
 
-    case ArcExtractor.extract(events, character_id, Keyword.put(opts, :source_scene_id, scene_id)) do
+    ext_opts =
+      opts
+      |> Keyword.put(:source_scene_id, scene_id)
+      |> meter(scene_id, "arc")
+
+    case ArcExtractor.extract(events, character_id, ext_opts) do
       {:ok, entries} ->
         Enum.each(entries, &ArcEntry.put(repo, &1, character_id))
         {:ok, length(entries)}
@@ -189,12 +194,11 @@ defmodule Polyphony.SceneClose do
     if is_nil(campaign_id) do
       {:ok, 0}
     else
-      # `campaign_id` keys storage only — the extraction call stays unattributed, like
-      # character-arc extraction (metering arc extraction is a separate, pre-existing gap).
       ext_opts =
         opts
         |> Keyword.put(:source_scene_id, scene_id)
         |> Keyword.put(:location_id, location_id)
+        |> meter(scene_id, "world_arc")
 
       case WorldArcExtractor.extract(events, ext_opts) do
         {:ok, entries} ->
@@ -238,6 +242,19 @@ defmodule Polyphony.SceneClose do
       _ -> []
     end)
     |> Enum.uniq()
+  end
+
+  # Attribute an extraction LLM call to the campaign owner (§B5) — for now the owner
+  # owns everything autonomous in their campaign. `put_new` so an explicit caller
+  # (a test) still wins. A campaign with no user owner resolves to nil user_id, and
+  # the metered call then records nothing rather than failing.
+  defp meter(opts, scene_id, usage_kind) do
+    attr = Attribution.for_scene(scene_id)
+
+    opts
+    |> Keyword.put_new(:user_id, attr.user_id)
+    |> Keyword.put_new(:campaign_id, attr.campaign_id)
+    |> Keyword.put_new(:usage_kind, usage_kind)
   end
 
   # The scene's campaign + authored location, from its opening event.

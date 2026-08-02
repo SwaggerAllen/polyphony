@@ -246,11 +246,12 @@ their next scene (facts injected, reactions played on screen — no arc extrapol
 shipped alongside wiring canon **character** arc into generation too (it was built but only
 consumed by publishing). Review gained reject + edit. See `completed-roadmap.md`.
 
-Two follow-ups it surfaced, left open:
-- **Arc/world-arc extraction is unattributed** (no cost metering), matching character arc — a
-  pre-existing gap, not world-arc-specific.
-- **§3.0 gating** ("arc review gates the next scene", world arc gates the campaign) sits on
-  top of this and stays deferred — see below.
+Two follow-ups it surfaced:
+- **Arc/world-arc extraction metering** — ✅ **Done.** Both extractions now attribute to the
+  campaign owner (`Attribution.for_scene`, `SceneClose.meter/3`); also fixed a latent
+  `Costs.check` crash on a nil user id (org-owned / unattributed campaigns). "The owner owns
+  everything autonomous in their campaign."
+- **§3.0 gating** — ✅ **Shipped (MVP)**, see below.
 
 ### 2.9 Multiplayer access grants · **new**
 Deferred. Multiplayer is currently a conceptual constraint on a single-player UI — whoever

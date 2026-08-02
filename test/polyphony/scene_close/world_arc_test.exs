@@ -6,7 +6,7 @@ defmodule Polyphony.SceneClose.WorldArcTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, Repo, SceneClose}
+  alias Polyphony.{App, Repo, SceneClose, Library, Costs}
   alias Polyphony.ReadModels.ArcEntry
   alias Polyphony.LLM.{Mock, Stub}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
@@ -83,5 +83,17 @@ defmodule Polyphony.SceneClose.WorldArcTest do
     scene = build_scene(campaign_id: nil, location_id: "nowhere")
 
     assert {:ok, 0} = SceneClose.extract_world(scene, provider: Mock, repo: Repo)
+  end
+
+  test "extraction is metered to the campaign owner (§B5)" do
+    campaign = Library.put(%{owner_id: "7", kind: "campaign", payload: %{}})
+    scene = build_scene(campaign_id: campaign.id, location_id: "the docks")
+
+    assert {:ok, _} = SceneClose.extract_world(scene, provider: Mock, repo: Repo)
+    assert {:ok, _} = SceneClose.extract_participant(scene, "mira", provider: Mock, repo: Repo)
+
+    # The owner (user 7) is billed for both extractions, on their daily and the campaign.
+    assert Costs.spent_campaign(campaign.id) > 0
+    assert Costs.spent_today(7) > 0
   end
 end
