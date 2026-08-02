@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyphony — campaign editor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="polyphony-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="antialiased">
+
+<header class="max-w-6xl mx-auto px-5 pt-12 pb-8">
+  <div class="wall mb-3">Polyphony · step 6 · campaign editor</div>
+  <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">The campaign is the hub</h1>
+  <p class="mt-4 max-w-2xl text-[15px] leading-relaxed note">
+    One create entry point, five panels, and an ordered flow that gets out of the way once you've been
+    through it. Every panel empty and populated. Stage register throughout — authoring is working, so
+    the reading register never appears here.
+  </p>
+</header>
+
+<!-- 00 · IA -->
+<section class="max-w-6xl mx-auto px-5 pb-14">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">00 · Two changes to the brief's tab order</div>
+    <h2 class="text-2xl font-bold mb-3">Settings · World · Cast · Groups · Premise · Scenes</h2>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note">
+      <div><b style="color:var(--page-fg)">Quick Build isn't a tab.</b> It's a one-shot — you use it
+        once, on an empty campaign, and never again. A permanent tab is dead weight from day two and
+        invites running it over a campaign you've already built. It's a card in the first-run state.</div>
+      <div><b style="color:var(--page-fg)">Scenes takes the slot.</b> The campaign is the hub, so it
+        has to be where you go to play. It's also where arc review surfaces, which fixes an orphan
+        route the catalog flags.</div>
+      <div><b style="color:var(--page-fg)">Cast comes before Premise.</b> Least-specific-to-most is the
+        intuitive order, but generation order wins: the pitch is written <em>from</em> the cast, so
+        writing it first means writing it twice.</div>
+      <div><b style="color:var(--page-fg)">Nothing is ever removed, only archived.</b> Characters are
+        referenced by every transcript they appear in. Removing one would invalidate history, so the
+        destructive-sounding control is Archive, everywhere.</div>
+      <div><b style="color:var(--page-fg)">Groups sit beside Cast.</b> They're written with the same
+        editor and they seed characters, so they belong next to the people they produce rather than
+        buried in a menu.</div>
+      <div><b style="color:var(--page-fg)">A campaign can be finished.</b> Not archived — finished,
+        deliberately, which is what makes it eligible to be another campaign's prequel and what turns
+        the Scenes tab into a record rather than a workspace.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 01 · FIRST RUN -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">01 · First run</div>
+    <h2 class="text-2xl font-bold mb-2">A campaign with nothing in it</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note">Dots on the tab bar mark what's unbuilt. Quick Build is the loud option because right now it's the right one; the ordered path below is for people who'd rather do it themselves.</p>
+  </div>
+  <div class="mt-7 grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr stage dark sheet"><div data-spec="firstrun"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr stage light sheet"><div data-spec="firstrun"></div></div></div>
+  </div>
+</section>
+
+<!-- 02 · QUICK BUILD -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">02 · Quick Build</div>
+    <h2 class="text-2xl font-bold mb-2">Seed as much or as little as you like</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      Every field is optional, including all of them. Cast size is expressed by how many rows you add —
+      fill in two, leave three blank, get five. Seeded characters become main cast; the people they
+      turn out to know get placed as recurring or walk-ons by whatever the story suggests, and you can
+      overrule that from the Cast tab. A world you already have and a campaign this one follows are
+      both selectable here, so Quick Build isn't only for starting from nothing.
+    </p>
+  </div>
+  <div class="grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Seed form · partly filled</div><div class="fr stage dark sheet"><div data-spec="qb-form"></div></div></div>
+    <div><div class="wall mb-2">Seed form · empty, "surprise me"</div><div class="fr stage light sheet"><div data-spec="qb-blank"></div></div></div>
+  </div>
+  <div class="mt-5 grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Running</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Building your campaign</div>
+          <div class="lbl dim mt-0.5">About a minute</div></div>
+        <div class="px-4 py-3.5">
+          <div class="bar mb-3"><i style="width:58%"></i></div>
+          <div class="space-y-2 text-[13px]">
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--ok)"></span><span class="dim">World written — <span class="ttl">Saltmarch</span></span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--ok)"></span><span class="dim">Wren Ashgrove</span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--ok)"></span><span class="dim">Ilias Vane</span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--lamp)"></span><span>Third character</span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--b3)"></span><span class="dim">Fourth, fifth</span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--b3)"></span><span class="dim">People they know</span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--b3)"></span><span class="dim">How they regard each other</span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--b3)"></span><span class="dim">The pitch</span></div>
+          </div>
+          <button class="btn btn-gh btn-sm mt-3.5">Stop</button>
+          <p class="text-[11px] dim mt-2">Anything finished stays finished.</p>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Done, with one gap</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">The Salt Line is ready</div>
+          <div class="lbl dim mt-0.5">A world, five characters, a pitch</div></div>
+        <div class="px-4 py-3.5">
+          <div class="rounded-lg p-2.5 mb-3" style="background:color-mix(in srgb,var(--pencil) 9%,transparent);border-left:2px solid var(--pencil)">
+            <div class="text-[12.5px] font-semibold mb-0.5">The pitch didn't get written</div>
+            <p class="text-[12px] leading-relaxed dim">Everything else came through. Write it yourself or try again from the Premise tab.</p>
+          </div>
+          <div class="space-y-2 text-[13px] mb-3.5">
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--ok)"></span><span>World · <span class="ttl">Saltmarch</span></span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--ok)"></span><span>5 in the main cast</span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--ok)"></span><span>4 more they know · 1 recurring, 3 walk-ons</span></div>
+          </div>
+          <button class="btn btn-pri w-full justify-center">Have a look</button>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Blocked · spending limit</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Quick Build</div></div>
+        <div class="px-4 py-3.5">
+          <div class="rounded-lg p-2.5 mb-3" style="background:color-mix(in srgb,var(--pencil) 9%,transparent);border-left:2px solid var(--pencil)">
+            <div class="text-[12.5px] font-semibold mb-0.5">You've hit today's spending limit</div>
+            <p class="text-[12px] leading-relaxed dim">$5.00 of $5.00 used. It resets at midnight, or you can raise it in Settings.</p>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <button class="btn btn-gh justify-center">Raise the limit</button>
+            <button class="btn btn-gh justify-center">Build it by hand instead</button>
+          </div>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 03 · SETTINGS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">03 · Settings</div>
+    <h2 class="text-2xl font-bold mb-2">Name, ceiling, continuity, tuning, spend</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">The ceiling shows a live label so the toggles have a visible consequence. Per-campaign spend lives here rather than in account settings — it's the campaign that costs money.</p>
+  </div>
+  <div class="grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr stage dark sheet"><div data-spec="settings"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr stage light sheet"><div data-spec="settings"></div></div></div>
+  </div>
+  <div class="mt-5 grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Ceiling · adult off</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center justify-between mb-3"><span class="text-[14px] font-semibold">Adult content</span><span class="sw"><i></i></span></div>
+        <div class="space-y-2.5 mb-3" style="opacity:.45">
+          <div class="flex items-center justify-between"><span class="text-[13px]">Sex</span><span class="sw"><i></i></span></div>
+          <div class="flex items-center justify-between"><span class="text-[13px]">Graphic violence</span><span class="sw"><i></i></span></div>
+          <div class="flex items-center justify-between"><span class="text-[13px]">Other mature themes</span><span class="sw"><i></i></span></div>
+        </div>
+        <div class="rounded-lg px-3 py-2" style="background:var(--b3)"><div class="lbl dim mb-0.5">Plays as</div><div class="text-[13.5px] font-semibold">Nothing explicit</div></div>
+      </div></div>
+    <div><div class="wall mb-2">Ceiling · everything on</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center justify-between mb-3"><span class="text-[14px] font-semibold">Adult content</span><span class="sw sw-on" style="--sc:var(--lamp)"><i></i></span></div>
+        <div class="space-y-2.5 mb-3">
+          <div class="flex items-center justify-between"><span class="text-[13px]">Sex</span><span class="sw sw-on" style="--sc:var(--lamp)"><i></i></span></div>
+          <div class="flex items-center justify-between"><span class="text-[13px]">Graphic violence</span><span class="sw sw-on" style="--sc:var(--lamp)"><i></i></span></div>
+          <div class="flex items-center justify-between"><span class="text-[13px]">Other mature themes</span><span class="sw sw-on" style="--sc:var(--lamp)"><i></i></span></div>
+        </div>
+        <div class="rounded-lg px-3 py-2" style="background:var(--b3)"><div class="lbl dim mb-0.5">Plays as</div><div class="text-[13.5px] font-semibold leading-snug">Adult, in every direction. No subject is off the table.</div></div>
+      </div></div>
+    <div><div class="wall mb-2">Prequel · picking</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Comes after</div></div>
+        <div class="px-4 py-3">
+          <div class="field px-3 py-2.5 text-[13px] dim mb-2.5">Search your campaigns…</div>
+          <div class="lbl dim mb-2">In Saltmarch</div>
+          <div class="sheet mb-2.5">
+            <div class="px-3 py-2.5 row"><div class="text-[13px] font-semibold ttl">Low Water</div><div class="text-[11px] dim">Finished · 11 scenes</div></div>
+            <div class="px-3 py-2.5"><div class="text-[13px] font-semibold ttl">The Ledger</div><div class="text-[11px] dim">In progress · 4 scenes</div></div>
+          </div>
+          <p class="text-[11px] leading-relaxed dim">Only campaigns in the same world can come before this one.</p>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Tuning · open</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center justify-between mb-3"><span class="text-[14px] font-semibold">Model tuning</span><span class="dim text-[15px] leading-none">⌃</span></div>
+        <div class="space-y-3">
+          <div class="flex items-center justify-between gap-2"><div><div class="text-[13px]">Let the Director think first</div><div class="text-[11px] dim">Slower, better pacing</div></div><span class="sw sw-on" style="--sc:var(--lamp)"><i></i></span></div>
+          <div><div class="lbl dim mb-1.5">Quality</div><div class="seg"><div class="dim">Cheap</div><div class="seg-on">Balanced</div><div class="dim">Best</div></div></div>
+          <div><div class="lbl dim mb-1.5">Priority</div><div class="seg"><div class="dim">Flex</div><div class="seg-on">Standard</div><div class="dim">Priority</div></div></div>
+          <div class="flex items-center justify-between"><span class="text-[13px] dim">How much a turn can say</span><span class="mono text-[12px]">1200 tokens</span></div>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 04 · WORLD -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">04 · World</div>
+    <h2 class="text-2xl font-bold mb-2">Attach one, or write one</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">A world can start any number of campaigns, so the empty state offers yours first — and then everyone else's, because someone building a campaign is exactly the person who wants to browse worlds. Taking a public one saves a copy to your library first, so everything a campaign references, you own.</p>
+  </div>
+  <div class="grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Empty · you have worlds</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">World</div><div class="lbl dim mt-0.5">Nothing attached</div></div>
+        <div class="px-4 py-3.5">
+          <div class="lbl dim mb-2">Use one you've written</div>
+          <div class="sheet mb-3">
+            <div class="px-3 py-2.5 row"><div class="text-[13px] font-semibold ttl">Saltmarch</div><div class="text-[11px] dim">A port town that runs on tides and debts · started 2 campaigns</div></div>
+            <div class="px-3 py-2.5"><div class="text-[13px] font-semibold ttl">The Ninth Gate</div><div class="text-[11px] dim">Sunless city, nine districts, one way out</div></div>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <button class="btn btn-gh justify-center">✦ Write a new world</button>
+            <button class="btn btn-gh justify-center">Find one someone else made</button>
+            <button class="btn btn-gh justify-center">Start one from scratch</button>
+          </div>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Someone else's worlds</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center gap-2" style="background:var(--b2)">
+          <span class="dim text-[15px]">‹</span><span class="ttl text-[15px]" style="font-weight:600">Worlds people have shared</span></div>
+        <div class="px-4 py-2.5 row"><div class="field px-3 py-2 text-[13px] dim">Search…</div>
+          <div class="flex flex-wrap gap-1.5 mt-2">
+            <span class="pill" style="background:var(--b3)">Any</span><span class="pill dim">Most used</span><span class="pill dim">Newest</span></div></div>
+        <div class="px-4 py-2.5 row">
+          <div class="text-[13px] font-semibold ttl mb-0.5">Kettleworth</div>
+          <p class="text-[11px] leading-relaxed dim mb-1">A mill town where the machines were never switched off and nobody remembers switching them on.</p>
+          <span class="text-[11px] dim">Used in 31 campaigns</span></div>
+        <div class="px-4 py-2.5 row">
+          <div class="text-[13px] font-semibold ttl mb-0.5">The Long Quiet</div>
+          <p class="text-[11px] leading-relaxed dim mb-1">Eleven households, one road out, and a winter that has gone on four years.</p>
+          <span class="text-[11px] dim">Used in 8 campaigns</span></div>
+        <div class="px-4 py-2.5"><p class="text-[11px] leading-relaxed dim">You'll see the cover, not the whole bible. Plenty of authors keep things back on purpose.</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Browse without leaving the campaign. The full Browse screen is for reading published campaigns, which is a different errand.</p>
+    </div>
+    <div><div class="wall mb-2">Taking one</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center gap-2" style="background:var(--b2)">
+          <span class="dim text-[15px]">‹</span><span class="ttl text-[15px]" style="font-weight:600">Kettleworth</span></div>
+        <div class="px-4 py-3 row">
+          <p class="text-[13px] leading-relaxed mb-2">A mill town where the machines were never switched off and nobody remembers switching them on. Everyone works a shift and nobody asks what it produces.</p>
+          <span class="text-[11px] dim">By Ilse Marek · used in 31 campaigns</span></div>
+        <div class="px-4 py-3 row">
+          <div class="rounded-lg p-2.5" style="background:var(--b3)">
+            <div class="text-[12.5px] font-semibold mb-0.5">You'll get your own copy</div>
+            <p class="text-[12px] leading-relaxed dim">It goes in your library and this campaign starts from it. Changing it won't affect hers, and hers won't affect yours.</p></div>
+        </div>
+        <div class="px-4 py-3">
+          <button class="btn btn-pri w-full justify-center mb-1.5">Use this world</button>
+          <button class="btn btn-gh w-full justify-center">Read the whole bible first</button>
+          <p class="text-[11px] leading-relaxed dim mt-2">Or don't read it — take it and find out what's in it while you play.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Attached</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between gap-2" style="background:var(--b2)">
+          <div class="min-w-0"><div class="ttl text-[15px]" style="font-weight:600">Saltmarch</div><div class="lbl dim mt-0.5">This campaign's copy</div></div>
+          <button class="btn btn-gh btn-sm shrink-0">Edit</button>
+        </div>
+        <div class="px-4 py-3 row"><div class="lbl dim mb-1">Setting</div><p class="text-[13px] leading-relaxed">A port town on a tidal flat, half of it underwater twice a day. Everything worth having comes in by sea and leaves by ledger.</p></div>
+        <div class="px-4 py-3 row"><div class="lbl dim mb-1">Tone</div><p class="text-[13px] leading-relaxed">Damp, close, quietly criminal. Nobody raises their voice.</p></div>
+        <div class="px-4 py-3"><div class="lbl dim mb-1.5">Rules</div>
+          <div class="space-y-1 text-[13px] leading-relaxed">
+            <div class="flex gap-2"><span class="dim mono text-[11px] pt-0.5">1</span><span>The tide bell is never rung twice by accident.</span></div>
+            <div class="flex gap-2"><span class="dim mono text-[11px] pt-0.5">2</span><span>Debts outlive the people who owe them.</span></div>
+            <div class="flex gap-2"><span class="dim mono text-[11px] pt-0.5">3</span><span>No magic. What looks like it is a bribe.</span></div>
+          </div>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 05 · CAST -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">05 · Cast</div>
+    <h2 class="text-2xl font-bold mb-2">Main cast, recurring, walk-ons</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      Tiers are the organising principle, because characters autogenerate during play and the roster
+      grows on its own. Main cast reads as the short list you authored; walk-ons collapse behind a
+      count. Promotion and demotion are per-row, and nothing is ever deleted.
+    </p>
+  </div>
+  <div class="grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Populated · dark</div><div class="fr stage dark sheet"><div data-spec="cast"></div></div></div>
+    <div><div class="wall mb-2">Populated · light</div><div class="fr stage light sheet"><div data-spec="cast"></div></div></div>
+  </div>
+  <div class="mt-5 grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Empty</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Cast</div><div class="lbl dim mt-0.5">Nobody yet</div></div>
+        <div class="px-4 py-7 text-center">
+          <div class="ttl text-[16px] mb-1.5" style="font-weight:500">A campaign needs at least one person in it.</div>
+          <p class="text-[13px] leading-relaxed dim mb-4">Write someone from a one-line brief, or bring in a character you've already made.</p>
+          <div class="flex flex-col gap-1.5">
+            <button class="btn btn-pri justify-center">✦ Write a character</button>
+            <button class="btn btn-gh justify-center">Start from scratch</button>
+          </div>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Row menu</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center gap-2.5" style="background:var(--b2)">
+          <span class="w-8 h-8 rounded-lg shrink-0" style="background:var(--v1)"></span>
+          <div><div class="text-[14px] font-semibold">Wren Ashgrove</div><div class="text-[11px] dim">Main cast</div></div>
+        </div>
+        <div class="py-1.5">
+          <div class="px-4 py-2 text-[13px]">Open sheet</div>
+          <div class="px-4 py-2 text-[13px]">Move to recurring</div>
+          <div class="px-4 py-2 text-[13px]">Move to walk-ons</div>
+          <div class="px-4 py-2 text-[13px] dim">Archive</div>
+        </div>
+        <div class="px-4 py-2.5" style="border-top:1px solid var(--rule)">
+          <p class="text-[11px] leading-relaxed dim">Main cast is always in mind. Walk-ons are only remembered in their own scenes.</p>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Archiving · confirm</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">Archive Sable Quist?</div>
+        <p class="text-[13px] leading-relaxed dim mb-3">She leaves the cast and won't be brought into new scenes. Everything she's already said stays exactly where it is, and you can bring her back any time.</p>
+        <div class="flex gap-1.5"><button class="btn btn-pri btn-sm">Archive her</button><button class="btn btn-gh btn-sm">Keep her</button></div>
+      </div></div>
+    <div><div class="wall mb-2">Writing a character</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="lbl dim mb-1.5">Who are they</div>
+        <div class="field px-3 py-2.5 text-[14px] mb-2">Mother Corrigan</div>
+        <div class="field px-3 py-2.5 text-[13px] leading-relaxed mb-2.5" style="min-height:56px">Keeps the chapel by the water. Hears more confessions than she repeats.</div>
+        <div class="lbl dim mb-1.5">They're</div>
+        <div class="seg mb-3"><div class="seg-on">Main cast</div><div class="dim">Recurring</div><div class="dim">Walk-on</div></div>
+        <button class="btn btn-pri w-full justify-center mb-2">✦ Write her sheet</button>
+        <p class="text-[11px] dim">Grounded in Saltmarch and in who your other three already are.</p>
+      </div></div>
+  </div>
+</section>
+
+<!-- 06 · PREMISE -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">06 · Premise</div>
+    <h2 class="text-2xl font-bold mb-2">The pitch, written from what exists</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">Last, because Expand reads the world and the cast. The empty state says which of those are missing rather than just refusing.</p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Empty · nothing to work from</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Premise</div></div>
+        <div class="px-4 py-7 text-center">
+          <div class="ttl text-[16px] mb-1.5" style="font-weight:500">What's this campaign about?</div>
+          <p class="text-[13px] leading-relaxed dim mb-4">Cast someone first — the pitch gets written from your world and the people in it, and right now there's nobody.</p>
+          <div class="flex flex-col gap-1.5">
+            <button class="btn btn-gh justify-center">Go to Cast</button>
+            <button class="btn btn-gh justify-center">Write it myself anyway</button>
+          </div>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Empty · ready</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+          <div class="ttl text-[15px]" style="font-weight:600">Premise</div><button class="btn btn-pri btn-sm">✦ Expand</button></div>
+        <div class="px-4 py-3.5">
+          <div class="field px-3 py-2.5 text-[14px] dim leading-relaxed" style="min-height:120px">A line about what's at stake, and Expand will make it a pitch…</div>
+          <p class="text-[11px] dim mt-2">It'll use Saltmarch and your five characters.</p>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Written</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between gap-2" style="background:var(--b2)">
+          <div class="ttl text-[15px]" style="font-weight:600">Premise</div>
+          <div class="flex gap-1.5 shrink-0"><button class="btn btn-gh btn-sm">✦ Expand</button><button class="btn btn-gh btn-sm">Rewrite</button></div></div>
+        <div class="px-4 py-3.5">
+          <p class="text-[14px] leading-relaxed mb-2.5">Cargo has been coming into Saltmarch that isn't on any manifest, and the harbourmaster's daughter has been signing for it.</p>
+          <p class="text-[14px] leading-relaxed">Nobody here is innocent and nobody is a villain. The only question is which debts get called in first, and who's standing on the quay when they are.</p>
+          <div class="flex items-center gap-2 mt-3 pt-3 border-t" style="border-color:var(--rule)">
+            <span class="dot" style="background:var(--ok)"></span><span class="text-[12px] dim">Saved</span>
+          </div>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 06b · GROUPS & FINISHING -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">06b · Groups &amp; finishing</div>
+    <h2 class="text-2xl font-bold mb-2">A tab beside Cast, and an ending</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      Groups are written with the character editor and seed the people they produce, so they sit next
+      to Cast. Finishing is separate from archiving — an archived campaign is out of the way, a
+      finished one is <em>done</em>, which is what lets another campaign name it as its prequel.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Groups · populated</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-2" style="background:var(--b2)">
+          <span class="flex items-center gap-1.5"><span class="lbl dim">Groups · 2</span><span class="info">i</span></span><button class="btn btn-gh btn-sm">✦ Write one</button></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="w-8 h-8 rounded-lg shrink-0" style="background:var(--secret)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13.5px] font-semibold">The Tidewatch</div>
+            <div class="text-[11px] dim">6 members · seeds new people · 2 secrets</div></div>
+          <span class="dim text-[15px] shrink-0">⋯</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="w-8 h-8 rounded-lg shrink-0" style="background:var(--v1)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13.5px] font-semibold">The harbour office</div>
+            <div class="text-[11px] dim">3 members</div></div>
+          <span class="dim text-[15px] shrink-0">⋯</span></div>
+        <div class="px-4 py-2.5"><p class="text-[11px] leading-relaxed dim">Anyone written from a group starts with its fields and knows whatever it knows.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Groups · empty</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-2.5 row" style="background:var(--b2)"><span class="lbl dim">Groups</span></div>
+        <div class="px-4 py-8 text-center">
+          <div class="ttl text-[16px] mb-1.5" style="font-weight:500">No groups yet.</div>
+          <p class="text-[13px] leading-relaxed dim mb-4">A group is written like a character and used as a starting point for others — a crew, a household, an order. It saves writing the same person five times, and gives secrets somewhere to point.</p>
+          <button class="btn btn-pri btn-sm">✦ Write a group</button>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Finish · in Settings</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><span class="lbl dim">Ending it</span></div>
+        <div class="px-4 py-3 row">
+          <div class="text-[13px] font-semibold mb-1">Finish this campaign</div>
+          <p class="text-[11px] leading-relaxed dim mb-2">No more scenes. It stays readable, and a new campaign can name it as what came before.</p>
+          <button class="btn btn-gh btn-sm">Finish it</button></div>
+        <div class="px-4 py-3 row">
+          <div class="text-[13px] font-semibold mb-1 flex items-center gap-1.5">Publish a copy<span class="info">i</span></div>
+          <p class="text-[11px] leading-relaxed dim mb-2">Freezes everything as it stands so others can read it.</p>
+          <button class="btn btn-gh btn-sm">Publish</button></div>
+        <div class="px-4 py-3">
+          <button class="btn btn-pen btn-sm -ml-1">Archive this campaign</button>
+          <p class="text-[11px] leading-relaxed dim mt-1">Out of your library. Nothing deleted, and you can come back to it.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Finish · confirm</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">Finish The Salt Line?</div>
+        <div class="rounded-lg p-2.5 mb-3" style="background:color-mix(in srgb,var(--lamp) 9%,transparent);border-left:2px solid var(--lamp)">
+          <div class="text-[12.5px] font-semibold mb-0.5">A scene is still open</div>
+          <p class="text-[12px] leading-relaxed dim">The quay, after the second bell, at beat 4. It'll be closed, and everything in it reviewed as usual.</p></div>
+        <p class="text-[12.5px] leading-relaxed dim mb-3">You can reopen it later if you change your mind — this isn't permanent, it just means you're done for now.</p>
+        <div class="flex gap-1.5"><button class="btn btn-pri btn-sm">Finish it</button><button class="btn btn-gh btn-sm">Not yet</button></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 07 · SCENES -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">07 · Scenes</div>
+    <h2 class="text-2xl font-bold mb-2">Readable at a glance, no generated titles</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      The location <em>is</em> the title — you authored it, it's always there, and it doesn't cost a
+      generation or risk being wrong. Under it: the premise for a scene that hasn't closed, the
+      omniscient summary once it has. Both always visible, not collapsed. On a long campaign this reads
+      like a table of contents, and it degrades correctly — summaries don't exist until scene-close is
+      wired, so premise is the fallback that always works.
+    </p>
+  </div>
+  <div class="grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Populated · dark</div><div class="fr stage dark sheet"><div data-spec="scenes"></div></div></div>
+    <div><div class="wall mb-2">Populated · light</div><div class="fr stage light sheet"><div data-spec="scenes"></div></div></div>
+  </div>
+  <div class="mt-5 grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Empty</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Scenes</div></div>
+        <div class="px-4 py-8 text-center">
+          <div class="ttl text-[16px] mb-1.5" style="font-weight:500">Nothing's happened yet.</div>
+          <p class="text-[13px] leading-relaxed dim mb-4">Pick a place, say what's going on, and choose who's there.</p>
+          <button class="btn btn-pri">Set the first scene</button>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Empty · not ready</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Scenes</div></div>
+        <div class="px-4 py-8 text-center">
+          <div class="ttl text-[16px] mb-1.5" style="font-weight:500">Nothing's happened yet.</div>
+          <p class="text-[13px] leading-relaxed dim mb-4">You'll need a world and at least one character before a scene can open.</p>
+          <button class="btn btn-off">Set the first scene</button>
+          <div class="flex gap-1.5 justify-center mt-3"><button class="btn btn-gh btn-sm">Go to World</button><button class="btn btn-gh btn-sm">Go to Cast</button></div>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Summary missing</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Scenes</div></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="ttl text-[14px]" style="font-weight:600">Low water</div><span class="pill dim shrink-0">Closed</span></div>
+          <div class="lbl dim mb-1.5">What it was set up to be</div>
+          <p class="text-[13px] leading-relaxed dim">Wren has four hours before the tide turns and a manifest she hasn't signed.</p>
+        </div>
+        <div class="px-4 py-2.5"><p class="text-[11px] leading-relaxed dim">When a scene closes without a summary, the premise stands in. Nothing looks broken.</p></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 08 · LIST SIZES -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">08 · Long lists</div>
+    <h2 class="text-2xl font-bold mb-2">Render everything, but structure it</h2>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note">
+      <div><b style="color:var(--page-fg)">Punt, deliberately.</b> Realistic ceilings are small — a
+        hundred characters, fifty scenes, a few hundred library entries. Server-rendered rows at that
+        scale are nothing, and paginating them now costs you effort and costs the user a click for a
+        problem they don't have.</div>
+      <div><b style="color:var(--page-fg)">Tiering and grouping are the real answer.</b> The list that
+        actually gets long is walk-ons, and it's already collapsed behind a count. Structure beats
+        pagination — a hundred rows in four labelled groups reads fine; a hundred flat rows don't,
+        paginated or not.</div>
+      <div><b style="color:var(--page-fg)">If a group does get long, add search before paging.</b>
+        People looking for a specific character type a name; they don't page through looking for it.
+        Search plus tier filters covers nearly every case pagination would have.</div>
+      <div><b style="color:var(--page-fg)">When it's finally needed, "Load more" — not infinite
+        scroll.</b> Infinite scroll fights back-navigation, and returning from a character sheet to
+        find you've lost your place is worse than a button. It's also far simpler over LiveView,
+        which streams appended rows natively.</div>
+    </div>
+    <p class="mt-4 max-w-2xl text-[14.5px] leading-relaxed note">
+      One thing worth doing now, since it's free: build every list row so it doesn't depend on its
+      neighbours. Then adding a window later is a change to the query, not to the markup.
+    </p>
+  </div>
+</section>
+
+<!-- 09 · STATES -->
+<section class="max-w-6xl mx-auto px-5 pb-24">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">09 · Saving, errors, toasts, lifecycle</div>
+    <h2 class="text-2xl font-bold mb-2">Server-rendered states</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">Validation comes back from the server, so every form needs its rejected state drawn. Toasts name the action that produced them — Publish gives you "Published."</p>
+  </div>
+  <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Saving</div>
+      <div class="fr stage dark sheet p-4"><div class="flex items-center justify-between"><span class="text-[13px] dim">Saving…</span><span class="dot" style="background:var(--lamp)"></span></div></div>
+      <div class="fr stage dark sheet p-4 mt-2"><div class="flex items-center justify-between"><span class="text-[13px] dim">Saved</span><span class="dot" style="background:var(--ok)"></span></div></div>
+      <div class="fr stage dark sheet p-4 mt-2"><div class="flex items-center justify-between gap-2"><span class="text-[13px]" style="color:var(--pencil)">Couldn't save — try again</span><button class="btn btn-pen btn-sm">Retry</button></div></div>
+    </div>
+    <div><div class="wall mb-2">Field rejected</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="lbl dim mb-1.5">Campaign name</div>
+        <div class="field px-3 py-2.5 text-[14px] dim mb-1.5" style="border-color:var(--pencil)">&nbsp;</div>
+        <div class="flex items-start gap-1.5"><span class="dot mt-1.5 shrink-0" style="background:var(--pencil)"></span><span class="text-[12px] leading-relaxed" style="color:var(--pencil)">Give it a name. You can change it later.</span></div>
+      </div></div>
+    <div><div class="wall mb-2">Toasts</div>
+      <div class="fr stage dark sheet p-3 flex items-center gap-2"><span class="dot" style="background:var(--ok)"></span><span class="text-[13px]">Published</span></div>
+      <div class="fr stage dark sheet p-3 mt-2 flex items-center gap-2"><span class="dot" style="background:var(--ok)"></span><span class="text-[13px]">Mother Corrigan written</span></div>
+      <div class="fr stage dark sheet p-3 mt-2 flex items-center justify-between gap-2"><span class="text-[13px]">Moved to walk-ons</span><button class="btn btn-pen btn-sm">Undo</button></div>
+      <div class="fr stage dark sheet p-3 mt-2 flex items-center justify-between gap-2"><span class="text-[13px]">Sable Quist archived</span><button class="btn btn-pen btn-sm">Undo</button></div>
+    </div>
+    <div><div class="wall mb-2">Publish &amp; lifecycle</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row"><div class="flex items-center justify-between gap-2">
+          <div><div class="text-[13px] font-semibold">Private</div><div class="text-[11px] dim">Only you can see this</div></div>
+          <span class="pill dim shrink-0">Change ▾</span></div></div>
+        <div class="px-4 py-3 row">
+          <div class="text-[13px] font-semibold mb-1">Publish a copy</div>
+          <p class="text-[11px] leading-relaxed dim mb-2">Freezes the world, the cast and everything play has settled, so others can read it.</p>
+          <button class="btn btn-gh btn-sm">Publish</button>
+        </div>
+        <div class="px-4 py-3">
+          <button class="btn btn-pen btn-sm -ml-1">Archive this campaign</button>
+          <p class="text-[11px] leading-relaxed dim mt-1">It leaves your library. Nothing is deleted.</p>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- ========== TEMPLATES ========== -->
+
+<template id="spec-firstrun">
+  <div>
+    <div class="px-4 py-3 row" style="background:var(--b2)">
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0"><div class="ttl text-[17px] truncate" style="font-weight:600">Untitled campaign</div>
+          <div class="lbl dim mt-0.5">Nothing built yet</div></div>
+        <span class="pill dim shrink-0">Private</span>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab tab-on">Settings</div><div class="tab tab-todo">World</div>
+      <div class="tab tab-todo">Cast</div><div class="tab">Groups</div><div class="tab tab-todo">Premise</div><div class="tab">Scenes</div>
+    </div>
+    <div class="px-4 py-4">
+      <div class="rounded-xl p-4 mb-4" style="background:color-mix(in srgb,var(--lamp) 10%,transparent);border:1px solid var(--lamp)">
+        <div class="ttl text-[16px] mb-1" style="font-weight:600">Build the whole thing at once</div>
+        <p class="text-[13px] leading-relaxed dim mb-3">Say as much or as little as you like about the story and get a world, a cast who already know each other, and a pitch — in about a minute. You can change any of it after.</p>
+        <button class="btn btn-pri">Try Quick Build</button>
+      </div>
+      <div class="lbl dim mb-2.5">Or do it in order</div>
+      <div class="sheet">
+        <div class="px-3.5 py-3 row flex items-center gap-3">
+          <span class="mono text-[11px] dim w-3">1</span>
+          <div class="flex-1"><div class="text-[13px] font-semibold">Name it and set the tone</div><div class="text-[11px] dim">What it can contain, how the models behave</div></div>
+          <span class="dim text-[14px]">›</span>
+        </div>
+        <div class="px-3.5 py-3 row flex items-center gap-3">
+          <span class="mono text-[11px] dim w-3">2</span>
+          <div class="flex-1"><div class="text-[13px] font-semibold">Give it a world</div><div class="text-[11px] dim">Attach one you've written, or write a new one</div></div>
+          <span class="dim text-[14px]">›</span>
+        </div>
+        <div class="px-3.5 py-3 row flex items-center gap-3">
+          <span class="mono text-[11px] dim w-3">3</span>
+          <div class="flex-1"><div class="text-[13px] font-semibold">Cast it</div><div class="text-[11px] dim">At least one character before you can play</div></div>
+          <span class="dim text-[14px]">›</span>
+        </div>
+        <div class="px-3.5 py-3 flex items-center gap-3">
+          <span class="mono text-[11px] dim w-3">4</span>
+          <div class="flex-1"><div class="text-[13px] font-semibold">Say what it's about</div><div class="text-[11px] dim">Written from the world and the cast, so it comes last</div></div>
+          <span class="dim text-[14px]">›</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="spec-qb-form">
+  <div>
+    <div class="px-4 py-3 row" style="background:var(--b2)">
+      <div class="ttl text-[16px]" style="font-weight:600">Quick Build</div>
+      <div class="lbl dim mt-0.5">Everything here is optional</div>
+    </div>
+    <div class="px-4 py-4 space-y-4">
+      <div>
+        <div class="flex items-center justify-between mb-1.5"><span class="lbl dim">The world</span>
+          <button class="btn btn-gh btn-sm">Use one I have</button></div>
+        <div class="field px-3 py-2.5 text-[13px] leading-relaxed" style="min-height:54px">A port town on a tidal flat that runs on debts and smuggling. Nobody raises their voice.</div>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-1.5"><span class="lbl dim">Comes after</span>
+          <span class="lbl dim">optional</span></div>
+        <div class="sheet px-3 py-2.5 flex items-center gap-2.5">
+          <span class="w-6 h-6 rounded-md shrink-0" style="background:var(--v3)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold ttl">Low Water</div>
+            <div class="text-[11px] dim">Finished · its ending becomes this one's starting point</div></div>
+          <span class="dim text-[15px] shrink-0">×</span></div>
+      </div>
+      <div>
+        <div class="lbl dim mb-1.5">What the story's about</div>
+        <div class="field px-3 py-2.5 text-[13px] leading-relaxed dim" style="min-height:54px">Leave this blank and it'll be written from whatever the cast turns out to be.</div>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="lbl dim">The main cast</span><span class="lbl dim">5</span>
+        </div>
+        <div class="space-y-1.5">
+          <div class="field px-3 py-2.5 text-[13px]">The harbourmaster's daughter, who signs for everything</div>
+          <div class="field px-3 py-2.5 text-[13px]">A customs inspector nobody can buy</div>
+          <div class="field px-3 py-2.5 text-[13px] dim">Someone else, if you have one in mind…</div>
+          <div class="field px-3 py-2.5 text-[13px] dim">Someone else, if you have one in mind…</div>
+          <div class="field px-3 py-2.5 text-[13px] dim">Someone else, if you have one in mind…</div>
+        </div>
+        <div class="flex items-center gap-1.5 mt-2">
+          <button class="btn btn-gh btn-sm">+ Another</button><button class="btn btn-gh btn-sm">− One fewer</button>
+        </div>
+        <p class="text-[11px] leading-relaxed dim mt-2">Blank rows get filled in for you. You'll get five either way — these five are your main cast, and anyone they turn out to know gets added around them.</p>
+      </div>
+    </div>
+    <div class="px-4 py-3 border-t" style="border-color:var(--rule);background:var(--b2)">
+      <button class="btn btn-pri w-full justify-center">Build it</button>
+      <p class="text-[11px] dim mt-2 text-center">Around a minute. Nothing is final — you can rewrite all of it.</p>
+    </div>
+  </div>
+</template>
+
+<template id="spec-qb-blank">
+  <div>
+    <div class="px-4 py-3 row" style="background:var(--b2)">
+      <div class="ttl text-[16px]" style="font-weight:600">Quick Build</div>
+      <div class="lbl dim mt-0.5">Everything here is optional</div>
+    </div>
+    <div class="px-4 py-4 space-y-4">
+      <div>
+        <div class="flex items-center justify-between mb-1.5"><span class="lbl dim">The world</span>
+          <button class="btn btn-gh btn-sm">Use one I have</button></div>
+        <div class="field px-3 py-2.5 text-[13px] leading-relaxed dim" style="min-height:54px">A place, a mood, a rule it runs on — or nothing at all.</div>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-1.5"><span class="lbl dim">Comes after</span>
+          <span class="lbl dim">optional</span></div>
+        <div class="field px-3 py-2.5 text-[13px] dim">Pick an earlier campaign, if this follows one…</div>
+      </div>
+      <div>
+        <div class="lbl dim mb-1.5">What the story's about</div>
+        <div class="field px-3 py-2.5 text-[13px] leading-relaxed dim" style="min-height:54px">Leave this blank and it'll be written from whatever the cast turns out to be.</div>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-2"><span class="lbl dim">The main cast</span><span class="lbl dim">3</span></div>
+        <div class="space-y-1.5">
+          <div class="field px-3 py-2.5 text-[13px] dim">Someone, if you have one in mind…</div>
+          <div class="field px-3 py-2.5 text-[13px] dim">Someone else…</div>
+          <div class="field px-3 py-2.5 text-[13px] dim">Someone else…</div>
+        </div>
+        <div class="flex items-center gap-1.5 mt-2">
+          <button class="btn btn-gh btn-sm">+ Another</button><button class="btn btn-gh btn-sm">− One fewer</button>
+        </div>
+      </div>
+      <div class="rounded-lg px-3 py-2.5" style="background:var(--b3)">
+        <p class="text-[12px] leading-relaxed">You've told it nothing, which is allowed. You'll get a world, three characters and a pitch, all invented, and you can throw any of it away.</p>
+      </div>
+    </div>
+    <div class="px-4 py-3 border-t" style="border-color:var(--rule);background:var(--b2)">
+      <button class="btn btn-pri w-full justify-center">Surprise me</button>
+      <p class="text-[11px] dim mt-2 text-center">Around a minute. Nothing is final.</p>
+    </div>
+  </div>
+</template>
+
+<template id="spec-settings">
+  <div>
+    <div class="px-4 py-3 row" style="background:var(--b2)">
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0"><div class="ttl text-[17px] truncate" style="font-weight:600">The Salt Line</div>
+          <div class="lbl dim mt-0.5">Saltmarch · 5 cast · 3 scenes</div></div>
+        <span class="pill dim shrink-0">Private</span>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab tab-on">Settings</div><div class="tab">World</div>
+      <div class="tab">Cast</div><div class="tab">Groups</div><div class="tab">Premise</div><div class="tab">Scenes</div>
+    </div>
+    <div class="px-4 py-4 space-y-4">
+      <div>
+        <div class="lbl dim mb-1.5">Campaign name</div>
+        <div class="field px-3 py-2.5 text-[14px]">The Salt Line</div>
+      </div>
+
+      <div>
+        <div class="flex items-center gap-1.5 mb-2"><span class="lbl dim">What this campaign can contain</span><span class="info">i</span></div>
+        <div class="sheet px-3.5 py-3">
+          <div class="flex items-center justify-between mb-3">
+            <div><div class="text-[14px] font-semibold">Adult content</div><div class="text-[11px] dim">Off by default, even though you can turn it on</div></div>
+            <span class="sw sw-on" style="--sc:var(--lamp)"><i></i></span>
+          </div>
+          <div class="space-y-2.5 pb-3 mb-3" style="border-bottom:1px solid var(--rule)">
+            <div class="flex items-center justify-between"><span class="text-[13px]">Sex</span><span class="sw"><i></i></span></div>
+            <div class="flex items-center justify-between"><span class="text-[13px]">Graphic violence</span><span class="sw sw-on" style="--sc:var(--lamp)"><i></i></span></div>
+            <div class="flex items-center justify-between"><span class="text-[13px]">Other mature themes</span><span class="sw sw-on" style="--sc:var(--lamp)"><i></i></span></div>
+          </div>
+          <div class="rounded-lg px-3 py-2" style="background:var(--b3)">
+            <div class="lbl dim mb-0.5">This campaign plays as</div>
+            <div class="text-[13.5px] font-semibold leading-snug">Violent, and unflinching about hard subjects. No sex.</div>
+          </div>
+          <p class="text-[11px] leading-relaxed dim mt-2">A ceiling, not a target. A character's own limits still hold underneath it.</p>
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center gap-1.5 mb-2"><span class="lbl dim">Continuity</span><span class="info">i</span></div>
+        <div class="sheet px-3.5 py-3">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="min-w-0"><div class="text-[13px] dim">Comes after</div>
+              <div class="ttl text-[14px]" style="font-weight:600">Low Water</div></div>
+            <button class="btn btn-gh btn-sm shrink-0">Change</button>
+          </div>
+          <p class="text-[11px] leading-relaxed dim mt-1.5">That campaign's ending is this one's starting point. Both are set in Saltmarch.</p>
+        </div>
+      </div>
+
+      <div>
+        <div class="sheet px-3.5 py-3">
+          <div class="flex items-center justify-between">
+            <div><div class="text-[14px] font-semibold flex items-center gap-1.5">Model tuning<span class="info">i</span></div><div class="text-[11px] dim">Balanced · Director thinks first</div></div>
+            <span class="dim text-[15px] leading-none">⌄</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="lbl dim mb-2">Spending</div>
+        <div class="sheet px-3.5 py-3">
+          <div class="flex items-baseline justify-between mb-1.5">
+            <span class="text-[13px] dim">This campaign, all time</span><span class="mono text-[13px]">$3.42</span>
+          </div>
+          <div class="bar mb-1.5"><i style="width:17%"></i></div>
+          <div class="flex items-baseline justify-between">
+            <span class="text-[11px] dim">of a $20.00 limit</span><button class="btn btn-gh btn-sm">Change</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="spec-cast">
+  <div>
+    <div class="px-4 py-3 row" style="background:var(--b2)">
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0"><div class="ttl text-[17px] truncate" style="font-weight:600">The Salt Line</div>
+          <div class="lbl dim mt-0.5">Saltmarch · 5 cast · 3 scenes</div></div>
+        <span class="pill dim shrink-0">Private</span>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab">Settings</div><div class="tab">World</div>
+      <div class="tab tab-on">Cast</div><div class="tab">Groups</div><div class="tab">Premise</div><div class="tab">Scenes</div>
+    </div>
+
+    <div class="px-4 py-2.5 row flex items-center justify-between gap-2" style="background:var(--b2)">
+      <span class="flex items-center gap-1.5"><span class="lbl dim">Main cast · 3</span><span class="info">i</span></span>
+      <div class="flex gap-1.5"><button class="btn btn-gh btn-sm">✦ Write someone</button><button class="btn btn-gh btn-sm">Add</button></div>
+    </div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="w-8 h-8 rounded-lg shrink-0" style="background:var(--v1)"></span>
+      <div class="min-w-0 flex-1"><div class="text-[13.5px] font-semibold">Wren Ashgrove</div>
+        <div class="text-[11px] dim">The harbourmaster's daughter, who signs for everything</div></div>
+      <span class="dim text-[15px] shrink-0">⋯</span>
+    </div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="w-8 h-8 rounded-lg shrink-0" style="background:var(--v2)"></span>
+      <div class="min-w-0 flex-1"><div class="text-[13.5px] font-semibold">Ilias Vane</div>
+        <div class="text-[11px] dim">A customs inspector who counts things nobody wants counted</div></div>
+      <span class="dim text-[15px] shrink-0">⋯</span>
+    </div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="w-8 h-8 rounded-lg shrink-0" style="background:var(--v3)"></span>
+      <div class="min-w-0 flex-1"><div class="text-[13.5px] font-semibold">Mother Corrigan</div>
+        <div class="text-[11px] dim">Keeps the chapel by the water</div></div>
+      <span class="dim text-[15px] shrink-0">⋯</span>
+    </div>
+
+    <div class="px-4 py-2.5 row" style="background:var(--b2)"><span class="lbl dim">Recurring · 2</span></div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="w-8 h-8 rounded-lg shrink-0" style="background:var(--v4)"></span>
+      <div class="min-w-0 flex-1"><div class="text-[13.5px] font-semibold">Sable Quist</div>
+        <div class="text-[11px] dim">Rings the bell for money · in 2 scenes</div></div>
+      <span class="dim text-[15px] shrink-0">⋯</span>
+    </div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="w-8 h-8 rounded-lg shrink-0" style="background:var(--v1)"></span>
+      <div class="min-w-0 flex-1"><div class="text-[13.5px] font-semibold">Aldous Ashgrove</div>
+        <div class="text-[11px] dim">Harbourmaster · in 1 scene</div></div>
+      <span class="dim text-[15px] shrink-0">⋯</span>
+    </div>
+
+    <div class="px-4 py-3 row flex items-center justify-between gap-2" style="background:var(--b2)">
+      <div><span class="lbl dim">Walk-ons · 6</span>
+        <div class="text-[11px] dim mt-0.5">Written during play. Only remembered in their own scenes.</div></div>
+      <span class="dim text-[14px] shrink-0">⌄</span>
+    </div>
+    <div class="px-4 py-2.5 flex items-center justify-between gap-2">
+      <span class="text-[11px] dim">1 archived</span><span class="dim text-[14px]">⌄</span>
+    </div>
+  </div>
+</template>
+
+<template id="spec-scenes">
+  <div>
+    <div class="px-4 py-3 row" style="background:var(--b2)">
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0"><div class="ttl text-[17px] truncate" style="font-weight:600">The Salt Line</div>
+          <div class="lbl dim mt-0.5">Saltmarch · 5 cast · 3 scenes</div></div>
+        <span class="pill dim shrink-0">Private</span>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab">Settings</div><div class="tab">World</div>
+      <div class="tab">Cast</div><div class="tab">Groups</div><div class="tab">Premise</div><div class="tab tab-on">Scenes</div>
+    </div>
+
+    <div class="px-4 py-2.5 row flex items-center justify-between gap-2" style="background:var(--b2)">
+      <span class="lbl dim">3 scenes</span><button class="btn btn-pri btn-sm">Set a scene</button>
+    </div>
+
+    <div class="px-4 py-3 row" style="background:color-mix(in srgb,var(--lamp) 8%,transparent)">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[14.5px] min-w-0 truncate" style="font-weight:600">The quay, after the second bell</div>
+        <span class="pill shrink-0" style="border-color:var(--lamp);color:var(--lamp)">Open</span>
+      </div>
+      <div class="lbl dim mb-1.5">Beat 4 · Wren, Ilias, Mother Corrigan</div>
+      <p class="text-[13px] leading-relaxed">A shipment came in that isn't on any manifest. Wren signed for it four hours ago and has told nobody.</p>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[14.5px] min-w-0 truncate" style="font-weight:600">The harbourmaster's office</div>
+        <span class="pill dim shrink-0">6 beats</span>
+      </div>
+      <div class="lbl dim mb-1.5">Wren, Aldous · 1 branch</div>
+      <p class="text-[13px] leading-relaxed dim">Wren asked her father directly about the Kestrel's cargo and he lied to her, badly enough that she noticed. Neither of them said so. She left with the ledger key she came for.</p>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[14.5px] min-w-0 truncate" style="font-weight:600">Low water</div>
+        <span class="pill dim shrink-0">4 beats</span>
+      </div>
+      <div class="lbl dim mb-1.5">Wren, Ilias, Sable</div>
+      <p class="text-[13px] leading-relaxed dim">Ilias arrived in Saltmarch and met Wren on the flats without knowing who she was. Sable rang the bell for a boat that never docked, and nobody asked her why.</p>
+    </div>
+
+    <div class="px-4 py-3 flex items-center justify-between gap-2">
+      <div class="min-w-0"><div class="text-[13px] font-semibold">3 things to review</div>
+        <div class="text-[11px] dim">What play has changed about your characters</div></div>
+      <button class="btn btn-gh btn-sm shrink-0">Review</button>
+    </div>
+  </div>
+</template>
+
+<script>
+  document.querySelectorAll('[data-spec]').forEach(function(slot){
+    var t = document.getElementById('spec-' + slot.getAttribute('data-spec'));
+    if (!t) { slot.innerHTML = '<div style="padding:1rem;font:12px monospace;color:#E0604A">missing template: ' + slot.getAttribute('data-spec') + '</div>'; return; }
+    slot.appendChild(t.content.cloneNode(true));
+  });
+</script>
+</body>
+</html>
