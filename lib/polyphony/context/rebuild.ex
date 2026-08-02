@@ -33,7 +33,7 @@ defmodule Polyphony.Context.Rebuild do
   @spec for_character(term(), term()) :: {:ok, Polyphony.Context.SceneContext.t()} | :error
   def for_character(scene_id, character_id) do
     with %SceneOpened{} = opened <- opened(scene_id),
-         %CharacterSheet{} = sheet <- find_sheet(roster(scene_id), character_id) do
+         %CharacterSheet{} = sheet <- resolve_sheet(scene_id, character_id) do
       ctx =
         Context.materialize(
           scene_id: scene_id,
@@ -127,7 +127,39 @@ defmodule Polyphony.Context.Rebuild do
     _ -> nil
   end
 
-  # Match a scene character id (a *name*) to its sheet in the roster, case-insensitively.
+  # Resolve a scene's `character_id` to its sheet (§5.2 identity migration, phase 1):
+  # by **library id first** — so a stable id survives a display-name change (rename-safe)
+  # — then the legacy **name** match, since character ids minted before the migration are
+  # names. Both paths are safe: a name never parses as a library id, so it can't
+  # mis-resolve to the wrong entry.
+  defp resolve_sheet(scene_id, character_id) do
+    sheet_by_id(character_id) || find_sheet(roster(scene_id), character_id)
+  end
+
+  defp sheet_by_id(character_id) do
+    with id when not is_nil(id) <- as_library_id(character_id),
+         entry when not is_nil(entry) <- get_entry(id),
+         %CharacterSheet{} = sheet <- entry_payload(entry) do
+      sheet
+    else
+      _ -> nil
+    end
+  end
+
+  # A character_id is a library id only if it's an integer or an all-digit string — a
+  # display name (the legacy key) never is, so this never mis-resolves a name.
+  defp as_library_id(id) when is_integer(id), do: id
+
+  defp as_library_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {n, ""} -> n
+      _ -> nil
+    end
+  end
+
+  defp as_library_id(_), do: nil
+
+  # Match a scene character id (a legacy *name*) to its sheet in the roster, case-insensitively.
   defp find_sheet(roster, character_id) do
     key = character_id |> to_string() |> String.downcase()
 

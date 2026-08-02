@@ -179,6 +179,51 @@ defmodule Polyphony.Context.RebuildTest do
     refute open_scene_at(campaign.id, "the rooftop") |> msg_text() =~ "The vault alarm is broken."
   end
 
+  test "resolves the sheet by stable library id, surviving a rename (§5.2 phase 1)" do
+    char =
+      Library.put(%{
+        owner_id: "1",
+        kind: "character",
+        payload: %CharacterSheet{name: "Original", status: :full, premise: "a thief"}
+      })
+
+    campaign =
+      Library.put(%{
+        owner_id: "1",
+        kind: "campaign",
+        payload: %{character_ids: [char.id], premise: "a heist", name: "C"}
+      })
+
+    scene = "reb-" <> Integer.to_string(System.unique_integer([:positive]))
+    # The scene keys the character by its stable library id, not its name.
+    cid = to_string(char.id)
+
+    :ok =
+      App.dispatch(%OpenScene{
+        scene_id: scene,
+        campaign_id: campaign.id,
+        premise: "a heist",
+        opened_beat: 0
+      })
+
+    :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: cid, beat: 1})
+
+    assert {:ok, ctx} = Rebuild.for_character(scene, cid)
+    assert ctx.prefix =~ "Original"
+
+    # Rename the character — its stable id (the scene's character_id) is unchanged, so
+    # the rebuild still finds the sheet and reflects the new name.
+    Library.update_payload(char.id, %CharacterSheet{
+      name: "Renamed",
+      status: :full,
+      premise: "a thief"
+    })
+
+    assert {:ok, ctx2} = Rebuild.for_character(scene, cid)
+    assert ctx2.prefix =~ "Renamed"
+    refute ctx2.prefix =~ "Original"
+  end
+
   test "canon character arc now reaches the rebuilt context, not just publishing (§2.8 caveat)" do
     campaign = campaign_with_cast()
 

@@ -666,8 +666,31 @@ unconditionally with no in-play guard.**
 (`campaign_live` scene-open + `seed_context`), add an **id↔name translation layer** where the
 fiction is rendered to / emitted by the LLM (the log stores ids; the prose still speaks names),
 simplify `find_sheet`/arc lookups to id, and provide a **dual-read shim** for legacy name-keyed
-streams/`scene_memberships`/`arc_entries.subject_id` (events are immutable — rule 6). Until it
-lands, at minimum guard the sheet editor against renaming an in-scene character.
+streams/`scene_memberships`/`arc_entries.subject_id` (events are immutable — rule 6).
+
+**Design decision (author):** *every* sheet field should eventually be arc-overridable — including
+`name` — except **boundaries** (which get their own events/functionality). So the goal isn't to
+lock the rename door; it's to make identity stable enough that rename (via arc or the editor) is
+safe, then open all non-boundary fields to revision.
+
+**Phased execution** (each phase tested + committed; every translation legacy-tolerant — an
+unmapped id renders as itself and an unmapped name resolves to itself, so old name-keyed data and
+the existing suite stay green):
+
+1. **Sheet-lookup id-tolerance.** `Rebuild` resolves a `character_id` to its sheet by library id
+   first, then the legacy name match. Safe, no visibility impact. *(done — the first, most
+   damaging break closed for the eventual flip.)*
+2. **LLM-boundary translation.** Render the display **name** for a `character_id` (context
+   `render_event`, Director transcript/roster/cast-instruction), and resolve emitted **names** back
+   to ids (Director `cast`, `TurnOrderDeclared`, packet `addressed_to`). ⚠️ Touches the visibility
+   invariant (whisper addressee matching) — needs the most care + tests.
+3. **Flip the mint.** `campaign_live` scene-open dispatches `EnterCharacter{character_id: lib_id}`
+   and seeds by id. Add rename-safety tests (rename an in-scene character; rebuild, arc, whispers
+   all still resolve).
+4. **Arc + gate by id.** `arc_entries.subject_id` = the id; scene gate / arc review drop the
+   name-resolution dance.
+5. **Open the fields.** Make `name` (and other non-boundary scalars) freely editable + arc-
+   overridable, now that identity is stable.
 
 ---
 
