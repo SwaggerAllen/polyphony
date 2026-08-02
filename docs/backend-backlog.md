@@ -25,10 +25,10 @@ Most of this file is a standing backlog to schedule against feedback. This slice
 it's the set that **gates the shipped frontend design**, so it's the near-term target. Ordered
 by leverage:
 
-- **§5.1 — scene-close fan-out has no caller.** The single highest-leverage fix: per-character
-  summaries and arc extraction never run in production, so the entire memory/arc layer (arc
-  review, world arc, the casting gate, published contents) is dark until it's wired. Everything
-  else here that touches memory lands on top of this.
+- **§5.1 — scene-close fan-out has no caller. ✅ Done.** The single highest-leverage fix:
+  per-character summaries and arc extraction never ran in production, so the entire memory/arc
+  layer (arc review, world arc, the casting gate, published contents) was dark. Now wired by a
+  Commanded handler on `SceneClosed`. Everything else here that touches memory lands on top of it.
 - **§1.1–1.7 — the branching + live-beat family.** Fork/edit wiring, lineage, failed-turn
   requeue with a give-up state, draft accept/discard, pass-turn, and per-viewer failure scoping.
   These make play and branching work as the mocks draw them.
@@ -672,13 +672,20 @@ how a specific story plays, and it arrives alongside a profile page.
 
 ## 5 · Pre-existing, high priority
 
-### 5.1 Scene-close fan-out is never triggered · **wiring**
-Not from this design pass — flagged in the catalog (§8). `SceneClose.enqueue` has no caller
-and `SceneClosed` doesn't trigger it, so **per-character summaries and arc extraction never
-run in production.** The whole memory and arc layer is dark until this is wired.
+### 5.1 Scene-close fan-out is never triggered · **wiring** — ✅ **Done**
+Not from this design pass — flagged in the catalog (§8). `SceneClose.enqueue` had no caller
+and `SceneClosed` didn't trigger it, so **per-character summaries and arc extraction never
+ran in production.** The whole memory and arc layer was dark until this was wired.
 
-Everything the design does with Arc Review is decorative until then. World arc (2.8)
-lands on top of this, so wiring it is a prerequisite for that too.
+**Wired** by `Polyphony.SceneClose.Handler`, a `start_from: :current` Commanded handler on
+`SceneClosed` that calls `enqueue/2` (jobs resolve the configured provider/embedder at run
+time). Supervised alongside the projectors and off in tests for the same reason (its
+`Oban.insert!` touches Postgres); tests drive `SceneClose.run/2` and the handler's `handle/2`
+directly. `start_from: :current` so a deploy doesn't re-summarize every historically-closed
+scene.
+
+Everything the design does with Arc Review was decorative until this. World arc (2.8) lands on
+top of it, so this was a prerequisite for that too.
 
 ---
 
