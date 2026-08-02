@@ -38,9 +38,9 @@ by leverage:
 - **§2.3 — scene premise & location as authored fields**, and **§2.8 — world arc.** The two §2
   items that gate designed screens: the "Set the scene" flow needs the former; arc review, the
   casting gate, and off-screen catch-up need the latter (and §2.8 sits on §5.1).
-- **§4b.1 / §4b.2 — account framing fixes.** 18+ is eligibility, not a content layer, and there
-  is no safety-analysis toggle to offer. Both are signup/settings copy-and-semantics corrections
-  the auth screens depend on.
+- **§4b.1 / §4b.2 — account framing fixes. ✅ Done.** 18+ reframed as eligibility (with the
+  no-row / no-invite-burn guarantee pinned by a test), and the settings toggle for the
+  non-existent safety analysis removed; the §C seam stays latent.
 
 Everything below §2.3/§2.8 in the section numbering — the rest of §2, §3's publishing cluster,
 §4 reporting, §6 deferred — is the standing backlog: real, shaped, but scheduled against user
@@ -691,10 +691,18 @@ to a turn's editorial row now.
 
 ## 4b · Accounts
 
-### 4b.1 18+ is eligibility, not a content ceiling · **change**
+### 4b.1 18+ is eligibility, not a content ceiling · **change** — ✅ **Done**
 
 The current model treats the age attestation as the first of three content layers, and
 `Content.Floor` hardcodes `attested: true` so it does nothing (§5). **That framing is wrong.**
+
+> **Done — the behaviour was already right; this corrected the framing and pinned the
+> guarantees.** `Accounts.register` already checks attestation *before* the transaction, so a
+> refusal never wrote a user row or redeemed the invite — now asserted by a test (no row for
+> the email, invite still open). `Content.Floor`, `Accounts`, and `adult_attested?/1` are
+> reframed: attestation is eligibility to hold an account, not a per-user content layer; the
+> floor's `attested` branch stays as a latent seam for future under-18 support, exercised by
+> no per-user path today.
 
 Under-18s cannot use Polyphony at all. Supporting them would require parental controls and
 in-house filtering — a large piece of work deferred a long way out. So:
@@ -709,7 +717,7 @@ in-house filtering — a large piece of work deferred a long way out. So:
 - The floor layer stays in the model for when under-18 support is eventually built. It just isn't
   doing per-user work today.
 
-### 4b.2 There is no automated safety analysis to opt out of · **change**
+### 4b.2 There is no automated safety analysis to opt out of · **change** — ✅ **Done**
 
 Settings should not offer a toggle for it. Scene analysis is part of the deferred under-18 work
 and doesn't exist — a switch for an absent feature is worse than no switch, and implies
@@ -718,6 +726,12 @@ processing that isn't happening.
 **What will be needed later**, and shouldn't be conflated with it: an opt-in for experimental
 generation behaviour. That may belong **per campaign** rather than per account, since it changes
 how a specific story plays, and it arrives alongside a profile page.
+
+> **Done.** Removed the "Opt out of proactive analysis" control from settings (the checkbox,
+> its `handle_event`, and the Data controls card) and the moduledoc's claim that it's
+> surfaced. The §C domain seam (`Accounts.set_proactive_opt_out`, `DataAccess` gating + the
+> per-campaign pref) stays latent for when such a feature exists — at which point the design
+> places the control per campaign, not per account.
 
 ---
 

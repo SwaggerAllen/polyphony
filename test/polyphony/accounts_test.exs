@@ -62,11 +62,17 @@ defmodule Polyphony.AccountsTest do
       %{admin: first_user()}
     end
 
-    test "attestation is required", %{admin: admin} do
-      attrs = signup_attrs(%{email: "a@x.io", username: "aaa", invite_token: invite_token(admin)})
+    test "attestation is required, and refusing it leaves no trace (§4b.1)", %{admin: admin} do
+      token = invite_token(admin)
+      attrs = signup_attrs(%{email: "a@x.io", username: "aaa", invite_token: token})
 
       assert {:error, :attestation_required} =
                Accounts.register(Map.put(attrs, :attested_adult, false))
+
+      # Eligibility, not a content ceiling: a refusal creates no row about the person
+      # and does not burn the invite code.
+      assert Repo.get_by(User, email: "a@x.io") == nil
+      assert Accounts.open_invite(token) != nil
     end
 
     test "a non-first sign-up requires an invite", %{admin: _admin} do

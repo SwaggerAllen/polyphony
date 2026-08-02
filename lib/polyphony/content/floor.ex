@@ -1,23 +1,27 @@
 defmodule Polyphony.Content.Floor do
   @moduledoc """
-  Layer 1 of content governance (§A5): the **app-wide 18+ floor**.
+  Layer 1 of content governance (§A5): the **app-wide 18+ floor** — the widest
+  ceiling every narrower layer (campaign, boundary) intersects down from.
 
-  Non-configurable and the widest ceiling — adult-content categories are available
-  at all only to an account that cleared the 18+ attestation (A9). The account and
-  attestation surface is B2 (not built yet), so this reads a flag rather than a
-  stored record.
+  **18+ is eligibility, not a per-user content layer (backlog §4b.1).** Under-18s
+  cannot hold a Polyphony account at all — sign-up rejects an unchecked attestation
+  before writing anything (`Accounts.sign_up`). So *every* real account has
+  attested, which makes the floor trivially satisfied rather than a live per-user
+  gate. It permits every category (it is a *floor*, not a filter — narrowing
+  happens above it).
 
-  For an attested account the floor permits every category (it is a *floor*, not a
-  filter — narrowing happens in the campaign and boundary layers). Without
-  attestation the floor is empty, and the nesting intersection collapses every
-  narrower layer to no adult content — the invariant that a narrower layer can
-  never expand past a broader one.
+  The `attested` parameter and the empty-register branch stay for when under-18
+  support is actually built (parental controls + in-house filtering, deferred a
+  long way out); until then nothing passes `attested: false`, so the branch is a
+  latent seam, not a code path exercised per user.
   """
   alias Polyphony.Content
 
   @doc """
-  The categories the app permits at its widest. `:attested` (default `true` until
-  the account layer lands) — an unattested account floors to an empty register.
+  The categories the app permits at its widest. `:attested` (default `true`) — the
+  latent under-18 seam; an unattested account would floor to an empty register, but
+  today no account is unattested (sign-up requires it), so this is always the full
+  register in practice.
   """
   @spec register(keyword()) :: [Content.category()]
   def register(opts \\ []) do
