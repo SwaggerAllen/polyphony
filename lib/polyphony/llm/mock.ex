@@ -26,6 +26,7 @@ defmodule Polyphony.LLM.Mock do
       :decision -> {:ok, decision_json(opts)}
       :summary -> {:ok, summary_text(messages)}
       :arc -> {:ok, arc_json(messages)}
+      :world_arc -> {:ok, world_arc_json(messages)}
       :sheet -> {:ok, sheet_json(messages)}
       :autofill -> {:ok, autofill_json(messages, opts)}
       :relationships -> {:ok, relationships_json(messages)}
@@ -54,6 +55,17 @@ defmodule Polyphony.LLM.Mock do
     Jason.encode!(%{
       entries: [
         %{kind: "discovery", statement: capitalize(lorem(seed, 5)) <> ".", sheet_field: nil}
+      ]
+    })
+  end
+
+  # A lorem world-arc result: one global durable world fact.
+  defp world_arc_json(messages) do
+    seed = :erlang.phash2(messages)
+
+    Jason.encode!(%{
+      entries: [
+        %{kind: "discovery", scope: "global", statement: capitalize(lorem(seed, 5)) <> "."}
       ]
     })
   end
