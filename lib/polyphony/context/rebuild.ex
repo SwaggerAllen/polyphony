@@ -33,7 +33,7 @@ defmodule Polyphony.Context.Rebuild do
   @spec for_character(term(), term()) :: {:ok, Polyphony.Context.SceneContext.t()} | :error
   def for_character(scene_id, character_id) do
     with %SceneOpened{} = opened <- opened(scene_id),
-         %CharacterSheet{} = sheet <- resolve_sheet(scene_id, character_id) do
+         %CharacterSheet{} = sheet <- sheet_for(scene_id, character_id) do
       ctx =
         Context.materialize(
           scene_id: scene_id,
@@ -127,12 +127,15 @@ defmodule Polyphony.Context.Rebuild do
     _ -> nil
   end
 
-  # Resolve a scene's `character_id` to its sheet (§5.2 identity migration, phase 1):
-  # by **library id first** — so a stable id survives a display-name change (rename-safe)
-  # — then the legacy **name** match, since character ids minted before the migration are
-  # names. Both paths are safe: a name never parses as a library id, so it can't
-  # mis-resolve to the wrong entry.
-  defp resolve_sheet(scene_id, character_id) do
+  @doc """
+  Resolve a scene's `character_id` to its sheet (§5.2 identity migration): by **library
+  id first** — so a stable id survives a display-name change (rename-safe) — then the
+  legacy **name** match, since character ids minted before the migration are names. Both
+  paths are safe: a name never parses as a library id, so it can't mis-resolve. Returns
+  `nil` when nothing matches.
+  """
+  @spec sheet_for(term(), term()) :: CharacterSheet.t() | nil
+  def sheet_for(scene_id, character_id) do
     sheet_by_id(character_id) || find_sheet(roster(scene_id), character_id)
   end
 
