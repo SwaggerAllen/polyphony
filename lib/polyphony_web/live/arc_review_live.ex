@@ -13,10 +13,27 @@ defmodule PolyphonyWeb.ArcReviewLive do
   def mount(%{"campaign_id" => id}, _session, socket) do
     entry = Library.get(id)
     campaign = entry && Library.payload(entry)
-    subjects = (campaign && campaign[:character_ids]) || []
 
     {:ok,
-     socket |> assign(page_title: "Arc review", campaign_id: id, subjects: subjects) |> load()}
+     socket
+     |> assign(page_title: "Arc review", campaign_id: id, subjects: cast_names(campaign))
+     |> load()}
+  end
+
+  # Character arc is keyed by the character's **name** (the id scenes and extraction
+  # use), not the library id the cast is stored under — resolve names to look it up.
+  defp cast_names(nil), do: []
+
+  defp cast_names(campaign) do
+    (campaign[:character_ids] || [])
+    |> Enum.map(fn id ->
+      case Library.get(id) do
+        nil -> nil
+        entry -> Map.get(Library.payload(entry) || %{}, :name)
+      end
+    end)
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.uniq()
   end
 
   defp load(socket) do
@@ -31,6 +48,19 @@ defmodule PolyphonyWeb.ArcReviewLive do
 
   def handle_event("accept", %{"id" => id}, socket),
     do: gate(socket, fn n -> ArcEntry.accept(Repo, n) end, id, "Accepted into canon.")
+
+  # The fast path out of the §3.0 scene gate: promote every proposal at once. The gate
+  # exists to keep state consistent, not to force careful reading.
+  def handle_event("accept_all", _params, socket) do
+    safe(socket, fn ->
+      ids =
+        Enum.map(socket.assigns.proposed, fn {_s, e} -> e.id end) ++
+          Enum.map(socket.assigns.world, & &1.id)
+
+      Enum.each(ids, &ArcEntry.accept(Repo, &1))
+      {:noreply, socket |> put_flash(:info, "All accepted into canon.") |> load()}
+    end)
+  end
 
   def handle_event("reject", %{"id" => id}, socket),
     do: gate(socket, fn n -> ArcEntry.reject(Repo, n) end, id, "Rejected — it won't reach canon.")
@@ -58,8 +88,18 @@ defmodule PolyphonyWeb.ArcReviewLive do
     <h1>Arc review</h1>
     <p class="dim">
       Interpreted discoveries awaiting review. Accept to promote to canon, reject to drop,
-      or edit the wording first.
+      or edit the wording first. A new scene can't open while the cast has pending arc — accept
+      all is the one-tap way through.
     </p>
+
+    <button
+      :if={@proposed != [] or @world != []}
+      class="btn"
+      phx-click="accept_all"
+      data-confirm="Accept every pending arc change into canon?"
+    >
+      Accept all
+    </button>
 
     <h3>Characters</h3>
     <div :if={@proposed == []} class="list-empty">No character arc to review.</div>

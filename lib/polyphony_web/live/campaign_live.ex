@@ -11,7 +11,7 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.{Library, Owner, Context, App}
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
-  alias Polyphony.Authoring.{Autofill, CharacterSheet, QuickBuild, Effective}
+  alias Polyphony.Authoring.{Autofill, CharacterSheet, QuickBuild, Effective, SceneGate}
   alias Polyphony.Events.SceneOpened
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Director.SceneBrief
@@ -223,49 +223,28 @@ defmodule PolyphonyWeb.CampaignLive do
 
   def handle_event("start_scene", _params, socket) do
     safe(socket, fn ->
-      %{entry: entry, payload: payload, cast: cast} = socket.assigns
+      %{entry: entry, cast: cast} = socket.assigns
       # Only finalized characters enter the scene; pending stubs are skipped (they
       # aren't castable until generated — bulk-generate them from the library first).
       {ready, pending} = Enum.split_with(cast, &full?/1)
 
-      if ready == [] do
-        {:noreply,
-         put_flash(socket, :error, "No ready characters — generate the pending ones first.")}
-      else
-        scene_id = "sc-" <> Integer.to_string(System.unique_integer([:positive]))
-        premise = payload[:premise] || ""
-        bible = payload[:bible_id] && Library.get(payload[:bible_id]) |> maybe_payload()
+      cond do
+        ready == [] ->
+          {:noreply,
+           put_flash(socket, :error, "No ready characters — generate the pending ones first.")}
 
-        :ok =
-          App.dispatch(%OpenScene{
-            scene_id: scene_id,
-            campaign_id: entry.id,
-            premise: premise,
-            opened_beat: 0
-          })
+        # Arc-review gate (§3.0): no new scene while the cast (or the campaign's world)
+        # has unreviewed arc — generation works from the sheet, so open one and the
+        # Director writes a character who's fallen behind the story. Accept-all on the
+        # review screen is the one-tap way through.
+        match?({:blocked, _}, SceneGate.check(entry.id, Enum.map(ready, &char_name/1))) ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Review the pending arc changes before the next scene.")
+           |> redirect(to: ~p"/arc/#{entry.id}")}
 
-        sheets = Enum.map(ready, &Library.payload/1)
-        content_config = CampaignConfig.from_payload(payload)
-
-        for {c, sheet} <- Enum.zip(ready, sheets) do
-          name = char_name(c)
-          :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: name, beat: 1})
-          seed_context(scene_id, name, sheet, premise, bible, content_config)
-        end
-
-        # The Director's omniscient brief: the world, the premise, the whole cast, and
-        # the cross-scene omniscient summaries (pgvector — no-ops without egress). The
-        # Director is omniscient, so it folds in ALL canon world arc (§2.8).
-        SceneBrief.materialize(scene_id,
-          world_bible: Effective.world_bible(bible, entry.id, :all),
-          premise: premise,
-          roster: sheets,
-          retriever: PgvectorRetriever
-        )
-
-        Library.update_payload(entry.id, %{payload | scenes: [scene_id | socket.assigns.scenes]})
-
-        {:noreply, socket |> maybe_flash_pending(pending) |> redirect(to: ~p"/play/#{scene_id}")}
+        true ->
+          start_scene(socket, ready, pending)
       end
     end)
   end
@@ -359,6 +338,46 @@ defmodule PolyphonyWeb.CampaignLive do
   def handle_info({:quick_build_progress, %{} = step}, socket) do
     {:noreply,
      if(socket.assigns.building, do: assign(socket, build_progress: step), else: socket)}
+  end
+
+  # Open the scene for the ready cast (the arc-review gate has passed).
+  defp start_scene(socket, ready, pending) do
+    %{entry: entry, payload: payload} = socket.assigns
+
+    scene_id = "sc-" <> Integer.to_string(System.unique_integer([:positive]))
+    premise = payload[:premise] || ""
+    bible = payload[:bible_id] && Library.get(payload[:bible_id]) |> maybe_payload()
+
+    :ok =
+      App.dispatch(%OpenScene{
+        scene_id: scene_id,
+        campaign_id: entry.id,
+        premise: premise,
+        opened_beat: 0
+      })
+
+    sheets = Enum.map(ready, &Library.payload/1)
+    content_config = CampaignConfig.from_payload(payload)
+
+    for {c, sheet} <- Enum.zip(ready, sheets) do
+      name = char_name(c)
+      :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: name, beat: 1})
+      seed_context(scene_id, name, sheet, premise, bible, content_config)
+    end
+
+    # The Director's omniscient brief: the world, the premise, the whole cast, and
+    # the cross-scene omniscient summaries (pgvector — no-ops without egress). The
+    # Director is omniscient, so it folds in ALL canon world arc (§2.8).
+    SceneBrief.materialize(scene_id,
+      world_bible: Effective.world_bible(bible, entry.id, :all),
+      premise: premise,
+      roster: sheets,
+      retriever: PgvectorRetriever
+    )
+
+    Library.update_payload(entry.id, %{payload | scenes: [scene_id | socket.assigns.scenes]})
+
+    {:noreply, socket |> maybe_flash_pending(pending) |> redirect(to: ~p"/play/#{scene_id}")}
   end
 
   defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible, content_config) do

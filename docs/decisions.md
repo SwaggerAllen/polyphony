@@ -555,3 +555,54 @@ default is per use-case, and how it composes with the existing `BeatPolicy` / `B
 **Not now.** It wants real multiplayer and at least the first dice system to pull against, or the
 design is guesswork. Sequenced after those; the backlog's §1.4 requeue refinement is the first
 concrete policy it would formalize.
+
+---
+
+## P13. Campaign companion — ask your story (Q&A agent)
+
+A companion to the arc-visualization work: let an author **ask an LLM about their own
+campaign** in natural language rather than scrolling the transcript. Example questions:
+
+- *"When did X event happen?"* (event-log lookup)
+- *"Why is character Y doing Z?"* (motivation from sheet + arc + recent scenes)
+- *"How did character A react to world event B?"* (cross-reference the transcript around B)
+
+**Shape.** An agent with a few **read skills** over everything a campaign holds — the event log
+(via the canonical read), character sheets + effective sheets, character and **world arc**
+(§2.8), scene summaries (the pgvector rows), and membership/visibility. The skills are thin
+wrappers over read models that already exist; the agent composes them.
+
+**The visibility angle is a feature, not an afterthought.** The same projection that powers play
+(`Visibility.project`) lets the companion answer **omnisciently** for the author or **as a
+character** — "what would Wren think happened here?" is a spoiler-safe read that nothing else can
+do. Default to omniscient for the author; offer a character lens.
+
+**Sequencing.** Adds an LLM pass on top of per-turn cost, so it's post-monetization / BYO (§P1).
+Cheap to prototype because it's read-only over existing data; the value is the skill set + the
+visibility lens, not new storage. Pairs with arc visualization (both are "see/understand your
+story" surfaces).
+
+## P14. Design-thread tooling — docs/ux access skills (workflow, open)
+
+*A workflow decision, not a product feature — recorded so it stops living only in chat.*
+
+The bottleneck today: design work and code work share one thread. It would be far more efficient
+to run a **separate design thread** that can read (and maybe write) this repo's `docs/` and `ux/`
+without the coding machinery — so one thread iterates on design while another writes code.
+
+**Wanted:** importable **skills** giving a chat session access to the docs + UX kit — **vector
+search**, **text search**, and **full-text download** over `docs/` and `ux/`. Claude Projects
+doesn't quite cover this (no good search/write loop against a living repo).
+
+**Open questions (still mulling — don't build until settled):**
+
+- **Where do the docs live?** Keep them in-repo as now (single source of truth, versioned with
+  the code), or move some to a hosted surface (e.g. Confluence) that's easier to browse/edit
+  outside a coding session? Splitting risks drift; keeping them in-repo needs the skills above to
+  be pleasant to use.
+- **Is the design surface publicly deployed?** If the storybook (roadmap: "Frontend redesign &
+  design-kit fidelity") and the `ux/*.html` mocks get a public deployment, **that deployment is
+  itself a read surface** — a design thread could just fetch the live pages instead of needing
+  repo access. That materially changes what the skills need to do.
+
+Decision pending on both; the skill set and the deployment/storybook work inform each other.

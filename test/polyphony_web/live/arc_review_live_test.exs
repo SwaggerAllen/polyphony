@@ -9,11 +9,13 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
   setup :register_and_log_in_user
 
   defp campaign(user) do
-    Library.put(%{
-      owner: Owner.of(user),
-      kind: "character",
-      payload: %CharacterSheet{name: "Mira", status: :full}
-    })
+    # The cast stores library ids; character arc is keyed by the character's name.
+    mira =
+      Library.put(%{
+        owner: Owner.of(user),
+        kind: "character",
+        payload: %CharacterSheet{name: "Mira", status: :full}
+      })
 
     Library.put(%{
       owner: Owner.of(user),
@@ -21,7 +23,7 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
       payload: %{
         kind: :campaign,
         name: "Camp",
-        character_ids: ["Mira"],
+        character_ids: [mira.id],
         bible_id: nil,
         scenes: []
       }
@@ -75,6 +77,21 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
     html = render(view)
     refute html =~ "Keep this one."
     refute html =~ "Drop this one."
+  end
+
+  test "accept all promotes every proposal at once (the §3.0 fast path)", %{
+    conn: conn,
+    user: user
+  } do
+    camp = campaign(user)
+    a = char_proposal("Character thing.")
+    b = world_proposal(camp, "World thing.", :global)
+
+    {:ok, view, _html} = live(conn, ~p"/arc/#{camp.id}")
+    view |> element("button", "Accept all") |> render_click()
+
+    assert Repo.get!(ArcRM, a.id).status == "canon"
+    assert Repo.get!(ArcRM, b.id).status == "canon"
   end
 
   test "editing corrects a world proposal's wording and scope before review", %{
