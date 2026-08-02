@@ -17,6 +17,7 @@ defmodule Polyphony.Context.Rebuild do
 
   alias Polyphony.{App, Context, Library}
   alias Polyphony.Authoring.CharacterSheet
+  alias Polyphony.Authoring.Effective
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Context.PgvectorRetriever
   alias Polyphony.Events.SceneOpened
@@ -37,10 +38,13 @@ defmodule Polyphony.Context.Rebuild do
         Context.materialize(
           scene_id: scene_id,
           character_id: to_string(character_id),
-          sheet: sheet,
+          # Canon character + world arc folded in (§2.8) so accepted arc reaches
+          # generation; world facts scoped to this scene's location (global + local-here).
+          sheet: Effective.sheet(sheet, character_id),
           premise: opened.premise || "",
           location: opened.location_id,
-          world_bible: world_bible(scene_id),
+          world_bible:
+            Effective.world_bible(world_bible(scene_id), opened.campaign_id, opened.location_id),
           # Re-apply the campaign content ceiling (§A5) so a rebuilt context caps the
           # same boundaries as the original seed — a cache wipe must not re-open them.
           content_config: content_config(scene_id),

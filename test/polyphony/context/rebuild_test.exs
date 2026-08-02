@@ -10,6 +10,8 @@ defmodule Polyphony.Context.RebuildTest do
   alias Polyphony.{App, Library, Repo}
   alias Polyphony.Context.{Rebuild, Store}
   alias Polyphony.Authoring.CharacterSheet
+  alias Polyphony.Authoring.{ArcEntry, WorldArcEntry}
+  alias Polyphony.ReadModels.ArcEntry, as: ArcRM
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Director.BeatOps
 
@@ -116,5 +118,84 @@ defmodule Polyphony.Context.RebuildTest do
     # Bare fallback — but it still spells out the schema so the model can't free-form.
     assert text =~ "You are Ghost"
     assert text =~ ~s("moves")
+  end
+
+  # ── World + character arc reach generation (§2.8) ────────────────────────────
+
+  defp open_scene_at(campaign_id, location) do
+    scene = "reb-" <> Integer.to_string(System.unique_integer([:positive]))
+
+    :ok =
+      App.dispatch(%OpenScene{
+        scene_id: scene,
+        campaign_id: campaign_id,
+        premise: "a heist",
+        location_id: location,
+        opened_beat: 0
+      })
+
+    :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: "Lydia", beat: 1})
+    scene
+  end
+
+  defp msg_text(scene),
+    do: scene |> BeatOps.messages_for(2, "Lydia") |> Enum.map_join("\n", & &1.content)
+
+  test "canon global world arc reaches the rebuilt character context (§2.8)" do
+    campaign = campaign_with_cast()
+
+    ArcRM.put_world(
+      Repo,
+      %WorldArcEntry{
+        kind: :discovery,
+        scope: :global,
+        statement: "The moon fell from the sky.",
+        status: :canon
+      },
+      campaign.id
+    )
+
+    scene = open_scene(campaign.id)
+    assert :error = Store.fetch(scene, "Lydia")
+    assert msg_text(scene) =~ "The moon fell from the sky."
+  end
+
+  test "a canon local world fact reaches only scenes at its location (§2.8)" do
+    campaign = campaign_with_cast()
+
+    ArcRM.put_world(
+      Repo,
+      %WorldArcEntry{
+        kind: :discovery,
+        scope: :local,
+        location_id: "the vault",
+        statement: "The vault alarm is broken.",
+        status: :canon
+      },
+      campaign.id
+    )
+
+    assert open_scene_at(campaign.id, "the vault") |> msg_text() =~ "The vault alarm is broken."
+    refute open_scene_at(campaign.id, "the rooftop") |> msg_text() =~ "The vault alarm is broken."
+  end
+
+  test "canon character arc now reaches the rebuilt context, not just publishing (§2.8 caveat)" do
+    campaign = campaign_with_cast()
+
+    ArcRM.put(
+      Repo,
+      %ArcEntry{
+        kind: :revision,
+        sheet_field: "premise",
+        statement: "a master thief who now works alone",
+        status: :canon
+      },
+      "Lydia"
+    )
+
+    scene = open_scene(campaign.id)
+    text = msg_text(scene)
+    assert text =~ "a master thief who now works alone"
+    refute text =~ "a nervous thief"
   end
 end

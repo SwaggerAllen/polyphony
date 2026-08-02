@@ -9,9 +9,10 @@ defmodule PolyphonyWeb.CampaignLive do
   require Logger
 
   alias Polyphony.{Library, Owner, Context, App}
-  alias Polyphony.Context.{Store, PgvectorRetriever}
+  alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
-  alias Polyphony.Authoring.{Autofill, CharacterSheet, QuickBuild}
+  alias Polyphony.Authoring.{Autofill, CharacterSheet, QuickBuild, Effective}
+  alias Polyphony.Events.SceneOpened
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Director.SceneBrief
   alias Polyphony.LLM.Settings
@@ -253,9 +254,10 @@ defmodule PolyphonyWeb.CampaignLive do
         end
 
         # The Director's omniscient brief: the world, the premise, the whole cast, and
-        # the cross-scene omniscient summaries (pgvector — no-ops without egress).
+        # the cross-scene omniscient summaries (pgvector — no-ops without egress). The
+        # Director is omniscient, so it folds in ALL canon world arc (§2.8).
         SceneBrief.materialize(scene_id,
-          world_bible: bible,
+          world_bible: Effective.world_bible(bible, entry.id, :all),
           premise: premise,
           roster: sheets,
           retriever: PgvectorRetriever
@@ -360,13 +362,16 @@ defmodule PolyphonyWeb.CampaignLive do
   end
 
   defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible, content_config) do
+    {campaign_id, location} = scene_campaign_location(scene_id)
+
     ctx =
       Context.materialize(
         scene_id: scene_id,
         character_id: name,
-        sheet: sheet,
+        # Canon character + world arc folded in (§2.8), scoped to this scene's location.
+        sheet: Effective.sheet(sheet, name),
         premise: premise,
-        world_bible: bible,
+        world_bible: Effective.world_bible(bible, campaign_id, location),
         # The campaign content ceiling (§A5): caps this character's categorized
         # boundaries and renders the enabled register into their frozen prefix.
         content_config: content_config,
@@ -379,6 +384,15 @@ defmodule PolyphonyWeb.CampaignLive do
   end
 
   defp seed_context(_scene_id, _name, _other, _premise, _bible, _content_config), do: :ok
+
+  # The scene's campaign + authored location, from its opening event (durable) — for
+  # folding canon world arc into the world half of context, scoped to this place.
+  defp scene_campaign_location(scene_id) do
+    case Rebuild.opened(scene_id) do
+      %SceneOpened{campaign_id: c, location_id: l} -> {c, l}
+      _ -> {nil, nil}
+    end
+  end
 
   defp maybe_payload(nil), do: nil
   defp maybe_payload(entry), do: Library.payload(entry)

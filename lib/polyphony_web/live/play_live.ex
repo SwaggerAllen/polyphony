@@ -26,7 +26,8 @@ defmodule PolyphonyWeb.PlayLive do
     TurnOrder
   }
 
-  alias Polyphony.Context.{Store, PgvectorRetriever}
+  alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
+  alias Polyphony.Authoring.Effective
   alias Polyphony.DebugTap
   alias Polyphony.Director.{BeatOps, SceneBrief}
 
@@ -304,13 +305,17 @@ defmodule PolyphonyWeb.PlayLive do
     do: put_flash(socket, :error, "#{name} has no usable sheet yet.")
 
   defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible) do
+    {campaign_id, location} = scene_campaign_location(scene_id)
+
     ctx =
       Context.materialize(
         scene_id: scene_id,
         character_id: name,
-        sheet: sheet,
+        # Canon character + world arc folded in (§2.8); world facts scoped to this
+        # scene's location (global + local-here).
+        sheet: Effective.sheet(sheet, name),
         premise: premise,
-        world_bible: bible,
+        world_bible: Effective.world_bible(bible, campaign_id, location),
         # Retrieve this character's own distant-scene summaries from pgvector
         # (no-ops to [] without egress / when the embed fails).
         retriever: PgvectorRetriever
@@ -842,18 +847,30 @@ defmodule PolyphonyWeb.PlayLive do
         ctx
 
       :error ->
+        {campaign_id, location} = scene_campaign_location(scene_id)
+
         ctx =
           Context.materialize(
             scene_id: scene_id,
             character_id: character,
-            sheet: sheet,
+            # Canon character + world arc folded in (§2.8), scoped to this location.
+            sheet: Effective.sheet(sheet, character),
             premise: premise,
-            world_bible: bible,
+            world_bible: Effective.world_bible(bible, campaign_id, location),
             retriever: PgvectorRetriever
           )
 
         Store.put(scene_id, character, ctx)
         ctx
+    end
+  end
+
+  # The scene's campaign + authored location, from its opening event (durable) — used
+  # to fold canon world arc into the world half of context, scoped to this place.
+  defp scene_campaign_location(scene_id) do
+    case Rebuild.opened(scene_id) do
+      %SceneOpened{campaign_id: c, location_id: l} -> {c, l}
+      _ -> {nil, nil}
     end
   end
 

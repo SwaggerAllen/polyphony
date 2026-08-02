@@ -24,7 +24,7 @@ defmodule Polyphony.Director.SceneBrief do
   `Polyphony.Packets.canonical/1` (rule 6) so a re-rolled take never reappears.
   """
 
-  alias Polyphony.Authoring.{WorldBible, CharacterSheet}
+  alias Polyphony.Authoring.{WorldBible, CharacterSheet, Effective}
   alias Polyphony.Context
   alias Polyphony.Context.{Rebuild, SceneContext, Store, StaticRetriever}
   alias Polyphony.Director.BeatOps
@@ -148,7 +148,14 @@ defmodule Polyphony.Director.SceneBrief do
     case Rebuild.opened(scene_id) do
       %{} = opened ->
         materialize(scene_id,
-          world_bible: Rebuild.world_bible(scene_id),
+          # The Director is omniscient: fold in ALL canon world arc (§2.8), not just
+          # facts local to this scene's place.
+          world_bible:
+            Effective.world_bible(
+              Rebuild.world_bible(scene_id),
+              Map.get(opened, :campaign_id),
+              :all
+            ),
           premise: Map.get(opened, :premise),
           location: Map.get(opened, :location_id),
           roster: Rebuild.roster(scene_id),
