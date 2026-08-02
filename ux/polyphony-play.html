@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyphony — set the scene &amp; play</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="polyphony-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="antialiased">
+
+<header class="max-w-6xl mx-auto px-5 pt-12 pb-8">
+  <div class="wall mb-3">Polyphony · step 5 · scene setup &amp; play</div>
+  <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">Set the scene, then play it</h1>
+  <p class="mt-4 max-w-2xl text-[15px] leading-relaxed note">
+    Scene setup became its own screen. Play gained a permanent status strip — tracker plus one
+    sentence — and lost the omniscient composer, because to write a character you become them.
+  </p>
+</header>
+
+<!-- 01 · SET THE SCENE -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">01 · Set the scene</div>
+    <h2 class="text-2xl font-bold mb-2">The GM's form, before beat 1</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note">Location and premise are the Director's brief. Cast is a list of rows, not chips — a row has somewhere to put control mode today and invitation state when multiplayer lands.</p>
+  </div>
+  <div class="mt-7 grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Empty · first scene in the campaign</div>
+      <div class="fr stage dark sheet"><div data-spec="setup-empty"></div></div></div>
+    <div><div class="wall mb-2">Filled</div>
+      <div class="fr stage dark sheet"><div data-spec="setup-full"></div></div></div>
+  </div>
+  <div class="mt-5 grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Premise generating</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center justify-between mb-2"><span class="lbl dim">What's happening</span><span class="pill" style="color:var(--lamp);border-color:var(--lamp)">Writing</span></div>
+        <div class="space-y-2"><div class="h-3 rounded" style="background:var(--b3);width:94%"></div><div class="h-3 rounded" style="background:var(--b3);width:88%"></div><div class="h-3 rounded" style="background:var(--b3);width:46%"></div></div>
+        <p class="text-[11px] dim mt-3">Using the world, the cast, and what happened in scene 2.</p>
+      </div></div>
+    <div><div class="wall mb-2">Write an NPC without leaving</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="lbl dim mb-2">New character for this scene</div>
+        <div class="field px-3 py-2.5 text-[14px] mb-2">Sable Quist</div>
+        <div class="field px-3 py-2.5 text-[13px] dim mb-2.5">A dockhand who rings the bell for money — one line about who she is…</div>
+        <div class="flex gap-1.5"><button class="btn btn-pri btn-sm">✦ Write her sheet</button><button class="btn btn-gh btn-sm">Add as a stub</button></div>
+        <p class="text-[11px] dim mt-2">A stub can play. You can flesh her out later.</p>
+      </div></div>
+    <div><div class="wall mb-2">Validation · server-side</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="lbl dim mb-1.5">Where it happens</div>
+        <div class="field px-3 py-2.5 text-[14px] dim mb-1.5" style="border-color:var(--pencil)">Somewhere</div>
+        <div class="flex items-start gap-1.5 mb-3.5"><span class="dot mt-1.5 shrink-0" style="background:var(--pencil)"></span><span class="text-[12px] leading-relaxed" style="color:var(--pencil)">Name the place. The Director builds the scene around it and won't invent one for you.</span></div>
+        <div class="lbl dim mb-1.5">Who's in it</div>
+        <div class="flex items-start gap-1.5"><span class="dot mt-1.5 shrink-0" style="background:var(--pencil)"></span><span class="text-[12px] leading-relaxed" style="color:var(--pencil)">Cast at least one character.</span></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 02 · STATUS STRIP -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">02 · The status strip</div>
+    <h2 class="text-2xl font-bold mb-2">Tracker and narration, always visible</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">Above the composer in both registers. No beat number — the transcript rule owns that. No navigation. Scrolled away from the bottom, an arrow appears on the strip, which replaces the floating pill entirely.</p>
+  </div>
+  <div class="grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr page dark sheet"><div data-spec="strips"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr page light sheet"><div data-spec="strips"></div></div></div>
+  </div>
+</section>
+
+<!-- 03 · PLAYER -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">03 · Page register</div>
+    <h2 class="text-2xl font-bold mb-2">As a player</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note">Scroll it — beat 3's rule pins until beat 4 takes over, and the strip holds the bottom throughout.</p>
+  </div>
+  <div class="mt-7 grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr page dark sheet"><div data-spec="player"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr page light sheet"><div data-spec="player"></div></div></div>
+  </div>
+</section>
+
+<!-- 04 · GM -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">04 · Stage register</div>
+    <h2 class="text-2xl font-bold mb-2">As the author or GM — no composer</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note">The strip's sentence is the way in: tapping <b style="color:var(--page-fg)">write Ilias Vane</b> switches perspective with the composer focused. Bottom bar is Narrate, Introductions, Continue.</p>
+  </div>
+  <div class="mt-7 grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr stage dark sheet"><div data-spec="gm"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr stage light sheet"><div data-spec="gm"></div></div></div>
+  </div>
+</section>
+
+<!-- 05 · DRAFT -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">05 · Draft &amp; approve</div>
+    <h2 class="text-2xl font-bold mb-2">The draft takes the composer's place</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">You're reacting to the scene, so the scene stays on screen. The panel grows and scrolls; the transcript compresses above it. Expand's variants use the same shape, because it's the same interaction.</p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Draft ready · in place</div>
+      <div class="fr page dark sheet"><div data-spec="draft-inplace"></div></div></div>
+    <div><div class="wall mb-2">Long draft · scrolls</div>
+      <div class="fr page dark sheet p-4">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2"><span class="ttl text-[13px]" style="font-weight:600;letter-spacing:.06em;color:var(--v2)">ILIAS VANE</span><span class="pill" style="color:var(--lamp);border-color:var(--lamp)">Draft</span></div>
+          <span class="dim text-[15px] leading-none">⌄</span>
+        </div>
+        <div class="overflow-y-auto scroller pr-1" style="max-height:150px">
+          <p class="text-[15px] leading-[1.7] dim">Pleasant, unhurried.</p>
+          <p class="text-[15px] leading-[1.7] mt-2">He does not reach for the coat. He has learned that reaching ends conversations, and this one has further to go.</p>
+          <p class="text-[15px] leading-[1.7] mt-2">“Then you won't mind me counting.”</p>
+          <p class="text-[15px] leading-[1.7] mt-2">He is already walking toward the crates, which is its own kind of answer.</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5 mt-3 pt-3 border-t" style="border-color:var(--rule)">
+          <button class="btn btn-pri btn-sm">Use this</button><button class="btn btn-gh btn-sm">Edit first</button>
+          <button class="btn btn-gh btn-sm">Try again</button><button class="btn btn-gh btn-sm">Discard</button>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Expand variants · same shape</div>
+      <div class="fr page dark sheet p-4">
+        <div class="flex items-center justify-between mb-2"><span class="lbl dim">Three ways he could take it</span><span class="dim text-[15px] leading-none">⌄</span></div>
+        <div class="space-y-1.5 overflow-y-auto scroller pr-1" style="max-height:150px">
+          <div class="p-2.5 rounded-lg border text-[14px] leading-relaxed" style="border-color:var(--lamp);background:color-mix(in srgb,var(--lamp) 8%,transparent)">“Then you won't mind me counting.”</div>
+          <div class="p-2.5 rounded-lg border text-[14px] leading-relaxed" style="border-color:var(--rule)">He lets the silence sit, and looks at her coat.</div>
+          <div class="p-2.5 rounded-lg border text-[14px] leading-relaxed" style="border-color:var(--rule)">“Nothing. Right.” He writes nothing down.</div>
+        </div>
+        <div class="flex gap-1.5 mt-3 pt-3 border-t" style="border-color:var(--rule)">
+          <button class="btn btn-pri btn-sm">Edit this one</button><button class="btn btn-gh btn-sm">Try again</button><button class="btn btn-gh btn-sm">Discard</button>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 06 · CONNECTION -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">06 · Connection</div>
+    <h2 class="text-2xl font-bold mb-2">Silent when healthy</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">No green dot. A permanent "everything is fine" indicator is noise and trains people to stop reading the one place that matters. It appears only when something is wrong — and because reconnecting replays the canonical scene, the copy can promise recovery.</p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Healthy</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3 row"><div class="flex items-center justify-between gap-2"><div class="min-w-0"><div class="lbl dim">The Salt Line</div><div class="ttl text-[15px] mt-0.5 truncate" style="font-weight:600">The quay</div></div><span class="viewas shrink-0" style="--vc:var(--v2)"><i></i>Ilias ▾</span></div></div>
+        <div class="px-4 py-7 text-center"><p class="text-[13px] dim">Nothing at all.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Reconnecting</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3 row"><div class="flex items-center justify-between gap-2"><div class="min-w-0"><div class="lbl dim">The Salt Line</div><div class="ttl text-[15px] mt-0.5 truncate" style="font-weight:600">The quay</div></div><span class="viewas shrink-0" style="--vc:var(--v2)"><i></i>Ilias ▾</span></div></div>
+        <div class="px-4 py-2 flex items-center gap-2" style="background:color-mix(in srgb,var(--lamp) 12%,transparent);border-bottom:1px solid var(--rule)">
+          <span class="dot" style="background:var(--lamp)"></span><span class="text-[12.5px]">Reconnecting — you won't lose the scene.</span></div>
+        <div class="strip"><div class="slots"><div class="slot slot-took" style="--sc:var(--v1)">WREN</div><div class="slot slot-now slot-you">YOU</div><div class="slot slot-wait">CORR</div></div>
+          <div class="text-[13px] mt-1.5 dim">Your turn.</div></div>
+        <div class="px-4 py-3" style="background:var(--b2);border-top:1px solid var(--rule);opacity:.6"><div class="field px-3.5 py-3 text-[14px] dim">What does Ilias do?</div></div>
+      </div></div>
+    <div><div class="wall mb-2">Disconnected</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3 row"><div class="flex items-center justify-between gap-2"><div class="min-w-0"><div class="lbl dim">The Salt Line</div><div class="ttl text-[15px] mt-0.5 truncate" style="font-weight:600">The quay</div></div><span class="viewas shrink-0" style="--vc:var(--v2)"><i></i>Ilias ▾</span></div></div>
+        <div class="px-4 py-2 flex items-center gap-2" style="background:color-mix(in srgb,var(--pencil) 12%,transparent);border-bottom:1px solid var(--rule)">
+          <span class="dot" style="background:var(--pencil)"></span><span class="text-[12.5px]">No connection. The scene will catch up when you're back.</span></div>
+        <div class="strip"><div class="slots" style="opacity:.5"><div class="slot slot-took" style="--sc:var(--v1)">WREN</div><div class="slot slot-now slot-you">YOU</div><div class="slot slot-wait">CORR</div></div>
+          <div class="text-[13px] mt-1.5 dim">Last seen: your turn.</div></div>
+        <div class="px-4 py-3" style="background:var(--b2);border-top:1px solid var(--rule)"><div class="field px-3.5 py-3 text-[14px] dim" style="background:var(--b2)">Can't write while you're offline</div></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 07 · INTRODUCTIONS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">07 · Introductions</div>
+    <h2 class="text-2xl font-bold mb-2">The Director asks; the GM decides</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      There's no "admit as a stub" — every path ends with a full character. The panel has two doors
+      of its own: <b style="color:var(--page-fg)">write someone new</b> and
+      <b style="color:var(--page-fg)">find someone you've written</b>. The Director can only suggest
+      from this campaign's cast; the GM can reach every character they own.
+    </p>
+  </div>
+
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Panel · Director has a suggestion</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)"><span class="ttl text-[15px]" style="font-weight:600">Introductions</span><span class="dim text-[17px] leading-none">×</span></div>
+        <div class="px-4 py-3 row">
+          <div class="lbl dim mb-2">The Director suggests</div>
+          <div class="flex items-center gap-2.5">
+            <span class="w-7 h-7 rounded-lg shrink-0" style="background:var(--v4)"></span>
+            <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Sable Quist</div><div class="text-[11px] dim">Somebody rang that bell</div></div>
+            <button class="btn btn-pri btn-sm shrink-0">Admit</button>
+          </div>
+          <div class="mt-2 flex items-center gap-2"><span class="lbl dim">She'll be</span><span class="info">i</span><span class="pill dim">Automated ▾</span><button class="btn btn-pen btn-sm">Not now</button></div>
+        </div>
+        <div class="px-4 py-3">
+          <div class="lbl dim mb-2">Bring someone on yourself</div>
+          <div class="flex flex-col gap-1.5">
+            <button class="btn btn-gh justify-start">✦ Write someone new</button>
+            <button class="btn btn-gh justify-start">Find someone you've written</button>
+          </div>
+        </div>
+      </div></div>
+
+    <div><div class="wall mb-2">Panel · nothing suggested</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)"><span class="ttl text-[15px]" style="font-weight:600">Introductions</span><span class="dim text-[17px] leading-none">×</span></div>
+        <div class="px-4 py-6 text-center row"><p class="text-[13px] leading-relaxed dim">The Director isn't asking for anyone. It will when the scene needs someone.</p></div>
+        <div class="px-4 py-3">
+          <div class="lbl dim mb-2">Bring someone on yourself</div>
+          <div class="flex flex-col gap-1.5">
+            <button class="btn btn-gh justify-start">✦ Write someone new</button>
+            <button class="btn btn-gh justify-start">Find someone you've written</button>
+          </div>
+        </div>
+      </div></div>
+
+    <div><div class="wall mb-2">Write someone new</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center gap-2" style="background:var(--b2)"><span class="dim text-[15px]">‹</span><span class="ttl text-[15px]" style="font-weight:600">Someone new</span></div>
+        <div class="px-4 py-3.5">
+          <div class="lbl dim mb-1.5">Who are they</div>
+          <div class="field px-3 py-2.5 text-[14px] mb-2">A harbour constable</div>
+          <div class="field px-3 py-2.5 text-[13px] leading-relaxed mb-2.5" style="min-height:60px">Came down for the noise, knows Wren's father, not on anyone's payroll yet.</div>
+          <div class="lbl dim mb-1.5">She'll be</div>
+          <div class="seg mb-3"><div class="seg-on">Automated</div><div class="dim">Draft</div><div class="dim">Mine</div></div>
+          <div class="flex flex-col gap-1.5">
+            <button class="btn btn-pri justify-center">✦ Write her and bring her on</button>
+            <button class="btn btn-gh justify-center">Open the sheet editor instead</button>
+          </div>
+          <p class="text-[11px] dim mt-2.5">Either way she joins your cast as a full character.</p>
+        </div>
+      </div></div>
+  </div>
+
+  <div class="mt-5">
+    <div class="wall mb-2">Find someone you've written · the picker</div>
+    <p class="text-[13px] leading-relaxed note max-w-2xl mb-3">
+      Same component as the library's character search, opened inside play. Scoped to this campaign —
+      characters don't cross campaigns, because a sheet is written against a world and the people who'd
+      want to move one want their history and relationships along with it. Tier is the primary filter,
+      since once walk-ons autogenerate the roster gets long fast.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Populated</div>
+      <div class="fr stage dark sheet"><div data-spec="picker"></div></div></div>
+    <div><div class="wall mb-2">No matches</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center gap-2" style="background:var(--b2)"><span class="dim text-[15px]">‹</span><span class="ttl text-[15px]" style="font-weight:600">Find someone</span></div>
+        <div class="px-4 py-3 row">
+          <div class="field px-3 py-2.5 text-[14px] mb-2.5">alchemist</div>
+          <div class="flex flex-wrap gap-1.5">
+            <span class="pill" style="background:var(--b3)">Everyone</span><span class="pill dim">Main cast</span><span class="pill dim">Recurring</span><span class="pill dim">Walk-ons</span>
+          </div>
+        </div>
+        <div class="px-4 py-7 text-center">
+          <p class="text-[13px] leading-relaxed dim mb-3">Nobody in this campaign by that name.</p>
+          <button class="btn btn-pri btn-sm">✦ Write an alchemist</button>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Chosen · confirm</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center gap-2" style="background:var(--b2)"><span class="dim text-[15px]">‹</span><span class="ttl text-[15px]" style="font-weight:600">Sable Quist</span></div>
+        <div class="px-4 py-3.5">
+          <div class="flex items-center gap-2.5 mb-2.5">
+            <span class="w-9 h-9 rounded-lg shrink-0" style="background:var(--v4)"></span>
+            <div><div class="text-[13px] font-semibold">Sable Quist</div><div class="text-[11px] dim">Recurring · last seen in scene 1</div></div>
+          </div>
+          <p class="text-[13px] leading-relaxed mb-3">Rings the tide bell for whoever pays her, and has never once said who did.</p>
+          <div class="lbl dim mb-1.5">She'll be</div>
+          <div class="seg mb-3"><div class="seg-on">Automated</div><div class="dim">Draft</div><div class="dim">Mine</div></div>
+          <button class="btn btn-pri w-full justify-center">Bring her on</button>
+          <p class="text-[11px] dim mt-2.5 text-center">She comes in at the next beat.</p>
+        </div>
+      </div></div>
+  </div>
+
+  <div class="mt-5 grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Admitted · sheet still writing</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center gap-2 mb-2"><span class="w-7 h-7 rounded-lg shrink-0" style="background:var(--v4)"></span>
+          <div><span class="ttl text-[14px]" style="font-weight:600">The bellman</span><div class="lbl" style="color:var(--lamp)">Here · being written</div></div></div>
+        <div class="space-y-2 mb-3"><div class="h-2.5 rounded" style="background:var(--b3);width:92%"></div><div class="h-2.5 rounded" style="background:var(--b3);width:74%"></div></div>
+        <p class="text-[12px] leading-relaxed dim">He's in the room. He won't act until he's written — the beat carries on without him.</p>
+      </div></div>
+    <div><div class="wall mb-2">His sheet failed</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center gap-2 mb-2"><span class="w-7 h-7 rounded-lg shrink-0" style="background:var(--v4)"></span>
+          <div><span class="ttl text-[14px]" style="font-weight:600">The bellman</span><div class="lbl" style="color:var(--pencil)">Here · not written</div></div></div>
+        <p class="text-[13px] leading-relaxed dim mb-2.5">Writing him didn't work. He's still in the scene and still won't act until he has a sheet.</p>
+        <div class="flex flex-wrap gap-1.5"><button class="btn btn-pri btn-sm">Try again</button><button class="btn btn-gh btn-sm">Write him yourself</button><button class="btn btn-gh btn-sm">Send him away</button></div>
+      </div></div>
+    <div><div class="wall mb-2">In the transcript</div>
+      <div class="fr page dark sheet p-4">
+        <div class="m-world mb-3"><div class="ttl text-[17px] leading-[1.55]" style="font-weight:500">A man comes up the steps from the water, still holding the bell rope.</div></div>
+        <div class="flex items-center gap-2"><span class="dot" style="background:var(--v4)"></span><span class="text-[13px] dim">The bellman is here.</span></div>
+        <p class="text-[11px] dim mt-3">Entrances read as fiction first. Nobody sees the sheet being written.</p>
+      </div></div>
+  </div>
+</section>
+
+<!-- ========== TEMPLATES ========== -->
+
+<template id="spec-setup-empty">
+  <div>
+    <div class="px-4 py-3 row" style="background:var(--b2)">
+      <div class="ttl text-[16px]" style="font-weight:600">Set the scene</div>
+      <div class="lbl dim mt-0.5">The Salt Line · first scene</div>
+    </div>
+    <div class="px-4 py-4 space-y-4">
+      <div>
+        <div class="lbl dim mb-1.5">Where it happens</div>
+        <div class="field px-3 py-2.5 text-[14px] dim">The quay, the market square, a locked room…</div>
+        <p class="text-[11px] dim mt-1.5">The Director builds around this and won't choose it for you.</p>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-1.5"><span class="flex items-center gap-1.5"><span class="lbl dim">What's happening</span><span class="info">i</span></span><button class="btn btn-gh btn-sm">✦ Expand</button></div>
+        <div class="field px-3 py-2.5 text-[14px] dim" style="min-height:76px">A line or two on where things stand as the scene opens. Expand will draft it from the world and cast.</div>
+      </div>
+      <div>
+        <div class="lbl dim mb-2">Who's in it</div>
+        <div class="rounded-xl px-4 py-7 text-center" style="border:1px dashed var(--rule)">
+          <p class="text-[13px] leading-relaxed dim mb-3">No cast in this campaign yet. Anyone you write here joins the campaign too.</p>
+          <button class="btn btn-pri btn-sm">✦ Write a character</button>
+        </div>
+      </div>
+    </div>
+    <div class="px-4 py-3 border-t" style="border-color:var(--rule);background:var(--b2)">
+      <button class="btn w-full justify-center" style="background:var(--b3);color:var(--bcm)">Open the scene</button>
+      <p class="text-[11px] dim mt-2 text-center">Name a place and cast someone first.</p>
+    </div>
+  </div>
+</template>
+
+<template id="spec-setup-full">
+  <div>
+    <div class="px-4 py-3 row" style="background:var(--b2)">
+      <div class="ttl text-[16px]" style="font-weight:600">Set the scene</div>
+      <div class="lbl dim mt-0.5">The Salt Line · scene 3</div>
+    </div>
+    <div class="px-4 py-4 space-y-4">
+      <div>
+        <div class="lbl dim mb-1.5">Where it happens</div>
+        <div class="field px-3 py-2.5 text-[14px]">The quay, after the second bell</div>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-1.5"><span class="lbl dim">What's happening</span><button class="btn btn-gh btn-sm">✦ Expand</button></div>
+        <div class="field px-3 py-2.5 text-[14px] leading-relaxed">A shipment came in that isn't on any manifest. Wren signed for it four hours ago and has told nobody. Ilias has been sent to count crates.</div>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-2"><span class="flex items-center gap-1.5"><span class="lbl dim">Who's in it</span><span class="info">i</span></span><span class="lbl dim">3 cast</span></div>
+        <div class="sheet">
+          <div class="px-3 py-2.5 row flex items-center gap-2.5">
+            <span class="w-6 h-6 rounded-md shrink-0" style="background:var(--v1)"></span>
+            <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Wren Ashgrove</div><div class="text-[11px] dim">Harbourmaster's daughter</div></div>
+            <span class="pill dim shrink-0">Automated ▾</span></div>
+          <div class="px-3 py-2.5 row flex items-center gap-2.5">
+            <span class="w-6 h-6 rounded-md shrink-0" style="background:var(--v2)"></span>
+            <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Ilias Vane</div><div class="text-[11px] dim">Customs inspector</div></div>
+            <span class="pill shrink-0" style="border-color:var(--lamp);color:var(--lamp)">Mine ▾</span></div>
+          <div class="px-3 py-2.5 flex items-center gap-2.5">
+            <span class="w-6 h-6 rounded-md shrink-0" style="background:var(--v3)"></span>
+            <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Mother Corrigan</div><div class="text-[11px] dim">Keeps the chapel by the water</div></div>
+            <span class="pill dim shrink-0">Automated ▾</span></div>
+        </div>
+        <div class="flex flex-wrap gap-1.5 mt-2">
+          <button class="btn btn-gh btn-sm">Add from your cast</button><button class="btn btn-gh btn-sm">✦ Write someone new</button></div>
+        <div class="mt-2.5 flex items-center gap-2 flex-wrap">
+          <span class="pill dim">Sable Quist</span><span class="text-[11px] dim">off-screen — the Director may bring her on</span></div>
+      </div>
+    </div>
+    <div class="px-4 py-3 border-t" style="border-color:var(--rule);background:var(--b2)">
+      <button class="btn btn-pri w-full justify-center">Open the scene</button>
+    </div>
+  </div>
+</template>
+
+<template id="spec-strips">
+  <div>
+    <div class="strip" style="border-top:none"><div class="slots"><div class="slot slot-took" style="--sc:var(--v1)">WREN</div><div class="slot slot-now slot-you">YOU</div><div class="slot slot-wait">CORR</div></div>
+      <div class="text-[13px] mt-1.5">Your turn.</div></div>
+    <div class="strip"><div class="slots"><div class="slot slot-now">WREN</div><div class="slot slot-wait slot-you">YOU</div><div class="slot slot-wait">CORR</div></div>
+      <div class="text-[13px] mt-1.5 dim">Wren is writing. You're next.</div></div>
+    <div class="strip"><div class="slots"><div class="slot slot-took" style="--sc:var(--v1)">WREN</div><div class="slot slot-pass slot-you">YOU</div><div class="slot slot-now">CORR</div></div>
+      <div class="text-[13px] mt-1.5 dim">You passed. Mother Corrigan is taking her turn.</div></div>
+    <div class="strip"><div class="slots"><div class="slot slot-took" style="--sc:var(--v1)">WREN</div><div class="slot slot-took" style="--sc:var(--v2)">YOU</div><div class="slot slot-fail">CORR</div></div>
+      <div class="flex items-center justify-between gap-2 mt-1.5">
+        <span class="text-[13px]" style="color:var(--pencil)">Mother Corrigan's turn didn't come through.</span>
+        <span class="text-[15px] leading-none shrink-0" style="color:var(--pencil)">↓</span></div></div>
+    <div class="strip"><div class="slots"><div class="slot slot-took" style="--sc:var(--v1)">WREN</div><div class="slot slot-took" style="--sc:var(--v2)">YOU</div><div class="slot slot-took" style="--sc:var(--v3)">CORR</div></div>
+      <div class="text-[13px] mt-1.5 dim">The beat is finished.</div></div>
+    <div class="strip"><div class="slots"><div class="slot slot-wait">WREN</div><div class="slot slot-wait slot-you">YOU</div><div class="slot slot-wait">CORR</div></div>
+      <div class="text-[13px] mt-1.5 dim">The Director is setting the beat.</div></div>
+    <div class="strip"><div class="slots"><div class="slot slot-took" style="--sc:var(--v1)">WREN</div><div class="slot slot-now slot-you">YOU</div><div class="slot slot-wait">CORR</div></div>
+      <div class="flex items-center justify-between gap-2 mt-1.5">
+        <span class="text-[13px]" style="color:var(--lamp)">Your turn.</span>
+        <span class="text-[15px] leading-none shrink-0" style="color:var(--lamp)">↓</span></div>
+      <div class="lbl dim mt-1">scrolled up — the arrow returns you</div></div>
+    <div class="strip"><div class="slots">
+        <div class="slot slot-took" style="--sc:var(--v1)">W</div><div class="slot slot-took" style="--sc:var(--v2)">I</div>
+        <div class="slot slot-fail">C</div><div class="slot slot-now">S</div><div class="slot slot-wait slot-you">P</div>
+        <div class="slot slot-pass">O</div><div class="slot slot-wait">H</div><div class="slot slot-wait">T</div></div>
+      <div class="text-[13px] mt-1.5 dim">Sable is writing. Two turns until yours.</div>
+      <div class="lbl dim mt-1">8 in the cast — names become initials</div></div>
+  </div>
+</template>
+
+<template id="spec-player">
+  <div>
+    <div class="flex items-center justify-between gap-3 px-5 py-3.5 row">
+      <div class="min-w-0"><div class="lbl dim">The Salt Line</div>
+        <div class="ttl text-[15px] mt-0.5 truncate" style="font-weight:600">The quay</div></div>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <span class="viewas" style="--vc:var(--v2)"><i></i>Ilias ▾</span><span class="pill">⋯</span></div>
+    </div>
+
+    <div class="scroller px-5">
+      <div class="beat-rule"><span class="ttl text-[14px]" style="font-weight:600">Beat 3</span></div>
+      <div class="pb-5">
+        <div class="mb-5"><div class="ttl text-[13px] mb-1.5" style="font-weight:600;letter-spacing:.06em;color:var(--v1)">WREN ASHGROVE</div>
+          <p class="text-[17px] leading-[1.75]">She counts the lamps along the quay the way other people count breaths, and does not look at the water.</p></div>
+        <div><div class="ttl text-[13px] mb-1.5" style="font-weight:600;letter-spacing:.06em;color:var(--v2)">ILIAS VANE</div>
+          <p class="text-[17px] leading-[1.75]">“You're out late for a night with nothing in it.”</p></div>
+      </div>
+
+      <div class="beat-rule"><span class="ttl text-[14px]" style="font-weight:600">Beat 4</span></div>
+      <div class="pb-4">
+        <div class="m-world mb-5"><div class="ttl text-[18px] leading-[1.55]" style="font-weight:500">The tide bell rings twice. An arrival nobody logged.</div></div>
+        <div><div class="ttl text-[13px] mb-1.5" style="font-weight:600;letter-spacing:.06em;color:var(--v1)">WREN ASHGROVE</div>
+          <p class="text-[17px] leading-[1.75]">Squared to the water and not to him, she folds the manifest into her coat before he can read the column.</p>
+          <p class="text-[17px] leading-[1.75] mt-2.5">“Nothing came in tonight.”</p></div>
+      </div>
+    </div>
+
+    <div class="strip"><div class="slots"><div class="slot slot-took" style="--sc:var(--v1)">WREN</div><div class="slot slot-now slot-you">YOU</div><div class="slot slot-wait">CORR</div></div>
+      <div class="text-[13px] mt-1.5" style="color:var(--lamp)">Your turn.</div></div>
+
+    <div class="px-5 py-3.5" style="background:var(--b2);border-top:1px solid var(--rule)">
+      <div class="flex items-center gap-1.5 mb-2"><span class="lbl dim">Say it to</span><span class="info">i</span><span class="pill" style="background:var(--b1)">Everyone ▾</span><span class="pill" style="border-color:var(--pencil);color:var(--pencil)">+ Whisper</span></div>
+      <div class="field px-3.5 py-3 text-[15px] dim">What does Ilias do?</div>
+      <div class="flex items-center justify-between mt-2.5 gap-2"><button class="btn btn-gh">✦ Expand</button>
+        <div class="flex gap-2"><button class="btn btn-gh">Pass</button><button class="btn btn-pri">Take the turn</button></div></div>
+    </div>
+  </div>
+</template>
+
+<template id="spec-gm">
+  <div>
+    <div class="flex items-center justify-between gap-3 px-4 py-3 row" style="background:var(--b2)">
+      <div class="min-w-0"><div class="ttl text-[16px] truncate" style="font-weight:600">The Salt Line</div>
+        <div class="lbl dim mt-0.5">Scene 3 · The quay, after the second bell</div></div>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <span class="viewas" style="--vc:var(--bc)"><i></i>Omniscient ▾</span><span class="pill" style="background:var(--b1)">⋯</span></div>
+    </div>
+
+    <div class="scroller px-4">
+      <div class="beat-rule"><span class="ttl text-[14px]" style="font-weight:600">Beat 3</span></div>
+      <div class="pb-4 pl-3" style="box-shadow:inset 2px 0 0 var(--v1)">
+        <div class="ttl text-[14px] mb-2" style="font-weight:600;color:var(--v1)">Wren Ashgrove</div>
+        <div class="flex gap-2.5"><span class="lbl dim pt-1 w-14 shrink-0">Action</span><span class="text-[15px] leading-relaxed">She counts the lamps along the quay and does not look at the water.</span></div>
+        <div class="flex flex-wrap gap-0.5 mt-2 -ml-1"><button class="btn btn-pen">Edit</button><button class="btn btn-pen">Delete</button></div>
+      </div>
+
+      <div class="beat-rule"><span class="ttl text-[14px]" style="font-weight:600">Beat 4</span></div>
+      <div class="pb-3">
+        <div class="m-world mb-4"><div class="flex gap-3"><span class="mono text-[13px] dim">—</span>
+          <div class="ttl text-[16px] leading-relaxed" style="font-weight:500">The tide bell rings twice. An arrival nobody logged.</div></div>
+          <div class="lbl dim mt-1.5 pl-6">The Director</div></div>
+
+        <div class="mb-4 pl-3" style="box-shadow:inset 2px 0 0 var(--v1)">
+          <div class="flex items-center gap-2 mb-2 flex-wrap"><span class="ttl text-[14px]" style="font-weight:600;color:var(--v1)">Wren Ashgrove</span><span class="pill dim">Automated</span></div>
+          <div class="space-y-1.5">
+            <div class="flex gap-2.5"><span class="lbl dim pt-1 w-14 shrink-0">Demeanor</span><span class="text-[14px] leading-relaxed dim">squared to the water, not to him</span></div>
+            <div class="flex gap-2.5"><span class="lbl dim pt-1 w-14 shrink-0">Action</span><span class="text-[15px] leading-relaxed">Folds the manifest into her coat before he can read the column.</span></div>
+            <div class="flex gap-2.5"><span class="lbl dim pt-1 w-14 shrink-0">Speech</span><span class="text-[15px] leading-relaxed">“Nothing came in tonight.”</span></div>
+          </div>
+          <div class="m-thought mt-2.5" style="--vc:var(--v1)"><div class="text-[15px] leading-relaxed">If he counts the crates, he'll know I signed for them.</div>
+            <div class="lbl mt-1" style="color:var(--v1)">Thought · only Wren</div></div>
+          <div class="flex flex-wrap gap-0.5 mt-2 -ml-1"><button class="btn btn-pen">Reroll</button><button class="btn btn-pen">Edit</button><button class="btn btn-pen">Delete</button></div>
+        </div>
+
+        <div class="m-fail">
+          <div class="flex items-center justify-between gap-2 mb-1"><div class="text-[14px] font-semibold">Mother Corrigan didn't generate</div><span class="mono text-[10px] dim">retry 1/3</span></div>
+          <p class="text-[13px] leading-relaxed dim">Empty response from the workhorse model. Moved to the end of the beat; nothing was written to the scene.</p>
+          <div class="flex flex-wrap gap-0.5 mt-1.5 -ml-1"><button class="btn btn-pen">Retry</button><button class="btn btn-pen">Edit and retry</button><button class="btn btn-pen">Retry heavy</button><button class="btn btn-pen">Skip her</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="strip"><div class="slots"><div class="slot slot-took" style="--sc:var(--v1)">WREN</div><div class="slot slot-now">ILIAS</div><div class="slot slot-fail">CORR</div></div>
+      <div class="text-[13px] mt-1.5">Waiting for you to <span style="color:var(--lamp);text-decoration:underline;text-underline-offset:2px">write Ilias Vane</span></div></div>
+
+    <div class="px-4 py-3 flex items-center justify-between gap-2" style="background:var(--b2);border-top:1px solid var(--rule)">
+      <div class="flex gap-2"><button class="btn btn-gh">Narrate</button><button class="btn btn-gh">Introductions <span class="dim">1</span></button></div>
+      <button class="btn btn-pri">Continue</button>
+    </div>
+    <div class="px-4 py-2 flex items-center justify-between" style="background:var(--b2);border-top:1px solid var(--rule)">
+      <span class="mono text-[10px] dim">$0.14 of $5.00 today</span><span class="mono text-[10px] dim">3 in cast · 1 pending</span>
+    </div>
+  </div>
+</template>
+
+<template id="spec-picker">
+  <div>
+    <div class="px-4 py-3 row flex items-center gap-2" style="background:var(--b2)"><span class="dim text-[15px]">‹</span><span class="ttl text-[15px]" style="font-weight:600">Find someone</span></div>
+    <div class="px-4 py-3 row">
+      <div class="field px-3 py-2.5 text-[14px] dim mb-2.5">Search by name or description…</div>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="pill" style="background:var(--b3)">Everyone</span><span class="pill dim">Main cast</span><span class="pill dim">Recurring</span><span class="pill dim">Walk-ons</span>
+      </div>
+    </div>
+    <div class="px-4 py-2 row"><span class="lbl dim">In this campaign, not in the scene</span></div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="w-7 h-7 rounded-lg shrink-0" style="background:var(--v4)"></span>
+      <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Sable Quist</div><div class="text-[11px] dim">Rings the bell for money</div></div>
+      <span class="pill dim shrink-0">Recurring</span>
+    </div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="w-7 h-7 rounded-lg shrink-0" style="background:var(--v1)"></span>
+      <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Aldous Ashgrove</div><div class="text-[11px] dim">Harbourmaster · Wren's father</div></div>
+      <span class="pill dim shrink-0">Main cast</span>
+    </div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="w-7 h-7 rounded-lg shrink-0" style="background:var(--v3)"></span>
+      <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">The dockhand with the limp</div><div class="text-[11px] dim">Written for scene 1 · never named</div></div>
+      <span class="pill dim shrink-0">Walk-on</span>
+    </div>
+    <div class="px-4 py-2.5 flex items-center gap-2.5" style="opacity:.5">
+      <span class="w-7 h-7 rounded-lg shrink-0" style="background:var(--v2)"></span>
+      <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Mother Corrigan</div><div class="text-[11px] dim">Already in the scene</div></div>
+    </div>
+  </div>
+</template>
+
+<template id="spec-draft-inplace">
+  <div>
+    <div class="px-4 py-3 row"><div class="lbl dim">The Salt Line · The quay</div>
+      <div class="ttl text-[15px] mt-0.5" style="font-weight:600">Reading as <span style="color:var(--v2)">Ilias Vane</span></div></div>
+    <div class="px-4 pt-3 pb-2" style="max-height:150px;overflow:hidden;-webkit-mask-image:linear-gradient(to bottom,transparent,#000 22%);mask-image:linear-gradient(to bottom,transparent,#000 22%)">
+      <div class="ttl text-[12px] mb-1" style="font-weight:600;letter-spacing:.06em;color:var(--v1)">WREN ASHGROVE</div>
+      <p class="text-[15px] leading-[1.7]">Squared to the water and not to him, she folds the manifest into her coat before he can read the column.</p>
+      <p class="text-[15px] leading-[1.7] mt-2">“Nothing came in tonight.”</p>
+    </div>
+    <div class="strip"><div class="slots"><div class="slot slot-took" style="--sc:var(--v1)">WREN</div><div class="slot slot-now slot-you">YOU</div><div class="slot slot-wait">CORR</div></div>
+      <div class="text-[13px] mt-1.5" style="color:var(--lamp)">Ilias has a draft ready.</div></div>
+    <div class="px-4 py-3.5" style="background:var(--b2);border-top:1px solid var(--rule)">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2"><span class="ttl text-[13px]" style="font-weight:600;letter-spacing:.06em;color:var(--v2)">ILIAS VANE</span><span class="pill" style="color:var(--lamp);border-color:var(--lamp)">Draft</span></div>
+        <span class="dim text-[15px] leading-none">⌃</span>
+      </div>
+      <p class="text-[15px] leading-[1.7] dim">Pleasant, unhurried.</p>
+      <p class="text-[15px] leading-[1.7] mt-2">“Then you won't mind me counting.”</p>
+      <div class="flex items-center gap-1.5 mt-2"><span class="dot" style="background:var(--pencil)"></span><span class="lbl" style="color:var(--pencil)">Whisper → Wren</span></div>
+      <div class="flex flex-wrap gap-1.5 mt-3 pt-3 border-t" style="border-color:var(--rule)">
+        <button class="btn btn-pri btn-sm">Use this</button><button class="btn btn-gh btn-sm">Edit first</button>
+        <button class="btn btn-gh btn-sm">Try again</button><button class="btn btn-gh btn-sm">Discard</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+document.querySelectorAll('[data-spec]').forEach(function(s){
+  s.appendChild(document.getElementById('spec-'+s.getAttribute('data-spec')).content.cloneNode(true));
+});
+</script>
+</body>
+</html>
