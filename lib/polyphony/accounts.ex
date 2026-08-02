@@ -9,9 +9,11 @@ defmodule Polyphony.Accounts do
   without a browser:
 
     * **Gated sign-up** (`register/2`) — three preconditions, all enforced here: an
-      18+ attestation (logged, the content floor of §A5), a valid single-use invite
-      (except the very first account, which bootstraps as `superadmin`), and
-      acceptance of the current consent documents.
+      18+ attestation (**eligibility to hold an account, not a content ceiling** —
+      backlog §4b.1), a valid single-use invite (except the very first account, which
+      bootstraps as `superadmin`), and acceptance of the current consent documents.
+      Attestation is checked *before* any write, so a refusal creates no user row and
+      does not redeem the invite (§4b.1).
     * **Roles** (planned addition #4) — first account is the sole, un-demotable
       `superadmin`; promotion/demotion is authorized by the pure `Accounts.Roles`
       and the singleton superadmin is also pinned by a DB constraint.
@@ -45,7 +47,11 @@ defmodule Polyphony.Accounts do
   def list_admins(opts \\ []),
     do: repo(opts).all(from(u in User, where: u.role in ["admin", "superadmin"]))
 
-  @doc "Has this account attested 18+? Its presence is the content floor (§A5)."
+  @doc """
+  Has this account attested 18+? True for every real account — attestation gates
+  sign-up (backlog §4b.1), so it is eligibility, not a per-user content ceiling.
+  Retained for the content-floor seam and future under-18 support.
+  """
   @spec adult_attested?(User.t()) :: boolean()
   def adult_attested?(%User{attested_adult_at: at}), do: not is_nil(at)
 

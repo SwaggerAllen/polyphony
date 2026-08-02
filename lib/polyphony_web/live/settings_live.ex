@@ -1,8 +1,14 @@
 defmodule PolyphonyWeb.SettingsLive do
   @moduledoc """
-  V10/V12: account, profile, data controls, and the cost dashboard. Email never
-  appears here (username is the public handle). Proactive-analysis opt-out (§C) and
-  spend (§B5) are surfaced and controllable.
+  V10/V12: account, profile, and the cost dashboard. Email never appears here
+  (username is the public handle); spend (§B5) is surfaced and controllable.
+
+  No proactive-analysis control is shown: there is no automated safety/scene
+  analysis today (it's deferred under-18 work), and a switch for an absent feature
+  implies processing that isn't happening (backlog §4b.2). The §C opt-out seam
+  stays in the domain (`Accounts.set_proactive_opt_out`, `DataAccess`) for when
+  such a feature exists — at which point the design places the control per campaign,
+  not per account.
   """
   use PolyphonyWeb, :live_view
 
@@ -46,13 +52,6 @@ defmodule PolyphonyWeb.SettingsLive do
         {:error, _} ->
           {:noreply, put_flash(socket, :error, "That username is taken or invalid.")}
       end
-    end)
-  end
-
-  def handle_event("proactive_opt_out", params, socket) do
-    safe(socket, fn ->
-      Accounts.set_proactive_opt_out(socket.assigns.current_user, params["value"] == "true")
-      {:noreply, socket |> put_flash(:info, "Data preference saved.") |> refresh()}
     end)
   end
 
@@ -104,19 +103,6 @@ defmodule PolyphonyWeb.SettingsLive do
       <p class="faint">Generation pauses automatically if you hit your daily or per-campaign cap.</p>
     </div>
 
-    <div class="card">
-      <h3>Data controls</h3>
-      <label class="row" style="align-items:center;gap:.5rem;">
-        <input type="checkbox" style="width:auto;"
-          phx-click="proactive_opt_out"
-          phx-value-value={to_string(not Accounts.proactive_opted_out?(@current_user))}
-          checked={Accounts.proactive_opted_out?(@current_user)} />
-        Opt out of proactive analysis of my content.
-      </label>
-      <p class="faint">
-        Report-triggered review still applies — you can't opt out of moderation when reported.
-      </p>
-    </div>
     """
   end
 

@@ -32,10 +32,10 @@ defmodule Polyphony.SceneClose do
 
   alias Polyphony.{App, Embeddings, Repo, Packets}
   alias Polyphony.Costs.Attribution
-  alias Polyphony.SceneClose.{Summarizer, ArcExtractor}
+  alias Polyphony.SceneClose.{Summarizer, ArcExtractor, WorldArcExtractor}
   alias Polyphony.ReadModels.{SceneSummary, ArcEntry}
-  alias Polyphony.Events.CharacterEntered
-  alias Polyphony.Jobs.{SummarizeScene, ExtractArc}
+  alias Polyphony.Events.{CharacterEntered, SceneOpened}
+  alias Polyphony.Jobs.{SummarizeScene, ExtractArc, ExtractWorldArc}
 
   # ── Production path: fan out into retryable Oban jobs ─────────────────────────
 
@@ -63,11 +63,18 @@ defmodule Polyphony.SceneClose do
       |> Oban.insert!()
     end
 
+    # World arc (§2.8): one extraction per scene, over the whole stream (not per
+    # participant). The job no-ops if the scene has no campaign to attach it to.
+    %{"scene_id" => scene_id, "provider" => provider}
+    |> ExtractWorldArc.new()
+    |> Oban.insert!()
+
     {:ok,
      %{
        participants: participants,
        summary_jobs: length(participants) + 1,
-       arc_jobs: length(participants)
+       arc_jobs: length(participants),
+       world_arc_jobs: 1
      }}
   end
 
@@ -96,7 +103,19 @@ defmodule Polyphony.SceneClose do
       end)
       |> Enum.sum()
 
-    {:ok, %{participants: participants, summaries: summaries, arc_entries: arc_entries}}
+    world_arc_entries =
+      case extract_world(scene_id, opts) do
+        {:ok, n} -> n
+        other -> log_degrade("world_arc", scene_id, other)
+      end
+
+    {:ok,
+     %{
+       participants: participants,
+       summaries: summaries,
+       arc_entries: arc_entries,
+       world_arc_entries: world_arc_entries
+     }}
   end
 
   # ── Per-unit work (called by both paths) ─────────────────────────────────────
@@ -139,7 +158,12 @@ defmodule Polyphony.SceneClose do
     repo = Keyword.get(opts, :repo) || Repo
     events = stored_events(scene_id)
 
-    case ArcExtractor.extract(events, character_id, Keyword.put(opts, :source_scene_id, scene_id)) do
+    ext_opts =
+      opts
+      |> Keyword.put(:source_scene_id, scene_id)
+      |> meter(scene_id, "arc")
+
+    case ArcExtractor.extract(events, character_id, ext_opts) do
       {:ok, entries} ->
         Enum.each(entries, &ArcEntry.put(repo, &1, character_id))
         {:ok, length(entries)}
@@ -149,6 +173,44 @@ defmodule Polyphony.SceneClose do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  rescue
+    e -> {:error, e}
+  end
+
+  @doc """
+  Extract and store the scene's proposed **world** arc (§2.8) — one call per scene,
+  over the whole stream, keyed to the campaign. `{:ok, count}`, `{:cancel, reason}`
+  for a permanent (schema-invalid) failure, `{:error, reason}` for a transient one.
+  Returns `{:ok, 0}` when the scene has no campaign to attach world arc to.
+  """
+  @spec extract_world(term(), keyword()) ::
+          {:ok, non_neg_integer()} | {:cancel, term()} | {:error, term()}
+  def extract_world(scene_id, opts \\ []) do
+    repo = Keyword.get(opts, :repo) || Repo
+    events = stored_events(scene_id)
+    {campaign_id, location_id} = scene_setup(events)
+
+    if is_nil(campaign_id) do
+      {:ok, 0}
+    else
+      ext_opts =
+        opts
+        |> Keyword.put(:source_scene_id, scene_id)
+        |> Keyword.put(:location_id, location_id)
+        |> meter(scene_id, "world_arc")
+
+      case WorldArcExtractor.extract(events, ext_opts) do
+        {:ok, entries} ->
+          Enum.each(entries, &ArcEntry.put_world(repo, &1, campaign_id))
+          {:ok, length(entries)}
+
+        {:error, :invalid_arc} ->
+          {:cancel, :invalid_arc}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
     end
   rescue
     e -> {:error, e}
@@ -180,6 +242,27 @@ defmodule Polyphony.SceneClose do
       _ -> []
     end)
     |> Enum.uniq()
+  end
+
+  # Attribute an extraction LLM call to the campaign owner (§B5) — for now the owner
+  # owns everything autonomous in their campaign. `put_new` so an explicit caller
+  # (a test) still wins. A campaign with no user owner resolves to nil user_id, and
+  # the metered call then records nothing rather than failing.
+  defp meter(opts, scene_id, usage_kind) do
+    attr = Attribution.for_scene(scene_id)
+
+    opts
+    |> Keyword.put_new(:user_id, attr.user_id)
+    |> Keyword.put_new(:campaign_id, attr.campaign_id)
+    |> Keyword.put_new(:usage_kind, usage_kind)
+  end
+
+  # The scene's campaign + authored location, from its opening event.
+  defp scene_setup(events) do
+    case Enum.find(events, &match?(%SceneOpened{}, &1)) do
+      %SceneOpened{campaign_id: c, location_id: l} -> {c, l}
+      _ -> {nil, nil}
+    end
   end
 
   # Canonical view only: re-rolled packets are never summarized or mined for arcs.

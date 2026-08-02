@@ -1,84 +1,86 @@
-# Backend asks
+# Polyphony — Backend Backlog
 
-Running list of backend work the frontend design depends on. Grown from the UX pass —
-each item says what the design needs, why, and whether it's **wiring** (code exists,
-nothing calls it), **change** (existing code needs different semantics), or **new**.
+**What this file is.** The standing engineering worklist: concrete backend work that isn't
+built yet, each item saying what's needed, why, and whether it's **wiring** (code exists,
+nothing calls it), **change** (existing code needs different semantics), or **new**. It began
+as the frontend design's list of dependencies (the UX pass, `ux/`), which is why so many items
+cite a designed screen — but it's no longer frontend-specific: it's the single home for
+"backend work we've decided we want and know the shape of."
 
-Cross-references `§n` point at the Backend Capability Catalog.
+**How it differs from its neighbours.** `decisions.md` is the *strategy* and *why* behind the
+post-v1 horizon; this file is the *worklist* — the tractable, shaped tasks that serve it.
+`roadmap.md` is the *schedule* that pulls from this list. `backend-capabilities.md` is the
+*catalog* of what already exists (and its gap register); this file is what to do about the gaps.
+When an item here is designed and dispositioned, it's ready to be scheduled. See `docs/README.md`
+for the full boundary map.
+
+**Cross-references.** `§n` markers point at the **Backend Capability Catalog**
+(`backend-capabilities.md`) — the numbered survey of existing capabilities.
+
+---
+
+## Immediate milestone — what the current design needs to function
+
+Most of this file is a standing backlog to schedule against feedback. This slice is different:
+it's the set that **gates the shipped frontend design**, so it's the near-term target.
+
+**Shipped** (detail in `completed-roadmap.md`): §5.1 scene-close fan-out; §1.1–1.3 branching
+family (found already complete); §1.5/§1.6 draft accept-discard + pass-turn (backend);
+§1.7 per-viewer failures; §2.3 scene premise & location; §4b.1/§4b.2 account framing.
+
+**Still open in the milestone:**
+
+- **§1.4 — failed-turn requeue-to-tail.** *Deferred by decision.* The beat already carries on
+  and closes on a terminal failure (no stall); the requeue-to-tail-once refinement is an
+  optional resilience nicety, folded into the config-spike roadmap item (`decisions.md §P12`).
+- **§2.8 — world arc.** The one substantial feature left: durable world-change entries
+  (proposed→canon, parallel to character arc) + a propagation rule so off-screen characters
+  learn world facts. Sits on §5.1 (now wired). In planning.
+
+Everything below §2.3/§2.8 in the section numbering — the rest of §2, §3's publishing cluster,
+§4 reporting, §6 deferred — is the standing backlog: real, shaped, but scheduled against user
+feedback rather than blocking the current design.
 
 ---
 
 ## 1 · Blocking the current design
 
-### 1.1 Fork wiring — `Fork.fork/3` · **wiring + change**
-`Fork.fork/3` and `ReadModels.SceneFork` exist with no UI (§1, §12). The design puts
-"Branch from beat N" in the beat drawer.
+### 1.1 Fork wiring — `Fork.fork/3` · ✅ **Shipped** (found already complete)
+Fork truncates at the cut beat and opens live there; `Reroll`/`Edit` are branch-relative for
+free because a fork is a separate stream. "Branch from beat N" UI is frontend, deferred. See
+`completed-roadmap.md`.
 
-Two semantics the design assumes, both need confirming:
+### 1.2 Edit with tail invalidation — `Edit.edit/6` `:invalid` · ✅ **Shipped** (found already built)
+`Edit.edit/6` complete (`:valid` any beat, `:invalid` forks); no branch-relative guard needed.
+Caller (frontend) deferred. See `completed-roadmap.md`.
 
-- **Fork truncates at the cut beat, and that beat becomes live.** Branching at beat 3 of a
-  6-beat scene yields a timeline whose newest beat is 3, with beat 3's turns intact and
-  editable. Beats 4–6 are not carried over.
-- **The "latest beat only" guard is branch-relative.** `Reroll.reroll/4` is restricted to
-  the latest beat. If forks are modelled as branches inside one scene rather than as new
-  scenes, that guard likely reads scene-latest today and would refuse every reroll in a
-  branch. It needs to mean "latest beat on this branch."
+### 1.3 Lineage records the cut beat and nothing else — `ReadModels.SceneFork` · ✅ **Shipped**
+`SceneFork` records `fork_beat` and nothing else, as prescribed. The optional read-time
+"identical-so-far / changed" comparison is a small helper to add when the branch-navigator UI
+wants it — not a blocker. See `completed-roadmap.md`.
 
-Together these are what makes beat-level forking sufficient. The design deliberately has
-**no turn-level fork control**: you branch a beat, which makes it live, then reroll or edit
-the specific turn you wanted to diverge at, and beat-tail invalidation does the rest.
+### 1.4 Failed turns requeue to the end of the beat · **change** — *deferred*
+The stall this warns about doesn't exist: a terminal failure records `PacketFailed`, the walk
+treats it as terminal, and the beat carries on and closes (*fail → skipped → carry on*). The
+unbuilt part is the softer **requeue-to-tail-once** (retry the slot at the end of the beat
+before giving up, with a retry count) — a resilience refinement with a narrative cost (a
+requeued turn conditions on turns that reacted to its absence). **Folded into the config-spike
+roadmap item** (`decisions.md §P12`): turn-order and failure behaviour want to be configurable
+per scene/beat (writers who don't want reordering; solo players who just want play not to stop;
+multiplayer retry/fairness once dice land), so requeue-to-tail becomes one policy among several
+rather than a hardcoded change.
 
-### 1.2 Edit with tail invalidation in the live beat — `Edit.edit/6` `:invalid` · **wiring**
-Built, no callers (§1, §12). Required by 1.1 — reroll only covers AI-authored turns, so
-without this you can't diverge at a turn the human wrote, and branching works for half the
-transcript. Needs the same branch-relative guard as reroll.
+### 1.5 Draft accept / discard · ✅ **Shipped (backend)**
+`BeatDriver.accept_draft/2` and `discard_draft/2` complete and tested; the approve/discard card
+is frontend, deferred. See `completed-roadmap.md`.
 
-### 1.3 Lineage records the cut beat and nothing else — `ReadModels.SceneFork` · **wiring**
+### 1.6 Pass turn · ✅ **Shipped (backend)**
+`BeatDriver.pass_turn/4` complete; the composer/quick-sheet entry points are frontend, deferred.
+See `completed-roadmap.md`.
 
-*Supersedes an earlier version of this item that proposed storing the first divergent turn
-alongside the branch point. It doesn't survive contact with editing.* Branch, change the
-last turn, then delete that turn — the stored divergence now points at a packet that is in
-neither timeline. Branch at beat 3, then delete beat 3 on the branch, and the "real"
-divergence has moved earlier. The first divergent turn is not a property of the fork; it is
-a property of the diff between two timelines as they currently stand, so storing it means
-maintaining it forever.
-
-**Record the cut beat only.** It is an immutable statement about history — this is where the
-copy was taken — and it stays true regardless of what the branch does afterwards, including
-deleting the beat it was cut at. It should not later be "corrected" to track edits.
-
-If the drawer wants to say more than that, it computes it at read time from the two
-canonical packet sets (`Packets.canonical/1`), never from a stored field. The version worth
-having is the cheapest one: **identical so far / changed** — a set comparison with no
-ordering semantics, which answers the only question that actually matters, namely whether a
-branch is still an empty copy. Anything finer can wait until someone asks for it.
-
-### 1.4 Failed turns requeue to the end of the beat · **change**
-Today a failure records and broadcasts (`Failures`, §8/§12). The design has play carry on
-around a failed turn rather than stalling on it.
-
-- Requeue the failed slot to the tail of the current beat's order.
-- **Needs a terminal give-up state.** If the requeued attempt also fails, the beat must be
-  able to close without it, or a beat can never settle. Surfaces as a retry count and a
-  final "skipped" state on the slot.
-
-### 1.5 Draft accept / discard · **wiring**
-`Drafts` + `BeatDriver.accept_draft/discard_draft` exist with no affordance (§2, §12). The
-design puts control mode two taps from the transcript, so "Draft & approve" becomes
-reachable in one gesture — the approve/edit/retry/discard card has to exist or the mode is
-a dead end. These ship together.
-
-### 1.6 Pass turn · **wiring**
-`BeatDriver.pass_turn` exists, no control (§2, §12). Design has it in the composer beside
-"Take the turn" (player passing their own) and in the character quick sheet ("Skip her
-turn", author passing someone else's). Same call, two entry points.
-
-### 1.7 Failures scoped per viewer · **change**
-`GenerationFailed` is currently surfaced to the omniscient viewer only (§8, §12). Rule the
-design assumes: **you see failures for characters you can act for.** A player sees their own
-character's failures and nothing else; the GM sees all. When someone else's turn fails, a
-player sees nothing — the beat simply carries on. Safe only because of 1.4 and the
-transcript tail state, which means they're never left waiting on a turn that isn't coming.
+### 1.7 Failures scoped per viewer · **change** — ✅ **Shipped**
+Turn failures now reach the failed character's own viewer topic (+ omniscient); author-facing
+failures stay omniscient-only; `PlayLive` loads per-viewer. See `completed-roadmap.md`.
 
 ---
 
@@ -103,9 +105,11 @@ Deferred for now by decision: the current design shows the beat as a plain rule 
 roster, and the transcript tail names only the character whose turn is live. Revisit
 together with 2.1.
 
-### 2.3 Scene premise and location as authored fields · **new**
-`SceneOpened` carries no authored setup (§1). The design adds a **Set the scene** screen the
-GM fills in before beat 1: a **location** and a **scene premise**, plus the cast.
+### 2.3 Scene premise and location as authored fields · **new** — ✅ **Shipped (backend)**
+Location now feeds Director + character context (volatile suffix, `"Location: …"`); new
+scene-aware `Autofill.generate_scene_premise/1`. The "Set the scene" form + LiveView seed sites
+passing `location:` are frontend, deferred. `location_id` stays a reference field so it can
+become a location-entity FK later without changing the event shape. See `completed-roadmap.md`.
 
 - Both are Director context. Today the Director infers the situation from the world bible and
   the transcript; this gives it the GM's actual intent for *this* scene.
@@ -233,39 +237,21 @@ campaign as its prequel, and imports at setup while the target world arc is stil
 copy, not a merge. Mid-campaign import is a merge of two divergent canon histories and should
 stay out of scope regardless.
 
-### 2.8 World arc — durable world change, and who knows about it · **new**
+### 2.8 World arc — durable world change, and who knows about it · **new** — ✅ **Shipped (A–D)**
+Durable world-change entries (discovery/revision), parallel to character arc, proposed → canon
+on review, folded into the world half of context. Global facts reach everywhere; local facts
+only their scene location (§2.3); off-screen characters catch up by the fact being present in
+their next scene (facts injected, reactions played on screen — no arc extrapolation). Reuses
+`arc_entries` (`subject_type: "world"`) with `WorldArcExtractor` / `EffectiveWorldBible`;
+shipped alongside wiring canon **character** arc into generation too (it was built but only
+consumed by publishing). Review gained reject + edit. See `completed-roadmap.md`.
 
-**Higher priority than anything in 2.6/2.7, because it bites inside a single self-contained
-campaign with no import feature at all.**
-
-Today `ArcEntry` (§4) records durable change to a *character*. World canon is
-`WorldBible.starting_canon` and never changes. `WorldEventOccurred` is a moment, not a fact.
-So there is nowhere for **"the moon fell out of the sky"** to live as durable, everyone-knows-
-this canon — and no way for it to reach a character who was off-screen when it happened.
-
-The off-screen gap is structural: scene-close summaries are visibility-filtered per
-participant (§8), so a character who wasn't there gets nothing. Correct for dramatic irony,
-wrong for world-level fact. Come back five scenes later and their knowledge simply hasn't
-advanced.
-
-**Wanted:**
-
-- **World arc entries** — durable changes to the world discovered during play, parallel to
-  character arc, proposed → canon on author review. Feeds the world half of context assembly.
-- **A propagation rule.** Not every world fact is common knowledge. Some are global (the moon);
-  some are local to a place or a group (the harbourmaster was murdered — known in the port
-  district first). Minimum viable version is a global/local flag; the better version is
-  location-scoped, which arrives free with 2.3.
-
-**What this deliberately does *not* require.** No arc extrapolation. An off-screen character
-needs the *facts* injected — that's context assembly, no generation involved. How they *feel*
-about the moon falling should not be computed: **letting them react on screen to news they
-missed is better fiction than silently rewriting their sheet.** The catch-up is a scene, not a
-migration. Keeping it that way is what makes this tractable.
-
-Worth noticing: cast tiers (2.5), scene location (2.3), and world-fact propagation all get
-substantially simpler once locations are authored entities. That's three features pointing at
-the same prerequisite.
+Two follow-ups it surfaced:
+- **Arc/world-arc extraction metering** — ✅ **Done.** Both extractions now attribute to the
+  campaign owner (`Attribution.for_scene`, `SceneClose.meter/3`); also fixed a latent
+  `Costs.check` crash on a nil user id (org-owned / unattributed campaigns). "The owner owns
+  everything autonomous in their campaign."
+- **§3.0 gating** — ✅ **Shipped (MVP)**, see below.
 
 ### 2.9 Multiplayer access grants · **new**
 Deferred. Multiplayer is currently a conceptual constraint on a single-player UI — whoever
@@ -332,10 +318,18 @@ access to the frozen snapshot's embedded copies, library visibility governs the 
 Reading a published campaign never reaches the author's live world. Browse should be explicit
 about which one a reader is looking at.
 
-### 3.0 Arc review gates the next scene · **new**
+### 3.0 Arc review gates the next scene · **new** — ✅ **Shipped (MVP)**
 
 Opening a new scene requires that **every character being cast has no pending arc proposals**.
 World arc gates the whole campaign, since it feeds every generation in it.
+
+> **Shipped (MVP).** `Authoring.SceneGate.check/3` — per-cast (keyed by character *name*, the id
+> scenes and extraction use), world arc campaign-wide; `campaign_live` consults it before
+> `OpenScene` and redirects to arc review on a block; `ArcReviewLive` resolves cast ids → names
+> (it was querying by id and finding nothing) and gained **accept-all**. See `completed-roadmap.md`.
+> **Refinements not yet built:** the "extraction failed → block with retry" and "extraction still
+> running → not ready yet" async states (they need extraction status tracking). The proposal gate
+> is the correctness core; these are UX polish on top.
 
 **Why.** Every unreviewed proposal is a gap between who a character is on paper and who they've
 become in the story, and generation works from the paper. Let it run five scenes and the Director
@@ -603,10 +597,10 @@ to a turn's editorial row now.
 
 ## 4b · Accounts
 
-### 4b.1 18+ is eligibility, not a content ceiling · **change**
-
-The current model treats the age attestation as the first of three content layers, and
-`Content.Floor` hardcodes `attested: true` so it does nothing (§5). **That framing is wrong.**
+### 4b.1 18+ is eligibility, not a content ceiling · **change** — ✅ **Shipped**
+Reframed attestation as account eligibility (not a content layer); pinned the no-row /
+no-invite-burn guarantee with a test; `Content.Floor`'s `attested` branch stays a latent
+under-18 seam. See `completed-roadmap.md`.
 
 Under-18s cannot use Polyphony at all. Supporting them would require parental controls and
 in-house filtering — a large piece of work deferred a long way out. So:
@@ -621,11 +615,10 @@ in-house filtering — a large piece of work deferred a long way out. So:
 - The floor layer stays in the model for when under-18 support is eventually built. It just isn't
   doing per-user work today.
 
-### 4b.2 There is no automated safety analysis to opt out of · **change**
-
-Settings should not offer a toggle for it. Scene analysis is part of the deferred under-18 work
-and doesn't exist — a switch for an absent feature is worse than no switch, and implies
-processing that isn't happening.
+### 4b.2 There is no automated safety analysis to opt out of · **change** — ✅ **Shipped**
+Removed the settings "opt out of proactive analysis" control (no automated analysis exists to
+opt out of); the §C domain seam stays latent for when the feature lands (per campaign, per the
+design). See `completed-roadmap.md`.
 
 **What will be needed later**, and shouldn't be conflated with it: an opt-in for experimental
 generation behaviour. That may belong **per campaign** rather than per account, since it changes
@@ -635,13 +628,88 @@ how a specific story plays, and it arrives alongside a profile page.
 
 ## 5 · Pre-existing, high priority
 
-### 5.1 Scene-close fan-out is never triggered · **wiring**
-Not from this design pass — flagged in the catalog (§8). `SceneClose.enqueue` has no caller
-and `SceneClosed` doesn't trigger it, so **per-character summaries and arc extraction never
-run in production.** The whole memory and arc layer is dark until this is wired.
+### 5.1 Scene-close fan-out is never triggered · **wiring** — ✅ **Done**
+Not from this design pass — flagged in the catalog (§8). `SceneClose.enqueue` had no caller
+and `SceneClosed` didn't trigger it, so **per-character summaries and arc extraction never
+ran in production.** The whole memory and arc layer was dark until this was wired.
 
-Everything the design does with Arc Review is decorative until then. World arc (2.8)
-lands on top of this, so wiring it is a prerequisite for that too.
+**Wired** by `Polyphony.SceneClose.Handler`, a `start_from: :current` Commanded handler on
+`SceneClosed` that calls `enqueue/2` (jobs resolve the configured provider/embedder at run
+time). Supervised alongside the projectors and off in tests for the same reason (its
+`Oban.insert!` touches Postgres); tests drive `SceneClose.run/2` and the handler's `handle/2`
+directly. `start_from: :current` so a deploy doesn't re-summarize every historically-closed
+scene.
+
+Everything the design does with Arc Review was decorative until this. World arc (2.8) lands on
+top of it, so this was a prerequisite for that too.
+
+### 5.2 Character identity is a name, not a stable id · **change** — ⚠️ **latent data-corruption risk**
+`character_id` in the event log is the character's **display name** — minted at
+`EnterCharacter{character_id: char_name(c)}` and keyed on with plain string equality through
+*every* play-side subsystem: scene/beat aggregates (members/cast/completed/failed sets),
+membership intervals, visibility (interior events **and** whisper `addressed_to` matching),
+`packet_id = "#{scene}-#{beat}-#{character}"` (+ reroll/next-attempt), arc `subject_id`, the
+Director roster/casting, and broadcast topics. The only id-keyed character reference in the
+codebase is `Relationship.target_id` — the pattern the rest should copy: **store the id, carry
+the name for display, resolve through the id.**
+
+**The hazard.** Renaming a character that's already in scenes silently corrupts it: cold-cache
+context rebuild (`Rebuild.find_sheet` name-matches) falls back to a bare prompt (no sheet, no
+arc, no boundaries); membership/CommitPacket guards reject the new name as `:not_a_member`;
+the character stops witnessing its pre-rename history and whispers misroute; accumulated arc is
+stranded under the old name; re-roll/edit of pre-rename turns fail on `packet_id`. Today two
+things keep the door shut: `name` is **not** in `EffectiveSheet.@overridable_scalars` (so arc
+can't rename), and there's no bulk-rename flow — **but the sheet editor writes `name`
+unconditionally with no in-play guard.**
+
+**The fix (bounded, but real).** Mint `character_id` as the library id at the single source
+(`campaign_live` scene-open + `seed_context`), add an **id↔name translation layer** where the
+fiction is rendered to / emitted by the LLM (the log stores ids; the prose still speaks names),
+simplify `find_sheet`/arc lookups to id, and provide a **dual-read shim** for legacy name-keyed
+streams/`scene_memberships`/`arc_entries.subject_id` (events are immutable — rule 6).
+
+**Design decision (author):** *every* sheet field should eventually be arc-overridable — including
+`name` — except **boundaries** (which get their own events/functionality). So the goal isn't to
+lock the rename door; it's to make identity stable enough that rename (via arc or the editor) is
+safe, then open all non-boundary fields to revision.
+
+**Phased execution** (each phase tested + committed; every translation legacy-tolerant — an
+unmapped id renders as itself and an unmapped name resolves to itself, so old name-keyed data and
+the existing suite stay green):
+
+1. **Sheet-lookup id-tolerance.** ✅ **Done.** `Rebuild.sheet_for` resolves by library id first,
+   then the legacy name match. Rename-safe lookup; no visibility impact.
+2a. **`Scene.Cast` resolver.** ✅ **Done.** id↔name maps for a scene (`render_name`, `resolve_id`)
+   with identity fallback.
+2b-render. **id→name in prompts.** ✅ **Done.** `context` (live events, recent scenes, membership)
+   and `scene_brief` (roster line, transcript, whisper addressees) render display names. Display
+   only — no routing impact; suite green on identity fallback.
+2b-emit + 3 (**the atomic remainder — must land together**). Resolve emitted **names → ids** and
+   flip the mint in one change, because `addressed_to` may become ids only once viewers are ids
+   too (otherwise whispers misroute — fail-*safe* under default-deny, i.e. a caught functional
+   bug, never a leak). Precise sites, now mapped:
+   - **Director cast → ids:** `run_beat.ex:164` (`resolved.cast` names) before `declare_turn_order`.
+   - **Packet `addressed_to` → ids** at the packet-production points before `CommitPacket`:
+     generation (`generate_packet`), the composer (`play_live`), and edit (`edit.ex`).
+   - **Mint flip:** `campaign_live` `EnterCharacter{character_id: lib_id}` + seed by id.
+   - **`play_live` viewer overhaul:** the viewer, roster `<option>` values, `speaker`, and whisper
+     target parsing move from names to ids (display stays names). This is the largest single piece.
+   - **Data clear:** reset dev/prod event streams + campaign `scenes` lists (clean-slate — no
+     backfill).
+   - **Tests:** dedicated id-path whisper routing + rename-safety (whisper to a character, rename
+     them, whisper still routes; a bystander still can't see it).
+4. **Arc + gate by id.** `arc_entries.subject_id` = the id; scene gate / arc review drop the
+   name-resolution dance.
+5. **Open the fields.** Make `name` (and other non-boundary scalars) freely editable + arc-
+   overridable, now that identity is stable.
+
+**Sequencing decision (author):** the atomic remainder (2b-emit + 3, and 4–5 on top) is
+**deferred to the frontend rebuild.** Its biggest piece is a `play_live` overhaul (composer,
+roster options, viewer selector, whisper parsing → ids) that the redesign will rewrite anyway —
+so it's built **id-native during the rebuild** rather than overhauled then discarded. The
+durable domain foundation (1, 2a, 2b-render) is banked. Corruption risk stays open but contained
+(clean-slate data, no bulk-rename flow, `name` not yet arc-overridable); **no editor stopgap
+added** by choice. The frontend-redesign roadmap item carries the flip as a requirement.
 
 ---
 

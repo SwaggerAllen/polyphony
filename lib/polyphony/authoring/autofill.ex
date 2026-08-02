@@ -454,6 +454,72 @@ defmodule Polyphony.Authoring.Autofill do
   end
 
   @doc """
+  Generate (or expand) a **scene premise** — the immediate situation as *this* scene
+  opens (§2.3). Distinct from `generate_campaign_premise/1`: it's scene-aware,
+  grounded in where the scene takes place and what's happened before it, so the
+  Director gets the author's intent for this scene rather than inferring it.
+
+  Opts: `opts[:world]` (world display map), `opts[:cast]` (`[%{"name","premise"}]`),
+  `opts[:location]` (the authored setting), `opts[:campaign_premise]` (the campaign's
+  overall pitch, for grounding), `opts[:recent]` (previous-scene summaries, `[text]`,
+  newest last), and `opts[:current]` (an existing scene premise to deepen — the ✨
+  Expand action). Returns `{:ok, text}`, one paragraph.
+  """
+  @spec generate_scene_premise(keyword()) :: {:ok, String.t()} | {:error, term()}
+  def generate_scene_premise(opts \\ []) do
+    instruction =
+      case opts[:current] do
+        s when is_binary(s) and s != "" ->
+          "The scene premise so far:\n#{s}\n\nDeepen and sharpen it — make the immediate " <>
+            "situation and what's at stake concrete, without contradicting it or the story so " <>
+            "far. Return the revised scene premise as one paragraph."
+
+        _ ->
+          "Write the scene premise: one vivid paragraph naming the immediate situation as the " <>
+            "scene opens and what's in the air for the characters present. Return only the paragraph."
+      end
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author set up the next scene of a role-play campaign. Write a " <>
+            "**scene** premise — the immediate situation as this scene opens, not the whole " <>
+            "campaign — grounded in the world, cast, setting, and what's happened so far below. " <>
+            "Return only the prose: no title, no label, no quotes, no JSON."
+      },
+      %{
+        role: "user",
+        content:
+          world_block(opts[:world]) <>
+            campaign_premise_block(opts[:campaign_premise]) <>
+            location_block(opts[:location]) <>
+            campaign_cast_block(opts[:cast] || []) <>
+            story_so_far_block(opts[:recent] || []) <>
+            instruction
+      }
+    ]
+
+    with {:ok, text} <- Polyphony.LLM.call(messages, [response: :field] ++ meter_opts(opts)) do
+      {:ok, String.trim(text)}
+    end
+  end
+
+  defp campaign_premise_block(p) when is_binary(p) and p != "",
+    do: "The campaign is about:\n#{p}\n\n"
+
+  defp campaign_premise_block(_), do: ""
+
+  defp location_block(loc) when is_binary(loc) and loc != "", do: "Location: #{loc}\n\n"
+  defp location_block(_), do: ""
+
+  defp story_so_far_block([]), do: ""
+
+  defp story_so_far_block(recent),
+    do:
+      "The story so far (earlier scenes):\n" <> Enum.map_join(recent, "\n", &"- #{&1}") <> "\n\n"
+
+  @doc """
   Extract the proper names of **people/characters** mentioned in `texts` (a scene's
   committed prose) — not places, objects, or groups. Returns `{:ok, [name]}`, de-duped
   case-insensitively. Empty input short-circuits without a provider call. The caller

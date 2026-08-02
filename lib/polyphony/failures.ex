@@ -85,20 +85,36 @@ defmodule Polyphony.Failures do
     end
   end
 
-  @doc "Open failures for a scene."
+  @doc """
+  Open failures for a scene. With `subject: character_id`, returns only that
+  character's open **turn** failures — the ones a viewer who can act for them may
+  see (§1.7). Without it, every open failure (the GM/omniscient view).
+  """
   def list_open(scene_id, opts \\ []) do
-    Failure.list_open(Keyword.get(opts, :repo, Repo), scene_id)
+    repo = Keyword.get(opts, :repo, Repo)
+
+    case Keyword.get(opts, :subject) do
+      nil -> Failure.list_open(repo, scene_id)
+      subject -> Failure.list_open_for_subject(repo, scene_id, subject)
+    end
   end
 
   # ── Broadcast ────────────────────────────────────────────────────────────────
 
+  # A failure reaches the omniscient (GM) viewer always, and — for a turn
+  # (`packet`) failure — the viewer who can act for that character too, so a player
+  # sees their own character's failures and nothing else (§1.7). Author-facing
+  # failures (scene-close summaries, arc extraction) stay omniscient-only: their
+  # `subject` is a viewer key, not a character a player controls.
+  defp broadcast(%Failure{scene_id: nil}), do: :ok
+
   defp broadcast(%Failure{} = row) do
-    if row.scene_id do
-      Phoenix.PubSub.broadcast(@pubsub, Broadcast.topic(row.scene_id, :omniscient), {
+    for viewer <- failure_viewers(row) do
+      Phoenix.PubSub.broadcast(@pubsub, Broadcast.topic(row.scene_id, viewer), {
         :polyphony_event,
         %{
           type: "generation.failed",
-          viewer: "omniscient",
+          viewer: Broadcast.viewer_tag(viewer),
           failure_id: row.id,
           scene_id: row.scene_id,
           beat: row.beat,
@@ -114,6 +130,12 @@ defmodule Polyphony.Failures do
 
     :ok
   end
+
+  defp failure_viewers(%Failure{operation: "packet", subject: subject})
+       when is_binary(subject),
+       do: [:omniscient, {:character, subject}]
+
+  defp failure_viewers(_row), do: [:omniscient]
 
   # ── Helpers ──────────────────────────────────────────────────────────────────
 

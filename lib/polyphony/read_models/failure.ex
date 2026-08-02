@@ -41,6 +41,26 @@ defmodule Polyphony.ReadModels.Failure do
     )
   end
 
+  @doc """
+  Open **turn** failures for one character in a scene, newest first — the ones a
+  viewer who can act for that character may see (§1.7). Restricted to `packet`
+  operations; author-facing failures (summaries, arc extraction) never scope to a
+  character.
+  """
+  def list_open_for_subject(repo, scene_id, subject) do
+    sid = to_string(scene_id)
+    who = to_string(subject)
+
+    repo.all(
+      from(f in __MODULE__,
+        where:
+          f.scene_id == ^sid and f.status == "open" and
+            f.operation == "packet" and f.subject == ^who,
+        order_by: [desc: f.inserted_at]
+      )
+    )
+  end
+
   def resolve(repo, id) do
     case get(repo, id) do
       nil -> :error

@@ -8,14 +8,19 @@ defmodule Polyphony.Context.SceneContext do
   computed by `Polyphony.Context.materialize/1` and never touched again for the
   life of the scene, so the stable portion of every prompt is byte-identical and
   the provider's prefix cache actually lands.
+
+  `premise` and `location` are scene-scoped authored setup (§2.3). They ride on the
+  struct but are rendered in the **volatile** suffix by `to_messages/2`, never baked
+  into `prefix` — placing them in the cache unit would invalidate it every scene.
   """
   @enforce_keys [:scene_id, :character_id, :premise, :prefix]
-  defstruct [:scene_id, :character_id, :premise, :prefix, meta: %{}]
+  defstruct [:scene_id, :character_id, :premise, :prefix, location: nil, meta: %{}]
 
   @type t :: %__MODULE__{
           scene_id: term(),
           character_id: term(),
           premise: String.t() | nil,
+          location: String.t() | nil,
           prefix: String.t(),
           meta: map()
         }

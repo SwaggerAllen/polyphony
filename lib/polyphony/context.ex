@@ -29,6 +29,7 @@ defmodule Polyphony.Context do
   alias Polyphony.Content
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Context.{SceneContext, StaticRetriever}
+  alias Polyphony.Scene.Cast
   alias Polyphony.Visibility
 
   alias Polyphony.Events.{
@@ -60,6 +61,7 @@ defmodule Polyphony.Context do
     character_id = fetch!(opts, :character_id)
     sheet = fetch!(opts, :sheet)
     premise = Map.get(opts, :premise)
+    location = blank_to_nil(Map.get(opts, :location))
 
     retriever = Map.get(opts, :retriever, StaticRetriever)
     bible = Map.get(opts, :world_bible)
@@ -130,6 +132,7 @@ defmodule Polyphony.Context do
       scene_id: scene_id,
       character_id: character_id,
       premise: premise,
+      location: location,
       prefix: prefix,
       meta: %{
         verbatim_scene_ids: verbatim_scene_ids,
@@ -153,17 +156,22 @@ defmodule Polyphony.Context do
   def to_messages(%SceneContext{} = ctx, opts \\ []) do
     opts = Map.new(opts)
 
+    # Translate stored character ids → display names for the LLM (§5.2). Identity
+    # fallback makes a name-keyed scene (tests / pre-migration) a no-op.
+    cast = Cast.for_scene(ctx.scene_id)
+
     live =
       opts
       |> Map.get(:live_events, [])
       |> Visibility.project({:character, ctx.character_id})
-      |> Enum.map(&render_event(&1, ctx.character_id))
+      |> Enum.map(&render_event(&1, cast))
       |> compact_join("\n")
 
     volatile =
       [
+        render_location(ctx.location),
         render_premise(ctx.premise),
-        render_membership(Map.get(opts, :members, []), Map.get(opts, :exits, [])),
+        render_membership(Map.get(opts, :members, []), Map.get(opts, :exits, []), cast),
         section("Scene so far", live),
         section("Current state", Map.get(opts, :current_state)),
         Map.get(opts, :turn_instruction, default_turn_instruction())
@@ -222,10 +230,13 @@ defmodule Polyphony.Context do
 
   defp render_recent_scenes(scenes, character_id) do
     Enum.map(scenes, fn %{scene_id: sid, events: events} ->
+      # Each recent scene resolves names against its own cast (§5.2).
+      cast = Cast.for_scene(sid)
+
       body =
         events
         |> Visibility.project({:character, character_id})
-        |> Enum.map(&render_event(&1, character_id))
+        |> Enum.map(&render_event(&1, cast))
         |> compact_join("\n")
 
       {sid, "Scene #{inspect(sid)}:\n" <> body}
@@ -313,38 +324,63 @@ defmodule Polyphony.Context do
   defp render_premise(nil), do: nil
   defp render_premise(premise), do: "Scene: #{premise}"
 
-  defp render_membership(members, exits) do
+  # Authored scene location (§2.3), volatile like the premise. The Director should be
+  # told where a scene takes place, not left to infer it. Labelled "Location" to stay
+  # distinct from the world bible's overall "Setting".
+  defp render_location(nil), do: nil
+  defp render_location(location), do: "Location: #{location}"
+
+  defp blank_to_nil(nil), do: nil
+  defp blank_to_nil(v) when is_binary(v), do: if(String.trim(v) == "", do: nil, else: v)
+  defp blank_to_nil(v), do: v
+
+  defp render_membership(members, exits, cast) do
+    names = Enum.map(members, &Cast.render_name(cast, &1))
+
     [
-      members != [] && "Present: #{Enum.join(members, ", ")}",
+      names != [] && "Present: #{Enum.join(names, ", ")}",
       exits != [] && "Exits: #{Enum.join(exits, ", ")}"
     ]
     |> compact_join()
   end
 
   # Event rendering. Interior events only ever appear here for the viewer whose
-  # they are (Visibility already filtered), so it's safe to render them.
-  defp render_event(%ThoughtOccurred{} = e, _me), do: "(you think: #{e.content})"
+  # they are (Visibility already filtered), so it's safe to render them. `cast`
+  # translates stored character ids → display names for the LLM (§5.2).
+  defp render_event(%ThoughtOccurred{} = e, _cast), do: "(you think: #{e.content})"
 
-  defp render_event(%PrivateStateReported{} = e, _me),
+  defp render_event(%PrivateStateReported{} = e, _cast),
     do: "(you feel #{e.mood_felt || "—"}; you intend #{e.intention || "—"})"
 
-  defp render_event(%SpeechUttered{} = e, _me) do
-    to = if e.addressed_to in [nil, []], do: "", else: " (to #{Enum.join(e.addressed_to, ", ")})"
+  defp render_event(%SpeechUttered{} = e, cast) do
+    to =
+      if e.addressed_to in [nil, []] do
+        ""
+      else
+        " (to #{e.addressed_to |> Enum.map(&Cast.render_name(cast, &1)) |> Enum.join(", ")})"
+      end
+
     whisper = if e.audibility == :private, do: " (whispered)", else: ""
-    "#{e.speaker_id}#{to}#{whisper}: \"#{e.content}\""
+    "#{Cast.render_name(cast, e.speaker_id)}#{to}#{whisper}: \"#{e.content}\""
   end
 
-  defp render_event(%ActionTaken{} = e, _me), do: "#{e.character_id} #{e.content}"
+  defp render_event(%ActionTaken{} = e, cast),
+    do: "#{Cast.render_name(cast, e.character_id)} #{e.content}"
 
-  defp render_event(%DemeanorReported{} = e, _me) do
+  defp render_event(%DemeanorReported{} = e, cast) do
     bits = [e.demeanor, e.posture, e.position] |> Enum.reject(&is_nil/1) |> Enum.join(", ")
-    "[#{e.character_id}: #{bits}]"
+    "[#{Cast.render_name(cast, e.character_id)}: #{bits}]"
   end
 
-  defp render_event(%WorldEventOccurred{} = e, _me), do: "[#{e.content}]"
-  defp render_event(%CharacterEntered{} = e, _me), do: "[#{e.character_id} enters]"
-  defp render_event(%CharacterExited{} = e, _me), do: "[#{e.character_id} leaves]"
-  defp render_event(_other, _me), do: nil
+  defp render_event(%WorldEventOccurred{} = e, _cast), do: "[#{e.content}]"
+
+  defp render_event(%CharacterEntered{} = e, cast),
+    do: "[#{Cast.render_name(cast, e.character_id)} enters]"
+
+  defp render_event(%CharacterExited{} = e, cast),
+    do: "[#{Cast.render_name(cast, e.character_id)} leaves]"
+
+  defp render_event(_other, _cast), do: nil
 
   # ── Small helpers ────────────────────────────────────────────────────────────
 

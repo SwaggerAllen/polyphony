@@ -43,7 +43,7 @@ superadmin.
   the live sessions.
 - **Ownership through `Owner`.** Library screens scope every read/write through
   `Polyphony.Owner.of(current_user)` — never a raw user id — so org support later is a
-  bolt-on, not a rewrite (roadmap §P2/§P8).
+  bolt-on, not a rewrite (decisions §P2/§P8).
 - **The Play view is the guarantee, visible.** It renders a scene as a
   viewer-parameterized projection (omniscient or as any character); a whisper the viewer
   wasn't part of is silently absent. That is `Polyphony.Visibility.project/2` — the same

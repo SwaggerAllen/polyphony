@@ -177,5 +177,24 @@ defmodule Polyphony.ContextTest do
       assert user =~ "Present: mira, otto"
       assert user =~ "Exits: north gate, courtyard"
     end
+
+    test "the authored location lands in the volatile suffix, not the cached prefix (§2.3)" do
+      ctx = materialize(location: "The North Dock at dawn")
+
+      # Scene-scoped, so it rides the volatile suffix — never the byte-stable prefix, or
+      # every new scene would invalidate the cast's cached prefix.
+      refute ctx.prefix =~ "The North Dock at dawn"
+
+      [_system, %{content: user}] = Context.to_messages(ctx, members: ["mira"])
+      assert user =~ "Location: The North Dock at dawn"
+    end
+
+    test "a blank location renders nothing (§2.3)" do
+      ctx = materialize(location: "  ")
+      assert ctx.location == nil
+
+      [_system, %{content: user}] = Context.to_messages(ctx, members: ["mira"])
+      refute user =~ "Location:"
+    end
   end
 end

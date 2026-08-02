@@ -17,6 +17,7 @@ defmodule Polyphony.Context.Rebuild do
 
   alias Polyphony.{App, Context, Library}
   alias Polyphony.Authoring.CharacterSheet
+  alias Polyphony.Authoring.Effective
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Context.PgvectorRetriever
   alias Polyphony.Events.SceneOpened
@@ -32,14 +33,18 @@ defmodule Polyphony.Context.Rebuild do
   @spec for_character(term(), term()) :: {:ok, Polyphony.Context.SceneContext.t()} | :error
   def for_character(scene_id, character_id) do
     with %SceneOpened{} = opened <- opened(scene_id),
-         %CharacterSheet{} = sheet <- find_sheet(roster(scene_id), character_id) do
+         %CharacterSheet{} = sheet <- sheet_for(scene_id, character_id) do
       ctx =
         Context.materialize(
           scene_id: scene_id,
           character_id: to_string(character_id),
-          sheet: sheet,
+          # Canon character + world arc folded in (§2.8) so accepted arc reaches
+          # generation; world facts scoped to this scene's location (global + local-here).
+          sheet: Effective.sheet(sheet, character_id),
           premise: opened.premise || "",
-          world_bible: world_bible(scene_id),
+          location: opened.location_id,
+          world_bible:
+            Effective.world_bible(world_bible(scene_id), opened.campaign_id, opened.location_id),
           # Re-apply the campaign content ceiling (§A5) so a rebuilt context caps the
           # same boundaries as the original seed — a cache wipe must not re-open them.
           content_config: content_config(scene_id),
@@ -122,7 +127,42 @@ defmodule Polyphony.Context.Rebuild do
     _ -> nil
   end
 
-  # Match a scene character id (a *name*) to its sheet in the roster, case-insensitively.
+  @doc """
+  Resolve a scene's `character_id` to its sheet (§5.2 identity migration): by **library
+  id first** — so a stable id survives a display-name change (rename-safe) — then the
+  legacy **name** match, since character ids minted before the migration are names. Both
+  paths are safe: a name never parses as a library id, so it can't mis-resolve. Returns
+  `nil` when nothing matches.
+  """
+  @spec sheet_for(term(), term()) :: CharacterSheet.t() | nil
+  def sheet_for(scene_id, character_id) do
+    sheet_by_id(character_id) || find_sheet(roster(scene_id), character_id)
+  end
+
+  defp sheet_by_id(character_id) do
+    with id when not is_nil(id) <- as_library_id(character_id),
+         entry when not is_nil(entry) <- get_entry(id),
+         %CharacterSheet{} = sheet <- entry_payload(entry) do
+      sheet
+    else
+      _ -> nil
+    end
+  end
+
+  # A character_id is a library id only if it's an integer or an all-digit string — a
+  # display name (the legacy key) never is, so this never mis-resolves a name.
+  defp as_library_id(id) when is_integer(id), do: id
+
+  defp as_library_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {n, ""} -> n
+      _ -> nil
+    end
+  end
+
+  defp as_library_id(_), do: nil
+
+  # Match a scene character id (a legacy *name*) to its sheet in the roster, case-insensitively.
   defp find_sheet(roster, character_id) do
     key = character_id |> to_string() |> String.downcase()
 

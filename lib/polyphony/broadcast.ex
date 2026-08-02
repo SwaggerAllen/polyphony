@@ -201,8 +201,10 @@ defmodule Polyphony.Broadcast do
 
   # ── Message shaping ──────────────────────────────────────────────────────────
 
-  defp viewer_tag(:omniscient), do: "omniscient"
-  defp viewer_tag({:character, id}), do: "character:#{id}"
+  @doc "The stable string tag for a viewer, as carried in a message's `:viewer` field."
+  @spec viewer_tag(viewer()) :: String.t()
+  def viewer_tag(:omniscient), do: "omniscient"
+  def viewer_tag({:character, id}), do: "character:#{id}"
 
   defp kind(%mod{}), do: mod |> Module.split() |> List.last()
 

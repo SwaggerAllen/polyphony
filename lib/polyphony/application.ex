@@ -95,13 +95,19 @@ defmodule Polyphony.Application do
     end
   end
 
-  # Ecto projectors run as their own processes subscribed to the event store. In
-  # tests we drive the read model's SQL directly (see the membership read-model
-  # test), so the live projector is left out there to avoid coupling every
-  # Commanded dispatch to the Ecto sandbox.
+  # Event-store subscription processes whose read-side work touches Postgres: the
+  # Ecto projectors, and the scene-close fan-out handler (it enqueues Oban jobs via
+  # `Oban.insert!`). In tests we drive the read model's SQL and `SceneClose.run/2`
+  # directly, so these are left out there to keep Commanded dispatch off the Ecto
+  # sandbox — the flag is `start_projectors` for both. (`Broadcast.Publisher`
+  # subscribes too but needs no Postgres, so it runs unconditionally above.)
   defp projectors do
     if Application.get_env(:polyphony, :start_projectors, true) do
-      [Polyphony.Projectors.SceneMemberships, Polyphony.Projectors.SceneForks]
+      [
+        Polyphony.Projectors.SceneMemberships,
+        Polyphony.Projectors.SceneForks,
+        Polyphony.SceneClose.Handler
+      ]
     else
       []
     end

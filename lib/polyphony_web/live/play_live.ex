@@ -26,7 +26,8 @@ defmodule PolyphonyWeb.PlayLive do
     TurnOrder
   }
 
-  alias Polyphony.Context.{Store, PgvectorRetriever}
+  alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
+  alias Polyphony.Authoring.Effective
   alias Polyphony.DebugTap
   alias Polyphony.Director.{BeatOps, SceneBrief}
 
@@ -144,11 +145,15 @@ defmodule PolyphonyWeb.PlayLive do
     )
   end
 
-  # Open generation failures for this scene — author-facing, so omniscient only.
+  # Open generation failures for this scene, scoped to the viewer (§1.7): the GM
+  # (omniscient) sees all; a character viewer sees only their own turn failures —
+  # the ones they can retry. Author-facing failures (summaries, arc) never scope to
+  # a character, so a player never sees them.
   defp open_failures(socket) do
-    if socket.assigns.viewer == :omniscient,
-      do: Failures.list_open(socket.assigns.scene_id),
-      else: []
+    case socket.assigns.viewer do
+      :omniscient -> Failures.list_open(socket.assigns.scene_id)
+      {:character, id} -> Failures.list_open(socket.assigns.scene_id, subject: id)
+    end
   end
 
   defp scene_premise(plain) do
@@ -300,13 +305,17 @@ defmodule PolyphonyWeb.PlayLive do
     do: put_flash(socket, :error, "#{name} has no usable sheet yet.")
 
   defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible) do
+    {campaign_id, location} = scene_campaign_location(scene_id)
+
     ctx =
       Context.materialize(
         scene_id: scene_id,
         character_id: name,
-        sheet: sheet,
+        # Canon character + world arc folded in (§2.8); world facts scoped to this
+        # scene's location (global + local-here).
+        sheet: Effective.sheet(sheet, name),
         premise: premise,
-        world_bible: bible,
+        world_bible: Effective.world_bible(bible, campaign_id, location),
         # Retrieve this character's own distant-scene summaries from pgvector
         # (no-ops to [] without egress / when the embed fails).
         retriever: PgvectorRetriever
@@ -838,18 +847,30 @@ defmodule PolyphonyWeb.PlayLive do
         ctx
 
       :error ->
+        {campaign_id, location} = scene_campaign_location(scene_id)
+
         ctx =
           Context.materialize(
             scene_id: scene_id,
             character_id: character,
-            sheet: sheet,
+            # Canon character + world arc folded in (§2.8), scoped to this location.
+            sheet: Effective.sheet(sheet, character),
             premise: premise,
-            world_bible: bible,
+            world_bible: Effective.world_bible(bible, campaign_id, location),
             retriever: PgvectorRetriever
           )
 
         Store.put(scene_id, character, ctx)
         ctx
+    end
+  end
+
+  # The scene's campaign + authored location, from its opening event (durable) — used
+  # to fold canon world arc into the world half of context, scoped to this place.
+  defp scene_campaign_location(scene_id) do
+    case Rebuild.opened(scene_id) do
+      %SceneOpened{campaign_id: c, location_id: l} -> {c, l}
+      _ -> {nil, nil}
     end
   end
 
@@ -1056,8 +1077,8 @@ defmodule PolyphonyWeb.PlayLive do
   #
   # A failure without a beat is a scene-close operation (arc extraction, summarization);
   # those are emitted at the scene's current beat, so they default to `current_beat` and
-  # land with the latest action rather than at the top. `failures` is [] for non-omniscient
-  # viewers, so nothing shows there.
+  # land with the latest action rather than at the top. A character viewer only ever gets
+  # their own turn failures (§1.7), which always carry a beat, so they sort in place.
   defp transcript_items(messages, failures, current_beat) do
     {blocks, _} =
       messages

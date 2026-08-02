@@ -1,3 +1,8 @@
+> **Archived — superseded.** This is the brief that seeded the mock thread. The mocks in
+> `ux/` are the design output; their decisions (some of which diverge from this brief — e.g.
+> Quick Build is not a tab, Premise follows Cast) supersede it. The engineering follow-through
+> lives in `docs/backend-backlog.md`. Kept for the reasoning, not for building.
+
 # Polyphony — Design Brief (for the mock thread)
 
 **Self-contained.** Everything a design session needs to mock the redesigned frontend
