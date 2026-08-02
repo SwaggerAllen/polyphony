@@ -677,16 +677,27 @@ safe, then open all non-boundary fields to revision.
 unmapped id renders as itself and an unmapped name resolves to itself, so old name-keyed data and
 the existing suite stay green):
 
-1. **Sheet-lookup id-tolerance.** `Rebuild` resolves a `character_id` to its sheet by library id
-   first, then the legacy name match. Safe, no visibility impact. *(done — the first, most
-   damaging break closed for the eventual flip.)*
-2. **LLM-boundary translation.** Render the display **name** for a `character_id` (context
-   `render_event`, Director transcript/roster/cast-instruction), and resolve emitted **names** back
-   to ids (Director `cast`, `TurnOrderDeclared`, packet `addressed_to`). ⚠️ Touches the visibility
-   invariant (whisper addressee matching) — needs the most care + tests.
-3. **Flip the mint.** `campaign_live` scene-open dispatches `EnterCharacter{character_id: lib_id}`
-   and seeds by id. Add rename-safety tests (rename an in-scene character; rebuild, arc, whispers
-   all still resolve).
+1. **Sheet-lookup id-tolerance.** ✅ **Done.** `Rebuild.sheet_for` resolves by library id first,
+   then the legacy name match. Rename-safe lookup; no visibility impact.
+2a. **`Scene.Cast` resolver.** ✅ **Done.** id↔name maps for a scene (`render_name`, `resolve_id`)
+   with identity fallback.
+2b-render. **id→name in prompts.** ✅ **Done.** `context` (live events, recent scenes, membership)
+   and `scene_brief` (roster line, transcript, whisper addressees) render display names. Display
+   only — no routing impact; suite green on identity fallback.
+2b-emit + 3 (**the atomic remainder — must land together**). Resolve emitted **names → ids** and
+   flip the mint in one change, because `addressed_to` may become ids only once viewers are ids
+   too (otherwise whispers misroute — fail-*safe* under default-deny, i.e. a caught functional
+   bug, never a leak). Precise sites, now mapped:
+   - **Director cast → ids:** `run_beat.ex:164` (`resolved.cast` names) before `declare_turn_order`.
+   - **Packet `addressed_to` → ids** at the packet-production points before `CommitPacket`:
+     generation (`generate_packet`), the composer (`play_live`), and edit (`edit.ex`).
+   - **Mint flip:** `campaign_live` `EnterCharacter{character_id: lib_id}` + seed by id.
+   - **`play_live` viewer overhaul:** the viewer, roster `<option>` values, `speaker`, and whisper
+     target parsing move from names to ids (display stays names). This is the largest single piece.
+   - **Data clear:** reset dev/prod event streams + campaign `scenes` lists (clean-slate — no
+     backfill).
+   - **Tests:** dedicated id-path whisper routing + rename-safety (whisper to a character, rename
+     them, whisper still routes; a bystander still can't see it).
 4. **Arc + gate by id.** `arc_entries.subject_id` = the id; scene gate / arc review drop the
    name-resolution dance.
 5. **Open the fields.** Make `name` (and other non-boundary scalars) freely editable + arc-
