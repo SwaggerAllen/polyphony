@@ -594,15 +594,18 @@ without the coding machinery — so one thread iterates on design while another 
 search**, **text search**, and **full-text download** over `docs/` and `ux/`. Claude Projects
 doesn't quite cover this (no good search/write loop against a living repo).
 
-**Open questions (still mulling — don't build until settled):**
+**Decisions (author):**
 
-- **Where do the docs live?** Keep them in-repo as now (single source of truth, versioned with
-  the code), or move some to a hosted surface (e.g. Confluence) that's easier to browse/edit
-  outside a coding session? Splitting risks drift; keeping them in-repo needs the skills above to
-  be pleasant to use.
-- **Is the design surface publicly deployed?** If the storybook (roadmap: "Frontend redesign &
-  design-kit fidelity") and the `ux/*.html` mocks get a public deployment, **that deployment is
-  itself a read surface** — a design thread could just fetch the live pages instead of needing
-  repo access. That materially changes what the skills need to do.
-
-Decision pending on both; the skill set and the deployment/storybook work inform each other.
+- **Deployment-as-read-surface is the chosen direction, and it's the gate.** The `ux/*.html`
+  mocks only render meaningfully with the CSS kit *served* — a bare git connector (read the raw
+  files) can't show the design, so it isn't worth standing up on its own. The design thread wants
+  the **storybook + `ux/` deployed** as a live surface it can fetch and review against. That
+  depends on the frontend build (roadmap: "Frontend redesign & design-kit fidelity"), so this is
+  **deferred until the frontend is built and a `ux`/storybook deploy exists.**
+- **Skip vector search.** The corpus (a handful of docs + ~14 mocks) is small enough that plain
+  text search covers it; an embedding index is ongoing lift for marginal value at this size.
+- **Docs stay in-repo** for now — single source of truth, versioned with the code; revisit only
+  if they outgrow it.
+- **Hold new design work** until the end-to-end MVP is built and reviewable anyway — designing
+  follow-up features before playing with the working product (and before storybook exists to
+  design against) risks designing on assumptions the MVP would correct.
