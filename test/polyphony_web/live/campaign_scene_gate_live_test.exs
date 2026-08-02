@@ -8,6 +8,8 @@ defmodule PolyphonyWeb.CampaignSceneGateLiveTest do
 
   setup :register_and_log_in_user
 
+  # Returns {campaign_entry, character_id} — the gate checks pending arc by library
+  # id, the same identity the cast enters a scene under (§5.2).
   defp campaign_with_ready_cast(user) do
     mira =
       Library.put(%{
@@ -16,26 +18,34 @@ defmodule PolyphonyWeb.CampaignSceneGateLiveTest do
         payload: %CharacterSheet{name: "Mira", status: :full}
       })
 
-    Library.put(%{
-      owner: Owner.of(user),
-      kind: "campaign",
-      payload: %{
-        kind: :campaign,
-        name: "Camp",
-        character_ids: [mira.id],
-        bible_id: nil,
-        scenes: []
-      }
-    })
+    camp =
+      Library.put(%{
+        owner: Owner.of(user),
+        kind: "campaign",
+        payload: %{
+          kind: :campaign,
+          name: "Camp",
+          character_ids: [mira.id],
+          bible_id: nil,
+          scenes: []
+        }
+      })
+
+    {camp, to_string(mira.id)}
   end
 
-  defp propose_arc(name),
-    do: ArcRM.put(Repo, %ArcEntry{kind: :discovery, statement: "x", status: :proposed}, name)
+  defp propose_arc(character_id),
+    do:
+      ArcRM.put(
+        Repo,
+        %ArcEntry{kind: :discovery, statement: "x", status: :proposed},
+        character_id
+      )
 
   test "starting a scene is blocked to arc review while a cast member has pending arc",
        %{conn: conn, user: user} do
-    camp = campaign_with_ready_cast(user)
-    propose_arc("Mira")
+    {camp, mira_id} = campaign_with_ready_cast(user)
+    propose_arc(mira_id)
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
 
@@ -49,7 +59,7 @@ defmodule PolyphonyWeb.CampaignSceneGateLiveTest do
   end
 
   test "with no pending arc, starting a scene opens play", %{conn: conn, user: user} do
-    camp = campaign_with_ready_cast(user)
+    {camp, _mira_id} = campaign_with_ready_cast(user)
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
 
@@ -61,7 +71,7 @@ defmodule PolyphonyWeb.CampaignSceneGateLiveTest do
   end
 
   test "accepting the pending arc unblocks the next scene", %{conn: conn, user: user} do
-    camp = campaign_with_ready_cast(user)
+    {camp, _mira_id} = campaign_with_ready_cast(user)
     row = propose_arc("Mira")
 
     ArcRM.accept(Repo, row.id)

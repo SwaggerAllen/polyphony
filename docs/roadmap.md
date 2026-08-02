@@ -339,13 +339,13 @@ The current LiveView is the first-cut UI; the redesign is speced in `ux/` (mocks
   on the first-cut UI: play, campaign, sheet editor, world bible, arc review, library,
   browse, settings, admin. The backend prerequisites are the `backend-backlog.md`
   immediate milestone.
-- **Build the play view id-native (finishes the identity migration).** The character-identity
-  migration (`backend-backlog.md §5.2`) deliberately stops at the domain foundation; its atomic
-  mint-flip includes a `play_live` overhaul (composer, roster options, viewer selector, whisper
-  parsing → stable ids, names for display). Do that here rather than overhaul-then-discard the
-  current LiveView — the rebuilt play view enters characters by library id, resolves emitted
-  whisper names → ids before commit, and the flip lands with dedicated whisper-routing +
-  rename-safety tests. Also clear dev/prod event streams + campaign `scenes` lists (clean-slate).
+- **Build the play view id-native (finishes the identity migration).** ✅ **Done.** The
+  character-identity mint-flip (`backend-backlog.md §5.2`, phases 2b-emit + 3 + 4) landed
+  here rather than overhaul-then-discard the current LiveView: characters enter by library
+  id, emitted whisper names resolve to ids before commit, and the play view renders names
+  at the edge. Pinned by `PlayIdentityLiveTest` (whisper routing + rename safety), with
+  `Polyphony.SceneReset` / `mix scene.reset` for the clean-slate data wipe. Detail in
+  `completed-roadmap.md`; phase 5 (open `name` to editing/arc override) stays in the backlog.
 - **Adopt a LiveView storybook so components can be reviewed in isolation.** ✅ **Done** —
   `phoenix_storybook` at `/storybook`, one page per kit component with its states. Gated by
   the `:storybook` config flag (on in dev and test, elsewhere via `STORYBOOK=true`); it

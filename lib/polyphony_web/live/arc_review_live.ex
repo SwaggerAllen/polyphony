@@ -16,30 +16,31 @@ defmodule PolyphonyWeb.ArcReviewLive do
 
     {:ok,
      socket
-     |> assign(page_title: "Arc review", campaign_id: id, subjects: cast_names(campaign))
+     |> assign(page_title: "Arc review", campaign_id: id, cast: cast(campaign))
      |> load()}
   end
 
-  # Character arc is keyed by the character's **name** (the id scenes and extraction
-  # use), not the library id the cast is stored under — resolve names to look it up.
-  defp cast_names(nil), do: []
+  # Character arc is keyed by the character's **library id** — the same identity the
+  # cast enters a scene under and extraction files against (§5.2). Names ride along
+  # only to label the proposals; before the mint flip this had to resolve ids to
+  # names to find anything, and that dance is what a rename used to break.
+  defp cast(nil), do: []
 
-  defp cast_names(campaign) do
+  defp cast(campaign) do
     (campaign[:character_ids] || [])
-    |> Enum.map(fn id ->
+    |> Enum.uniq()
+    |> Enum.flat_map(fn id ->
       case Library.get(id) do
-        nil -> nil
-        entry -> Map.get(Library.payload(entry) || %{}, :name)
+        nil -> []
+        entry -> [{to_string(id), Map.get(Library.payload(entry) || %{}, :name) || to_string(id)}]
       end
     end)
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.uniq()
   end
 
   defp load(socket) do
     proposed =
-      Enum.flat_map(socket.assigns.subjects, fn subject ->
-        Repo |> ArcEntry.list_proposed(subject) |> Enum.map(&{subject, &1})
+      Enum.flat_map(socket.assigns.cast, fn {id, name} ->
+        Repo |> ArcEntry.list_proposed(id) |> Enum.map(&{name, &1})
       end)
 
     world = ArcEntry.list_proposed_world(Repo, socket.assigns.campaign_id)
@@ -103,8 +104,8 @@ defmodule PolyphonyWeb.ArcReviewLive do
 
     <h3>Characters</h3>
     <div :if={@proposed == []} class="list-empty">No character arc to review.</div>
-    <div :for={{subject, e} <- @proposed} class="card">
-      <span class="badge"><%= subject %></span>
+    <div :for={{name, e} <- @proposed} class="card">
+      <span class="badge"><%= name %></span>
       <span class="faint"><%= e.kind %></span>
       <.review_row e={e} />
     </div>

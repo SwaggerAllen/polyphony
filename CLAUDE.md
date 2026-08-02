@@ -121,6 +121,15 @@ for it.
 
 - `scene_id` is the event-store stream id and stands in for a branch. A **fork** is
   a new scene stream (`Polyphony.Fork`, copy-on-fork).
+- `character_id` is the character's **library entry id** — never their display name.
+  It is the routing key everywhere: membership, visibility (including a whisper's
+  `addressed_to`), `packet_id`, arc `subject_id`, control modes, broadcast topics.
+  Names are *display*, resolved at the edges by `Polyphony.Scene.Cast` —
+  `render_name/2` on the way out (prompts, the transcript, any label), and
+  `resolve_addressees/2` on the way in, immediately before `CommitPacket`. Both have
+  an identity fallback, so an unmapped value passes through as itself. **Never put a
+  name where a routing key belongs**: under default-deny that fails safe (the whisper
+  reaches nobody) but it's still a bug, and it's the class of bug §5.2 existed to end.
 - `packet_id = "#{scene}-#{beat}-#{character}"` (base attempt). Re-rolls/edits add
   `-r<n>`: `BeatOps.reroll_packet_id/4`. **Attempt numbering is max-seen + 1**
   (`BeatOps.next_attempt/4`), not a count — a fork copies only the canonical take,

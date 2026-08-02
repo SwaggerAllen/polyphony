@@ -51,7 +51,7 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
 
   test "admitting an existing character enters them and clears the proposal",
        %{conn: conn, user: user} do
-    character(user, "Bram")
+    bram = character(user, "Bram")
     scene = scene_with_proposal("Bram")
 
     {:ok, view, html} = live(conn, ~p"/play/#{scene}")
@@ -61,9 +61,12 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
     view |> element("button[phx-click=intro_admit][phx-value-name=Bram]") |> render_click()
 
     html = render(view)
-    # Proposal gone; Bram is now a scene member (offered in the viewing-as roster).
+    # Proposal gone — matched by *name* even though he entered by id (§5.2).
     refute html =~ "New characters to bring on"
-    assert html =~ ~s(<option value="Bram")
+    # Bram is a scene member: offered in the viewing-as roster keyed by his library
+    # id, labelled with his name. The value is what routes; the label is what reads.
+    assert html =~ ~s(<option value="#{bram.id}")
+    assert html =~ ">Bram</option>"
   end
 
   test "generate & admit a brand-new name creates, fills, and enters them",
@@ -81,7 +84,9 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
       Enum.find(Library.list_for_owner(Owner.of(user)), &(Library.payload(&1).name == "Ghost"))
 
     assert ghost && Library.payload(ghost).status == :full
-    assert render(view) =~ ~s(<option value="Ghost")
+    # Entered under the library id the generation minted, displayed by name (§5.2).
+    assert render(view) =~ ~s(<option value="#{ghost.id}")
+    assert render(view) =~ ">Ghost</option>"
   end
 
   test "dismissing clears the proposal without entering anyone", %{conn: conn} do

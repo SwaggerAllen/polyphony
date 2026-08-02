@@ -61,6 +61,44 @@ the first-cut design system (a component that only looks right next to legacy CS
 ported yet). Both storybook bundles are committed and covered by CI's asset-drift guard,
 like `app.{js,css}`.
 
+### Character identity: the mint flip (`backend-backlog.md` §5.2, phases 2b-emit + 3 + 4)
+The frontend rebuild carried this as a scoped requirement, and it landed with the id-native
+play view. Before it, `character_id` in the event log was a character's **display name**,
+keyed on with string equality through membership, packet ids, arc, and — the one that
+mattered most — a whisper's `addressed_to`. Renaming a character already in scenes silently
+corrupted them.
+
+Now the log stores the character's **library id** everywhere, and names are display only,
+resolved at the edges by `Polyphony.Scene.Cast`:
+
+- **In:** `Cast.resolve_addressees/2` runs at every packet-production point immediately
+  before `CommitPacket` — generation, the composer, an edit, an accepted draft, a
+  user-controlled slot — so a whisper the model or the player wrote by name enters the log
+  addressed by id. The Director's cast picks resolve the same way before
+  `declare_turn_order`.
+- **Out:** the prompt boundary already rendered names (phase 2b-render); the play view now
+  does too — transcript, roster labels, composer, progress lines, failure lines, and the
+  turn editor, which shows "(whisper to Bram: …)" and resolves it back on save.
+- **Mint:** `EnterCharacter{character_id: <library id>}` at both sites — campaign
+  scene-open and play's admit.
+- **Arc + gate by id** (phase 4): `arc_entries.subject_id` is the library id, so arc review
+  and `SceneGate` dropped the name-resolution dance they needed when the two identities
+  disagreed.
+
+`PlayIdentityLiveTest` is the guard, and it's shaped around the failure mode: an id/name
+mismatch fails *safe* under default-deny (the whisper reaches nobody), so the tests assert
+the addressee still **sees** the whisper after a rename as hard as they assert the bystander
+doesn't.
+
+**Data was cleared, not migrated.** Events are immutable (rule 6), so there is no in-place
+rewrite of `character_id`, and a half-keyed scene is worse than either scheme.
+`Polyphony.SceneReset` (`mix scene.reset`, or `bin/polyphony eval` in prod) drops every
+stream and scene-derived read model and clears campaign `scenes` lists, **keeping the
+library** — characters, worlds and campaigns are authored work.
+
+Phase 5 (open `name` and other non-boundary scalars to editing and arc override, now that
+identity is stable) stays open in the backlog.
+
 ---
 
 ## Immediate milestone — the backend the frontend design needs

@@ -8,8 +8,10 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
 
   setup :register_and_log_in_user
 
+  # Returns {campaign_entry, character_id}. Character arc is keyed by the character's
+  # **library id** — the same identity the cast enters a scene under (§5.2) — so the
+  # cast list and the arc rows agree without any name resolution in between.
   defp campaign(user) do
-    # The cast stores library ids; character arc is keyed by the character's name.
     mira =
       Library.put(%{
         owner: Owner.of(user),
@@ -17,25 +19,28 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
         payload: %CharacterSheet{name: "Mira", status: :full}
       })
 
-    Library.put(%{
-      owner: Owner.of(user),
-      kind: "campaign",
-      payload: %{
-        kind: :campaign,
-        name: "Camp",
-        character_ids: [mira.id],
-        bible_id: nil,
-        scenes: []
-      }
-    })
+    camp =
+      Library.put(%{
+        owner: Owner.of(user),
+        kind: "campaign",
+        payload: %{
+          kind: :campaign,
+          name: "Camp",
+          character_ids: [mira.id],
+          bible_id: nil,
+          scenes: []
+        }
+      })
+
+    {camp, to_string(mira.id)}
   end
 
-  defp char_proposal(statement),
+  defp char_proposal(character_id, statement),
     do:
       ArcRM.put(
         Repo,
         %ArcEntry{kind: :discovery, statement: statement, status: :proposed},
-        "Mira"
+        character_id
       )
 
   defp world_proposal(camp, statement, scope),
@@ -47,8 +52,8 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
       )
 
   test "shows character and world proposals side by side", %{conn: conn, user: user} do
-    camp = campaign(user)
-    char_proposal("Mira has learned the truth.")
+    {camp, mira_id} = campaign(user)
+    char_proposal(mira_id, "Mira has learned the truth.")
     world_proposal(camp, "The harbour is blockaded.", :local)
 
     {:ok, _view, html} = live(conn, ~p"/arc/#{camp.id}")
@@ -61,8 +66,8 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
   end
 
   test "accepting promotes to canon; rejecting retracts", %{conn: conn, user: user} do
-    camp = campaign(user)
-    keep = char_proposal("Keep this one.")
+    {camp, mira_id} = campaign(user)
+    keep = char_proposal(mira_id, "Keep this one.")
     drop = world_proposal(camp, "Drop this one.", :global)
 
     {:ok, view, _html} = live(conn, ~p"/arc/#{camp.id}")
@@ -83,8 +88,8 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
     conn: conn,
     user: user
   } do
-    camp = campaign(user)
-    a = char_proposal("Character thing.")
+    {camp, mira_id} = campaign(user)
+    a = char_proposal(mira_id, "Character thing.")
     b = world_proposal(camp, "World thing.", :global)
 
     {:ok, view, _html} = live(conn, ~p"/arc/#{camp.id}")
@@ -98,7 +103,7 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
     conn: conn,
     user: user
   } do
-    camp = campaign(user)
+    {camp, _mira_id} = campaign(user)
     p = world_proposal(camp, "vaeg statement", :global)
 
     {:ok, view, _html} = live(conn, ~p"/arc/#{camp.id}")

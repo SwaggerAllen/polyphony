@@ -237,7 +237,9 @@ defmodule PolyphonyWeb.CampaignLive do
         # has unreviewed arc — generation works from the sheet, so open one and the
         # Director writes a character who's fallen behind the story. Accept-all on the
         # review screen is the one-tap way through.
-        match?({:blocked, _}, SceneGate.check(entry.id, Enum.map(ready, &char_name/1))) ->
+        # Checked by library id — the same identity the cast enters the scene under
+        # and arc extraction files proposals against (§5.2).
+        match?({:blocked, _}, SceneGate.check(entry.id, Enum.map(ready, & &1.id))) ->
           {:noreply,
            socket
            |> put_flash(:error, "Review the pending arc changes before the next scene.")
@@ -359,10 +361,14 @@ defmodule PolyphonyWeb.CampaignLive do
     sheets = Enum.map(ready, &Library.payload/1)
     content_config = CampaignConfig.from_payload(payload)
 
+    # Characters enter by their **library id**, not their name (§5.2). The id is what
+    # the log, membership, packet ids, whisper routing and arc all key on from here;
+    # the name is a display field the prompt boundary renders back (Scene.Cast). This
+    # is the mint — get it wrong here and a rename corrupts the scene later.
     for {c, sheet} <- Enum.zip(ready, sheets) do
-      name = char_name(c)
-      :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: name, beat: 1})
-      seed_context(scene_id, name, sheet, premise, bible, content_config)
+      character_id = to_string(c.id)
+      :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: character_id, beat: 1})
+      seed_context(scene_id, character_id, sheet, premise, bible, content_config)
     end
 
     # The Director's omniscient brief: the world, the premise, the whole cast, and
@@ -380,15 +386,23 @@ defmodule PolyphonyWeb.CampaignLive do
     {:noreply, socket |> maybe_flash_pending(pending) |> redirect(to: ~p"/play/#{scene_id}")}
   end
 
-  defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible, content_config) do
+  defp seed_context(
+         scene_id,
+         character_id,
+         %CharacterSheet{} = sheet,
+         premise,
+         bible,
+         content_config
+       ) do
     {campaign_id, location} = scene_campaign_location(scene_id)
 
     ctx =
       Context.materialize(
         scene_id: scene_id,
-        character_id: name,
+        character_id: character_id,
         # Canon character + world arc folded in (§2.8), scoped to this scene's location.
-        sheet: Effective.sheet(sheet, name),
+        # Arc is keyed by the same id the log uses, so it survives a rename too.
+        sheet: Effective.sheet(sheet, character_id),
         premise: premise,
         world_bible: Effective.world_bible(bible, campaign_id, location),
         # The campaign content ceiling (§A5): caps this character's categorized
@@ -399,10 +413,11 @@ defmodule PolyphonyWeb.CampaignLive do
         retriever: PgvectorRetriever
       )
 
-    Store.put(scene_id, name, ctx)
+    Store.put(scene_id, character_id, ctx)
   end
 
-  defp seed_context(_scene_id, _name, _other, _premise, _bible, _content_config), do: :ok
+  defp seed_context(_scene_id, _character_id, _other, _premise, _bible, _content_config),
+    do: :ok
 
   # The scene's campaign + authored location, from its opening event (durable) — for
   # folding canon world arc into the world half of context, scoped to this place.

@@ -1,5 +1,5 @@
 defmodule Polyphony.Authoring.SceneGateTest do
-  @moduledoc "The arc-review gate on opening a new scene (§3.0), keyed by character name."
+  @moduledoc "The arc-review gate on opening a new scene (§3.0), keyed by character id."
   use ExUnit.Case, async: false
 
   alias Polyphony.Repo

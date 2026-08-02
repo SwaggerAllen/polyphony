@@ -24,26 +24,36 @@ defmodule PolyphonyWeb.TurnEdit do
 
   @doc """
   Render a turn's transcript messages (as carried in the play view) to editable text.
+
+  `render_name` turns a stored character id into the display name a human should see
+  and type — the log addresses whispers by id (§5.2), and an author editing a turn
+  must read "(whisper to Bram: …)", not an opaque id. It defaults to identity for
+  callers with no cast to hand (and for name-keyed test streams). The inverse runs
+  at commit time, so a turn round-trips id → name → edit → id.
   """
-  @spec serialize([map()]) :: String.t()
-  def serialize(msgs) do
+  @spec serialize([map()], (term() -> String.t())) :: String.t()
+  def serialize(msgs, render_name \\ &to_string/1) do
     msgs
-    |> Enum.flat_map(&line_for/1)
+    |> Enum.flat_map(&line_for(&1, render_name))
     |> Enum.join("\n")
   end
 
-  defp line_for(%{kind: "ThoughtOccurred", payload: p}), do: text_line("thinks: ", p[:content])
-  defp line_for(%{kind: "ActionTaken", payload: p}), do: text_line("does: ", p[:content])
-  defp line_for(%{kind: "DemeanorReported", payload: p}), do: text_line("seems: ", p[:demeanor])
+  defp line_for(%{kind: "ThoughtOccurred", payload: p}, _n),
+    do: text_line("thinks: ", p[:content])
 
-  defp line_for(%{kind: "SpeechUttered", payload: p}) do
+  defp line_for(%{kind: "ActionTaken", payload: p}, _n), do: text_line("does: ", p[:content])
+
+  defp line_for(%{kind: "DemeanorReported", payload: p}, _n),
+    do: text_line("seems: ", p[:demeanor])
+
+  defp line_for(%{kind: "SpeechUttered", payload: p}, render_name) do
     case String.trim(to_string(p[:content] || "")) do
       "" ->
         []
 
       said ->
         if to_string(p[:audibility]) == "private" do
-          to = (p[:addressed_to] || []) |> Enum.join(", ")
+          to = (p[:addressed_to] || []) |> Enum.map_join(", ", render_name)
           ["(whisper to #{to}: #{said})"]
         else
           [said]
@@ -51,7 +61,7 @@ defmodule PolyphonyWeb.TurnEdit do
     end
   end
 
-  defp line_for(_), do: []
+  defp line_for(_, _n), do: []
 
   @doc """
   Render a freshly-generated `TurnPacket` to editable composer text (the same

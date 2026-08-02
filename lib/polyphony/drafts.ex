@@ -18,6 +18,7 @@ defmodule Polyphony.Drafts do
 
   require Logger
 
+  alias Polyphony.Scene.Cast
   alias Polyphony.{App, Repo, Broadcast}
   alias Polyphony.ReadModels.PacketDraft
   alias Polyphony.Commands.CommitPacket
@@ -86,7 +87,9 @@ defmodule Polyphony.Drafts do
             character_id: row.character_id,
             beat: row.beat,
             packet_id: packet_id,
-            packet: decode(row.packet),
+            # The draft is stored as the model wrote it (names, so an author editing
+            # it reads names); ids are minted here, on the way into the log.
+            packet: Cast.resolve_addressees(row.scene_id, decode(row.packet)),
             edited: row.edited
           })
 

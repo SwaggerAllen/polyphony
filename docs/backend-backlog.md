@@ -643,7 +643,7 @@ scene.
 Everything the design does with Arc Review was decorative until this. World arc (2.8) lands on
 top of it, so this was a prerequisite for that too.
 
-### 5.2 Character identity is a name, not a stable id · **change** — ⚠️ **latent data-corruption risk**
+### 5.2 Character identity is a name, not a stable id · **change** — ✅ **Shipped** (phases 1–4; §5 open)
 `character_id` in the event log is the character's **display name** — minted at
 `EnterCharacter{character_id: char_name(c)}` and keyed on with plain string equality through
 *every* play-side subsystem: scene/beat aggregates (members/cast/completed/failed sets),
@@ -684,32 +684,33 @@ the existing suite stay green):
 2b-render. **id→name in prompts.** ✅ **Done.** `context` (live events, recent scenes, membership)
    and `scene_brief` (roster line, transcript, whisper addressees) render display names. Display
    only — no routing impact; suite green on identity fallback.
-2b-emit + 3 (**the atomic remainder — must land together**). Resolve emitted **names → ids** and
-   flip the mint in one change, because `addressed_to` may become ids only once viewers are ids
-   too (otherwise whispers misroute — fail-*safe* under default-deny, i.e. a caught functional
-   bug, never a leak). Precise sites, now mapped:
-   - **Director cast → ids:** `run_beat.ex:164` (`resolved.cast` names) before `declare_turn_order`.
-   - **Packet `addressed_to` → ids** at the packet-production points before `CommitPacket`:
-     generation (`generate_packet`), the composer (`play_live`), and edit (`edit.ex`).
-   - **Mint flip:** `campaign_live` `EnterCharacter{character_id: lib_id}` + seed by id.
-   - **`play_live` viewer overhaul:** the viewer, roster `<option>` values, `speaker`, and whisper
-     target parsing move from names to ids (display stays names). This is the largest single piece.
-   - **Data clear:** reset dev/prod event streams + campaign `scenes` lists (clean-slate — no
-     backfill).
-   - **Tests:** dedicated id-path whisper routing + rename-safety (whisper to a character, rename
-     them, whisper still routes; a bystander still can't see it).
-4. **Arc + gate by id.** `arc_entries.subject_id` = the id; scene gate / arc review drop the
-   name-resolution dance.
-5. **Open the fields.** Make `name` (and other non-boundary scalars) freely editable + arc-
-   overridable, now that identity is stable.
+2b-emit + 3. **The atomic remainder.** ✅ **Done** (with the frontend rebuild). Emitted
+   names resolve to ids and the mint flipped in one change, because `addressed_to` could
+   only become ids once viewers were ids too. Landed: `Cast.resolve_addressees/2` at every
+   packet-production point (generation, the composer, edit, an accepted draft, a
+   user-controlled slot); the Director's cast picks resolved before `declare_turn_order`;
+   `EnterCharacter{character_id: <library id>}` at both mint sites (campaign scene-open and
+   play's admit); and an id-native `play_live` — viewer, roster `<option>` values, speaker,
+   control modes and whisper parsing all keyed by id, with names rendered at the edge.
+4. **Arc + gate by id.** ✅ **Done** (same change). `arc_entries.subject_id` is the library
+   id, so the arc-review screen and `SceneGate` dropped the name-resolution dance they used
+   to need; names are labels again.
+5. **Open the fields.** ⬜ **Open.** Make `name` (and other non-boundary scalars) freely
+   editable + arc-overridable, now that identity is stable. The rename-safety tests
+   (`PlayIdentityLiveTest`) are the guard this phase builds on.
 
-**Sequencing decision (author):** the atomic remainder (2b-emit + 3, and 4–5 on top) is
-**deferred to the frontend rebuild.** Its biggest piece is a `play_live` overhaul (composer,
-roster options, viewer selector, whisper parsing → ids) that the redesign will rewrite anyway —
-so it's built **id-native during the rebuild** rather than overhauled then discarded. The
-durable domain foundation (1, 2a, 2b-render) is banked. Corruption risk stays open but contained
-(clean-slate data, no bulk-rename flow, `name` not yet arc-overridable); **no editor stopgap
-added** by choice. The frontend-redesign roadmap item carries the flip as a requirement.
+**Data.** Cleared rather than migrated — events are immutable (rule 6), so there is no
+in-place rewrite of `character_id`, and a half-keyed scene is worse than either scheme.
+`Polyphony.SceneReset` / `mix scene.reset` drops every stream and scene-derived read model
+and keeps the library (characters, worlds, campaigns).
+
+**Sequencing decision (author), as executed:** the atomic remainder was deferred to the
+frontend rebuild rather than overhauled then discarded — its biggest piece was a `play_live`
+overhaul the redesign would rewrite anyway — and landed there, built id-native. The
+corruption risk is **closed**: a rename now changes only what's displayed, pinned by
+`PlayIdentityLiveTest` (a whisper still reaches its addressee after the target is renamed,
+and a bystander still can't see it). What's left is phase 5, which is a feature rather than
+a risk. Detail in `completed-roadmap.md`.
 
 ---
 

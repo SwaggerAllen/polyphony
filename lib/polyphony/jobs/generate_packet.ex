@@ -36,6 +36,7 @@ defmodule Polyphony.Jobs.GeneratePacket do
 
   require Logger
 
+  alias Polyphony.Scene.Cast
   alias Polyphony.{App, Drafts, Generation, Failures}
   alias Polyphony.Commands.CommitPacket
   alias Polyphony.Director.{BeatOps, BeatDriver, BeatPolicy}
@@ -100,13 +101,17 @@ defmodule Polyphony.Jobs.GeneratePacket do
     end
   end
 
+  # The model writes whispers in the fiction's vocabulary — display names — because
+  # that's what its prompt renders (§5.2 phase 2b-render). Resolve them to character
+  # ids before the packet enters the log, so `addressed_to` routes on identity rather
+  # than on a string that can be renamed out from under it.
   defp commit(scene_id, character_id, beat, packet_id, packet) do
     App.dispatch(%CommitPacket{
       scene_id: scene_id,
       character_id: character_id,
       beat: beat,
       packet_id: packet_id,
-      packet: packet
+      packet: Cast.resolve_addressees(scene_id, packet)
     })
   end
 

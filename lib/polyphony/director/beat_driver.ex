@@ -24,6 +24,7 @@ defmodule Polyphony.Director.BeatDriver do
 
   require Logger
 
+  alias Polyphony.Scene.Cast
   alias Polyphony.{App, Drafts, Broadcast}
   alias Polyphony.Commands.CommitPacket
   alias Polyphony.Director.{BeatWalk, BeatOps, BeatPolicy}
@@ -58,7 +59,8 @@ defmodule Polyphony.Director.BeatDriver do
         character_id: character_id,
         beat: beat,
         packet_id: BeatOps.packet_id(scene_id, beat, character_id),
-        packet: packet
+        # A human wrote this one, so its whisper targets are names too (§5.2).
+        packet: Cast.resolve_addressees(scene_id, packet)
       })
 
     :ok =

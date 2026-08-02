@@ -77,7 +77,9 @@ defmodule PolyphonyWeb.CampaignContentLiveTest do
     # Adult content OFF (default) ⇒ empty register ⇒ the :sexual boundary is forced closed.
     camp = campaign(user, %{character_ids: [mira.id]})
 
-    {:ok, ctx} = Store.fetch(start_scene_id(conn, camp), "Mira")
+    # Context is cached under the character's **library id** — the same key they
+    # entered the scene under (§5.2), not their name.
+    {:ok, ctx} = Store.fetch(start_scene_id(conn, camp), to_string(mira.id))
     refute ctx.prefix =~ "Content register enabled"
     assert ctx.prefix =~ "intimacy: a hard line"
   end
@@ -91,7 +93,7 @@ defmodule PolyphonyWeb.CampaignContentLiveTest do
         content_config: %CampaignConfig{adult_content: true, sexual: true}
       })
 
-    {:ok, ctx} = Store.fetch(start_scene_id(conn, camp), "Mira")
+    {:ok, ctx} = Store.fetch(start_scene_id(conn, camp), to_string(mira.id))
     assert ctx.prefix =~ "Content register enabled"
     assert ctx.prefix =~ "intimacy: you will not — not until trust"
   end
