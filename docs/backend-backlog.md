@@ -191,9 +191,26 @@ Deferred for now by decision: the current design shows the beat as a plain rule 
 roster, and the transcript tail names only the character whose turn is live. Revisit
 together with 2.1.
 
-### 2.3 Scene premise and location as authored fields · **new**
+### 2.3 Scene premise and location as authored fields · **new** — ✅ **Done (backend)**
 `SceneOpened` carries no authored setup (§1). The design adds a **Set the scene** screen the
 GM fills in before beat 1: a **location** and a **scene premise**, plus the cast.
+
+> **Done (backend); the "Set the scene" screen is frontend.** `SceneOpened`/`OpenScene`/the
+> `Scene` aggregate already carried `premise` and `location_id`, and the premise already fed
+> generation context. This adds the missing half:
+> - **Location into context.** `Context.materialize`/`SceneContext` carry `location`, rendered
+>   in the **volatile** suffix (`"Location: …"`, distinct from the world bible's `"Setting:"`)
+>   so it never enters the byte-stable prefix; the Director brief (`SceneBrief`) renders it in
+>   its scene-scoped prefix; `Context.Rebuild` and `SceneBrief` rebuild feed `opened.location_id`.
+>   Proven end-to-end by a rebuild test (open with `location_id` → `messages_for` carries it).
+> - **Scene-aware premise Expand.** `Autofill.generate_scene_premise/1` — grounded in world,
+>   cast, setting, campaign premise, and previous-scene summaries; deepens an existing premise
+>   on ✨ Expand. Distinct from the campaign-level `generate_campaign_premise/1`.
+>
+> Remaining (frontend, deferred): the "Set the scene" form authors `location_id`/`premise` on
+> open and the LiveView seed sites pass `location:` (today `location_id` is nil there, so the
+> domain path via `Rebuild` is the wired proof). `location_id` stays a reference field so it
+> can become a location-entity FK later without changing the event shape.
 
 - Both are Director context. Today the Director infers the situation from the world bible and
   the transcript; this gives it the GM's actual intent for *this* scene.

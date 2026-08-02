@@ -57,10 +57,12 @@ defmodule Polyphony.Director.SceneBrief do
   @spec materialize(term(), keyword()) :: SceneContext.t()
   def materialize(scene_id, opts \\ []) do
     premise = Keyword.get(opts, :premise)
+    location = Keyword.get(opts, :location)
 
     meta = %{
       world: render_world(Keyword.get(opts, :world_bible)),
       premise: premise,
+      location: location,
       roster: opts |> Keyword.get(:roster, []) |> Enum.flat_map(&identity_line/1),
       summaries: fetch_summaries(scene_id, premise, opts)
     }
@@ -148,6 +150,7 @@ defmodule Polyphony.Director.SceneBrief do
         materialize(scene_id,
           world_bible: Rebuild.world_bible(scene_id),
           premise: Map.get(opened, :premise),
+          location: Map.get(opened, :location_id),
           roster: Rebuild.roster(scene_id),
           retriever: Rebuild.retriever()
         ).prefix
@@ -162,6 +165,7 @@ defmodule Polyphony.Director.SceneBrief do
   defp render_prefix(meta) do
     [
       meta[:world],
+      meta[:location] && "Location: #{meta[:location]}",
       meta[:premise] && "Scene: #{meta[:premise]}",
       render_roster(meta[:roster]),
       render_summaries(meta[:summaries])

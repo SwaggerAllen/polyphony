@@ -82,6 +82,29 @@ defmodule Polyphony.Context.RebuildTest do
     assert {:ok, _ctx} = Store.fetch(scene, "Lydia")
   end
 
+  test "rebuild carries the scene's authored location into the character context (§2.3)" do
+    campaign = campaign_with_cast()
+    scene = "reb-" <> Integer.to_string(System.unique_integer([:positive]))
+
+    :ok =
+      App.dispatch(%OpenScene{
+        scene_id: scene,
+        campaign_id: campaign.id,
+        premise: "a heist",
+        location_id: "the vault antechamber",
+        opened_beat: 0
+      })
+
+    :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: "Lydia", beat: 1})
+
+    # Cold cache → rebuild from SceneOpened; the authored location reaches generation.
+    assert :error = Store.fetch(scene, "Lydia")
+    messages = BeatOps.messages_for(scene, 2, "Lydia")
+    text = Enum.map_join(messages, "\n", & &1.content)
+
+    assert text =~ "Location: the vault antechamber"
+  end
+
   test "messages_for still states the schema even when no sheet can be resolved" do
     scene = "reb-" <> Integer.to_string(System.unique_integer([:positive]))
     :ok = App.dispatch(%OpenScene{scene_id: scene, opened_beat: 0})

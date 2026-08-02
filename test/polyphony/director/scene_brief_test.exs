@@ -52,6 +52,23 @@ defmodule Polyphony.Director.SceneBriefTest do
       assert ctx.prefix =~ "the gate was breached"
     end
 
+    test "the authored scene location is rendered, distinct from the world's setting (§2.3)" do
+      s = scene()
+
+      ctx =
+        SceneBrief.materialize(s,
+          world_bible: bible(),
+          premise: "A parley at the tideline.",
+          location: "the eastern jetty",
+          roster: [sheet("Mira", "a tidewarden")]
+        )
+
+      # The Director is told where the scene happens, under its own label so it never
+      # collides with the world bible's overall "Setting".
+      assert ctx.prefix =~ "Location: the eastern jetty"
+      assert ctx.prefix =~ "Setting: a drowned city"
+    end
+
     test "is cached and surfaced in the Director's messages" do
       s = scene()
       SceneBrief.materialize(s, world_bible: bible(), premise: "P.", roster: [sheet("Mira", "x")])

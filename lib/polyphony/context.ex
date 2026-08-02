@@ -60,6 +60,7 @@ defmodule Polyphony.Context do
     character_id = fetch!(opts, :character_id)
     sheet = fetch!(opts, :sheet)
     premise = Map.get(opts, :premise)
+    location = blank_to_nil(Map.get(opts, :location))
 
     retriever = Map.get(opts, :retriever, StaticRetriever)
     bible = Map.get(opts, :world_bible)
@@ -130,6 +131,7 @@ defmodule Polyphony.Context do
       scene_id: scene_id,
       character_id: character_id,
       premise: premise,
+      location: location,
       prefix: prefix,
       meta: %{
         verbatim_scene_ids: verbatim_scene_ids,
@@ -162,6 +164,7 @@ defmodule Polyphony.Context do
 
     volatile =
       [
+        render_location(ctx.location),
         render_premise(ctx.premise),
         render_membership(Map.get(opts, :members, []), Map.get(opts, :exits, [])),
         section("Scene so far", live),
@@ -312,6 +315,16 @@ defmodule Polyphony.Context do
 
   defp render_premise(nil), do: nil
   defp render_premise(premise), do: "Scene: #{premise}"
+
+  # Authored scene location (§2.3), volatile like the premise. The Director should be
+  # told where a scene takes place, not left to infer it. Labelled "Location" to stay
+  # distinct from the world bible's overall "Setting".
+  defp render_location(nil), do: nil
+  defp render_location(location), do: "Location: #{location}"
+
+  defp blank_to_nil(nil), do: nil
+  defp blank_to_nil(v) when is_binary(v), do: if(String.trim(v) == "", do: nil, else: v)
+  defp blank_to_nil(v), do: v
 
   defp render_membership(members, exits) do
     [

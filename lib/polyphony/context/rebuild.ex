@@ -39,6 +39,7 @@ defmodule Polyphony.Context.Rebuild do
           character_id: to_string(character_id),
           sheet: sheet,
           premise: opened.premise || "",
+          location: opened.location_id,
           world_bible: world_bible(scene_id),
           # Re-apply the campaign content ceiling (§A5) so a rebuilt context caps the
           # same boundaries as the original seed — a cache wipe must not re-open them.

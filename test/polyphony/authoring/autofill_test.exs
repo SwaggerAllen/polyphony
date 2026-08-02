@@ -487,4 +487,55 @@ defmodule Polyphony.Authoring.AutofillTest do
                Autofill.generate_field(:world_bible, "rules", %{}, opts)
     end
   end
+
+  describe "generate_scene_premise/1 (§2.3)" do
+    test "returns a trimmed one-paragraph scene premise" do
+      assert {:ok, "The tide turns at the jetty."} =
+               Autofill.generate_scene_premise(
+                 world: %{"name" => "Duskhaven"},
+                 cast: [%{"name" => "Mira", "premise" => "a tidewarden"}],
+                 provider: Polyphony.LLM.Stub,
+                 respond_with: {:ok, "  The tide turns at the jetty.\n"}
+               )
+    end
+
+    test "grounds the prompt in world, cast, setting, campaign premise, and the story so far" do
+      msgs =
+        capture_prompt(fn cap ->
+          Autofill.generate_scene_premise(
+            world: %{"name" => "Duskhaven", "setting" => "a drowned city"},
+            cast: [%{"name" => "Mira", "premise" => "a tidewarden"}],
+            location: "the eastern jetty",
+            campaign_premise: "a long feud over the tideworks",
+            recent: ["The gate was breached last night."],
+            provider: Polyphony.LLM.Stub,
+            respond_with: cap
+          )
+        end)
+
+      assert msgs =~ "Duskhaven"
+      assert msgs =~ "Mira — a tidewarden"
+      assert msgs =~ "Location: the eastern jetty"
+      assert msgs =~ "a long feud over the tideworks"
+      assert msgs =~ "The gate was breached last night."
+      # It's a scene premise, not the whole campaign.
+      assert msgs =~ "scene premise" or msgs =~ "scene"
+    end
+
+    test "with a current premise it deepens rather than replaces (✨ Expand)" do
+      msgs =
+        capture_prompt(fn cap ->
+          Autofill.generate_scene_premise(
+            world: %{"name" => "Duskhaven"},
+            current: "They meet at dawn.",
+            provider: Polyphony.LLM.Stub,
+            respond_with: cap
+          )
+        end)
+
+      assert msgs =~ "The scene premise so far:"
+      assert msgs =~ "They meet at dawn."
+      assert msgs =~ "Deepen and sharpen"
+    end
+  end
 end
