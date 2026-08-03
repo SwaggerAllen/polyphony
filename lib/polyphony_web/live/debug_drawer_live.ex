@@ -96,11 +96,7 @@ defmodule PolyphonyWeb.DebugDrawerLive do
     # meaningful while connected).
     ~H"""
     <div id="debug-drawer" class="fr stage dark dock">
-      <Kit.sheet
-        id="debug-drawer-body"
-        class="dock-panel flex-col"
-        style="display:none;"
-      >
+      <Kit.sheet id="debug-drawer-body" class="dock-panel">
         <Kit.row class="px-3 py-2 flex items-center flex-wrap gap-1.5" style="background:var(--b2)">
           <span class="mono text-[12px] font-semibold">Session log</span>
           <Kit.pill><%= @count %></Kit.pill>

@@ -12,7 +12,10 @@ defmodule PolyphonyWeb.LoginLive do
   """
   use PolyphonyWeb, :live_view
 
+  require Logger
+
   alias Polyphony.Accounts
+  alias Polyphony.Notifications.Transport
   alias PolyphonyWeb.{Auth, Kit}
 
   def mount(_params, _session, socket) do
@@ -21,11 +24,10 @@ defmodule PolyphonyWeb.LoginLive do
 
   def handle_event("send", %{"email" => email}, socket) do
     safe(socket, fn ->
-      link =
-        case Accounts.get_by_email(email) do
-          nil -> nil
-          user -> dev_link(Auth.deliver_magic_link(user))
-        end
+      user = Accounts.get_by_email(email)
+      log_attempt(email, user)
+
+      link = user && dev_link(Auth.deliver_magic_link(user))
 
       {:noreply, assign(socket, sent_to: String.trim(to_string(email)), dev_link: link)}
     end)
@@ -33,21 +35,34 @@ defmodule PolyphonyWeb.LoginLive do
 
   def handle_event("again", _params, socket) do
     safe(socket, fn ->
-      case Accounts.get_by_email(socket.assigns.sent_to) do
-        nil ->
-          {:noreply, put_flash(socket, :info, "Sent again.")}
+      email = socket.assigns.sent_to
+      user = Accounts.get_by_email(email)
+      log_attempt(email, user)
 
-        user ->
-          {:noreply,
-           socket
-           |> assign(dev_link: dev_link(Auth.deliver_magic_link(user)))
-           |> put_flash(:info, "Sent again.")}
-      end
+      socket =
+        if user,
+          do: assign(socket, dev_link: dev_link(Auth.deliver_magic_link(user))),
+          else: socket
+
+      {:noreply, put_flash(socket, :info, "Sent again.")}
     end)
   end
 
   def handle_event("different", _params, socket),
     do: {:noreply, assign(socket, sent_to: nil, dev_link: nil)}
+
+  # The screen deliberately says the same thing either way, so **the log is the only
+  # place the difference exists** — and without this line a sign-in that matched no
+  # account produced no output at all, which is indistinguishable from the form never
+  # having been submitted.
+  #
+  # It does mean an address can be tested for existence by anyone who can read the
+  # drawer, which is why `DEBUG_DRAWER` belongs off once you are in. The screen itself
+  # still reveals nothing.
+  defp log_attempt(email, user) do
+    outcome = if user, do: "match", else: "no account"
+    Logger.info("[mail] sign-in requested for #{Transport.redact(email)} — #{outcome}")
+  end
 
   # Outside prod the link is surfaced so the flow works with no mailer; in prod it only
   # ever goes to email. Defaulting to `false` is the whole point — an absent or

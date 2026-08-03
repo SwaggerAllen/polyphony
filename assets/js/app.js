@@ -176,23 +176,20 @@ function initDebugDrawer(liveSocket) {
   const drawer = document.getElementById("debug-drawer")
   if (!drawer) return // drawer disabled — nothing rendered
 
-  const body = document.getElementById("debug-drawer-body")
   const toggle = document.getElementById("debug-drawer-toggle")
   const closeBtn = document.getElementById("debug-drawer-close")
   const copyBtn = document.getElementById("debug-copy")
 
-  if (toggle && body) {
-    toggle.addEventListener("click", () => {
-      body.style.display = "flex"
-      toggle.style.display = "none"
-    })
-  }
-  if (closeBtn && body && toggle) {
-    closeBtn.addEventListener("click", () => {
-      body.style.display = "none"
-      toggle.style.display = ""
-    })
-  }
+  // Open/closed is a class on <body>, deliberately not an inline style on the panel.
+  // The drawer is a nested LiveView: every server round-trip (Events, Trace, Clear)
+  // patches its DOM, re-asserting the template's attributes and discarding whatever
+  // we had set. That closed the panel and hid the toggle with it, leaving no way back
+  // to the log short of a reload. <body> belongs to the root layout, which no
+  // LiveView patches, so the state survives.
+  const setOpen = (open) => document.body.classList.toggle("dock-open", open)
+
+  if (toggle) toggle.addEventListener("click", () => setOpen(true))
+  if (closeBtn) closeBtn.addEventListener("click", () => setOpen(false))
   if (copyBtn) {
     copyBtn.addEventListener("click", () => {
       const list = document.getElementById("debug-log-list")
