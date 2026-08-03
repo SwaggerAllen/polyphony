@@ -97,6 +97,15 @@ The boot log prints what was resolved — `[boot] mail relay=host:port from=… 
 — so a misconfiguration is visible on startup rather than at the first failed send.
 `auth=MISSING` means `SMTP_USERNAME` never arrived.
 
+### Locally
+
+Dev needs no provider: it runs Swoosh's `Local` adapter behind the same
+`Transport.Email`, and `/dev/mailbox` renders what was sent. That is the only way to
+see the real message — the body, and the provider headers — since the login screen's
+on-page link bypasses mail entirely. Both the adapter and the route are dev-only, and
+the route is compiled in only when `:dev_mailbox` is set, because it displays every
+magic link the app has issued.
+
 ### When the log says `sent` and nothing arrives
 
 A `sent` line means the relay returned a 250 and took the message. It is *theirs*
@@ -126,7 +135,28 @@ MessageID: it is the handle that makes the provider's side searchable.
 
 SMTP rather than a provider HTTP API is a deliberate choice: Resend, Postmark,
 SendGrid, Mailgun and SES all speak it, so the provider is a credential rather than a
-deploy. The TLS options in `runtime.exs` verify the relay's certificate against the
+deploy. Switching is `SMTP_HOST` + credentials and nothing else — the only
+provider-specific behaviour in the app is the Postmark message-stream header, and it
+is conditional on a `postmarkapp.com` relay, so it stays out of the way.
+
+The one thing that catches people is the **username**, which is rarely a username:
+
+| Provider | `SMTP_HOST` | `SMTP_USERNAME` | `SMTP_PASSWORD` |
+|---|---|---|---|
+| Postmark | `smtp.postmarkapp.com` | Server API token | the same token |
+| Resend | `smtp.resend.com` | literally `resend` | API key |
+| SendGrid | `smtp.sendgrid.net` | literally `apikey` | API key |
+| Mailgun | `smtp.mailgun.org` | the SMTP login (`postmaster@…`) | its SMTP password |
+| Amazon SES | `email-smtp.<region>.amazonaws.com` | SES **SMTP** credentials | ditto |
+
+All of them use port 587 with STARTTLS, which is the default here. SES's SMTP
+credentials are derived from an IAM user and are *not* the IAM access key — generating
+them is a separate step.
+
+Worth knowing before you pick: transactional providers approve accounts by hand and
+several decline anything adult-adjacent, regardless of the mail itself being nothing
+but sign-in links. If that becomes a pattern, SES on a domain you own asks the fewest
+questions, at the cost of setting up DKIM yourself. The TLS options in `runtime.exs` verify the relay's certificate against the
 system CA bundle — `gen_smtp` defaults to `:verify_none`, which would hand the
 credentials to anyone who can answer for the host.
 

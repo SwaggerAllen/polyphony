@@ -137,6 +137,13 @@ defmodule Polyphony.MixProject do
       {:swoosh, "~> 1.27"},
       {:gen_smtp, "~> 1.3"},
 
+      # Runtime introspection (§B6-adjacent): processes, ETS, VM measurements, and the
+      # metrics below. Admin-only — it exposes process state and environment, so it is
+      # mounted inside the admin live_session rather than behind a flag.
+      {:phoenix_live_dashboard, "~> 0.8.7"},
+      {:telemetry_metrics, "~> 1.0"},
+      {:telemetry_poller, "~> 1.3"},
+
       # CI checks, no runtime footprint. `mix deps.audit` scans the lock against the
       # Elixir security advisory DB; `mix sobelow` is Phoenix-aware static analysis
       # (XSS via raw/1, CSRF, directory traversal, config secrets).
