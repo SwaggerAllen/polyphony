@@ -26,6 +26,11 @@ defmodule Polyphony.Moderation.AuditLog do
     )
   end
 
+  @doc "Everything done lately, newest first — the admin screen's audit view."
+  def list_recent(repo, limit \\ 50) do
+    repo.all(from(a in __MODULE__, order_by: [desc: a.inserted_at], limit: ^limit))
+  end
+
   @doc "The audit trail touching a specific target (e.g. a report or a user's content)."
   def list_for_target(repo, target_type, target_id) do
     repo.all(

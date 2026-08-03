@@ -26,6 +26,9 @@ defmodule Polyphony.Accounts.User do
     # Moderation state (§B3): suspension gates login; a review flag is raised by an
     # absolute-line takedown against this account's content.
     field(:suspended_at, :naive_datetime_usec)
+    # When it lifts. Null with a live `suspended_at` is a genuinely indefinite
+    # suspension — the design's *until we say otherwise* — rather than an oversight.
+    field(:suspended_until, :naive_datetime_usec)
     field(:flagged_for_review_at, :naive_datetime_usec)
     # §C: account-level opt-out from proactive analysis (reactive/report access ignores it).
     field(:proactive_opt_out_at, :naive_datetime_usec)

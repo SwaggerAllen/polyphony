@@ -64,15 +64,58 @@ defmodule Polyphony.Accounts do
   def flagged_for_review?(%User{flagged_for_review_at: at}), do: not is_nil(at)
 
   @doc """
-  Moderation state transitions on an account. Authorization is the **caller's**
-  responsibility (`Polyphony.Moderation` gates + audits these); these are plain
-  identity-state writes, kept here because `Accounts` owns the user record.
+  Suspend for `days`, or indefinitely when `days` is nil — the design's *until we say
+  otherwise*, which is a real choice rather than the only one.
+
+  Authorization is the **caller's** responsibility (`Polyphony.Moderation` gates and
+  audits these); this and its neighbours are plain identity-state writes, kept here
+  because `Accounts` owns the user record.
   """
-  def suspend(%User{} = user, opts \\ []),
-    do: repo(opts).update!(Ecto.Changeset.change(user, suspended_at: now(opts)))
+  def suspend(user, days \\ nil, opts \\ [])
+
+  def suspend(%User{} = user, days, opts) do
+    now = now(opts)
+    until = days && NaiveDateTime.add(now, days * 24 * 60 * 60, :second)
+
+    repo(opts).update!(Ecto.Changeset.change(user, suspended_at: now, suspended_until: until))
+  end
 
   def reinstate(%User{} = user, opts \\ []),
-    do: repo(opts).update!(Ecto.Changeset.change(user, suspended_at: nil))
+    do: repo(opts).update!(Ecto.Changeset.change(user, suspended_at: nil, suspended_until: nil))
+
+  @doc """
+  Is the suspension still running? A lapsed one is over whether or not anybody lifted it.
+
+  Read rather than swept, so a `suspended_until` in the past simply stops binding —
+  there is no window in which somebody stays locked out because a job hasn't run.
+  """
+  @spec suspension_active?(User.t(), keyword()) :: boolean()
+  def suspension_active?(user, opts \\ [])
+  def suspension_active?(%User{suspended_at: nil}, _opts), do: false
+  def suspension_active?(%User{suspended_until: nil}, _opts), do: true
+
+  def suspension_active?(%User{suspended_until: until}, opts),
+    do: NaiveDateTime.compare(until, now(opts)) == :gt
+
+  @doc "Days left on a suspension — nil when indefinite or not suspended."
+  @spec suspension_days_left(User.t(), keyword()) :: non_neg_integer() | nil
+  def suspension_days_left(user, opts \\ [])
+  def suspension_days_left(%User{suspended_at: nil}, _opts), do: nil
+  def suspension_days_left(%User{suspended_until: nil}, _opts), do: nil
+
+  def suspension_days_left(%User{suspended_until: until}, opts) do
+    seconds = NaiveDateTime.diff(until, now(opts), :second)
+    if seconds <= 0, do: 0, else: ceil(seconds / 86_400)
+  end
+
+  @doc "Every currently-suspended account."
+  @spec list_suspended(keyword()) :: [User.t()]
+  def list_suspended(opts \\ []) do
+    import Ecto.Query
+
+    repo(opts).all(from(u in User, where: not is_nil(u.suspended_at)))
+    |> Enum.filter(&suspension_active?(&1, opts))
+  end
 
   def flag_for_review(%User{} = user, opts \\ []),
     do: repo(opts).update!(Ecto.Changeset.change(user, flagged_for_review_at: now(opts)))
@@ -232,6 +275,13 @@ defmodule Polyphony.Accounts do
     else
       {:error, :forbidden}
     end
+  end
+
+  @doc "Every invite, newest first — used and unused both, so the admin screen can show who came in through which."
+  @spec list_invites(keyword()) :: [Invite.t()]
+  def list_invites(opts \\ []) do
+    import Ecto.Query
+    repo(opts).all(from(i in Invite, order_by: [desc: i.inserted_at]))
   end
 
   @doc "An unredeemed invite for `token`, or nil."

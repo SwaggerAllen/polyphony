@@ -597,6 +597,47 @@ Still open and recorded: the mock's **signed-in-on device list** isn't built. Se
 cookie-only today, so it would mean a persisted session store — a change to auth transport rather
 than a domain gap, and showing a device list backed by nothing would be worse than not showing one.
 
+### Moderation, ported (`ux/polyphony-admin.html`)
+The queue was fully built and had never had an input; that got fixed with browse. This is the
+other end — an internal tool for people making judgement calls under time pressure, where density
+is fine and ambiguity isn't. Four things it has to get right, and two of them needed new domain
+behaviour rather than new reads.
+
+**Child safety is its own lane.** `Moderation.lanes/1` — not a filter on a general queue but a
+separate list that is always first and doesn't get buried under forty spam reports. Oldest first
+within a lane, because the alternative is reports that never get looked at.
+
+**A take-down spreads, and can't spread blind.** The public copy and the author's own, plus every
+fork descended from it — but a fork may have diverged twenty scenes past anything objectionable,
+so deleting the family is wrong and ignoring it is worse. `take_down/4` now hides the family
+(via `root_id`, §3.1d) into a **review lane** where somebody looks, with *leave it* and *take it
+down too* as the two outcomes. `hidden_at` is a fourth axis on a library entry, deliberately
+separate from visibility, archiving and deletion: the owner's own `visibility` is untouched, so
+lifting restores what they chose rather than what a moderator guessed.
+
+**A suspension hides everything shared, unlisted included.** Otherwise a suspended person makes a
+new account, opens their own share link, and forks their way back in — so `get_by_share_token/2`
+and `list_public/2` both check `hidden_at`, at the query rather than at the call site.
+`suspended_until` makes *7 days* / *30 days* / *until we say otherwise* real, and it's **read
+rather than swept**: a lapsed suspension stops binding the moment it lapses, with no window in
+which somebody stays locked out because a job hasn't run. Suspended accounts are signed out on
+their next request.
+
+**Reading a report means bypassing publication scope**, and the screen says so out loud rather
+than granting it silently: a *why* field, stored in the audit metadata with the moderator's name.
+A reason field turns an unlogged habit into a decision — nobody types one forty times a day for
+something they don't need — and privilege use is tinted in the audit list, because it's the entry
+most likely to matter later and the least likely to be looked for.
+
+Content and people never share a row: different consequences, different reversals. And two things
+that existed in the domain and had never been reachable now have buttons — **demotion** (an admin
+promoted by mistake was permanent) and **reinstatement** (an indefinite suspension with no way back
+is a deletion nobody agreed to). The first account stays pinned, since there is exactly one
+superadmin and it is never assignable.
+
+Also here: reports read **both directions**. Someone whose own reports are nearly all dismissed is
+a signal too, and a queue that only ever looks at the accused can't see that.
+
 ---
 
 ## Immediate milestone — the backend the frontend design needs

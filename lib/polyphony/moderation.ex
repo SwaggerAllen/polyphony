@@ -45,6 +45,68 @@ defmodule Polyphony.Moderation do
     end
   end
 
+  @doc """
+  The queue, in lanes (`ux/polyphony-admin.html` §01).
+
+  **Child safety is its own lane** — not a filter on a general queue but a separate
+  list that is always first, always visible, and doesn't get buried under forty spam
+  reports. Different urgency, different handling.
+
+  Within a lane it's **oldest first**, because the alternative is reports that never
+  get looked at.
+
+  Returns `%{urgent:, forks:, rest:}` — the third lane is forks of things that were
+  taken down, which are *review* rather than reports (§B3): a take-down spreads, and
+  a fork may have diverged twenty scenes past anything objectionable.
+  """
+  @spec lanes(keyword()) :: %{urgent: [Report.t()], forks: [map()], rest: [Report.t()]}
+  def lanes(opts \\ []) do
+    {urgent, rest} =
+      opts
+      |> list_open()
+      |> Enum.sort_by(& &1.inserted_at, NaiveDateTime)
+      |> Enum.split_with(&Report.absolute_line?(&1.reason))
+
+    %{urgent: urgent, forks: review_lane(opts), rest: rest}
+  end
+
+  @doc """
+  Forks awaiting review after an ancestor was taken down.
+
+  The design's third option, and the reason it exists: a take-down that fired a cascade
+  would delete work that may contain none of what was reported, and one that ignored
+  the family would leave the reported material sitting in every copy. So a take-down
+  opens a lane, and somebody looks.
+  """
+  @spec review_lane(keyword()) :: [map()]
+  def review_lane(opts \\ []) do
+    for entry <- Library.hidden(opts), entry.review_reason == "fork_of_takedown" do
+      %{entry: entry, root_id: Library.root_of(entry)}
+    end
+  end
+
+  @doc "Clear a fork from the review lane — it diverged, and it stays up."
+  def leave_fork(%User{} = admin, entry_id, opts \\ []) do
+    with_admin(admin, "fork_cleared", {"library_entry", entry_id}, %{}, opts, fn ->
+      Library.unhide(entry_id, opts)
+    end)
+  end
+
+  @doc "Take a fork down too — it carries the same material."
+  def take_down_fork(%User{} = admin, entry_id, reason, opts \\ []) do
+    with_admin(admin, "takedown", {"library_entry", entry_id}, %{reason: reason}, opts, fn ->
+      Library.hide(entry_id, reason, opts)
+    end)
+  end
+
+  @doc "Reports that have been decided, newest first."
+  @spec list_resolved(keyword()) :: [Report.t()]
+  def list_resolved(opts \\ []) do
+    import Ecto.Query
+
+    repo(opts).all(from(r in Report, where: r.status != "open", order_by: [desc: r.resolved_at]))
+  end
+
   @doc "Open reports, newest first."
   def list_open(opts \\ []) do
     import Ecto.Query
@@ -65,7 +127,10 @@ defmodule Polyphony.Moderation do
       admin,
       "content_access",
       {"report", report.id},
-      %{owner_id: report.owner_id},
+      # The stated reason is the accountability record. A reason field turns an
+      # unlogged habit into a decision — nobody types one forty times a day for
+      # something they don't need.
+      %{owner_id: report.owner_id, why: Keyword.get(opts, :why)},
       opts,
       fn ->
         {:ok, Library.list_for_owner(report.owner_id, opts)}
@@ -90,6 +155,11 @@ defmodule Polyphony.Moderation do
       opts,
       fn ->
         unpublish(report, opts)
+        # A take-down takes everything and **spreads**: the public copy and the
+        # author's own, plus every fork descended from it. The forks can't go down
+        # blind — one may have diverged past anything objectionable — so they go dark
+        # *and* into a review lane, where somebody looks.
+        open_fork_review(report, opts)
         if absolute and report.owner_id, do: flag_account(report.owner_id, opts)
 
         {:ok, resolve(report, "actioned", "takedown", reason, admin, opts)}
@@ -112,18 +182,119 @@ defmodule Polyphony.Moderation do
     end)
   end
 
-  @doc "**Suspend** the reported account. Suspends the owner and marks the report actioned."
-  def suspend_user(%User{} = admin, %Report{} = report, opts \\ []) do
-    with_admin(admin, "suspend", {"user", report.owner_id}, %{report_id: report.id}, opts, fn ->
-      case report.owner_id && Accounts.get(report.owner_id, opts) do
-        %User{} = owner ->
-          Accounts.suspend(owner, opts)
-          {:ok, resolve(report, "actioned", "suspend", nil, admin, opts)}
+  @doc """
+  **Suspend** the reported account for `days` (nil = until we say otherwise).
 
-        _ ->
-          {:error, :no_owner}
+  A person, not a thing — a separate action from a take-down with a separate confirm,
+  because they have different consequences and different reversals. Nothing of theirs
+  is deleted; they can't sign in or publish, and **everything they've shared goes
+  dark, public and unlisted both**. Hiding the unlisted half is what stops a suspended
+  person opening their own share link from a new account and forking their way back in.
+  """
+  @spec suspend_user(User.t(), Report.t(), pos_integer() | nil, keyword()) ::
+          {:ok, Report.t()} | {:error, term()}
+  def suspend_user(admin, report, days \\ nil, opts \\ [])
+
+  def suspend_user(%User{} = admin, %Report{} = report, days, opts) do
+    with_admin(
+      admin,
+      "suspend",
+      {"user", report.owner_id},
+      %{report_id: report.id, days: days},
+      opts,
+      fn ->
+        case report.owner_id && Accounts.get(report.owner_id, opts) do
+          %User{} = owner ->
+            Accounts.suspend(owner, days, opts)
+            hide_everything_shared(owner, "suspended", opts)
+            {:ok, resolve(report, "actioned", "suspend", nil, admin, opts)}
+
+          _ ->
+            {:error, :no_owner}
+        end
       end
+    )
+  end
+
+  @doc """
+  **Lift a suspension.** Reinstatement was never reachable, and an indefinite
+  suspension with no way back is a deletion nobody agreed to.
+
+  What comes back is what the owner chose: hiding never touched their `visibility`, so
+  a public thing is public again and an unlisted one is unlisted again.
+  """
+  @spec lift_suspension(User.t(), User.t(), keyword()) :: {:ok, User.t()} | {:error, term()}
+  def lift_suspension(%User{} = admin, %User{} = target, opts \\ []) do
+    with_admin(admin, "reinstate", {"user", target.id}, %{}, opts, fn ->
+      Accounts.reinstate(target, opts)
+
+      for entry <- Library.hidden(opts),
+          entry.review_reason == "suspended",
+          to_string(entry.owner_id) == to_string(target.id) do
+        Library.unhide(entry.id, opts)
+      end
+
+      {:ok, Accounts.get(target.id, opts)}
     end)
+  end
+
+  @doc """
+  Everything a moderator has done lately, newest first — the audit view.
+
+  Privilege use (reading an unpublished perspective) is the entry most likely to matter
+  later and the least likely to be looked for, so the screen tints it; this read just
+  makes sure it's *there*.
+  """
+  @spec recent_audit(keyword()) :: [AuditLog.t()]
+  def recent_audit(opts \\ []),
+    do: AuditLog.list_recent(repo(opts), Keyword.get(opts, :limit, 50))
+
+  @doc """
+  Somebody's whole history, **both directions**.
+
+  Reports against them and reports they made, each with outcomes. The second direction
+  is a signal too: someone whose reports are nearly all dismissed is campaigning rather
+  than reporting, and a queue that only ever looks at the accused can't see that.
+  """
+  @spec history(term(), keyword()) :: map()
+  def history(user_id, opts \\ []) do
+    against = Report.list_for_owner(repo(opts), user_id)
+    made = Report.list_by_reporter(repo(opts), user_id)
+
+    %{
+      against: against,
+      against_upheld: Enum.count(against, &(&1.status == "actioned")),
+      made: made,
+      made_upheld: Enum.count(made, &(&1.status == "actioned")),
+      made_dismissed: Enum.count(made, &(&1.status == "dismissed"))
+    }
+  end
+
+  @doc """
+  How many earlier reports on the same item were dismissed.
+
+  Shown on a report because the fourth one on the same thing usually means somebody is
+  campaigning rather than reporting.
+  """
+  @spec previous_dismissals(Report.t(), keyword()) :: non_neg_integer()
+  def previous_dismissals(%Report{} = report, opts \\ []) do
+    repo(opts)
+    |> Report.list_for_item(report.item_type, report.item_id)
+    |> Enum.count(&(&1.id != report.id and &1.status == "dismissed"))
+  end
+
+  # Forks go dark **and** into a review lane rather than down with the original.
+  defp open_fork_review(%Report{item_type: "library_entry", item_id: id}, opts)
+       when is_integer(id) do
+    for entry <- Library.family(id, opts), entry.id != id do
+      Library.hide(entry.id, "fork_of_takedown", opts)
+    end
+  end
+
+  defp open_fork_review(_report, _opts), do: :ok
+
+  defp hide_everything_shared(owner, reason, opts) do
+    for entry <- Library.shared_by(owner, opts), do: Library.hide(entry.id, reason, opts)
   end
 
   @doc "The audit trail for an actor (accountability read)."

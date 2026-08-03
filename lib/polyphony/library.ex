@@ -270,6 +270,66 @@ defmodule Polyphony.Library do
     end
   end
 
+  # ── Moderation hiding (§B3) ─────────────────────────────────────────────────
+
+  @doc """
+  Hide an entry from everyone but its owner and an admin.
+
+  A **fourth axis**, deliberately separate from visibility, archiving and deletion: the
+  owner's own `visibility` is left exactly as they set it, so lifting the hiding
+  restores what they chose rather than what a moderator guessed. `reason` is what the
+  review lane reads.
+  """
+  @spec hide(term(), String.t() | nil, keyword()) :: {:ok, LibraryEntry.t()} | {:error, term()}
+  def hide(id, reason \\ nil, opts \\ []) do
+    case get(id, opts) do
+      nil ->
+        {:error, :not_found}
+
+      entry ->
+        {:ok,
+         LibraryEntry.update(repo(opts), entry,
+           hidden_at: now(opts),
+           review_reason: reason
+         )}
+    end
+  end
+
+  @doc "Un-hide it. The owner's visibility comes back untouched, which is the point."
+  @spec unhide(term(), keyword()) :: {:ok, LibraryEntry.t()} | {:error, term()}
+  def unhide(id, opts \\ []) do
+    case get(id, opts) do
+      nil -> {:error, :not_found}
+      entry -> {:ok, LibraryEntry.update(repo(opts), entry, hidden_at: nil, review_reason: nil)}
+    end
+  end
+
+  @doc "Is this entry hidden by moderation?"
+  @spec hidden?(LibraryEntry.t()) :: boolean()
+  def hidden?(%LibraryEntry{hidden_at: at}), do: not is_nil(at)
+
+  @doc "Everything currently hidden — the review lane's list."
+  @spec hidden(keyword()) :: [LibraryEntry.t()]
+  def hidden(opts \\ []), do: LibraryEntry.list_hidden(repo(opts))
+
+  @doc """
+  Everything `owner` has shared — public **and** unlisted.
+
+  What a suspension has to reach. Hiding only the public half would leave a suspended
+  person able to open their own share link and fork their way back in; starting again
+  should mean starting again.
+  """
+  @spec shared_by(term(), keyword()) :: [LibraryEntry.t()]
+  def shared_by(owner, opts \\ []) do
+    owner = Owner.coerce(owner)
+
+    LibraryEntry.list_shared_for_owner(
+      repo(opts),
+      Owner.type_string(owner),
+      Owner.id(owner)
+    )
+  end
+
   @doc "Is this entry live (neither archived nor soft-deleted)?"
   def live?(%LibraryEntry{archived_at: nil, deleted_at: nil}), do: true
   def live?(%LibraryEntry{}), do: false

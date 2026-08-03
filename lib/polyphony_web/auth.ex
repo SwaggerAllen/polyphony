@@ -57,6 +57,16 @@ defmodule PolyphonyWeb.Auth do
   than on a settings screen because coming back is the act that means it.
   """
   def log_in_user(conn, user) do
+    if Accounts.suspension_active?(user) do
+      conn
+      |> put_flash(:error, "This account is suspended.")
+      |> redirect(to: ~p"/")
+    else
+      do_log_in(conn, user)
+    end
+  end
+
+  defp do_log_in(conn, user) do
     {user, note} = un_delete(user)
 
     conn
@@ -123,7 +133,16 @@ defmodule PolyphonyWeb.Auth do
   end
 
   defp load_user(nil), do: nil
-  defp load_user(id), do: Accounts.get(id)
+
+  # A suspended account is signed out on the next request rather than swept by a job:
+  # the check is a read, so a lapsed suspension stops binding the moment it lapses and
+  # a live one binds immediately, with no window either way.
+  defp load_user(id) do
+    case Accounts.get(id) do
+      nil -> nil
+      user -> unless Accounts.suspension_active?(user), do: user
+    end
+  end
 
   defp role_atom(role) when is_atom(role), do: role
 

@@ -38,6 +38,11 @@ defmodule Polyphony.ReadModels.LibraryEntry do
     # recoverable delete before a purge.
     field(:archived_at, :naive_datetime_usec)
     field(:deleted_at, :naive_datetime_usec)
+    # Hidden by moderation (§B3) — distinct from every other axis here. The owner's own
+    # `visibility` is untouched, so lifting the hiding restores what they chose rather
+    # than what a moderator guessed. `review_reason` says why, for the lane that looks.
+    field(:hidden_at, :naive_datetime_usec)
+    field(:review_reason, :string)
     timestamps(type: :naive_datetime_usec)
   end
 
@@ -75,21 +80,61 @@ defmodule Polyphony.ReadModels.LibraryEntry do
     |> repo.all()
   end
 
-  @doc "Public, browsable entries of a `kind` — never soft-deleted or archived."
+  @doc """
+  Public, browsable entries of a `kind` — never soft-deleted, archived, or **hidden**.
+
+  Hidden is the moderation axis (§B3) and it is checked here rather than by callers,
+  because "browse must not show a taken-down thing" is exactly the guarantee that must
+  not depend on every call site remembering.
+  """
   def list_public(repo, kind) do
     k = to_string(kind)
 
     from(e in __MODULE__,
-      where: e.kind == ^k and e.visibility == "public",
+      where: e.kind == ^k and e.visibility == "public" and is_nil(e.hidden_at),
       order_by: [desc: e.inserted_at]
     )
     |> visible([])
     |> repo.all()
   end
 
-  @doc "The unlisted, live entry matching a share token, or nil (a deleted one is gone)."
+  @doc "Everything currently hidden by moderation, oldest first — the review lane."
+  def list_hidden(repo) do
+    repo.all(
+      from(e in __MODULE__,
+        where: not is_nil(e.hidden_at),
+        order_by: [asc: e.hidden_at]
+      )
+    )
+  end
+
+  @doc "Everything `{owner_type, owner_id}` has shared — public *and* unlisted."
+  def list_shared_for_owner(repo, owner_type, owner_id) do
+    ot = to_string(owner_type)
+    oid = to_string(owner_id)
+
+    repo.all(
+      from(e in __MODULE__,
+        where:
+          e.owner_type == ^ot and e.owner_id == ^oid and e.visibility in ["public", "unlisted"] and
+            is_nil(e.deleted_at)
+      )
+    )
+  end
+
+  @doc """
+  The unlisted, live entry matching a share token, or nil.
+
+  A deleted one is gone, and so is a **hidden** one — which is the point of hiding
+  unlisted things at all: otherwise a suspended person makes a new account, opens their
+  own share link, and forks their way back in.
+  """
   def get_by_share_token(repo, token) when is_binary(token) do
-    repo.one(from(e in __MODULE__, where: e.share_token == ^token and is_nil(e.deleted_at)))
+    repo.one(
+      from(e in __MODULE__,
+        where: e.share_token == ^token and is_nil(e.deleted_at) and is_nil(e.hidden_at)
+      )
+    )
   end
 
   def get_by_share_token(_repo, _), do: nil
