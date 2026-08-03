@@ -339,6 +339,48 @@ Also landed with the screen: `Autofill.suggest_facts/2` (the mock's ✦ Suggest 
 drawer's *a few is right* nudge written into the prompt), and the Mock returning all four flag
 combinations so the offline path exercises the composition the list is built around.
 
+### The world bible, ported (`ux/polyphony-world.html`)
+The audit-before-porting routine paid for itself here: reading the mock against the domain found
+a **prompt leak sitting one UI control away from being reachable**.
+
+`WorldBible.rules` and `starting_canon` were plain strings, and `Context.render_bible` put all of
+`starting_canon` into every character's prefix. §04 asks for one secret control in three places —
+a rule, a canon entry, a character's fact — so the moment the screen let an author mark a world
+fact secret, it would have gone straight into the model's context. That is the one place a leak is
+invisible: the only symptom is a character who mysteriously knows something.
+
+Both lists are now `WorldBible.Entry`, and the split is structural in the same shape `Visibility`
+draws for events. A character reads `public/1`. The Director reads `statements/1`, because knowing
+a secret is how it aims a scene at one. And anything that *writes* a character — a stub, a
+generated sheet, a campaign premise — is character-facing too, since being written from a secret
+is how a character comes to know it. Concealment is deliberately not world-arc reach: `scope` is
+where a fact landed, `concealed` is who knows it.
+
+**The screen.** Same long-form shape as the character sheet, because it's the same problem and the
+design uses one navigation primitive for both. What's new is that it stopped treating its two kinds
+of field as one: setting and tone are prose with Rewrite and Expand; rules and what's-already-true
+are **items** with their own menu — secret, move up, delete. The old editor made both stacks of
+textareas, which is exactly why reordering and the secret control had nowhere to live.
+
+**The preview renders through the same filter the context path uses** (`WorldBible.for_character/1`),
+not a second implementation of "what a character sees" — that's how a preview ends up telling you
+something reassuring that isn't true. It's read-only per §3.2, and it says how much is held back
+without saying what. There's no per-character list yet, and there shouldn't be: without audiences
+(§3.3) everyone outside a secret sees the same thing, which is precisely the mock's own last picker
+row — *somebody with no part in this*.
+
+**The cover says what it was checked against.** "Checked against your 2 secrets" rather than a bare
+claim of safety, because the claim is worth nothing without the count.
+
+**A library world is a template** (§2.5b, shipped with this). Attaching copies it, so the editor
+states which side of that it's on: a template says how many campaigns were started from it and that
+edits reach none of them; a copy says it has a history and offers the one deliberate route back.
+
+Smaller pieces the mock asked for and got: a duplicate world name refused at the field rather than
+saved (§03), the share link appearing the moment unlisted is picked rather than minted and shown to
+nobody, `New link` breaking the old one, and the write-it-from-a-line card leading an empty world
+and folding away once there's something there — the same argument as the campaign's Quick Build.
+
 ---
 
 ## Immediate milestone — the backend the frontend design needs

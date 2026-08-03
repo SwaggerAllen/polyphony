@@ -93,10 +93,12 @@ asks pass recorded the interesting **follow-on** work and sometimes skipped the 
 sits on. These four are what a second read found: a field, a generation, a scheduled job and a
 query. None of them is clever, which is exactly why they were missed.
 
-**And §2.16, found the same way one step later** — by starting the character-sheet port and reading
-the mock section by section against the domain rather than against this file. That is the cheaper
-version of the same pass, and worth doing before every screen: the mocks are the specification, and
-a backlog is only ever a summary of one reading of them.
+**And §2.16 and §2.17, found the same way one screen at a time** — by reading a mock section by
+section against the *domain* rather than against this file, before porting it. That is the cheaper
+version of the same pass, and it is now the routine before every screen: the mocks are the
+specification, and a backlog is only ever a summary of one reading of them. §2.17 is the case for
+doing it in that order rather than after — it was a prompt leak sitting one UI control away from
+being reachable, and building the control first would have shipped it.
 
 ### 2.16 A character can be pushed in two directions · **change** — ✅ **Shipped**
 `direction` on `CharacterSheet.Boundary` (`:refusal | :compulsion`, defaulting to refusal), plus
@@ -119,6 +121,26 @@ can't stop doing**. `Boundary` modelled only the first. The design argues the sp
 is exactly what went wrong when everything was one list of "lines" — and that compulsions are the
 more dramatic half: *covering for her father is a better story engine than any refusal on the
 sheet.*
+
+### 2.17 Anything in a world can be marked secret · **change** — ✅ **Shipped**
+`WorldBible.rules` and `starting_canon` are lists of `WorldBible.Entry` (statement +
+`concealed`), which is the design's *one control, three places* (`ux/polyphony-world.html`
+§04) reaching the world layer. A bare string still reads as a public entry, so stored
+payloads and generated lines need no migration.
+
+The reason it had to land with the screen is that it was a **prompt leak waiting for a
+control**. `Context.render_bible` put all of `starting_canon` into every character's prefix,
+so the moment the UI let an author mark a world fact secret it would have gone straight into
+the model's context — the one place a leak is invisible and the only symptom is a character
+who mysteriously knows something. The split is now structural, in the same shape `Visibility`
+draws for events: a character reads `public/1`, the Director reads `statements/1`, and
+anything that *writes* a character (a stub, a generated sheet, a campaign premise) is
+character-facing too, because being written from a secret is how a character comes to know it.
+Pinned by `WorldSecretsTest`.
+
+Deliberately **not** the same axis as world-arc reach: `scope` answers *where a fact landed*,
+`concealed` answers *who knows it*. Folding them together would make a local fact secret and a
+global secret impossible. **Who else** knows one is still §3.3.
 
 ### 2.1 Concealed and partial presence · **new**
 There is currently no way for a character to be in a scene but hidden, or known to only
@@ -339,7 +361,16 @@ already schedules it: *long lists: render everything for now. Realistic ceilings
 structure does the work pagination would. If a group gets long, add search before paging.*
 So this is wanted when a real library gets long, not to make the mocks implementable.
 
-### 2.5b Attaching a world copies it · **change**
+### 2.5b Attaching a world copies it · **change** — ✅ **Shipped**
+`Library.copy/3` is the primitive — the one shape behind every "this is a template"
+relationship in the design — and `derived_from_id` (which the schema already had) records
+the provenance, so `copies_of/2` / `copy_count/2` make *"used in 2 campaigns"* a real count
+rather than a claim. `CampaignLive.select_world` copies on attach; re-selecting a campaign's
+own copy doesn't copy the copy. `LibraryTemplateTest` pins each consequence the design
+claims: editing the template reaches nobody already started, deleting it breaks nothing, and
+the only route back is deliberate and takes a snapshot. The world screen states which side of
+the relationship it is on rather than leaving it to be discovered. Original ask below.
+
 
 A campaign does not reference a library world, it **copies it on attach**. Forced by 2.8: a
 campaign accumulates world arc, and two campaigns cannot write different histories onto one
