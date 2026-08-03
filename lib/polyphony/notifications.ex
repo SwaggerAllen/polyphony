@@ -28,14 +28,22 @@ defmodule Polyphony.Notifications do
     {recipient_id, email} = resolve(recipient, opts)
     force = Keyword.get(opts, :force, false)
 
+    # Every branch logs. These three return before `dispatch/6` and so used to leave no
+    # trace at all — which reads identically to the send never having been attempted,
+    # and "no line in the drawer" is precisely the symptom this trail exists to
+    # explain. `:no_email` is the one that would really mislead: an account with a
+    # blank address produces silence rather than a reason.
     cond do
       not Prefs.type?(type) ->
+        Logger.error("[mail] #{type} → not a known notification type; nothing sent")
         {:error, :unknown_type}
 
       blank?(email) ->
+        Logger.error("[mail] #{type} → account has no email address; nothing sent")
         {:error, :no_email}
 
       not force and recipient_id && not Prefs.wants?(recipient_id, type, opts) ->
+        Logger.info("[mail] #{type} → #{redact(email)} skipped; opted out of this type")
         record(recipient_id, email, type, nil, nil, "skipped_opt_out", opts)
         {:skipped, :opted_out}
 
