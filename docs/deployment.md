@@ -126,7 +126,28 @@ MessageID: it is the handle that makes the provider's side searchable.
 
 SMTP rather than a provider HTTP API is a deliberate choice: Resend, Postmark,
 SendGrid, Mailgun and SES all speak it, so the provider is a credential rather than a
-deploy. The TLS options in `runtime.exs` verify the relay's certificate against the
+deploy. Switching is `SMTP_HOST` + credentials and nothing else — the only
+provider-specific behaviour in the app is the Postmark message-stream header, and it
+is conditional on a `postmarkapp.com` relay, so it stays out of the way.
+
+The one thing that catches people is the **username**, which is rarely a username:
+
+| Provider | `SMTP_HOST` | `SMTP_USERNAME` | `SMTP_PASSWORD` |
+|---|---|---|---|
+| Postmark | `smtp.postmarkapp.com` | Server API token | the same token |
+| Resend | `smtp.resend.com` | literally `resend` | API key |
+| SendGrid | `smtp.sendgrid.net` | literally `apikey` | API key |
+| Mailgun | `smtp.mailgun.org` | the SMTP login (`postmaster@…`) | its SMTP password |
+| Amazon SES | `email-smtp.<region>.amazonaws.com` | SES **SMTP** credentials | ditto |
+
+All of them use port 587 with STARTTLS, which is the default here. SES's SMTP
+credentials are derived from an IAM user and are *not* the IAM access key — generating
+them is a separate step.
+
+Worth knowing before you pick: transactional providers approve accounts by hand and
+several decline anything adult-adjacent, regardless of the mail itself being nothing
+but sign-in links. If that becomes a pattern, SES on a domain you own asks the fewest
+questions, at the cost of setting up DKIM yourself. The TLS options in `runtime.exs` verify the relay's certificate against the
 system CA bundle — `gen_smtp` defaults to `:verify_none`, which would hand the
 credentials to anyone who can answer for the host.
 
