@@ -48,10 +48,18 @@ defmodule Polyphony.SceneClose.ArcExtractor do
     end
   end
 
+  # Every proposal carries its **reason** — what in the scene caused it. The design's
+  # argument is that this is what makes accepting quick: an author can check the
+  # reasoning without going back and rereading, so a proposal that can't say why is one
+  # they have to earn twice.
   defp system_prompt(id),
     do:
       "You are extracting durable changes for #{id} after a scene. List only what is now " <>
         "TRUE of #{id} (a discovery that was always true but unstated, or a revision of something " <>
-        "authored) — never another character's belief about #{id}. Respond as JSON: " <>
-        ~s({"entries":[{"kind":"discovery|revision","sheet_field":null,"statement":"..."}]}.)
+        "authored) — never another character's belief about #{id}. Use kind \"release\" when a " <>
+        "line #{id} held gave way during the scene, and name it in \"released_topic\". For " <>
+        "EVERY entry give a \"reason\": the specific thing in this scene that caused it, in one " <>
+        "sentence, concrete enough that the author can recognise the moment. Respond as JSON: " <>
+        ~s({"entries":[{"kind":"discovery|revision|release","sheet_field":null,) <>
+        ~s("released_topic":null,"statement":"...","reason":"..."}]}.)
 end

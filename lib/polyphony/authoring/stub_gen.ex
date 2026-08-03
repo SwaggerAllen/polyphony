@@ -53,8 +53,10 @@ defmodule Polyphony.Authoring.StubGen do
               "name" => wb.name || "",
               "setting" => wb.setting || "",
               "tone" => wb.tone || "",
-              "rules" => Enum.join(wb.rules || [], "\n"),
-              "starting_canon" => Enum.join(wb.starting_canon || [], "\n")
+              # `public/1`, not `statements/1`: a character must not be *written from*
+              # a world secret they don't know any more than they may be told it.
+              "rules" => Enum.join(WorldBible.public(wb.rules), "\n"),
+              "starting_canon" => Enum.join(WorldBible.public(wb.starting_canon), "\n")
             }
 
           _ ->

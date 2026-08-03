@@ -24,6 +24,7 @@ defmodule Polyphony.Jobs.RunBeat do
 
   require Logger
 
+  alias Polyphony.Scene.Cast
   alias Polyphony.{App, Broadcast, Content, Library}
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Costs.Attribution
@@ -161,7 +162,13 @@ defmodule Polyphony.Jobs.RunBeat do
     # Declare the turn order (unless the user already set one), open the beat, and
     # hand off to the walk — it enqueues the first slot, or pauses for a
     # user-controlled/assisted one (§A1/§A2).
-    cast_ids = Enum.map(resolved.cast, & &1.character_id)
+    # The Director casts from the omniscient brief, which renders display names
+    # (§5.2 phase 2b-render) — so its picks come back as names. Resolve them to
+    # character ids before they become the beat's declared turn order, because the
+    # walk, packet ids and membership guards all key on ids. An unrecognised name
+    # resolves to itself and is dropped by the membership check downstream.
+    cast = Cast.for_scene(scene_id)
+    cast_ids = Enum.map(resolved.cast, &Cast.resolve_id(cast, &1.character_id))
     order = BeatOps.declare_turn_order(scene_id, beat, cast_ids)
 
     :ok =

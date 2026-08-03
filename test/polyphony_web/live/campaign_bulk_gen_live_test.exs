@@ -1,5 +1,13 @@
-defmodule PolyphonyWeb.LibraryBulkGenLiveTest do
-  @moduledoc "Bulk-generating pending stubs from the library, driven by the offline Mock."
+defmodule PolyphonyWeb.CampaignBulkGenLiveTest do
+  @moduledoc """
+  Bulk-filling pending stubs, driven by the offline Mock.
+
+  It lives on the campaign's cast rather than in the library because characters are
+  written *inside* a campaign under the redesigned IA (`ux/polyphony-library.html`
+  §00) — the pending ones are that campaign's pending ones, and the button belongs
+  next to the pills that say so. Stubs arrive in batches, from other people's
+  relationships, so one press beats twenty trips through the editor.
+  """
   use PolyphonyWeb.ConnCase, async: false
 
   alias Polyphony.{Library, Owner}
@@ -17,16 +25,27 @@ defmodule PolyphonyWeb.LibraryBulkGenLiveTest do
   defp stub(user, payload),
     do: Library.put(%{owner: Owner.of(user), kind: "character", payload: payload})
 
-  test "generate-all-pending fills and finalizes every stub, keeping names",
+  test "fill-them-in finalizes every stub in the cast, keeping names",
        %{conn: conn, user: user} do
     ghost = stub(user, Stub.new("Ghost", "haunts her"))
     bram = stub(user, Stub.new("Bram", "estranged mentor"))
     # A finalized character is left alone (not pending).
-    stub(user, %CharacterSheet{name: "Mira", status: :full})
+    mira = stub(user, %CharacterSheet{name: "Mira", status: :full})
 
-    {:ok, view, html} = live(conn, ~p"/library")
-    assert html =~ "pending characters"
-    assert html =~ ">2</strong>"
+    campaign =
+      Library.put(%{
+        owner: Owner.of(user),
+        kind: "campaign",
+        payload: %{
+          kind: :campaign,
+          name: "The Salt Line",
+          character_ids: [ghost.id, bram.id, mira.id],
+          scenes: []
+        }
+      })
+
+    {:ok, view, html} = live(conn, ~p"/campaigns/#{campaign.id}?tab=cast")
+    assert html =~ "2 pending characters"
 
     view |> element("button[phx-click=generate_pending]") |> render_click()
     render_async(view)
@@ -39,7 +58,7 @@ defmodule PolyphonyWeb.LibraryBulkGenLiveTest do
     assert b.status == :full
     assert g.name == "Ghost" and b.name == "Bram"
 
-    # The pending banner is gone.
+    # The banner is gone, because there's nothing left pending.
     refute render(view) =~ "pending character"
   end
 end

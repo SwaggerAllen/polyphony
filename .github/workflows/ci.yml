@@ -8,9 +8,51 @@ on:
 permissions:
   contents: read
 
+# A push to a PR branch fires this twice (push + pull_request). Cancel the superseded
+# run rather than paying for both, and cancel the previous commit's run while we're
+# here — only the tip's result means anything.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # One place, so a toolchain bump is a one-line change across every job.
+  OTP_VERSION: "27.3"
+  ELIXIR_VERSION: "1.17.3-otp-27"
+
 jobs:
+  # Split into named jobs on purpose. As a single job called "format · compile · test"
+  # the PR check list showed one row, so a failed format and a failed suite read
+  # identically — and it wasn't obvious the suite ran at all.
+  lint:
+    name: format · compile · deps
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-lint-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-lint-
+
+      - run: mix deps.get
+      - run: mix format --check-formatted
+      - run: mix compile --warnings-as-errors
+      # A dependency removed months ago lingers in mix.lock and keeps turning up in
+      # advisory scans. Stale locks are also how a `deps.get` resolves differently on
+      # a fresh clone than it does here.
+      - run: mix deps.unlock --check-unused
+
   test:
-    name: format · compile · test
+    name: test suite
     runs-on: ubuntu-latest
 
     services:
@@ -32,35 +74,183 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: erlef/setup-beam@v1
         with:
-          otp-version: "27.3"
-          elixir-version: "1.17.3-otp-27"
-
-      - name: Cache deps and build
-        uses: actions/cache@v4
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+      - uses: actions/cache@v4
         with:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-
+          key: ${{ runner.os }}-mix-test-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-test-
 
       - run: mix deps.get
-      - run: mix format --check-formatted
-      - run: mix compile --warnings-as-errors
+      # The `test` alias creates + migrates the test DB (the migration enables
+      # pgvector), then runs the suite. The LLM path stays offline (Mock/Stub
+      # providers); only hex fetches touch the network.
+      - run: mix test
 
-      # Verify the committed asset bundles (priv/static/assets/app.{js,css}) are
-      # in sync with their source under assets/. Fetches the esbuild/tailwind
-      # binaries, rebuilds, and fails if the tracked outputs drift — so a change
-      # to assets/ can't land without its rebuilt bundle.
+  feature:
+    name: browser end-to-end
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      MIX_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-test-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-test-
+
+      # Wallaby drives a real Chrome over chromedriver, and chromedriver refuses to
+      # drive a browser of a different major version. Installing both together is what
+      # keeps them matched.
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+        with:
+          chrome-version: stable
+          install-chromedriver: true
+
+      - run: mix deps.get
+
+      # The tier `Phoenix.LiveViewTest` cannot reach: a real LiveSocket over a real
+      # WebSocket, real JS, real render. It proves the dramatic-irony guarantee end to
+      # end — and it is the only check that can prove the CSP doesn't forbid our own
+      # WebSocket, because a broken policy passes every in-process test and fails the
+      # moment a browser loads the page.
+      - name: Feature tests (Wallaby)
+        env:
+          WALLABY_CHROME_BINARY: ${{ steps.chrome.outputs.chrome-path }}
+          WALLABY_CHROMEDRIVER: ${{ steps.chrome.outputs.chromedriver-path }}
+        run: mix test --only feature
+
+  assets:
+    name: asset drift
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-lint-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-lint-
+
+      - run: mix deps.get
+
+      # Verify the committed asset bundles are in sync with their source under
+      # assets/. Fetches the esbuild/tailwind binaries, rebuilds, and fails if the
+      # tracked outputs drift — so a change to assets/ (including a re-run of
+      # `mix kit.port`) can't land without its rebuilt bundle.
       - run: mix assets.setup
       - run: mix assets.build
       - name: Assets are up to date
-        run: git diff --exit-code priv/static/assets/app.css priv/static/assets/app.js
+        run: |
+          git diff --exit-code \
+            priv/static/assets/app.css priv/static/assets/app.js \
+            priv/static/assets/storybook.css priv/static/assets/storybook.js
 
-      # The `test` alias creates + migrates the test DB (the migration enables
-      # pgvector), then runs the suite. The LLM path stays offline (Mock/Stub
-      # providers); only hex/npm/github fetches touch the network.
-      - run: mix test
+  types:
+    name: dialyzer
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-lint-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-lint-
+
+      # The PLT is built from OTP plus every dependency and takes ~2 minutes, so it is
+      # cached separately and keyed on mix.lock — the only thing that invalidates it.
+      # `restore-keys` matters more than the exact hit: an almost-current PLT is
+      # incrementally updated in seconds, while no PLT at all pays the full build.
+      - uses: actions/cache@v4
+        with:
+          path: priv/plts
+          key: ${{ runner.os }}-plt-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-plt-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-
+
+      - run: mix deps.get
+      # Split from the run so a PLT build failure reads as a PLT build failure, and so
+      # the cache is written even when the analysis below finds something.
+      - run: mix dialyzer --plt
+
+      - run: mix dialyzer --format short
+
+  audit:
+    name: security audit
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-lint-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-lint-
+
+      - run: mix deps.get
+
+      # Known vulnerabilities in the locked dependency tree.
+      - run: mix deps.audit
+
+      # Retired packages plus the OSV advisory feed — a different database from the
+      # one `deps.audit` reads, so it genuinely finds different things. Non-blocking
+      # *only* because cowlib 2.19.0 carries two advisories with no fixed release yet
+      # (EEF-CVE-2026-43966, EEF-CVE-2026-43969); make this blocking as soon as one
+      # ships. The log still shows everything it found.
+      - name: Hex advisories (informational)
+        continue-on-error: true
+        run: mix hex.audit
+
+      # Phoenix-aware static analysis: XSS via raw/1, CSRF, directory traversal,
+      # secrets in config. `--skip` honours the `@sobelow_skip` annotations at the
+      # three `binary_to_term` call sites, each of which already passes `:safe`.
+      - run: mix sobelow --exit low --skip

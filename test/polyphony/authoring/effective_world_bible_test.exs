@@ -4,6 +4,11 @@ defmodule Polyphony.Authoring.EffectiveWorldBibleTest do
 
   alias Polyphony.Authoring.{WorldBible, WorldArcEntry, EffectiveWorldBible}
 
+  # Canon is a list of `WorldBible.Entry` now, so read it back through the accessor —
+  # which is also the point: a folded world-arc fact is a *public* entry, since reach
+  # (`scope`) and concealment are different axes and arc has no way to be concealed yet.
+  defp canon(bible), do: WorldBible.statements(bible.starting_canon)
+
   defp e(attrs),
     do:
       struct(
@@ -20,7 +25,7 @@ defmodule Polyphony.Authoring.EffectiveWorldBibleTest do
     ]
 
     out = EffectiveWorldBible.apply(bible, entries, :all)
-    assert out.starting_canon == ["The sea is cold.", "The tide-gates broke.", "The moon fell."]
+    assert canon(out) == ["The sea is cold.", "The tide-gates broke.", "The moon fell."]
   end
 
   test "only canon applies — proposed and retracted are ignored" do
@@ -30,9 +35,7 @@ defmodule Polyphony.Authoring.EffectiveWorldBibleTest do
       e(statement: "gone", status: :retracted)
     ]
 
-    assert EffectiveWorldBible.apply(%WorldBible{}, entries, :all).starting_canon == [
-             "canon fact"
-           ]
+    assert canon(EffectiveWorldBible.apply(%WorldBible{}, entries, :all)) == ["canon fact"]
   end
 
   test "global facts reach everywhere; local facts only their location; omniscient sees all" do
@@ -41,17 +44,17 @@ defmodule Polyphony.Authoring.EffectiveWorldBibleTest do
       e(statement: "harbour murder", scope: :local, location_id: "the harbour")
     ]
 
-    at_harbour = EffectiveWorldBible.apply(%WorldBible{}, entries, "the harbour").starting_canon
+    at_harbour = canon(EffectiveWorldBible.apply(%WorldBible{}, entries, "the harbour"))
     assert "global fact" in at_harbour and "harbour murder" in at_harbour
 
-    elsewhere = EffectiveWorldBible.apply(%WorldBible{}, entries, "the moor").starting_canon
+    elsewhere = canon(EffectiveWorldBible.apply(%WorldBible{}, entries, "the moor"))
     assert elsewhere == ["global fact"]
 
     # A scene with no location gets only global facts.
-    nowhere = EffectiveWorldBible.apply(%WorldBible{}, entries, nil).starting_canon
+    nowhere = canon(EffectiveWorldBible.apply(%WorldBible{}, entries, nil))
     assert nowhere == ["global fact"]
 
-    omni = EffectiveWorldBible.apply(%WorldBible{}, entries, :all).starting_canon
+    omni = canon(EffectiveWorldBible.apply(%WorldBible{}, entries, :all))
     assert "global fact" in omni and "harbour murder" in omni
   end
 end

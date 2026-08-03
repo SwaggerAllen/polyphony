@@ -19,8 +19,10 @@ defmodule Polyphony.Authoring.SceneGate do
     * **Never blocks the open scene**, only opening a *new* one; the current scene closes
       normally regardless.
 
-  Keyed by character **name** — the identity scenes and arc extraction both use
-  (`CharacterEntered.character_id`), not the library id.
+  Keyed by character **id** — the identity scenes and arc extraction both use
+  (`CharacterEntered.character_id`, now the library id since §5.2's mint flip). The
+  gate used to resolve library ids to names to do this lookup; it doesn't any more,
+  because there is only one identity again.
 
   *Not yet modelled here:* the "extraction failed → block with a retry" and the
   "extraction still running → not ready yet" states (§3.0). Those need the async
@@ -33,16 +35,18 @@ defmodule Polyphony.Authoring.SceneGate do
   @type blocked :: %{characters: [String.t()], world: non_neg_integer()}
 
   @doc """
-  May a new scene open for `campaign_id` with cast `character_names`? `:ok`, or
-  `{:blocked, %{characters: [name], world: count}}` naming the cast members with
-  pending arc and the count of pending world-arc proposals.
+  May a new scene open for `campaign_id` with cast `character_ids`? `:ok`, or
+  `{:blocked, %{characters: [id], world: count}}` listing the cast members with
+  pending arc and the count of pending world-arc proposals. The caller renders those
+  ids as names — the gate deals only in identity.
   """
-  @spec check(term(), [String.t()], module()) :: :ok | {:blocked, blocked()}
-  def check(campaign_id, character_names, repo \\ Repo) do
+  @spec check(term(), [term()], module()) :: :ok | {:blocked, blocked()}
+  def check(campaign_id, character_ids, repo \\ Repo) do
     blocked_chars =
-      character_names
+      character_ids
+      |> Enum.map(&to_string/1)
       |> Enum.uniq()
-      |> Enum.filter(fn name -> ArcEntry.list_proposed(repo, to_string(name)) != [] end)
+      |> Enum.filter(fn id -> ArcEntry.list_proposed(repo, id) != [] end)
 
     world_pending = length(ArcEntry.list_proposed_world(repo, campaign_id))
 

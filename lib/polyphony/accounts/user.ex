@@ -14,6 +14,9 @@ defmodule Polyphony.Accounts.User do
 
   @roles ~w(user admin superadmin)
 
+  @typedoc "A user row. `Ecto.Schema` generates no `t/0`, so it is declared here."
+  @type t :: %__MODULE__{}
+
   schema "users" do
     field(:email, :string)
     field(:username, :string)
@@ -26,9 +29,19 @@ defmodule Polyphony.Accounts.User do
     # Moderation state (§B3): suspension gates login; a review flag is raised by an
     # absolute-line takedown against this account's content.
     field(:suspended_at, :naive_datetime_usec)
+    # When it lifts. Null with a live `suspended_at` is a genuinely indefinite
+    # suspension — the design's *until we say otherwise* — rather than an oversight.
+    field(:suspended_until, :naive_datetime_usec)
     field(:flagged_for_review_at, :naive_datetime_usec)
     # §C: account-level opt-out from proactive analysis (reactive/report access ignores it).
     field(:proactive_opt_out_at, :naive_datetime_usec)
+    # The account's own daily spend ceiling in micro-cents (§B5). Null means "use the
+    # configured default" — so a default stays a default rather than being frozen into
+    # every row the day it was introduced.
+    field(:daily_cap, :integer)
+    # Leaving is a decision on a clock, not an event: signing back in inside the window
+    # cancels it (`ux/polyphony-settings-auth.html` §04).
+    field(:deletion_requested_at, :naive_datetime_usec)
     timestamps(type: :naive_datetime_usec)
   end
 

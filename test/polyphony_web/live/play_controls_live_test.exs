@@ -24,20 +24,26 @@ defmodule PolyphonyWeb.PlayControlsLiveTest do
   test "the cast panel defaults to automated and is omniscient-only", %{conn: conn} do
     scene = scene_with(["mira"])
 
-    {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
-    assert html =~ "Cast &amp; control"
-    # Default automated (autonomous) is selected.
-    assert html =~ ~r/<option value="autonomous" selected[^>]*>Automated/
+    # It's a drawer off the GM's bottom bar — one panel at a time, because two open
+    # would push the transcript off a phone.
+    {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+    html = view |> element("button[phx-click=toggle_cast]") |> render_click()
 
-    # A character viewer doesn't get the author control panel.
+    assert html =~ "Who drives each character"
+    # Default automated (autonomous) is selected.
+    assert html =~ ~r/<option value="autonomous" selected[^>]*>\s*Automated/
+
+    # A character viewer gets no GM bar at all, so no way to reach the panel.
     {:ok, _mira, mira_html} = live(conn, ~p"/play/#{scene}?as=mira")
-    refute mira_html =~ "Cast &amp; control"
+    refute mira_html =~ "toggle_cast"
+    refute mira_html =~ "Who drives each character"
   end
 
   test "setting a control mode records it and the walk honors it", %{conn: conn} do
     scene = scene_with(["mira"])
 
     {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+    view |> element("button[phx-click=toggle_cast]") |> render_click()
 
     view
     |> element("form[phx-change=set_control]")

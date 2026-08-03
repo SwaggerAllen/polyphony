@@ -14,10 +14,21 @@ defmodule Polyphony.Director.BeatOps do
   alias Polyphony.Commands.{RecordWorldEvent, ExitCharacter, CloseScene, ProposeIntroduction}
   alias Polyphony.Director.Proposal
 
+  @typedoc "An event-store stream id — a scene, standing in for a branch."
+  @type scene_id :: String.t()
+  @typedoc "A character's **library entry id**, never their display name (§5.2)."
+  @type character_id :: String.t()
+  @typedoc "The integer grouping label. Not an ordering key — the store's sequence is."
+  @type beat :: integer()
+  @typedoc "A chat message as the provider adapters take one."
+  @type message :: %{role: String.t(), content: String.t()}
+
   @doc "The beat aggregate's stream id (distinct from the integer scene beat)."
+  @spec beat_ref(scene_id(), beat()) :: String.t()
   def beat_ref(scene_id, beat), do: "#{scene_id}-b#{beat}"
 
   @doc "Deterministic packet id `(scene, beat, character)` for idempotency (§12)."
+  @spec packet_id(scene_id(), beat(), character_id()) :: String.t()
   def packet_id(scene_id, beat, character_id), do: "#{scene_id}-#{beat}-#{character_id}"
 
   @doc """
@@ -25,6 +36,7 @@ defmodule Polyphony.Director.BeatOps do
   The base attempt (`packet_id/3`) is unsuffixed; each re-roll adds `-r<n>`, so
   every attempt is a distinct, addressable packet (§7, §12).
   """
+  @spec reroll_packet_id(scene_id(), beat(), character_id(), pos_integer()) :: String.t()
   def reroll_packet_id(scene_id, beat, character_id, attempt) when attempt >= 1,
     do: "#{packet_id(scene_id, beat, character_id)}-r#{attempt}"
 
@@ -35,6 +47,7 @@ defmodule Polyphony.Director.BeatOps do
   ones, so counting would re-use a live id). `1` when only the base attempt
   exists; `0` when the packet doesn't exist yet.
   """
+  @spec next_attempt([struct() | map()], scene_id(), beat(), character_id()) :: non_neg_integer()
   def next_attempt(events, scene_id, beat, character_id) do
     base = packet_id(scene_id, beat, character_id)
 
@@ -47,9 +60,17 @@ defmodule Polyphony.Director.BeatOps do
 
     case indices do
       [] -> 0
-      xs -> Enum.max(xs) + 1
+      xs -> highest(xs, 0) + 1
     end
   end
+
+  # `Enum.max/1` returns the element type, which Dialyzer widens to `number()`, and
+  # `Enum.reduce/3`'s accumulator is `any()` — either way an attempt index that can
+  # only ever be an integer reads as possibly-float. Spelled out so the type is
+  # provable, because the result becomes part of a packet id.
+  @spec highest([non_neg_integer()], non_neg_integer()) :: non_neg_integer()
+  defp highest([], acc), do: acc
+  defp highest([n | rest], acc), do: highest(rest, max(n, acc))
 
   defp attempt_of?(id, base), do: id == base or String.starts_with?(id, base <> "-r")
 
@@ -65,6 +86,7 @@ defmodule Polyphony.Director.BeatOps do
   end
 
   @doc "All events on a scene's stream (empty if the stream doesn't exist yet)."
+  @spec stored_events(scene_id()) :: [struct()]
   def stored_events(scene_id) do
     App |> Commanded.EventStore.stream_forward(scene_id) |> Enum.map(& &1.data)
   rescue
@@ -72,9 +94,11 @@ defmodule Polyphony.Director.BeatOps do
   end
 
   @doc "The canonical view of a scene's stream — re-rolled packets filtered out (§7)."
+  @spec canonical_events(scene_id()) :: [struct()]
   def canonical_events(scene_id), do: scene_id |> stored_events() |> Packets.canonical()
 
   @doc "Events on a beat's own aggregate stream (`beat_ref`), empty if it hasn't opened."
+  @spec beat_events(scene_id(), beat()) :: [struct()]
   def beat_events(scene_id, beat) do
     App |> Commanded.EventStore.stream_forward(beat_ref(scene_id, beat)) |> Enum.map(& &1.data)
   rescue
@@ -86,6 +110,7 @@ defmodule Polyphony.Director.BeatOps do
   the given default cast — which is recorded as a `TurnOrderDeclared` so re-roll and
   the walk read a single source of truth. Returns the ordered `character_id`s.
   """
+  @spec declare_turn_order(scene_id(), beat(), [character_id()]) :: [character_id()]
   def declare_turn_order(scene_id, beat, default_cast_ids) do
     events = canonical_events(scene_id)
 
@@ -106,6 +131,7 @@ defmodule Polyphony.Director.BeatOps do
   end
 
   @doc "Character ids present in the scene at `beat`, derived from the log."
+  @spec members_now(scene_id(), beat()) :: [character_id()]
   def members_now(scene_id, beat) do
     scene_id
     |> stored_events()
@@ -118,6 +144,7 @@ defmodule Polyphony.Director.BeatOps do
   re-read live history (so serial conditioning holds), plus any pacing note.
   Falls back to a minimal seed if no context is cached.
   """
+  @spec messages_for(scene_id(), beat(), character_id(), String.t() | nil) :: [message()]
   def messages_for(scene_id, beat, character_id, pacing_note \\ nil) do
     # Condition on the canonical log so a re-rolled packet never re-enters a
     # later cast member's context (§7).
@@ -164,6 +191,7 @@ defmodule Polyphony.Director.BeatOps do
   defp pacing(_), do: []
 
   @doc "Dispatch the Director's authored world events onto the scene log."
+  @spec author_world_events(Enumerable.t(), scene_id(), beat()) :: :ok
   def author_world_events(world_events, scene_id, beat) do
     Enum.each(world_events, fn we ->
       App.dispatch(%RecordWorldEvent{
@@ -179,6 +207,7 @@ defmodule Polyphony.Director.BeatOps do
   are omniscient-only queue signals (§B7) — they do NOT change membership, so they
   never trigger truncation; the author admits them from the play view.
   """
+  @spec author_introductions(Enumerable.t() | nil, scene_id(), beat()) :: :ok
   def author_introductions(introductions, scene_id, beat) do
     Enum.each(introductions || [], fn intro ->
       App.dispatch(%ProposeIntroduction{
@@ -195,6 +224,7 @@ defmodule Polyphony.Director.BeatOps do
   actions). Returns `:changed` or `:unchanged` — `:changed` triggers beat
   truncation (§10).
   """
+  @spec apply_membership_changes(map(), scene_id(), beat()) :: :changed | :unchanged
   def apply_membership_changes(resolved, scene_id, beat) do
     exits = Enum.filter(resolved.accepted, &match?(%Proposal{type: :exit}, &1))
     closes = Enum.filter(resolved.scene_actions, &(&1.action in [:close, :move]))
@@ -215,6 +245,7 @@ defmodule Polyphony.Director.BeatOps do
   end
 
   @doc "Resolve an optional `\"provider\"` arg (module name string) to a module."
+  @spec resolve_provider(module() | String.t() | nil) :: module() | nil
   def resolve_provider(nil), do: nil
   def resolve_provider(mod) when is_atom(mod), do: mod
 

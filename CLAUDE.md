@@ -34,11 +34,19 @@ mix assets.setup             # fetch the esbuild + tailwind binaries (once)
 mix test                     # full suite; the alias migrates the test DB first
 mix test test/polyphony/foo_test.exs   # one file
 mix test --only feature      # real-browser (Wallaby) E2E; excluded by default, needs a browser
+                             # run bin/setup-chromedriver first — the sandbox's driver
+                             # and its Chromium are different majors
 mix format                   # always run before committing
 mix compile --warnings-as-errors       # must stay clean
 mix run -e "…"               # exercise the loop offline against LLM.Mock
-mix assets.build             # rebuild priv/static/assets/app.{js,css} after touching assets/
-mix phx.server               # the LiveView frontend at :4000 (watches + rebuilds assets)
+mix assets.build             # rebuild priv/static/assets/{app,storybook}.{js,css} after assets/
+mix kit.port                 # regenerate assets/css/kit.css from ux/polyphony-kit.css
+mix dialyzer                 # type analysis; first run builds the PLT (~2 min, cached)
+mix deps.audit               # dependency advisories (CI: blocking)
+mix sobelow --exit low --skip  # Phoenix static analysis (CI: blocking)
+mix deps.unlock --check-unused # stale mix.lock entries (CI: blocking)
+mix phx.server               # the LiveView frontend at :4000 (watches + rebuilds assets),
+                             # and the component catalogue at :4000/storybook
 ```
 
 The frontend (`PolyphonyWeb`) is a thin Phoenix LiveView layer; `mix phx.server`
@@ -100,6 +108,20 @@ for it.
   tested hardest. Pure logic is tested as pure functions; end-to-end slices dispatch
   real commands through `Polyphony.App`.
 - `mix format` clean and `--warnings-as-errors` clean before every commit.
+- **Dialyzer stays at zero.** CI blocks on it. Only `:extra_return` /
+  `:missing_return` are enabled — a spec that disagrees with what the function can
+  actually return — because on this codebase every one of those was a real defect,
+  while `:unmatched_returns` was 66 findings of idiomatic noise. Two consequences
+  worth knowing before you fight it: a module referenced as `Mod.t()` must *declare*
+  `@type t` (`Ecto.Schema` does not generate one, and an unknown **remote** type
+  compiles fine and only fails here), and Dialyzer infers a function's success typing
+  from its body alone, ignoring the spec's parameter types — so an integer sum reached
+  through `Enum.sum/1` (spec'd `:: number()`) widens to `number()` and needs a guard
+  or a `length/1` to stay provable.
+- **Spec what crosses a boundary**, not everything. A context's public functions,
+  anything returning a tagged tuple or a nilable, and any id-shaped string worth
+  naming (`scene_id`, `character_id`, `beat`). Commanded `execute/2` and `apply/2`
+  clauses and LiveView callbacks are *not* worth specs — the shapes are the structs.
 - Prefer **reuse over new abstraction** — check what the existing generation /
   supersession / fork primitives already give you before adding machinery. Re-rolls,
   edits, and forks all share the supersede-and-recommit primitive for this reason.
@@ -108,11 +130,29 @@ for it.
   their tokens and component classes from `ux/polyphony-kit.css` and their markup
   states from the mocks — the closer the port, the less the implementation drifts from
   the design. Define nothing screen-local that the kit already provides.
+  In practice: `assets/css/kit.css` is **generated** from the design file by `mix kit.port`
+  — a verbatim copy minus the kit's mock chrome, never hand-edited (a test fails if it
+  drifts) — and the kit's markup lives in `PolyphonyWeb.Kit` as function components. A
+  ported screen calls those inside a `Kit.frame/1`, which sets the register and theme the
+  tokens key on. `app.css` is an ordered manifest (Tailwind → kit) and the kit is last, so
+  it outranks a utility it overlaps with — the precedence the mocks have. The first-cut
+  design system is **deleted**, so **screens that haven't been ported render unstyled**;
+  that's deliberate, the app has no users until the rebuild lands. Review components at
+  `/storybook`, and give any new one a story — the suite requires it.
 
 ## Identity & numbering (easy to get wrong)
 
 - `scene_id` is the event-store stream id and stands in for a branch. A **fork** is
   a new scene stream (`Polyphony.Fork`, copy-on-fork).
+- `character_id` is the character's **library entry id** — never their display name.
+  It is the routing key everywhere: membership, visibility (including a whisper's
+  `addressed_to`), `packet_id`, arc `subject_id`, control modes, broadcast topics.
+  Names are *display*, resolved at the edges by `Polyphony.Scene.Cast` —
+  `render_name/2` on the way out (prompts, the transcript, any label), and
+  `resolve_addressees/2` on the way in, immediately before `CommitPacket`. Both have
+  an identity fallback, so an unmapped value passes through as itself. **Never put a
+  name where a routing key belongs**: under default-deny that fails safe (the whisper
+  reaches nobody) but it's still a bug, and it's the class of bug §5.2 existed to end.
 - `packet_id = "#{scene}-#{beat}-#{character}"` (base attempt). Re-rolls/edits add
   `-r<n>`: `BeatOps.reroll_packet_id/4`. **Attempt numbering is max-seen + 1**
   (`BeatOps.next_attempt/4`), not a count — a fork copies only the canonical take,
@@ -123,10 +163,10 @@ for it.
 
 ## Environment gotchas
 
-- **Elixir 1.17 / OTP 27** (via the SessionStart hook; see Commands above). Two
-  legacy pins linger from the 1.14 era — `ecto_sql ~> 3.11.0`, `postgrex ~> 0.17.5` —
-  and the DeepInfra adapter still uses Erlang `:httpc` rather than Req. All three are
-  now bumpable and tracked as cleanup; see the README "Toolchain notes".
+- **Elixir 1.17 / OTP 27** (via the SessionStart hook; see Commands above). The two
+  legacy 1.14-era pins are gone (`ecto_sql ~> 3.14`, `postgrex ~> 0.22`); the DeepInfra
+  adapter still uses Erlang `:httpc` rather than Req, which remains optional cleanup.
+  See the README "Toolchain notes".
 - **No egress to DeepInfra** in the sandbox. Everything runs on `Polyphony.LLM.Mock`
   (deterministic lorem via `:erlang.phash2`, offline) or `LLM.Stub` (tests). Never
   rely on `Math.random`/`Date` — determinism matters for replay.

@@ -10,7 +10,31 @@ defmodule Polyphony.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
-      releases: releases()
+      releases: releases(),
+      dialyzer: dialyzer()
+    ]
+  end
+
+  # Dialyzer's PLT is derived from OTP + every dep and takes minutes to build, so it
+  # lives in a fixed path that CI caches on mix.lock rather than under _build, where a
+  # cache miss on unrelated compilation would throw it away.
+  #
+  # Flags are chosen by signal-to-noise, measured on this codebase rather than assumed:
+  #
+  #   * `:extra_return` / `:missing_return` — a spec that disagrees with what the
+  #     function can actually return. Every one of these was a real defect here.
+  #   * `:unmatched_returns` is **off**. It produced 66 of an initial 116 findings and
+  #     essentially all of them were idiomatic discards — `PubSub.subscribe/1`,
+  #     fire-and-forget bookkeeping, sequenced calls inside a `fn` — so it buried the
+  #     50 findings that meant something. Worth revisiting selectively, not wholesale.
+  #   * `:error_handling` and `:underspecs` are off too: the first is noise on OTP
+  #     behaviours, the second demands specs be exactly as narrow as the implementation,
+  #     which fights the looser hand-written specs that are easier to read.
+  defp dialyzer do
+    [
+      plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
+      plt_add_apps: [:mix, :ex_unit],
+      flags: [:extra_return, :missing_return]
     ]
   end
 
@@ -51,8 +75,8 @@ defmodule Polyphony.MixProject do
       # Persistence for read models (pgvector for scene/summary embeddings later).
       # These lower bounds were chosen for the original Elixir 1.14 toolchain and
       # still resolve cleanly on the modern one; left as-is to avoid churn.
-      {:ecto_sql, "~> 3.11.0"},
-      {:postgrex, "~> 0.17.5"},
+      {:ecto_sql, "~> 3.14"},
+      {:postgrex, "~> 0.22"},
       {:pgvector, "~> 0.3.0"},
 
       # Job dispatch (§2): Postgres-backed, retries, concurrency control.
@@ -73,6 +97,12 @@ defmodule Polyphony.MixProject do
       {:plug_cowboy, "~> 2.7"},
       {:phoenix_ecto, "~> 4.5"},
       {:lazy_html, ">= 0.1.0", only: :test},
+      # Component catalogue for the design kit (PolyphonyWeb.Kit). Renders each
+      # component and its states on its own page so they can be reviewed without
+      # hunting through screens — the guard against the kit and the shipped UI
+      # drifting apart. Mounted at /storybook, gated by :storybook config
+      # (dev-only by default; see config/config.exs).
+      {:phoenix_storybook, "~> 1.3"},
       # Real-browser end-to-end tests (tagged :feature, excluded by default) —
       # drives Chromium over a live LiveSocket. See test/polyphony_web/features.
       {:wallaby, "~> 0.30", runtime: false, only: :test},
@@ -91,7 +121,14 @@ defmodule Polyphony.MixProject do
       # client swappable, so moving to ReqLLM on the modern toolchain later is a
       # one-module change.
 
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+
+      # CI checks, no runtime footprint. `mix deps.audit` scans the lock against the
+      # Elixir security advisory DB; `mix sobelow` is Phoenix-aware static analysis
+      # (XSS via raw/1, CSRF, directory traversal, config secrets).
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -106,9 +143,12 @@ defmodule Polyphony.MixProject do
       # `assets.build` produces the dev bundles; `assets.deploy` is the minified
       # + digested prod build.
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["tailwind polyphony", "esbuild polyphony"],
+      # `esbuild polyphony` emits app.js and storybook.js from one profile;
+      # Tailwind needs a profile per entry point.
+      "assets.build": ["tailwind polyphony", "tailwind storybook", "esbuild polyphony"],
       "assets.deploy": [
         "tailwind polyphony --minify",
+        "tailwind storybook --minify",
         "esbuild polyphony --minify",
         "phx.digest"
       ]

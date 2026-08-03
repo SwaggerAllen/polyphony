@@ -30,17 +30,17 @@ defmodule PolyphonyWeb.PlayFailuresLiveTest do
     })
 
     {:ok, _view, author_html} = live(conn, ~p"/play/#{s}")
-    assert author_html =~ "Couldn&#39;t generate"
+    assert author_html =~ "didn&#39;t generate"
     assert author_html =~ "mira"
     assert author_html =~ "provider unavailable"
     assert author_html =~ "phx-click=\"retry_failure\""
     # The failure is interleaved into the transcript (inline), not a standalone pane.
-    assert author_html =~ "turn-fail"
+    assert author_html =~ "m-fail"
     refute author_html =~ "fail-panel"
 
     # A character must not see the author's failure panel.
     {:ok, _mira, mira_html} = live(conn, ~p"/play/#{s}?as=mira")
-    refute mira_html =~ "Couldn&#39;t generate"
+    refute mira_html =~ "didn&#39;t generate"
   end
 
   test "a beat-less scene-close failure defaults to the current beat, not the top",

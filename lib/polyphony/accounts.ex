@@ -64,15 +64,58 @@ defmodule Polyphony.Accounts do
   def flagged_for_review?(%User{flagged_for_review_at: at}), do: not is_nil(at)
 
   @doc """
-  Moderation state transitions on an account. Authorization is the **caller's**
-  responsibility (`Polyphony.Moderation` gates + audits these); these are plain
-  identity-state writes, kept here because `Accounts` owns the user record.
+  Suspend for `days`, or indefinitely when `days` is nil — the design's *until we say
+  otherwise*, which is a real choice rather than the only one.
+
+  Authorization is the **caller's** responsibility (`Polyphony.Moderation` gates and
+  audits these); this and its neighbours are plain identity-state writes, kept here
+  because `Accounts` owns the user record.
   """
-  def suspend(%User{} = user, opts \\ []),
-    do: repo(opts).update!(Ecto.Changeset.change(user, suspended_at: now(opts)))
+  def suspend(user, days \\ nil, opts \\ [])
+
+  def suspend(%User{} = user, days, opts) do
+    now = now(opts)
+    until = days && NaiveDateTime.add(now, days * 24 * 60 * 60, :second)
+
+    repo(opts).update!(Ecto.Changeset.change(user, suspended_at: now, suspended_until: until))
+  end
 
   def reinstate(%User{} = user, opts \\ []),
-    do: repo(opts).update!(Ecto.Changeset.change(user, suspended_at: nil))
+    do: repo(opts).update!(Ecto.Changeset.change(user, suspended_at: nil, suspended_until: nil))
+
+  @doc """
+  Is the suspension still running? A lapsed one is over whether or not anybody lifted it.
+
+  Read rather than swept, so a `suspended_until` in the past simply stops binding —
+  there is no window in which somebody stays locked out because a job hasn't run.
+  """
+  @spec suspension_active?(User.t(), keyword()) :: boolean()
+  def suspension_active?(user, opts \\ [])
+  def suspension_active?(%User{suspended_at: nil}, _opts), do: false
+  def suspension_active?(%User{suspended_until: nil}, _opts), do: true
+
+  def suspension_active?(%User{suspended_until: until}, opts),
+    do: NaiveDateTime.compare(until, now(opts)) == :gt
+
+  @doc "Days left on a suspension — nil when indefinite or not suspended."
+  @spec suspension_days_left(User.t(), keyword()) :: non_neg_integer() | nil
+  def suspension_days_left(user, opts \\ [])
+  def suspension_days_left(%User{suspended_at: nil}, _opts), do: nil
+  def suspension_days_left(%User{suspended_until: nil}, _opts), do: nil
+
+  def suspension_days_left(%User{suspended_until: until}, opts) do
+    seconds = NaiveDateTime.diff(until, now(opts), :second)
+    if seconds <= 0, do: 0, else: ceil(seconds / 86_400)
+  end
+
+  @doc "Every currently-suspended account."
+  @spec list_suspended(keyword()) :: [User.t()]
+  def list_suspended(opts \\ []) do
+    import Ecto.Query
+
+    repo(opts).all(from(u in User, where: not is_nil(u.suspended_at)))
+    |> Enum.filter(&suspension_active?(&1, opts))
+  end
 
   def flag_for_review(%User{} = user, opts \\ []),
     do: repo(opts).update!(Ecto.Changeset.change(user, flagged_for_review_at: now(opts)))
@@ -234,6 +277,13 @@ defmodule Polyphony.Accounts do
     end
   end
 
+  @doc "Every invite, newest first — used and unused both, so the admin screen can show who came in through which."
+  @spec list_invites(keyword()) :: [Invite.t()]
+  def list_invites(opts \\ []) do
+    import Ecto.Query
+    repo(opts).all(from(i in Invite, order_by: [desc: i.inserted_at]))
+  end
+
   @doc "An unredeemed invite for `token`, or nil."
   def open_invite(token, opts \\ []) do
     case repo(opts).get_by(Invite, token: to_string(token)) do
@@ -243,6 +293,122 @@ defmodule Polyphony.Accounts do
   end
 
   # ── Profile / username ─────────────────────────────────────────────────────────
+
+  @doc """
+  Set this account's own daily spend ceiling, in micro-cents.
+
+  Passing `nil` puts them back on the configured default rather than on zero — the two
+  are very different answers and only one of them is a setting anybody wants.
+  """
+  @spec set_daily_cap(User.t(), integer() | nil, keyword()) ::
+          {:ok, User.t()} | {:error, Ecto.Changeset.t()}
+  def set_daily_cap(%User{} = user, cap, opts \\ []) do
+    cap = if is_integer(cap) and cap > 0, do: cap, else: nil
+
+    user
+    |> Ecto.Changeset.change(daily_cap: cap)
+    |> repo(opts).update()
+  end
+
+  # ── Leaving ──────────────────────────────────────────────────────────────────
+
+  @doc """
+  How long a deleted account waits before it really goes. The same window as the
+  library's trash (§2.13), for the same reason: the number has to mean something.
+  """
+  @spec deletion_window_days() :: pos_integer()
+  def deletion_window_days, do: 30
+
+  @doc """
+  Ask for the account to be deleted — a decision on a clock, not an event.
+
+  Nothing is destroyed here. *Sign back in within 30 days and none of this happens*,
+  which is the whole design of it: leaving in anger is common and irreversible deletion
+  of somebody's authored work is not something to do on a single tap.
+  """
+  @spec request_deletion(User.t(), keyword()) :: {:ok, User.t()} | {:error, term()}
+  def request_deletion(%User{} = user, opts \\ []) do
+    user
+    |> Ecto.Changeset.change(deletion_requested_at: now(opts))
+    |> repo(opts).update()
+  end
+
+  @doc "Change your mind. Called on sign-in too, which is what makes the promise true."
+  @spec cancel_deletion(User.t(), keyword()) :: {:ok, User.t()} | {:error, term()}
+  def cancel_deletion(user, opts \\ [])
+  def cancel_deletion(%User{deletion_requested_at: nil} = user, _opts), do: {:ok, user}
+
+  def cancel_deletion(%User{} = user, opts) do
+    user
+    |> Ecto.Changeset.change(deletion_requested_at: nil)
+    |> repo(opts).update()
+  end
+
+  @doc "Is this account on its way out, and how many days are left?"
+  @spec days_until_deletion(User.t(), keyword()) :: non_neg_integer() | nil
+  def days_until_deletion(user, opts \\ [])
+  def days_until_deletion(%User{deletion_requested_at: nil}, _opts), do: nil
+
+  def days_until_deletion(%User{deletion_requested_at: at}, opts) do
+    elapsed = NaiveDateTime.diff(now(opts), at, :second)
+    remaining = deletion_window_days() * 24 * 60 * 60 - elapsed
+
+    if remaining <= 0, do: 0, else: ceil(remaining / (24 * 60 * 60))
+  end
+
+  @doc """
+  Delete the accounts whose window has run out, and everything they own.
+
+  The half that makes the countdown a number rather than a claim — the same argument as
+  the library's trash (§2.13). Returns how many went.
+
+  A **forked copy is not touched**: it lives in the forker's library with its own root
+  (§3.1d), and deleting somebody else's work to honour this request would be the wrong
+  trade. What goes is this account's own entries, published originals included.
+  """
+  @spec purge_expired_deletions(keyword()) :: non_neg_integer()
+  def purge_expired_deletions(opts \\ []) do
+    repo = repo(opts)
+    cutoff = NaiveDateTime.add(now(opts), -deletion_window_days() * 24 * 60 * 60, :second)
+
+    import Ecto.Query
+
+    repo.all(
+      from(u in User,
+        where: not is_nil(u.deletion_requested_at) and u.deletion_requested_at < ^cutoff
+      )
+    )
+    |> Enum.reduce(0, fn user, count ->
+      case purge_account(user, opts) do
+        :ok -> count + 1
+        _ -> count
+      end
+    end)
+  end
+
+  @doc """
+  Delete one account and its library outright. Irreversible; the window is the safety.
+  """
+  @spec purge_account(User.t(), keyword()) :: :ok | {:error, term()}
+  def purge_account(%User{} = user, opts \\ []) do
+    repo = repo(opts)
+
+    Enum.each(
+      Polyphony.Library.list_for_owner(
+        Polyphony.Owner.of(user),
+        # A purge has to be complete, moderation-hidden entries included.
+        opts ++ [include_archived: true, include_deleted: true, include_hidden: true]
+      ),
+      fn entry ->
+        Polyphony.Library.purge(entry.id, opts)
+      end
+    )
+
+    repo.delete(user)
+    :ok
+  rescue
+    error -> {:error, error}
+  end
 
   @doc "Update profile fields (never email or role)."
   def update_profile(%User{} = user, attrs, opts \\ []),

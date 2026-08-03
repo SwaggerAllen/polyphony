@@ -1,0 +1,13 @@
+/* The storybook's stylesheet — a build manifest, like app.css.
+ *
+ * PhoenixStorybook loads this instead of app.css, so the kit components' look has to
+ * be here. What is deliberately NOT here is the first-cut design system: a component
+ * that only looks right next to legacy CSS isn't ported yet, and the catalogue exists
+ * to show that. Tailwind arrives as utilities only — the mocks lean on them for layout
+ * and type scale, so the ported markup does too — and without preflight, which would
+ * restyle the storybook's own chrome.
+ *
+ * The kit is imported last for the same reason as in app.css: it outranks a utility it
+ * overlaps with, which is how the mocks resolve that collision. */
+@import "./tailwind-utilities.css";
+@import "./kit.css";

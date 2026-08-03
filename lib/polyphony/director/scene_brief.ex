@@ -184,15 +184,20 @@ defmodule Polyphony.Director.SceneBrief do
     |> compact_join()
   end
 
+  # **The omniscient read**, and deliberately unfiltered. The Director knows the
+  # world's secrets — knowing them is how it aims a scene at one — where a character
+  # gets `WorldBible.public/1` in `Polyphony.Context`. The asymmetry is the feature;
+  # it is the same asymmetry `Visibility` draws for events.
   defp render_world(%WorldBible{} = b) do
-    rules = if b.rules in [nil, []], do: nil, else: "Rules:\n" <> bullets(b.rules)
+    rules = WorldBible.statements(b.rules)
+    canon = WorldBible.statements(b.starting_canon)
 
     [
       b.name && "World: #{b.name}",
       b.setting && "Setting: #{b.setting}",
       b.tone && "Tone: #{b.tone}",
-      rules,
-      b.starting_canon not in [nil, []] && "Canon:\n" <> bullets(b.starting_canon)
+      rules != [] && "Rules:\n" <> bullets(rules),
+      canon != [] && "Canon:\n" <> bullets(canon)
     ]
     |> compact_join("\n")
   end

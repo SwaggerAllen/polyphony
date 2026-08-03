@@ -7,6 +7,8 @@ defmodule Polyphony.Moderation.AuditLog do
   """
   use Ecto.Schema
   import Ecto.Query
+  @typedoc "A row of this table. `Ecto.Schema` generates no `t/0`, so it is declared here."
+  @type t :: %__MODULE__{}
 
   schema "admin_audit_logs" do
     field(:actor_id, :id)
@@ -24,6 +26,11 @@ defmodule Polyphony.Moderation.AuditLog do
     repo.all(
       from(a in __MODULE__, where: a.actor_id == ^actor_id, order_by: [desc: a.inserted_at])
     )
+  end
+
+  @doc "Everything done lately, newest first — the admin screen's audit view."
+  def list_recent(repo, limit \\ 50) do
+    repo.all(from(a in __MODULE__, order_by: [desc: a.inserted_at], limit: ^limit))
   end
 
   @doc "The audit trail touching a specific target (e.g. a report or a user's content)."

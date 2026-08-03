@@ -22,6 +22,46 @@ is the logging notifier. The **magic-link** sign-in surfaces its link directly o
 login page in dev (no mailer needed) — the first account to sign up becomes the
 superadmin.
 
+## The design kit
+
+The redesign speced in `ux/` is being ported screen by screen. Two files carry it:
+
+- **`assets/css/kit.css`** — generated, and a *verbatim* copy of
+  `ux/polyphony-kit.css` but for the kit's §11 mock chrome. `mix kit.port` derives it and
+  `PolyphonyWeb.KitPortTest` fails the build if the two disagree, so the design file really
+  is the single source of truth. To change the look: edit `ux/polyphony-kit.css`, run
+  `mix kit.port`, run `mix assets.build`, commit all three. Never edit the generated file.
+- **`lib/polyphony_web/components/kit.ex`** — the kit's markup as function components. A
+  ported screen calls these; it doesn't re-derive class strings, and it defines nothing
+  screen-local the kit already provides.
+
+`app.css` is an ordered manifest — Tailwind, then the kit — and the order is load-bearing:
+the kit is last so it outranks a utility it overlaps with, which is the precedence the mocks
+have (they link the kit after the Tailwind CDN).
+
+**The first-cut design system is gone**, and with it any styling for the screens that
+haven't been ported: they render as unstyled markup until each is rebuilt from the kit. That
+is deliberate rather than an oversight — the app has no users until the rebuild lands, so
+there's no reason to carry 400 lines of superseded CSS, and no reason for the shipped
+stylesheet to be anything other than the design file. The screens themselves and their
+tests **are** kept, as the record of how each one drives the domain; each goes when its
+replacement lands.
+
+**The shell is thin, by design.** There is no persistent global chrome: a screen fills the
+viewport and carries its own header (`Kit.header/1` — context small, title, controls top
+right, overflow last), and going elsewhere is that header's back chevron or its overflow
+menu (`Kit.menu/1`, filled by `Layouts.nav_menu/1`). A standing nav bar would cost a row of
+vertical space on every screen of a product whose main surface is a transcript. `<body>`
+carries the register (`fr stage dark`), which is what gives the document a backdrop and
+makes the kit's tokens resolve outside a screen's own frame; a screen nests its own frame
+when it needs a different register, as play does for a character viewer.
+
+Browse the components at **`/storybook`** (`mix phx.server`, then
+<http://localhost:4000/storybook>) — one page per component with its states. It's on in dev
+and test, and elsewhere only with `STORYBOOK=true`. `PolyphonyWeb.StorybookTest` renders
+every story and asserts every kit component has one, so the catalogue can't drift from the
+components.
+
 ## Design choices worth knowing
 
 - **Modern toolchain.** Phoenix 1.8 / LiveView 1.2 on OTP 27 / Elixir 1.17 (installed by
@@ -31,7 +71,7 @@ superadmin.
   Floki, so that's the only test-only web dep.
 - **Real asset pipeline, committed outputs.** Source lives in `assets/` — `js/app.js`
   (LiveSocket + an autoscroll hook, importing `phoenix`/`phoenix_live_view` from `deps/`)
-  and `css/app.css` (Tailwind base/utilities + the mobile-first dark design system).
+  and `css/app.css` (a manifest: Tailwind, then the ported design kit).
   esbuild bundles the JS and Tailwind builds the CSS via standalone binaries (no Node.js),
   fetched by `mix assets.setup`. The **built outputs** (`priv/static/assets/app.{js,css}`)
   are committed, so the app still compiles and serves with no build step — offline and in

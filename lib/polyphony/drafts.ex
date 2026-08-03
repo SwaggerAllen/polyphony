@@ -18,6 +18,7 @@ defmodule Polyphony.Drafts do
 
   require Logger
 
+  alias Polyphony.Scene.Cast
   alias Polyphony.{App, Repo, Broadcast}
   alias Polyphony.ReadModels.PacketDraft
   alias Polyphony.Commands.CommitPacket
@@ -86,7 +87,9 @@ defmodule Polyphony.Drafts do
             character_id: row.character_id,
             beat: row.beat,
             packet_id: packet_id,
-            packet: decode(row.packet),
+            # The draft is stored as the model wrote it (names, so an author editing
+            # it reads names); ids are minted here, on the way into the log.
+            packet: Cast.resolve_addressees(row.scene_id, decode(row.packet)),
             edited: row.edited
           })
 
@@ -120,6 +123,12 @@ defmodule Polyphony.Drafts do
   defp encode(packet), do: :erlang.term_to_binary(packet)
   # `:safe` refuses to fabricate atoms/modules; the packet's (:thought, :speech,
   # TurnPacket, …) are all already loaded, so this only ever rebuilds known terms.
+  # Sobelow flags every `binary_to_term`; `:safe` is the mitigation it asks for, and
+  # the binary is our own `encode/1` output read back from our own table.
+  # Registered because the attribute is read by Sobelow, not the compiler, which
+  # would otherwise warn it is set and never used (and CI compiles as errors).
+  Module.register_attribute(__MODULE__, :sobelow_skip, accumulate: true)
+  @sobelow_skip ["Misc.BinToTerm"]
   defp decode(bin), do: :erlang.binary_to_term(bin, [:safe])
 
   # ── Broadcast ─────────────────────────────────────────────────────────────

@@ -40,6 +40,31 @@ defmodule Polyphony.ReadModels.SceneSummary do
   end
 
   @doc """
+  The scenes this character has **closed**, oldest first — the stops on the sheet
+  scrubber (§2.14).
+
+  A summary row is written at scene close and only then, so the existence of one is
+  what "this scene is finished" means here. That is also the right resolution for
+  the scrubber: arc is extracted at close, so there is nothing to wind back to
+  between two closes.
+
+  Returns `[%{scene_id: id, summary: text, closed_at: naive_datetime}]`. The
+  character's *own* filtered summary, never the omniscient one — the scrubber shows
+  a sheet as it stood, and the sheet is theirs.
+  """
+  def closed_scenes_for(repo, character_id) do
+    cid = to_string(character_id)
+
+    repo.all(
+      from(s in __MODULE__,
+        where: s.character_id == ^cid,
+        order_by: [asc: s.inserted_at, asc: s.id],
+        select: %{scene_id: s.scene_id, summary: s.summary, closed_at: s.inserted_at}
+      )
+    )
+  end
+
+  @doc """
   The `limit` summaries closest to `query_embedding` **within `character_id`'s own
   summaries** — the memory-gradient retrieval slice 4 consumes (§9), scoped so it
   can never surface another viewer's summary.

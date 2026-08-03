@@ -1,0 +1,1538 @@
+/* The storybook's stylesheet — a build manifest, like app.css.
+ *
+ * PhoenixStorybook loads this instead of app.css, so the kit components' look has to
+ * be here. What is deliberately NOT here is the first-cut design system: a component
+ * that only looks right next to legacy CSS isn't ported yet, and the catalogue exists
+ * to show that. Tailwind arrives as utilities only — the mocks lean on them for layout
+ * and type scale, so the ported markup does too — and without preflight, which would
+ * restyle the storybook's own chrome.
+ *
+ * The kit is imported last for the same reason as in app.css: it outranks a utility it
+ * overlaps with, which is how the mocks resolve that collision. */
+
+/* Utilities only — no preflight. The storybook uses this: preflight is a global
+   element reset and would restyle phoenix_storybook's own chrome, which ships its
+   own psb-prefixed CSS and isn't ours to touch. The kit needs no reset of its own. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.pointer-events-none {
+  pointer-events: none;
+}
+
+.pointer-events-auto {
+  pointer-events: auto;
+}
+
+.visible {
+  visibility: visible;
+}
+
+.invisible {
+  visibility: hidden;
+}
+
+.collapse {
+  visibility: collapse;
+}
+
+.static {
+  position: static;
+}
+
+.fixed {
+  position: fixed;
+}
+
+.absolute {
+  position: absolute;
+}
+
+.relative {
+  position: relative;
+}
+
+.sticky {
+  position: sticky;
+}
+
+.inset-x-0 {
+  left: 0px;
+  right: 0px;
+}
+
+.right-0 {
+  right: 0px;
+}
+
+.top-0 {
+  top: 0px;
+}
+
+.top-full {
+  top: 100%;
+}
+
+.z-20 {
+  z-index: 20;
+}
+
+.z-50 {
+  z-index: 50;
+}
+
+.m-4 {
+  margin: 1rem;
+}
+
+.mx-4 {
+  margin-left: 1rem;
+  margin-right: 1rem;
+}
+
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.my-3 {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.my-4 {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.-ml-1 {
+  margin-left: -0.25rem;
+}
+
+.mb-0 {
+  margin-bottom: 0px;
+}
+
+.mb-0\.5 {
+  margin-bottom: 0.125rem;
+}
+
+.mb-1 {
+  margin-bottom: 0.25rem;
+}
+
+.mb-1\.5 {
+  margin-bottom: 0.375rem;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+
+.mb-2\.5 {
+  margin-bottom: 0.625rem;
+}
+
+.mb-3 {
+  margin-bottom: 0.75rem;
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
+.mb-5 {
+  margin-bottom: 1.25rem;
+}
+
+.ml-auto {
+  margin-left: auto;
+}
+
+.mt-0 {
+  margin-top: 0px;
+}
+
+.mt-0\.5 {
+  margin-top: 0.125rem;
+}
+
+.mt-1 {
+  margin-top: 0.25rem;
+}
+
+.mt-1\.5 {
+  margin-top: 0.375rem;
+}
+
+.mt-2 {
+  margin-top: 0.5rem;
+}
+
+.mt-2\.5 {
+  margin-top: 0.625rem;
+}
+
+.mt-3 {
+  margin-top: 0.75rem;
+}
+
+.mt-4 {
+  margin-top: 1rem;
+}
+
+.block {
+  display: block;
+}
+
+.inline {
+  display: inline;
+}
+
+.flex {
+  display: flex;
+}
+
+.table {
+  display: table;
+}
+
+.grid {
+  display: grid;
+}
+
+.contents {
+  display: contents;
+}
+
+.hidden {
+  display: none;
+}
+
+.h-11 {
+  height: 2.75rem;
+}
+
+.min-h-0 {
+  min-height: 0px;
+}
+
+.min-h-\[100dvh\] {
+  min-height: 100dvh;
+}
+
+.w-11 {
+  width: 2.75rem;
+}
+
+.w-14 {
+  width: 3.5rem;
+}
+
+.w-28 {
+  width: 7rem;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.min-w-0 {
+  min-width: 0px;
+}
+
+.min-w-\[11rem\] {
+  min-width: 11rem;
+}
+
+.min-w-\[14rem\] {
+  min-width: 14rem;
+}
+
+.min-w-\[15rem\] {
+  min-width: 15rem;
+}
+
+.min-w-\[8rem\] {
+  min-width: 8rem;
+}
+
+.max-w-md {
+  max-width: 28rem;
+}
+
+.max-w-sm {
+  max-width: 24rem;
+}
+
+.flex-1 {
+  flex: 1 1 0%;
+}
+
+.shrink-0 {
+  flex-shrink: 0;
+}
+
+.grow {
+  flex-grow: 1;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.list-none {
+  list-style-type: none;
+}
+
+.appearance-none {
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.items-start {
+  align-items: flex-start;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.items-baseline {
+  align-items: baseline;
+}
+
+.justify-end {
+  justify-content: flex-end;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-0 {
+  gap: 0px;
+}
+
+.gap-0\.5 {
+  gap: 0.125rem;
+}
+
+.gap-1 {
+  gap: 0.25rem;
+}
+
+.gap-1\.5 {
+  gap: 0.375rem;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-2\.5 {
+  gap: 0.625rem;
+}
+
+.gap-3 {
+  gap: 0.75rem;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.gap-x-2 {
+  -moz-column-gap: 0.5rem;
+       column-gap: 0.5rem;
+}
+
+.gap-y-1 {
+  row-gap: 0.25rem;
+}
+
+.space-y-1 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
+}
+
+.space-y-1\.5 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.375rem * var(--tw-space-y-reverse));
+}
+
+.space-y-2 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.5rem * var(--tw-space-y-reverse));
+}
+
+.space-y-2\.5 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.625rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.625rem * var(--tw-space-y-reverse));
+}
+
+.space-y-3 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.75rem * var(--tw-space-y-reverse));
+}
+
+.space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(1rem * var(--tw-space-y-reverse));
+}
+
+.overflow-hidden {
+  overflow: hidden;
+}
+
+.overflow-y-auto {
+  overflow-y: auto;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+
+.rounded-xl {
+  border-radius: 0.75rem;
+}
+
+.rounded-r-lg {
+  border-top-right-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+
+.border {
+  border-width: 1px;
+}
+
+.bg-\[var\(--b3\)\] {
+  background-color: var(--b3);
+}
+
+.bg-transparent {
+  background-color: transparent;
+}
+
+.p-2 {
+  padding: 0.5rem;
+}
+
+.p-2\.5 {
+  padding: 0.625rem;
+}
+
+.p-3 {
+  padding: 0.75rem;
+}
+
+.p-4 {
+  padding: 1rem;
+}
+
+.p-5 {
+  padding: 1.25rem;
+}
+
+.px-2 {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+.px-2\.5 {
+  padding-left: 0.625rem;
+  padding-right: 0.625rem;
+}
+
+.px-3 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.px-3\.5 {
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+}
+
+.px-4 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.px-5 {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+.py-1 {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.py-1\.5 {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+
+.py-10 {
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+}
+
+.py-2 {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.py-2\.5 {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+
+.py-3 {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.py-3\.5 {
+  padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
+}
+
+.py-4 {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.py-5 {
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.py-6 {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+
+.py-7 {
+  padding-top: 1.75rem;
+  padding-bottom: 1.75rem;
+}
+
+.py-8 {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.py-9 {
+  padding-top: 2.25rem;
+  padding-bottom: 2.25rem;
+}
+
+.pb-3 {
+  padding-bottom: 0.75rem;
+}
+
+.pl-3 {
+  padding-left: 0.75rem;
+}
+
+.pl-3\.5 {
+  padding-left: 0.875rem;
+}
+
+.pl-6 {
+  padding-left: 1.5rem;
+}
+
+.pt-0 {
+  padding-top: 0px;
+}
+
+.pt-0\.5 {
+  padding-top: 0.125rem;
+}
+
+.pt-1 {
+  padding-top: 0.25rem;
+}
+
+.pt-2 {
+  padding-top: 0.5rem;
+}
+
+.pt-2\.5 {
+  padding-top: 0.625rem;
+}
+
+.pt-3 {
+  padding-top: 0.75rem;
+}
+
+.pt-4 {
+  padding-top: 1rem;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-\[10px\] {
+  font-size: 10px;
+}
+
+.text-\[11\.5px\] {
+  font-size: 11.5px;
+}
+
+.text-\[11px\] {
+  font-size: 11px;
+}
+
+.text-\[12\.5px\] {
+  font-size: 12.5px;
+}
+
+.text-\[12px\] {
+  font-size: 12px;
+}
+
+.text-\[13\.5px\] {
+  font-size: 13.5px;
+}
+
+.text-\[13px\] {
+  font-size: 13px;
+}
+
+.text-\[14\.5px\] {
+  font-size: 14.5px;
+}
+
+.text-\[14px\] {
+  font-size: 14px;
+}
+
+.text-\[15px\] {
+  font-size: 15px;
+}
+
+.text-\[16px\] {
+  font-size: 16px;
+}
+
+.text-\[17px\] {
+  font-size: 17px;
+}
+
+.text-\[18px\] {
+  font-size: 18px;
+}
+
+.text-\[19px\] {
+  font-size: 19px;
+}
+
+.text-\[22px\] {
+  font-size: 22px;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.capitalize {
+  text-transform: capitalize;
+}
+
+.leading-\[1\.55\] {
+  line-height: 1.55;
+}
+
+.leading-\[1\.75\] {
+  line-height: 1.75;
+}
+
+.leading-\[1\.7\] {
+  line-height: 1.7;
+}
+
+.leading-none {
+  line-height: 1;
+}
+
+.leading-relaxed {
+  line-height: 1.625;
+}
+
+.leading-snug {
+  line-height: 1.375;
+}
+
+.tracking-\[\.06em\] {
+  letter-spacing: .06em;
+}
+
+.text-\[var\(--lamp\)\] {
+  color: var(--lamp);
+}
+
+.underline {
+  text-decoration-line: underline;
+}
+
+.opacity-50 {
+  opacity: 0.5;
+}
+
+.blur {
+  --tw-blur: blur(8px);
+  filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
+}
+
+.filter {
+  filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
+}
+
+/* ============================================================================
+   GENERATED FILE — DO NOT EDIT.
+
+   Ported from ux/polyphony-kit.css by `mix kit.port`, verbatim but for the kit's
+   §11 mock chrome. The design kit is the single source of truth: change it in
+   ux/, re-run the task, commit both. KitPortTest fails if the two disagree.
+   ============================================================================ */
+
+/* ============================================================================
+   POLYPHONY — UI KIT
+   The single source of truth for tokens and components across every mock.
+   Every screen file links this. Nothing here is defined twice anywhere else.
+
+   PORTING NOTE
+   The token block below maps onto daisyUI theme variables. Everything under
+   COMPONENTS is a Tailwind @apply candidate or a LiveView function component.
+   Class names are deliberately short and semantic so they survive the port.
+   ============================================================================ */
+
+/* ============================================================================
+   1 · TOKENS
+   Two registers × two themes. The register is the outer decision:
+
+     .stage  — working / live. Omniscient play, and every authoring screen.
+     .page   — reading. Character play, and published campaigns.
+
+   Both take .dark or .light. Usage: <div class="fr stage dark">
+
+   daisyUI mapping:
+     --b1 --b2 --b3   → base-100 / base-200 / base-300
+     --bc --bcm       → base-content / base-content at 60%
+     --rule           → border colour
+     --pri --pric     → primary / primary-content
+     --lamp           → info      · "now"
+     --pencil         → error     · "correction"
+     --ok             → success   · "done"
+     --secret         → a custom semantic; no daisyUI equivalent
+     --v1..--v8       → per-character voice colours, assigned by cast order
+   ============================================================================ */
+
+.fr {
+  --f-title: Spectral, Georgia, serif;
+  --f-ui:    Archivo, system-ui, sans-serif;
+  --f-mono:  "IBM Plex Mono", monospace;
+  font-family: var(--f-ui);
+  background: var(--b1);
+  color: var(--bc);
+}
+
+.stage.dark {
+  --b1:#15171C;
+  --b2:#1D2027;
+  --b3:#282C35;
+  --bc:#E9E5D9;
+  --bcm:#8C897E;
+  --rule:#2E323C;
+  --pri:#E9E5D9;
+  --pric:#15171C;
+  --pencil:#E0604A;
+  --lamp:#EDB25E;
+  --ok:#6FBF92;
+  --secret:#9B8FD4;
+  --v1:#7BA7D9;
+  --v2:#C08FD4;
+  --v3:#6FBF92;
+  --v4:#D9AE55;
+  --v5:#E09080;
+  --v6:#8FD4CE;
+  --v7:#B9B6E0;
+  --v8:#D9A0BE;
+}
+
+.stage.light {
+  --b1:#F6F3E9;
+  --b2:#EEEADC;
+  --b3:#E2DCCA;
+  --bc:#1A1D24;
+  --bcm:#6E6B61;
+  --rule:#D6CFBB;
+  --pri:#232833;
+  --pric:#F6F3E9;
+  --pencil:#A8302A;
+  --lamp:#8F5C10;
+  --ok:#2F6E4F;
+  --secret:#5A4E94;
+  --v1:#35618E;
+  --v2:#7A4E8C;
+  --v3:#2F6E4F;
+  --v4:#A5761B;
+  --v5:#9C4F3C;
+  --v6:#2F6E6E;
+  --v7:#5A5A94;
+  --v8:#94436A;
+}
+
+.page.dark {
+  --b1:#191419;
+  --b2:#211B22;
+  --b3:#2B232D;
+  --bc:#F0E9E0;
+  --bcm:#8B8090;
+  --rule:#302836;
+  --pri:#F0E9E0;
+  --pric:#191419;
+  --pencil:#E2604F;
+  --lamp:#F0A64C;
+  --ok:#5FBF8E;
+  --secret:#B7A8E8;
+  --v1:#8FB6E0;
+  --v2:#CE9BDE;
+  --v3:#7FCBA0;
+  --v4:#E0B96A;
+  --v5:#E8A090;
+  --v6:#9CDDD6;
+  --v7:#C4C1E8;
+  --v8:#E2AECA;
+}
+
+.page.light {
+  --b1:#FAF6EC;
+  --b2:#F3EEE0;
+  --b3:#E7DFCD;
+  --bc:#241F26;
+  --bcm:#6F6875;
+  --rule:#DED4C4;
+  --pri:#241F26;
+  --pric:#FAF6EC;
+  --pencil:#A8302A;
+  --lamp:#9A6210;
+  --ok:#2F6E4F;
+  --secret:#5A4E94;
+  --v1:#35618E;
+  --v2:#7A4E8C;
+  --v3:#2F6E4F;
+  --v4:#A5761B;
+  --v5:#9C4F3C;
+  --v6:#2F6E6E;
+  --v7:#5A5A94;
+  --v8:#94436A;
+}
+
+/* ============================================================================
+   2 · TYPE
+   Archivo for everything, including all prose in a transcript.
+   Spectral names things: screen titles, campaign and scene names, character
+   labels, and Director narration — the one place serif does body work.
+   Plex Mono for beats, ids, money.
+   Nothing uses italic as a semantic. Structure carries meaning.
+   ============================================================================ */
+
+.ttl  {
+  font-family: var(--f-title);
+}
+
+.mono {
+  font-family: var(--f-mono);
+}
+
+.dim  {
+  color: var(--bcm);
+}
+
+.lbl  {
+  font-family: var(--f-mono);
+  font-size:10px;
+  letter-spacing:.13em;
+  text-transform:uppercase;
+}
+
+/* ============================================================================
+   3 · SURFACES
+   ============================================================================ */
+
+.sheet {
+  border:1px solid var(--rule);
+  border-radius:14px;
+  background:var(--b1);
+  overflow:hidden;
+}
+
+.row   {
+  border-bottom:1px solid var(--rule);
+}
+
+.field {
+  background:var(--b1);
+  border:1px solid var(--rule);
+  border-radius:10px;
+}
+
+.scroller {
+  max-height:520px;
+  overflow-y:auto;
+}
+
+.scroller::-webkit-scrollbar {
+  width:6px;
+}
+
+.scroller::-webkit-scrollbar-thumb {
+  background:var(--rule);
+  border-radius:99px;
+}
+
+/* ============================================================================
+   4 · CONTROLS
+   Pencil is the editorial layer — reroll, edit, delete, branch, and every
+   error. It is never a primary action.
+   ============================================================================ */
+
+.btn {
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  border-radius:8px;
+  padding:.4rem .7rem;
+  font-size:13px;
+  font-weight:600;
+  border:1px solid transparent;
+  cursor:default;
+}
+
+.btn-pri  {
+  background:var(--pri);
+  color:var(--pric);
+}
+
+.btn-gh   {
+  background:transparent;
+  color:var(--bc);
+  border-color:var(--rule);
+}
+
+.btn-pen  {
+  background:transparent;
+  color:var(--pencil);
+  border-color:transparent;
+  padding:.2rem .35rem;
+  font-size:12px;
+  font-weight:500;
+}
+
+.btn-red  {
+  background:var(--pencil);
+  color:var(--b1);
+}
+
+.btn-off  {
+  background:var(--b3);
+  color:var(--bcm);
+}
+
+/* disabled-looking */
+
+.btn-sm   {
+  padding:.25rem .5rem;
+  font-size:12px;
+}
+
+.pill {
+  display:inline-flex;
+  align-items:center;
+  gap:.3rem;
+  border:1px solid var(--rule);
+  border-radius:999px;
+  padding:.1rem .5rem;
+  font-size:11px;
+  line-height:1.6;
+}
+
+.dot {
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  display:inline-block;
+}
+
+.av  {
+  width:28px;
+  height:28px;
+  border-radius:8px;
+  flex-shrink:0;
+}
+
+/* One boolean pattern, everywhere. Colour by meaning:
+   --sc:var(--lamp) for "always in mind", --sc:var(--secret) for "secret". */
+
+.sw    {
+  width:34px;
+  height:19px;
+  border-radius:999px;
+  position:relative;
+  flex-shrink:0;
+  background:var(--b3);
+}
+
+.sw i  {
+  position:absolute;
+  top:2px;
+  left:2px;
+  width:15px;
+  height:15px;
+  border-radius:999px;
+  background:var(--bcm);
+}
+
+.sw-on {
+  background:color-mix(in srgb, var(--sc) 40%, transparent);
+}
+
+.sw-on i {
+  left:auto;
+  right:2px;
+  background:var(--sc);
+}
+
+.seg   {
+  display:flex;
+  border:1px solid var(--rule);
+  border-radius:8px;
+  overflow:hidden;
+}
+
+.seg > * {
+  flex:1;
+  text-align:center;
+  padding:.35rem .5rem;
+  font-size:12px;
+  font-weight:600;
+}
+
+.seg-on  {
+  background:var(--b3);
+}
+
+.chk    {
+  width:18px;
+  height:18px;
+  border-radius:5px;
+  border:1.5px solid var(--rule);
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:11px;
+  font-weight:700;
+}
+
+.chk-on  {
+  background:var(--lamp);
+  border-color:var(--lamp);
+  color:var(--b1);
+}
+
+/* Outlined tick = inherited from a group. Can't be individually removed. */
+
+.chk-via {
+  border-color:var(--secret);
+  color:var(--secret);
+}
+
+.bar    {
+  height:5px;
+  border-radius:99px;
+  background:var(--b3);
+  overflow:hidden;
+}
+
+.bar i  {
+  display:block;
+  height:100%;
+  background:var(--lamp);
+}
+
+/* ============================================================================
+   5 · THE PERSPECTIVE CONTROL
+   The single most important idiom in the product. Identical markup, identical
+   position (top right of the header) on every surface with a viewpoint:
+   play as a character, play as omniscient, reading a published campaign,
+   its contents list, and preview on the world bible and character sheet.
+
+   <span class="viewas" style="--vc:var(--v2)"><i></i>Ilias ▾</span>
+
+   --vc is the character's voice colour; var(--bc) for omniscient,
+   var(--lamp) for limited omniscient, var(--bcm) for spectator.
+   ============================================================================ */
+
+.viewas   {
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  border:1px solid var(--vc);
+  color:var(--vc);
+  border-radius:999px;
+  padding:.12rem .5rem;
+  font-size:11.5px;
+  font-weight:600;
+  line-height:1.6;
+  white-space:nowrap;
+}
+
+.viewas i {
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  background:var(--vc);
+  display:inline-block;
+}
+
+/* ============================================================================
+   6 · THE INFO AFFORDANCE
+   Sits beside a section header, never inside a menu. One drawer per section,
+   covering the concepts in it — not one popover per setting.
+   Test for whether something needs one: does this label mean something
+   different here than a first-time reader would assume?
+   ============================================================================ */
+
+.info {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:15px;
+  height:15px;
+  border-radius:999px;
+  border:1px solid var(--bcm);
+  color:var(--bcm);
+  font-size:9.5px;
+  font-weight:700;
+  line-height:1;
+  flex-shrink:0;
+}
+
+/* ============================================================================
+   7 · TRANSCRIPT
+   Move types are told apart by structure, never by slant.
+   ============================================================================ */
+
+/* Director narration. Rules above and below, hanging dash, Spectral. */
+
+.m-world   {
+  border-top:1px solid var(--rule);
+  border-bottom:1px solid var(--rule);
+  padding:.7rem 0;
+}
+
+/* Interior monologue. Voice-coloured rule + a faint tint of the same hue.
+   Set --vc to the speaker's voice colour. */
+
+.m-thought {
+  border-left:2px solid var(--vc);
+  background:color-mix(in srgb, var(--vc) 7%, transparent);
+  border-radius:0 8px 8px 0;
+  padding:.5rem .7rem;
+}
+
+/* A generation that failed, rendered where it happened. */
+
+.m-fail    {
+  background:color-mix(in srgb, var(--pencil) 9%, transparent);
+  border-left:2px solid var(--pencil);
+  border-radius:0 8px 8px 0;
+  padding:.7rem .8rem;
+}
+
+/* "Now" — the live turn, the current beat, an unsaved draft.
+   The only bright thing on screen, so attention has one meaning everywhere. */
+
+.m-live    {
+  background:radial-gradient(120% 160% at 6% 0%,
+             color-mix(in srgb, var(--lamp) 15%, transparent) 0%, transparent 60%);
+}
+
+/* A beat divider. Sticky within the transcript, plain by design — it records
+   that a beat opened and never changes afterwards. */
+
+.beat-rule         {
+  position:sticky;
+  top:0;
+  z-index:5;
+  background:var(--b1);
+  display:flex;
+  align-items:center;
+  gap:.7rem;
+  padding:.55rem 0 .5rem;
+}
+
+.beat-rule::after  {
+  content:"";
+  flex:1;
+  height:1px;
+  background:var(--rule);
+}
+
+/* ============================================================================
+   8 · STATUS STRIP
+   Above the composer in both registers: a slot per cast member, then one
+   sentence. No beat number — the transcript rule owns that. No navigation.
+   Slots are voice-coloured and flex, so names become initials around six.
+   ============================================================================ */
+
+.strip {
+  border-top:1px solid var(--rule);
+  background:var(--b2);
+  padding:.55rem .9rem;
+}
+
+.slots {
+  display:flex;
+  gap:4px;
+  align-items:center;
+}
+
+.slot  {
+  height:20px;
+  min-width:20px;
+  border-radius:5px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:var(--f-mono);
+  font-size:9.5px;
+  font-weight:600;
+  flex:1 1 0;
+}
+
+.slot-took {
+  background:var(--sc);
+  color:var(--b1);
+}
+
+/* took their turn */
+
+.slot-now  {
+  background:color-mix(in srgb, var(--lamp) 22%, transparent);
+  border:1.5px solid var(--lamp);
+  color:var(--lamp);
+}
+
+/* happening now */
+
+.slot-wait {
+  border:1px solid var(--rule);
+  color:var(--bcm);
+}
+
+/* still to come */
+
+.slot-pass {
+  border:1px dashed var(--rule);
+  color:var(--bcm);
+}
+
+/* passed */
+
+.slot-fail {
+  border:1.5px solid var(--pencil);
+  color:var(--pencil);
+}
+
+.slot-you  {
+  box-shadow:0 0 0 2px var(--b2), 0 0 0 3.5px var(--bc);
+}
+
+/* ============================================================================
+   9 · NAVIGATION
+   One primitive for long forms (character sheet, world bible) and one for
+   sectioned screens (campaign, library, browse, admin). Both scroll
+   horizontally and never wrap.
+   ============================================================================ */
+
+.tabs {
+  display:flex;
+  overflow-x:auto;
+  border-bottom:1px solid var(--rule);
+  background:var(--b2);
+  width:100%;
+  min-width:0;
+}
+
+.tabs::-webkit-scrollbar {
+  display:none;
+}
+
+.tabs {
+  scrollbar-width:none;
+}
+
+.tab      {
+  padding:.6rem .8rem;
+  font-size:13px;
+  font-weight:600;
+  white-space:nowrap;
+  color:var(--bcm);
+  border-bottom:2px solid transparent;
+}
+
+.tab-on   {
+  color:var(--bc);
+  border-bottom-color:var(--lamp);
+}
+
+/* Amber dot = unbuilt, on the campaign's first run. */
+
+.tab-todo::after {
+  content:"";
+  display:inline-block;
+  width:5px;
+  height:5px;
+  border-radius:99px;
+  background:var(--lamp);
+  margin-left:.35rem;
+  vertical-align:middle;
+}
+
+.jump {
+  display:flex;
+  gap:.15rem;
+  overflow-x:auto;
+  padding:.5rem .9rem;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  background:var(--b2);
+  border-bottom:1px solid var(--rule);
+}
+
+.jump::-webkit-scrollbar {
+  display:none;
+}
+
+.jump {
+  scrollbar-width:none;
+}
+
+.jump span    {
+  font-family:var(--f-mono);
+  font-size:10px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--bcm);
+  padding:.15rem .4rem;
+  white-space:nowrap;
+  border-radius:5px;
+}
+
+.jump .on     {
+  color:var(--bc);
+  background:var(--b3);
+}
+
+/* Scene scrubber on a character sheet — one stop per closed scene. */
+
+.scrub {
+  display:flex;
+  gap:.15rem;
+  overflow-x:auto;
+  padding:.5rem .9rem;
+  width:100%;
+  min-width:0;
+  background:var(--b2);
+  border-bottom:1px solid var(--rule);
+}
+
+.scrub::-webkit-scrollbar {
+  display:none;
+}
+
+.scrub {
+  scrollbar-width:none;
+}
+
+.scrub span {
+  font-family:var(--f-mono);
+  font-size:10px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--bcm);
+  padding:.15rem .45rem;
+  white-space:nowrap;
+  border-radius:5px;
+}
+
+.scrub .on  {
+  color:var(--bc);
+  background:var(--b3);
+}
+
+/* ============================================================================
+   10 · MARKED LIST ITEMS
+   Left-rule + tint, used wherever an item in a list carries a state.
+   Secret takes the structure because visibility has consequences;
+   "always in mind" is a chip instead, so the two compose.
+   ============================================================================ */
+
+.secret {
+  border-left:2px solid var(--secret);
+  background:color-mix(in srgb, var(--secret) 8%, transparent);
+  border-radius:0 8px 8px 0;
+  padding-left:.65rem;
+}
+
+.core   {
+  border-left:2px solid var(--lamp);
+  background:color-mix(in srgb, var(--lamp) 7%, transparent);
+  border-radius:0 8px 8px 0;
+  padding-left:.65rem;
+}
+
+.prop   {
+  border-left:2px solid var(--lamp);
+  padding-left:.65rem;
+}
+
+/* proposed */
+
+.canon  {
+  border-left:2px solid var(--ok);
+  padding-left:.65rem;
+}
+
+/* accepted */
+
+.drop   {
+  border-left:2px solid var(--rule);
+  padding-left:.65rem;
+  opacity:.55;
+}
+
+.bound  {
+  border-left:2px solid var(--pencil);
+  padding-left:.65rem;
+}
+
+/* won't */
+
+.compel {
+  border-left:2px solid var(--v2);
+  padding-left:.65rem;
+}
+
+/* can't stop */
+
+.urgent {
+  border-left:2px solid var(--pencil);
+  background:color-mix(in srgb, var(--pencil) 7%, transparent);
+}
+
+.arch   {
+  opacity:.6;
+}
+
+.was    {
+  text-decoration:line-through;
+  text-decoration-color:var(--bcm);
+  text-decoration-thickness:1px;
+}
+
+.chip-core {
+  display:inline-flex;
+  align-items:center;
+  gap:.3rem;
+  border:1px solid var(--lamp);
+  color:var(--lamp);
+  border-radius:999px;
+  padding:.02rem .4rem;
+  font-family:var(--f-mono);
+  font-size:9.5px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.cover {
+  border:1px dashed var(--rule);
+  border-radius:10px;
+}
+
+.skel  {
+  height:12px;
+  border-radius:4px;
+  background:var(--b3);
+}
+
+.last\:mb-0:last-child {
+  margin-bottom: 0px;
+}
+
+@media (min-width: 768px) {
+  .md\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.phx-error .\[\.phx-error_\&\]\:flex {
+  display: flex;
+}
+
+.phx-loading .\[\.phx-loading_\&\]\:flex {
+  display: flex;
+}

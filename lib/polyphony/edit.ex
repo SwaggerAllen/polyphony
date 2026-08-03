@@ -23,6 +23,7 @@ defmodule Polyphony.Edit do
   private thought stays private.
   """
 
+  alias Polyphony.Scene.Cast
   alias Polyphony.{App, Packets, Fork}
   alias Polyphony.Commands.{SupersedePacket, CommitPacket}
   alias Polyphony.Director.BeatOps
@@ -99,7 +100,8 @@ defmodule Polyphony.Edit do
         character_id: character_id,
         beat: beat,
         packet_id: new_id,
-        packet: corrected,
+        # The correction came back from the model in display names; the log takes ids.
+        packet: Cast.resolve_addressees(scene_id, corrected),
         edited: true
       })
 

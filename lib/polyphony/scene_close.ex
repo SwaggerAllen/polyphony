@@ -141,7 +141,6 @@ defmodule Polyphony.SceneClose do
       :ok
     else
       {:error, reason} -> {:error, reason}
-      other -> {:error, other}
     end
   rescue
     e -> {:error, e}

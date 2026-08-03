@@ -56,5 +56,9 @@ defmodule Polyphony.SceneClose.WorldArcExtractor do
         "private thoughts and not passing moments. For each, mark its reach: \"global\" if " <>
         "everyone in the world would come to know it, or \"local\" if it would be known first " <>
         "only where it happened. Respond as JSON: " <>
-        ~s({"entries":[{"kind":"discovery|revision","scope":"global|local","statement":"..."}]}.)
+        "Also say who comes to know it — \"everyone\" for common knowledge, or \"scene\" if " <>
+        "only the people who were there would. And for each give a \"reason\": the specific " <>
+        "thing in this scene that made it true, in one sentence. Respond as JSON: " <>
+        ~s({"entries":[{"kind":"discovery|revision","scope":"global|local",) <>
+        ~s("known_by":"everyone|scene","statement":"...","reason":"..."}]}.)
 end

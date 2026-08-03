@@ -36,7 +36,7 @@ defmodule Polyphony.Visibility do
     IntroductionDismissed
   }
 
-  @type viewer :: :omniscient | {:character, term()}
+  @type viewer :: :omniscient | {:character, term()} | :spectator | {:readers, [term()]}
   @type member_at? :: (term(), term(), integer() -> boolean())
 
   @doc """
@@ -44,9 +44,54 @@ defmodule Polyphony.Visibility do
 
   The omniscient viewer sees everything (still routed here, never bypassing).
   Characters see only what the predicate grants; everything else is denied.
+
+  ## The two reading viewers (§3.1b)
+
+  Published campaigns add two more viewer values, and neither loosens anything above:
+
+    * `{:readers, ids}` — **limited omniscient**: visible if visible to *any* of the
+      published perspectives. A union over the existing character predicate, not a new
+      projection, which is the whole point — it inherits default-deny for free and
+      cannot drift from what those characters actually knew. The union is bounded by
+      what the publisher granted, so it is never omniscient: a character the author
+      kept back contributes nothing.
+    * `:spectator` — **what a camera caught**: speech and action, no interiority. It is
+      genuinely a different projection (nobody in the fiction has this view), so it is
+      written as its own default-deny clause rather than derived, and whispers are
+      denied *before* the general speech clause, not after.
+
+  Both are reachable only through a published snapshot. Nothing in play produces them.
   """
   @spec visible_to?(struct(), viewer(), member_at?()) :: boolean()
   def visible_to?(_event, :omniscient, _member_at?), do: true
+
+  # Limited omniscient: the union of the granted perspectives, and nothing beyond
+  # them. An empty grant sees nothing — default-deny, and the honest answer for a
+  # publication that named no perspectives.
+  def visible_to?(event, {:readers, ids}, member_at?) when is_list(ids) do
+    Enum.any?(ids, &visible_to?(event, {:character, &1}, member_at?))
+  end
+
+  # Spectator: everything said and done, nobody's thoughts. The safe default, and
+  # the only option that reveals nothing — which is *why* it's the default, not
+  # because it's the best read.
+  def visible_to?(event, :spectator, _member_at?) do
+    case event do
+      # A whisper is not something a camera in the room catches. Denied ahead of the
+      # general speech clause, because the order of these two is the whole difference
+      # between a spectator read and a leak.
+      %SpeechUttered{audibility: :private} -> false
+      %SpeechUttered{} -> true
+      %ActionTaken{} -> true
+      %DemeanorReported{} -> true
+      %WorldEventOccurred{} -> true
+      %CharacterEntered{} -> true
+      %CharacterExited{} -> true
+      # DEFAULT DENY (rule 3), same as for a character: thoughts, private state,
+      # scene lifecycle, arc, author-facing tooling. A camera has no interiority.
+      _ -> false
+    end
+  end
 
   def visible_to?(event, {:character, char_id}, member_at?)
       when is_function(member_at?, 3) do

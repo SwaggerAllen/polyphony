@@ -26,14 +26,18 @@ defmodule PolyphonyWeb.PlayFeatureTest do
     |> sign_in(user)
     |> visit("/play/#{scene}?as=mira")
     |> fill_in(text_field("text"), with: "(whisper to otto: meet me at dawn)")
-    |> click(button("Send"))
+    |> click(button("Take the turn"))
     |> assert_has(css("#transcript", text: "meet me at dawn"))
 
     # Bystander (cara): the page renders, but the whisper she wasn't part of is
     # structurally absent — occlusion is silent.
+    #
+    # The transcript itself is the anchor, not some other element on the page: a
+    # `refute_has` passes for free if the thing it looks inside never rendered, so the
+    # assertion that it *did* is what gives the refutation below its teeth.
     session
     |> visit("/play/#{scene}?as=cara")
-    |> assert_has(css("body", text: "Viewing as"))
+    |> assert_has(css("#transcript"))
     |> refute_has(css("#transcript", text: "meet me at dawn"))
 
     # Addressee (otto): the whisper is present.

@@ -74,7 +74,7 @@ defmodule PolyphonyWeb.PlayTurnsLiveTest do
       })
   end
 
-  test "an action already naming the actor isn't doubled; a bare one gets the name", %{conn: conn} do
+  test "an action is shown as written — the turn is attributed once, at its head", %{conn: conn} do
     scene = "turn-" <> Integer.to_string(System.unique_integer([:positive]))
     :ok = App.dispatch(%OpenScene{scene_id: scene, opened_beat: 0})
     :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: "Todd", beat: 1})
@@ -85,11 +85,18 @@ defmodule PolyphonyWeb.PlayTurnsLiveTest do
 
     {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
 
-    # Third-person content that already opens with the name is shown as-is (no "Todd Todd").
+    # The design gives each turn one heading with the actor's name, so a move never
+    # repeats it — which also ends the old "Todd Todd" doubling, without the
+    # does-it-already-start-with-the-name guess that used to prevent it.
     assert html =~ "Todd snaps his head toward her."
     refute html =~ "Todd Todd"
-    # A bare action gets the actor's name prepended.
-    assert html =~ "Lydia reaches out a trembling hand."
+
+    # A bare action stays bare: whose it is has already been said above it.
+    assert html =~ "reaches out a trembling hand."
+    refute html =~ "Lydia reaches out a trembling hand."
+
+    # ...and that's where it's said — the block's heading, in her voice colour.
+    assert html =~ ~r{ttl[^>]*>\s*Lydia\s*<}
   end
 
   test "turn controls are author-only", %{conn: conn} do

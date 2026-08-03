@@ -1,0 +1,6 @@
+/* Tailwind's three layers, as their own file so the build manifests can order them
+   explicitly. `@import` has to lead a stylesheet, so a file that wants something
+   *after* Tailwind can't just write these directives at the top of itself. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

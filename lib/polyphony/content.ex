@@ -60,32 +60,46 @@ defmodule Polyphony.Content do
   def permits?(register, category), do: category in register
 
   @doc """
-  Cap a boundary by the register (layer 2 constrains layer 3). A boundary whose
-  `:category` the register disables is **forced `:closed`** — the campaign ceiling
-  overrides characterization, so an `:open` stance can't reopen disabled content.
-  A boundary with no category is characterization and passes through untouched.
+  Cap a boundary by the register (layer 2 constrains layer 3). One whose `:category`
+  the register disables is **capped toward refusal** — the campaign ceiling overrides
+  characterization, so an `:open` stance can't reopen disabled content. One with no
+  category is characterization and passes through untouched.
+
+  **Toward refusal, not merely `:closed`.** For a refusal those are the same thing:
+  forced closed means she won't. For a **compulsion** they are opposites — a closed
+  compulsion is one she always acts on — so capping it also flips its direction, and
+  the item becomes a hard line against the same topic. `ux/polyphony-character.html`
+  §05 states the rule and why: *a compulsion flagged for content the campaign doesn't
+  allow is held closed, meaning she doesn't do it. That's the correct direction to
+  fail in.* A cap that only set `stance: :closed` would make the ceiling compel the
+  content it exists to forbid.
 
   Applied at context assembly, before `BoundaryGate.resolve/3`, so a gated-off
   category never releases regardless of arc or stance.
   """
   @spec gate_boundary(Boundary.t(), [category()]) :: Boundary.t()
   def gate_boundary(%Boundary{category: category} = boundary, register) do
-    if permits?(register, category), do: boundary, else: %Boundary{boundary | stance: :closed}
+    if permits?(register, category), do: boundary, else: cap(boundary)
   end
 
   @doc """
   Authoring-time constraint (FS §V8a): the same rule surfaced for the boundary
   editor. Returns `{:ok, boundary}` when the category is permitted, or
-  `{:constrained, forced_closed}` when the campaign ceiling forbids it — the editor
-  must not let an author open a boundary past the ceiling.
+  `{:constrained, capped}` when the campaign ceiling forbids it — the editor must not
+  let an author open a boundary past the ceiling. Caps identically to
+  `gate_boundary/2`, direction included.
   """
   @spec constrain_boundary(Boundary.t(), [category()]) ::
           {:ok, Boundary.t()} | {:constrained, Boundary.t()}
   def constrain_boundary(%Boundary{category: category} = boundary, register) do
     if permits?(register, category),
       do: {:ok, boundary},
-      else: {:constrained, %Boundary{boundary | stance: :closed}}
+      else: {:constrained, cap(boundary)}
   end
+
+  # Held, and held as a refusal — so the capped item always means "they don't".
+  defp cap(%Boundary{} = boundary),
+    do: %Boundary{boundary | stance: :closed, direction: :refusal}
 
   @doc """
   Render the enabled register for the prefix — what the Director and characters are

@@ -39,8 +39,18 @@ config :polyphony, Polyphony.App,
 # (foundational rule 1) — so a job produces commands.
 config :polyphony, Oban,
   repo: Polyphony.Repo,
-  queues: [generation: 5, director: 2, scene_close: 3],
-  plugins: [{Oban.Plugins.Pruner, max_age: 60 * 60}]
+  queues: [generation: 5, director: 2, scene_close: 3, maintenance: 1],
+  plugins: [
+    {Oban.Plugins.Pruner, max_age: 60 * 60},
+    # The recovery window is only a number rather than a claim if something actually
+    # purges on schedule (§2.13). Daily is enough for a 30-day window, and the job is
+    # idempotent, so a missed run catches up on the next one.
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"0 4 * * *", Polyphony.Jobs.PurgeTrash},
+       {"20 4 * * *", Polyphony.Jobs.PurgeAccounts}
+     ]}
+  ]
 
 # LLM provider config (§2, §3). DeepInfra direct by default; the workhorse MoE
 # on the volume path, the heavy model reserved for character/world generation.
@@ -121,7 +131,7 @@ config :esbuild,
   version: "0.21.5",
   polyphony: [
     args:
-      ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
+      ~w(js/app.js js/storybook.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
   ]
@@ -131,6 +141,16 @@ config :tailwind,
   polyphony: [
     args: ~w(--input=css/app.css --output=../priv/static/assets/app.css),
     cd: Path.expand("../assets", __DIR__)
+  ],
+  # The storybook loads its own bundle, not app.css (see assets/css/storybook.css).
+  storybook: [
+    args: ~w(--input=css/storybook.css --output=../priv/static/assets/storybook.css),
+    cd: Path.expand("../assets", __DIR__)
   ]
+
+# The component catalogue (PolyphonyWeb.Storybook) at /storybook. A review aid,
+# not a product surface: on in dev, off elsewhere unless STORYBOOK=true
+# (runtime.exs). It renders components only and reads no domain data.
+config :polyphony, :storybook, false
 
 import_config "#{config_env()}.exs"

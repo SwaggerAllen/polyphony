@@ -24,7 +24,7 @@ defmodule Polyphony.Context do
       the live events, so the cached portion cannot drift turn to turn.
   """
 
-  alias Polyphony.Authoring.{WorldBible, CharacterSheet, BoundaryGate}
+  alias Polyphony.Authoring.{Audience, WorldBible, CharacterSheet, BoundaryGate}
   alias Polyphony.Authoring.CharacterSheet.Boundary
   alias Polyphony.Content
   alias Polyphony.Content.CampaignConfig
@@ -49,9 +49,11 @@ defmodule Polyphony.Context do
   Materialize the frozen prefix for `character_id` in a scene.
 
   Required keys: `:scene_id`, `:character_id`, `:sheet` (the **effective** sheet),
-  `:premise`. Optional: `:world_bible`, `:distant_summaries` (the character's own
-  summaries, `[%{scene_id:, text:}]`), `:recent_scenes` (`[%{scene_id:, events:}]`
-  as raw events — filtered here), `:retriever`, `:fact_limit`, `:summary_limit`,
+  `:premise`. Optional: `:world_bible`, `:cast` (the rest of the campaign's cast as
+  `[{character_id, sheet}]` — the source of other people's secrets this character is
+  in on, §3.3), `:distant_summaries` (the character's own summaries,
+  `[%{scene_id:, text:}]`), `:recent_scenes` (`[%{scene_id:, events:}]` as raw events
+  — filtered here), `:retriever`, `:repo`, `:fact_limit`, `:summary_limit`,
   `:scene_token_budget`.
   """
   @spec materialize(keyword() | map()) :: SceneContext.t()
@@ -65,6 +67,20 @@ defmodule Polyphony.Context do
 
     retriever = Map.get(opts, :retriever, StaticRetriever)
     bible = Map.get(opts, :world_bible)
+
+    # Audience resolution reads live group membership, so it needs the repo the caller
+    # is using — and it is asked *here*, at scene open, which is what makes a walk-on
+    # written into a group mid-campaign arrive already knowing (§3.3).
+    audience_opts = opts |> Map.take([:repo]) |> Map.to_list()
+
+    # What this character starts out knowing that belongs to somebody else: another
+    # character's concealed fact whose audience names them. Absent `:cast` there is
+    # nothing, which is the default-deny reading — a caller that doesn't supply the
+    # cast makes a character know too little, never too much.
+    shared_secrets =
+      opts
+      |> Map.get(:cast, [])
+      |> shared_secrets_for(character_id, audience_opts)
 
     # Content register (§A5): the effective governance register, floor ∩ campaign,
     # computed here so it both frames the prefix and caps the boundary layer below.
@@ -117,8 +133,9 @@ defmodule Polyphony.Context do
 
     prefix =
       [
-        render_bible(bible),
+        render_bible(bible, character_id, audience_opts),
         render_sheet(sheet),
+        render_shared_secrets(shared_secrets),
         Content.render_register(register),
         render_boundaries(resolved_boundaries),
         render_facts("Always-resident facts", core_facts),
@@ -243,17 +260,24 @@ defmodule Polyphony.Context do
     end)
   end
 
-  defp render_bible(nil), do: nil
+  defp render_bible(nil, _character_id, _opts), do: nil
 
-  defp render_bible(%WorldBible{} = b) do
-    rules = if b.rules == [], do: nil, else: "Rules:\n" <> bullets(b.rules)
+  # **The character-facing read, and the only one that may be.** `known_to/3` gives
+  # the public statements plus the concealed ones this character's audience puts them
+  # in on; `statements/1` would hand them the world's secrets wholesale, which is the
+  # world-level version of the leak `Polyphony.Visibility` exists to prevent — and it
+  # would leak into a *prompt*, where nobody can see it happen. The Director reads the
+  # unfiltered list, in `Director.SceneBrief`, because the Director is omniscient.
+  defp render_bible(%WorldBible{} = b, character_id, opts) do
+    rules = WorldBible.known_to(b.rules, character_id, opts)
+    canon = WorldBible.known_to(b.starting_canon, character_id, opts)
 
     [
       b.name && "World: #{b.name}",
       b.setting && "Setting: #{b.setting}",
       b.tone && "Tone: #{b.tone}",
-      rules,
-      b.starting_canon != [] && "Canon:\n" <> bullets(b.starting_canon)
+      rules != [] && "Rules:\n" <> bullets(rules),
+      canon != [] && "Canon:\n" <> bullets(canon)
     ]
     |> compact_join()
   end
@@ -261,6 +285,9 @@ defmodule Polyphony.Context do
   defp render_sheet(%CharacterSheet{} = s) do
     [
       s.name && "You are #{s.name}.",
+      # Immediately after the name, because it governs every sentence written about
+      # them — including the third-person prose the model writes for their actions.
+      s.pronouns && "Referred to as #{s.pronouns}.",
       s.premise && s.premise,
       s.appearance && "Appearance: #{s.appearance}",
       s.voice && "Voice: #{s.voice}",
@@ -272,6 +299,38 @@ defmodule Polyphony.Context do
     |> compact_join()
   end
 
+  # Secrets that belong to somebody else and that this character is in on (§3.3).
+  #
+  # Rendered into the same "You know:" shape `initial_knowledge` uses, because that is
+  # exactly what §6.1 says that block is for — *characters must start knowing different
+  # things, and that has to be authored.* The audience picker is the authoring; this is
+  # the same idea reaching the prompt, so the prompt shape doesn't change.
+  #
+  # Each line names whose secret it is. A character who starts out knowing that Wren
+  # signs for the Kestrel knows it *about Wren*, and a bare statement would read as
+  # something true of themselves.
+  defp render_shared_secrets([]), do: nil
+
+  defp render_shared_secrets(lines),
+    do: "You also know, and are not supposed to:\n" <> bullets(lines)
+
+  # Walk the rest of the cast for concealed facts whose audience names this character.
+  # Their *own* facts are not here — those reach them through their sheet, which is
+  # where a character's own secrets have always come from.
+  defp shared_secrets_for(cast, character_id, opts) do
+    me = to_string(character_id)
+
+    for {owner_id, %CharacterSheet{} = sheet} <- cast,
+        to_string(owner_id) != me,
+        %CharacterSheet.Fact{concealed: true} = fact <- sheet.facts || [],
+        Audience.knows?(fact.audience, me, Keyword.put(opts, :owner, owner_id)) do
+      case sheet.name do
+        n when is_binary(n) and n != "" -> "#{n}: #{fact.statement}"
+        _ -> fact.statement
+      end
+    end
+  end
+
   defp render_relationships([]), do: nil
 
   defp render_relationships(rels) do
@@ -280,35 +339,75 @@ defmodule Polyphony.Context do
 
   # Boundaries (§A3) — the resolved gate state, framed **in character** so a refusal
   # is generated as a scene beat, not enforced as a filter (§V4.6).
+  #
+  # Both directions render here. A compulsion is the same gate with the sign flipped
+  # — held means she can't stop rather than she won't — and it is written that way
+  # rather than as a negated refusal, because a model handed "you will not not do
+  # this" writes a worse beat than one handed "you can't help it".
   defp render_boundaries([]), do: nil
 
   defp render_boundaries(resolved) do
-    "Your boundaries (a refusal here is you being yourself — a scene beat, not a rule):\n" <>
-      bullets(Enum.map(resolved, &boundary_line/1))
+    "Where you can be pushed (what happens here is you being yourself — a scene beat, " <>
+      "not a rule):\n" <> bullets(Enum.map(resolved, &boundary_line/1))
   end
+
+  defp boundary_line(%{boundary: %Boundary{stance: :open, topic: t, direction: :compulsion}}),
+    do: "#{t}: you do this freely."
 
   defp boundary_line(%{boundary: %Boundary{stance: :open, topic: t}}),
     do: "#{t}: you are open to this."
+
+  defp boundary_line(%{
+         boundary: %Boundary{stance: :closed, topic: t, direction: :compulsion, on_pressure: p}
+       }),
+       do: "#{t}: you always do this — you can't help it.#{resisted(p)}"
 
   defp boundary_line(%{boundary: %Boundary{stance: :closed, topic: t, on_pressure: p}}),
     do: "#{t}: a hard line — you will not.#{on_pressure(p)}"
 
   defp boundary_line(%{
-         boundary: %Boundary{stance: :conditional, topic: t, condition: c},
+         boundary: %Boundary{stance: :conditional, topic: t, condition: c} = b,
          released: true
-       }),
-       do: "#{t}: you held back until #{c}; that has happened, so you are open to it now."
+       }) do
+    case b.direction do
+      :compulsion ->
+        "#{t}: you couldn't stop until #{c}; that has happened, and it no longer holds you." <>
+          after_release(b.after_release)
+
+      _ ->
+        "#{t}: you held back until #{c}; that has happened, so you are open to it now." <>
+          after_release(b.after_release)
+    end
+  end
 
   defp boundary_line(%{
-         boundary: %Boundary{stance: :conditional, topic: t, condition: c, on_pressure: p},
+         boundary: %Boundary{stance: :conditional, topic: t, condition: c} = b,
          released: false
-       }),
-       do: "#{t}: you will not — not until #{c}, and that has not happened.#{on_pressure(p)}"
+       }) do
+    case b.direction do
+      # The after-state is deliberately absent while it holds: she isn't told what
+      # she'll be like afterwards until it's true of her, or she plays it early.
+      :compulsion ->
+        "#{t}: you can't stop — not until #{c}, and that has not happened.#{resisted(b.on_pressure)}"
+
+      _ ->
+        "#{t}: you will not — not until #{c}, and that has not happened.#{on_pressure(b.on_pressure)}"
+    end
+  end
+
+  defp boundary_line(%{boundary: %Boundary{topic: t, direction: :compulsion}}),
+    do: "#{t}: you keep doing this."
 
   defp boundary_line(%{boundary: %Boundary{topic: t}}), do: "#{t}: you hold back here."
 
   defp on_pressure(p) when p in [nil, ""], do: ""
   defp on_pressure(p), do: " When pushed: #{p}"
+
+  defp resisted(p) when p in [nil, ""], do: ""
+  defp resisted(p), do: " When someone tries to stop you: #{p}"
+
+  defp after_release(a) when a in [nil, ""], do: ""
+  defp after_release(a), do: " Since then: #{a}"
 
   defp render_facts(_label, []), do: nil
   defp render_facts(label, facts), do: "#{label}:\n" <> bullets(Enum.map(facts, & &1.statement))

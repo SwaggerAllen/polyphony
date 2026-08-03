@@ -56,7 +56,6 @@ defmodule Polyphony.Authoring.Studio do
     else
       {:error, %Ecto.Changeset{}} -> {:error, :invalid_draft}
       {:error, reason} -> {:error, reason}
-      other -> {:error, other}
     end
   end
 

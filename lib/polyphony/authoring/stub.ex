@@ -30,6 +30,9 @@ defmodule Polyphony.Authoring.Stub do
       name: name,
       role: role,
       status: :stub,
+      # Written during play rather than cast deliberately, so they start as a
+      # walk-on. Promotion is a real operation if they turn out to matter (§2.5).
+      tier: :incidental,
       relationships: Keyword.get(opts, :relationships, []),
       world_bible_id: Keyword.get(opts, :world_bible_id)
     }

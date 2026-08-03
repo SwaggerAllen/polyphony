@@ -324,28 +324,47 @@ multi-beat play.
 
 ---
 
-## Frontend redesign & design-kit fidelity ⬜ **Planned**
+## Frontend redesign & design-kit fidelity 🔨 **In progress**
 
 The current LiveView is the first-cut UI; the redesign is speced in `ux/` (mocks + the
-`polyphony-kit.css`/`polyphony-kit.html` component kit). Two things to do when it's built:
+`polyphony-kit.css`/`polyphony-kit.html` component kit). Three things to do:
 
-- **Port from the kit directly, to keep design and implementation in lockstep.** Lift the
-  kit's tokens, classes, and markup states into the components rather than re-deriving them
-  (see CLAUDE.md conventions). The backend prerequisites are the `backend-backlog.md`
-  immediate milestone.
-- **Build the play view id-native (finishes the identity migration).** The character-identity
-  migration (`backend-backlog.md §5.2`) deliberately stops at the domain foundation; its atomic
-  mint-flip includes a `play_live` overhaul (composer, roster options, viewer selector, whisper
-  parsing → stable ids, names for display). Do that here rather than overhaul-then-discard the
-  current LiveView — the rebuilt play view enters characters by library id, resolves emitted
-  whisper names → ids before commit, and the flip lands with dedicated whisper-routing +
-  rename-safety tests. Also clear dev/prod event streams + campaign `scenes` lists (clean-slate).
-- **Adopt a LiveView storybook so components can be reviewed in isolation.** A catalogue
-  that renders each kit component and its states on its own page — the natural home for the
-  kit once it's real markup, and a guard against drift (a component's states live in one
-  place instead of scattered across screens). `phoenix_storybook` is the leading option
-  (Surface Catalogue is the other, but it's Surface-specific); evaluate when the redesign
-  starts. Not blocking — a review/QA convenience, sequenced with the port, not before it.
+- **Port from the kit directly, to keep design and implementation in lockstep.** ✅ **The
+  foundation is built** — the kit's *tokens and classes* are now derived from `ux/` by
+  `mix kit.port` rather than hand-copied, and its *markup* lives in `PolyphonyWeb.Kit` as
+  function components. Detail in `completed-roadmap.md`. **Remaining: the screens.** Each
+  one ports by calling those components instead of re-deriving class strings. The first-cut
+  design system has been **deleted**, so **unported screens render unstyled until they're
+  rebuilt** — an accepted cost, since the app has no users until the rebuild lands. Their
+  LiveViews and tests stay until each replacement lands: they're the record of how a screen
+  drives the domain, and the behaviour the new one must still satisfy. **Play is ported**
+  (detail in `completed-roadmap.md`). Screens left to rebuild: campaign, sheet editor, world
+  bible, arc review, library, browse, settings, admin — in `ux/README.md`'s own order. Play,
+  the app shell and the campaign hub are done. The campaign's **Groups tab is unblocked but not
+  yet built** — `Polyphony.Groups` now exists (see `completed-roadmap.md`); the tab is the next
+  frontend piece. The **app shell is ported** — there is
+  no global nav bar; a screen owns the viewport and carries `Kit.header/1` with the overflow
+  menu. The backend prerequisites are the
+  `backend-backlog.md` immediate milestone.
+
+  Deferred out of the play port, each needing its own design surface or backend wiring:
+  the **audience picker** (`ux/polyphony-audience-picker.html` — an explicit "say it to"
+  control; the `(whisper to NAME: …)` syntax carries it meanwhile), **Pass / draft cards**
+  (the A1 interactive-turn wiring the FE/BE parity audit already tracks as deferred), the
+  redesigned **Introductions panel + character picker**, and the **Set the scene** screen.
+- **Build the play view id-native (finishes the identity migration).** ✅ **Done.** The
+  character-identity mint-flip (`backend-backlog.md §5.2`, phases 2b-emit + 3 + 4) landed
+  here rather than overhaul-then-discard the current LiveView: characters enter by library
+  id, emitted whisper names resolve to ids before commit, and the play view renders names
+  at the edge. Pinned by `PlayIdentityLiveTest` (whisper routing + rename safety), with
+  `Polyphony.SceneReset` / `mix scene.reset` for the clean-slate data wipe. Detail in
+  `completed-roadmap.md`; phase 5 (open `name` to editing/arc override) stays in the backlog.
+- **Adopt a LiveView storybook so components can be reviewed in isolation.** ✅ **Done** —
+  `phoenix_storybook` at `/storybook`, one page per kit component with its states. Gated by
+  the `:storybook` config flag (on in dev and test, elsewhere via `STORYBOOK=true`); it
+  reads no domain data. The suite renders every story and fails if a kit component has no
+  page, so the catalogue can't fall behind the components. Detail in
+  `completed-roadmap.md`.
 
 ---
 

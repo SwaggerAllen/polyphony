@@ -13,9 +13,15 @@ defmodule Polyphony.SceneClose.ArcSchema do
   @primary_key false
   embedded_schema do
     embeds_many :entries, Entry, primary_key: false do
-      field(:kind, Ecto.Enum, values: [:discovery, :revision])
+      field(:kind, Ecto.Enum, values: [:discovery, :revision, :release])
       field(:sheet_field, :string)
       field(:statement, :string)
+      # The "Because" line. Not required — a model that skips it produces a usable
+      # proposal, just a slower one to accept, and dropping the whole entry over a
+      # missing justification would be the worse trade.
+      field(:reason, :string)
+      # `:release` only — which line gave.
+      field(:released_topic, :string)
     end
   end
 
@@ -27,7 +33,7 @@ defmodule Polyphony.SceneClose.ArcSchema do
 
   defp entry_changeset(entry, params) do
     entry
-    |> cast(params, [:kind, :sheet_field, :statement])
+    |> cast(params, [:kind, :sheet_field, :statement, :reason, :released_topic])
     |> validate_required([:kind, :statement])
   end
 
@@ -49,6 +55,8 @@ defmodule Polyphony.SceneClose.ArcSchema do
             kind: e.kind,
             sheet_field: e.sheet_field,
             statement: e.statement,
+            reason: e.reason,
+            released_topic: e.released_topic,
             status: :proposed,
             beat: Keyword.get(opts, :beat),
             source_scene_id: Keyword.get(opts, :source_scene_id)

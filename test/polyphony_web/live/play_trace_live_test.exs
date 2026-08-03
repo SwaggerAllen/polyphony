@@ -89,7 +89,7 @@ defmodule PolyphonyWeb.PlayTraceLiveTest do
     assert html =~ "director"
     # The hidden copy source carries the plain-text timeline for the Copy button.
     assert html =~ ~s(id="scene-debug-copy")
-    assert html =~ "Copy debug"
+    assert html =~ ~s(data-copy-target="scene-debug-copy")
   end
 
   test "traces are author-only — a character view never shows them", %{conn: conn} do

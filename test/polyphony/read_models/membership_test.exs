@@ -73,4 +73,37 @@ defmodule Polyphony.ReadModels.MembershipTest do
     assert Enum.sort(Membership.members_at(Repo, "S1", 9)) == ["A", "B", "D"]
     assert Enum.sort(Membership.members_at(Repo, "S1", 11)) == ["B", "D"]
   end
+
+  describe "a character's scenes (§2.14 — \"In 3 scenes\" on their sheet)" do
+    test "counts scenes, not doorways: leaving and coming back is still one scene" do
+      replay!([entered("S1", "D", 1), exited("S1", "D", 4), entered("S1", "D", 8)])
+
+      assert Membership.scenes_for_character(Repo, "D") == ["S1"]
+      assert Membership.scene_count(Repo, "D") == 1
+    end
+
+    test "lists every scene a character has been in, in first-entry order" do
+      replay!([
+        entered("S2", "A", 3),
+        entered("S1", "A", 1),
+        entered("S3", "A", 7),
+        entered("S1", "B", 1)
+      ])
+
+      assert Membership.scenes_for_character(Repo, "A") == ["S1", "S2", "S3"]
+      assert Membership.scene_count(Repo, "A") == 3
+    end
+
+    test "someone else's scenes are not counted" do
+      replay!(@scenario)
+
+      assert Membership.scenes_for_character(Repo, "C") == ["S2"]
+      assert Membership.scene_count(Repo, "B") == 1
+    end
+
+    test "a character who has never played is zero, not an error" do
+      assert Membership.scenes_for_character(Repo, "nobody") == []
+      assert Membership.scene_count(Repo, "nobody") == 0
+    end
+  end
 end

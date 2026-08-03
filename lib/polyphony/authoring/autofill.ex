@@ -24,6 +24,9 @@ defmodule Polyphony.Authoring.Autofill do
   # {field, type, guidance}. type: :string (a single value) | :lines (one item/line).
   @character [
     {"name", :string, "the character's name (just the name, a few words)"},
+    {"pronouns", :string,
+     "the pronouns they go by, as a pair like \"she / her\", \"he / him\" or " <>
+       "\"they / them\" — write what suits the character, and don't assume from the name"},
     {"premise", :string, "a one-line hook — who they are and what drives them"},
     {"appearance", :string, "how they look and physically carry themselves"},
     {"voice", :string, "how they speak — diction, rhythm, verbal tics"},
@@ -193,11 +196,96 @@ defmodule Polyphony.Authoring.Autofill do
   end
 
   @doc """
-  Propose **boundaries** (lines the character holds, §A3 — played as scene beats, never
-  filters) from their fields + context. Returns
-  `{:ok, [%{"topic","stance","condition","on_pressure","category"}]}`; `:existing`
-  topics are shown as "don't repeat" and filtered out. `stance` ∈ closed|conditional|open;
-  `category` ∈ sexual|graphic_violence|other|"" (blank ⇒ pure characterization).
+  Propose **facts** — short, flat statements that are true about the character.
+
+  `ux/polyphony-character.html` §03 defines them and what they're for: *what she'd
+  never contradict, so keep them to things you'd defend rather than things you'd
+  like.* Returns `{:ok, [%{"statement","core","concealed"}]}`; `:existing` statements
+  are shown as "don't repeat" and filtered out.
+
+  The model may flag a fact **core** (always resident) or **concealed** (a secret),
+  and is told to be sparing with the first: the drawer's own nudge is that *a few is
+  right*, because always-in-mind is context every turn of every scene and twenty of
+  them is a quality problem.
+  """
+  @spec suggest_facts(map(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  def suggest_facts(current, opts \\ []) do
+    current = stringify(current)
+
+    existing =
+      opts[:existing] |> List.wrap() |> Enum.map(&fact_statement/1) |> Enum.reject(&(&1 == ""))
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author populate the facts on a role-play character sheet. A " <>
+            "fact is a SHORT, FLAT statement that is simply true about them — the kind of " <>
+            "thing they would never contradict. Concrete and defensible, not aspirational " <>
+            "and not a mood. Propose 4–6. For each, two independent flags: \"core\" (true " <>
+            "if it is something they would never stop being aware of — be sparing, a few " <>
+            "at most) and \"concealed\" (true if nobody else starts out knowing it). The " <>
+            "two are orthogonal: someone can have a secret they rarely think about. Return " <>
+            "ONLY a JSON array of objects with keys \"statement\", \"core\" and " <>
+            "\"concealed\". Do NOT repeat anything already listed."
+      },
+      %{
+        role: "user",
+        content:
+          context_block(context(opts)) <>
+            character_block(current) <> existing_facts_block(existing)
+      }
+    ]
+
+    with {:ok, text} <- Polyphony.LLM.call(messages, [response: :facts] ++ meter_opts(opts)),
+         {:ok, list} <- decode_array(text) do
+      excluded = existing |> Enum.map(&normalize_name/1) |> MapSet.new()
+
+      facts =
+        list
+        |> Enum.filter(&is_map/1)
+        |> Enum.map(fn item ->
+          %{
+            "statement" => String.trim(to_string(item["statement"] || "")),
+            "core" => truthy?(item["core"]),
+            "concealed" => truthy?(item["concealed"])
+          }
+        end)
+        |> Enum.reject(
+          &(&1["statement"] == "" or MapSet.member?(excluded, normalize_name(&1["statement"])))
+        )
+        |> Enum.uniq_by(&normalize_name(&1["statement"]))
+
+      {:ok, facts}
+    end
+  end
+
+  defp fact_statement(%{statement: s}), do: to_string(s || "")
+  defp fact_statement(%{"statement" => s}), do: to_string(s || "")
+  defp fact_statement(_), do: ""
+
+  defp existing_facts_block([]), do: ""
+
+  defp existing_facts_block(statements),
+    do:
+      "\n\nAlready true of them (do not repeat):\n" <> Enum.map_join(statements, "\n", &"- #{&1}")
+
+  defp truthy?(true), do: true
+  defp truthy?("true"), do: true
+  defp truthy?(_), do: false
+
+  @doc """
+  Propose **pressures** (§A3 — played as scene beats, never filters) from the
+  character's fields + context. Returns
+  `{:ok, [%{"topic","stance","direction","condition","on_pressure","after_release","category"}]}`;
+  `:existing` topics are shown as "don't repeat" and filtered out. `stance` ∈
+  closed|conditional|open; `direction` ∈ refusal|compulsion; `category` ∈
+  sexual|graphic_violence|other|"" (blank ⇒ pure characterization).
+
+  Both directions are asked for, and roughly evenly: the thing a character *can't
+  stop* doing is the same gate with the sign flipped and is usually the better story
+  engine, so a suggester that only proposed refusals would quietly halve what the
+  feature is for.
   """
   @spec suggest_boundaries(map(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def suggest_boundaries(current, opts \\ []) do
@@ -210,24 +298,28 @@ defmodule Polyphony.Authoring.Autofill do
       %{
         role: "system",
         content:
-          "You are helping an author populate a role-play character's boundaries — lines " <>
-            "this character holds in the story. A refusal is played as a scene beat, never a " <>
-            "content filter. Propose 2–4 **conditional** boundaries: lines the character holds " <>
-            "FOR NOW but that the right story development could change — slow burns, not " <>
-            "permanent hard 'no's. For each, give the condition: what must be earned or happen " <>
-            "in the story before they'd cross it. Choose topics that plausibly shift with the " <>
-            "story (intimacy, trust, loyalty, opening up, using violence, revealing a secret), " <>
-            "NOT absolute taboos. TWO RULES: (1) The topic and its condition must share the " <>
-            "same scope. If the line is about a SPECIFIC person, name them in the topic (e.g. " <>
-            "\"Physical intimacy with Jack\") — never gate a broad, everyone topic on one " <>
-            "person's arc. If the topic is general, keep the condition general too. (2) The " <>
-            "condition must be ONE concrete development the story can clearly reach — a single " <>
-            "checkable event, not several things bundled together (avoid \"and\"/\"both\"), and " <>
-            "not a vague mood. Return ONLY a JSON array of objects, each with keys \"topic\" " <>
-            "(what the line is about), \"condition\" (REQUIRED, non-empty — the one thing that " <>
-            "must happen first), \"on_pressure\" (how they react when pushed, optional), and " <>
-            "\"category\" (\"sexual\", \"graphic_violence\", \"other\", or \"\" for pure " <>
-            "characterization). Do NOT repeat a topic already listed."
+          "You are helping an author populate the places a role-play character can be " <>
+            "pushed. These are played as scene beats, never as a content filter. Propose 2–4 " <>
+            "**conditional** ones: things that hold FOR NOW but that the right story " <>
+            "development could change — slow burns, not permanent absolutes. Mix the two " <>
+            "DIRECTIONS roughly evenly: a \"refusal\" is something they won't do; a " <>
+            "\"compulsion\" is something they can't stop doing (covering for someone, signing " <>
+            "whatever is put in front of them, going back to a place). A compulsion is often " <>
+            "the more dramatic of the two — propose at least one. Choose topics that " <>
+            "plausibly shift with the story (intimacy, trust, loyalty, opening up, using " <>
+            "violence, revealing a secret, protecting someone), NOT absolute taboos. TWO " <>
+            "RULES: (1) The topic and its condition must share the same scope. If it is about " <>
+            "a SPECIFIC person, name them in the topic (e.g. \"Physical intimacy with Jack\") " <>
+            "— never gate a broad, everyone topic on one person's arc. If the topic is " <>
+            "general, keep the condition general too. (2) The condition must be ONE concrete " <>
+            "development the story can clearly reach — a single checkable event, not several " <>
+            "bundled together (avoid \"and\"/\"both\"), and not a vague mood. Return ONLY a " <>
+            "JSON array of objects, each with keys \"topic\" (what it is about), " <>
+            "\"direction\" (\"refusal\" or \"compulsion\"), \"condition\" (REQUIRED, " <>
+            "non-empty — the one thing that must happen first), \"on_pressure\" (how they " <>
+            "react when pushed against it, optional), \"after_release\" (what they are like " <>
+            "once it turns, optional), and \"category\" (\"sexual\", \"graphic_violence\", " <>
+            "\"other\", or \"\" for pure characterization). Do NOT repeat a topic already listed."
       },
       %{
         role: "user",
@@ -262,15 +354,20 @@ defmodule Polyphony.Authoring.Autofill do
 
   defp normalize_boundary(item) do
     category = item["category"] |> to_string() |> String.trim() |> String.downcase()
+    direction = item["direction"] |> to_string() |> String.trim() |> String.downcase()
 
     %{
       "topic" => String.trim(to_string(item["topic"] || "")),
-      # Generated boundaries are always **conditional** slow-burns (§A3) — an auto-proposed
+      # Generated pressures are always **conditional** slow-burns (§A3) — an auto-proposed
       # hard line or "open" non-boundary isn't worth surfacing; the author sets those by
       # hand in the editor, where every stance is available.
       "stance" => "conditional",
+      # Anything the model didn't say plainly is a refusal: it's the reading that can
+      # only make a character less likely to act, which is the direction to fail in.
+      "direction" => if(direction == "compulsion", do: "compulsion", else: "refusal"),
       "condition" => String.trim(to_string(item["condition"] || "")),
       "on_pressure" => String.trim(to_string(item["on_pressure"] || "")),
+      "after_release" => String.trim(to_string(item["after_release"] || "")),
       "category" => if(category in @categories, do: category, else: "")
     }
   end
@@ -713,8 +810,6 @@ defmodule Polyphony.Authoring.Autofill do
 
   defp context_block(%{} = ctx),
     do: role_block(ctx[:role]) <> world_block(ctx[:world]) <> relations_block(ctx[:relations])
-
-  defp context_block(_), do: ""
 
   # A character stubbed from another's relationships carries a one-line `role` (how
   # that source character described them, e.g. "estranged mentor"). Feed it into

@@ -9,6 +9,21 @@ defmodule PolyphonyWeb.PlayLive do
   tokens). The composer commits a user turn directly; **Continue** advances the beat
   and lets the autonomous cast respond through the Oban Director loop. Three distinct
   waiting states, per the FS principle.
+
+  ## Identity: ids in, names out (§5.2)
+
+  This view is **id-native**. Everything that routes — the viewer, the roster, the
+  speaker, control modes, packet ids, whisper addressees — is a stable character id
+  (the library entry's id, minted at `EnterCharacter`). Everything a person reads or
+  types is a display name, resolved through `Polyphony.Scene.Cast` at the edge:
+  `render_name/2` on the way out, `resolve_addressees/2` on the way in, immediately
+  before `CommitPacket`.
+
+  The point is that renaming a character can't corrupt a scene. A whisper addressed
+  to an id keeps reaching the same person after a rename; a whisper addressed to a
+  name would silently stop — fail-*safe* under default-deny (nobody sees it who
+  shouldn't), but a real bug. Nothing here may put a name where a routing key
+  belongs.
   """
   use PolyphonyWeb, :live_view
 
@@ -27,6 +42,12 @@ defmodule PolyphonyWeb.PlayLive do
   }
 
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
+  alias Polyphony.Scene.Cast
+  alias PolyphonyWeb.Kit
+  alias PolyphonyWeb.Transcript
+  alias PolyphonyWeb.Layouts
+  alias PolyphonyWeb.Play.Strip
+  alias PolyphonyWeb.Voice
   alias Polyphony.Authoring.Effective
   alias Polyphony.DebugTap
   alias Polyphony.Director.{BeatOps, SceneBrief}
@@ -36,6 +57,7 @@ defmodule PolyphonyWeb.PlayLive do
     DeclareTurnOrder,
     EnterCharacter,
     DismissIntroduction,
+    RecordWorldEvent,
     SetControlMode,
     SupersedePacket
   }
@@ -69,6 +91,7 @@ defmodule PolyphonyWeb.PlayLive do
        scene_id: scene_id,
        page_title: "Play",
        topic: nil,
+       cast: %Cast{},
        waiting: :you,
        progress: %{phase: :idle, subject: nil},
        introductions: [],
@@ -82,7 +105,13 @@ defmodule PolyphonyWeb.PlayLive do
        traces: [],
        debug_feed: [],
        debug_feed_text: "",
-       premise: ""
+       premise: "",
+       narrating: false,
+       panel: nil,
+       voices: %{},
+       campaign_name: "",
+       scene_title: "The scene",
+       strip: %{slots: [], sentence: nil, tone: nil}
      )}
   end
 
@@ -91,11 +120,21 @@ defmodule PolyphonyWeb.PlayLive do
   def handle_params(params, _uri, socket) do
     viewer = parse_viewer(params["as"])
     socket = resubscribe(socket, viewer)
-    {:noreply, socket |> assign(viewer: viewer, speaker: speaker(viewer)) |> reload()}
+
+    {:noreply,
+     socket
+     |> assign(viewer: viewer, speaker: speaker(viewer), register: register_for(viewer))
+     |> reload()}
   end
 
   defp parse_viewer(as) when as in [nil, "", "omniscient"], do: :omniscient
   defp parse_viewer(as), do: {:character, as}
+
+  # The register is the surface's, not the user's (`ux/README.md`): a character in
+  # their own head is reading, so `.page`; the omniscient author is working, so
+  # `.stage`. Same components either way — different density and warmth.
+  defp register_for({:character, _}), do: :page
+  defp register_for(_), do: :stage
 
   # You speak as whoever you're viewing as; omniscient is a read-only vantage.
   defp speaker({:character, c}), do: c
@@ -122,7 +161,14 @@ defmodule PolyphonyWeb.PlayLive do
     messages = Broadcast.replay(events, socket.assigns.viewer, member_at?, 0)
 
     next_beat = 1 + Enum.max([0 | Enum.map(plain, &event_beat/1)])
+    # The roster is character **ids**; `cast` is how they become readable. Rebuilt on
+    # every reload so a rename shows up without a page load.
     roster = BeatOps.members_now(scene_id, max(next_beat - 1, 1))
+    cast = Cast.for_scene(scene_id)
+    # Voice colours come from the hue stored on each sheet, so they're stable across
+    # the transcript, the strip and the perspective control — and stable across a
+    # cast change, which is what deriving them from order could never be.
+    voices = Map.new(cast.id_to_hue, fn {id, hue} -> {id, Voice.colour(hue)} end)
 
     traces = if socket.assigns.debug_trace, do: DebugTap.recent(scene_id), else: []
     failures = open_failures(socket)
@@ -133,12 +179,26 @@ defmodule PolyphonyWeb.PlayLive do
       raw_events: events,
       traces: traces,
       roster: roster,
+      cast: cast,
+      voices: voices,
+      strip:
+        Strip.build(
+          beat_events: BeatOps.beat_events(scene_id, max(next_beat - 1, 1)),
+          order: TurnOrder.for_beat(plain, max(next_beat - 1, 1)),
+          members: roster,
+          viewer: socket.assigns.viewer,
+          generating: generating_now(socket.assigns.progress),
+          names: cast.id_to_name,
+          voices: voices
+        ),
       next_beat: next_beat,
       premise: scene_premise(plain),
+      campaign_name: campaign_name(socket),
+      scene_title: scene_title(plain),
       control_modes: Map.new(roster, fn c -> {c, TurnOrder.control_mode(plain, c)} end),
       # The Director's pending introductions — author-facing tooling, so only the
       # omniscient view shows the queue (and each carries how it resolves).
-      introductions: intro_queue(socket, plain),
+      introductions: intro_queue(socket, plain, cast),
       failures: failures,
       debug_feed: feed,
       debug_feed_text: feed_text(feed)
@@ -156,6 +216,30 @@ defmodule PolyphonyWeb.PlayLive do
     end
   end
 
+  # The header, per the kit's standard header spec: campaign name small, the scene's
+  # location as the title. Play and the published reading screen share this markup.
+  defp scene_title(plain) do
+    Enum.find_value(plain, "The scene", fn
+      %SceneOpened{location_id: l} when is_binary(l) and l != "" -> l
+      _ -> nil
+    end)
+  end
+
+  defp campaign_name(socket) do
+    with %SceneOpened{campaign_id: cid} when not is_nil(cid) <-
+           scene_opened(socket.assigns.scene_id),
+         entry when not is_nil(entry) <- Library.get(cid),
+         %{name: name} when is_binary(name) <- Library.payload(entry) do
+      name
+    else
+      _ -> ""
+    end
+  end
+
+  # Who the beat loop is generating right now, if anyone — the strip's live slot.
+  defp generating_now(%{phase: :generating, subject: s}) when is_binary(s) and s != "", do: s
+  defp generating_now(_), do: nil
+
   defp scene_premise(plain) do
     Enum.find_value(plain, "", fn
       %SceneOpened{premise: p} -> p || ""
@@ -163,12 +247,12 @@ defmodule PolyphonyWeb.PlayLive do
     end)
   end
 
-  defp intro_queue(socket, plain) do
+  defp intro_queue(socket, plain, cast) do
     if socket.assigns.viewer == :omniscient do
       by_name = owner_characters(socket.assigns.current_user)
 
       plain
-      |> pending_introductions()
+      |> pending_introductions(cast)
       |> Enum.map(fn intro ->
         entry = Map.get(by_name, String.downcase(intro.name))
         Map.put(intro, :resolution, resolution(entry))
@@ -180,7 +264,7 @@ defmodule PolyphonyWeb.PlayLive do
 
   # Fold the stream into the still-pending proposals (proposed, minus dismissed, minus
   # those who have since entered).
-  defp pending_introductions(plain) do
+  defp pending_introductions(plain, cast) do
     plain
     |> Enum.reduce(%{}, fn
       %IntroductionProposed{name: n} = e, acc ->
@@ -189,8 +273,10 @@ defmodule PolyphonyWeb.PlayLive do
       %IntroductionDismissed{name: n}, acc ->
         Map.delete(acc, String.downcase(n))
 
+      # An introduction is proposed by name but entered by id (§5.2), so match the
+      # two through the cast — otherwise an admitted character stays in the queue.
       %CharacterEntered{character_id: c}, acc ->
-        Map.delete(acc, String.downcase(to_string(c)))
+        Map.delete(acc, String.downcase(Cast.render_name(cast, c)))
 
       _e, acc ->
         acc
@@ -235,7 +321,13 @@ defmodule PolyphonyWeb.PlayLive do
   # current scene member. Returns the names actually stubbed.
   defp stub_mentions(socket, names) do
     known = owner_characters(socket.assigns.current_user)
-    members = MapSet.new(socket.assigns.roster, &String.downcase(to_string(&1)))
+    # The roster is ids; a mention is a name. Compare on names.
+    members =
+      MapSet.new(
+        socket.assigns.roster,
+        &String.downcase(Cast.render_name(socket.assigns.cast, &1))
+      )
+
     owner = Owner.of(socket.assigns.current_user)
     world_id = campaign_world_id(socket)
 
@@ -290,41 +382,57 @@ defmodule PolyphonyWeb.PlayLive do
   end
 
   # Enter a finalized character into the scene at the current beat boundary and seed
-  # their frozen context so the Director loop can cast them next.
-  defp admit(socket, name, %CharacterSheet{} = sheet) do
+  # their frozen context so the Director loop can cast them next. The character enters
+  # by **library id** (§5.2) — the same mint as scene open — with the name kept only
+  # for what the author reads.
+  defp admit(socket, entry, %CharacterSheet{name: name} = sheet) do
     scene_id = socket.assigns.scene_id
     beat = max(socket.assigns.next_beat - 1, 1)
-    :ok = App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: name, beat: beat})
-    seed_context(scene_id, name, sheet, socket.assigns.premise, campaign_world_bible(socket))
+    character_id = to_string(entry.id)
+
+    :ok =
+      App.dispatch(%EnterCharacter{scene_id: scene_id, character_id: character_id, beat: beat})
+
+    seed_context(
+      scene_id,
+      character_id,
+      sheet,
+      socket.assigns.premise,
+      campaign_world_bible(socket)
+    )
+
     # Fold the newcomer into the Director's omniscient brief so the next beat knows them.
     SceneBrief.note_character(scene_id, sheet)
     socket |> reload() |> put_flash(:info, "#{name} joins the scene.")
   end
 
-  defp admit(socket, name, _other),
-    do: put_flash(socket, :error, "#{name} has no usable sheet yet.")
+  defp admit(socket, _entry, _other),
+    do: put_flash(socket, :error, "That character has no usable sheet yet.")
 
-  defp seed_context(scene_id, name, %CharacterSheet{} = sheet, premise, bible) do
+  defp seed_context(scene_id, character_id, %CharacterSheet{} = sheet, premise, bible) do
     {campaign_id, location} = scene_campaign_location(scene_id)
 
     ctx =
       Context.materialize(
         scene_id: scene_id,
-        character_id: name,
+        character_id: character_id,
         # Canon character + world arc folded in (§2.8); world facts scoped to this
-        # scene's location (global + local-here).
-        sheet: Effective.sheet(sheet, name),
+        # scene's location (global + local-here). Arc keys on the same id the log
+        # uses, so accumulated arc survives a rename (§5.2 phase 4).
+        sheet: Effective.sheet(sheet, character_id),
         premise: premise,
         world_bible: Effective.world_bible(bible, campaign_id, location),
+        # The rest of the cast, so a secret whose audience names this character
+        # actually reaches them (§3.3). Live group membership is read here, at scene
+        # open, which is what lets a newly-written group member already know.
+        cast: Rebuild.cast(scene_id),
         # Retrieve this character's own distant-scene summaries from pgvector
         # (no-ops to [] without egress / when the embed fails).
         retriever: PgvectorRetriever
       )
 
-    Store.put(scene_id, name, ctx)
+    Store.put(scene_id, character_id, ctx)
   end
-
-  defp seed_context(_scene_id, _name, _other, _premise, _bible), do: :ok
 
   # The scene's world bible payload (a `%WorldBible{}`), or nil — for framing both
   # the admitted character's context and the Director's omniscient brief.
@@ -440,7 +548,7 @@ defmodule PolyphonyWeb.PlayLive do
       {:noreply,
        socket
        |> assign(waiting: :director)
-       |> put_flash(:info, "Rerolling #{c}…")
+       |> put_flash(:info, "Rerolling #{name_of(socket, c)}…")
        |> start_async({:reroll, c}, fn -> Polyphony.Reroll.reroll(scene, beat, c) end)}
     end)
   end
@@ -462,7 +570,7 @@ defmodule PolyphonyWeb.PlayLive do
           reason: "deleted by author"
         })
 
-      {:noreply, socket |> put_flash(:info, "Removed #{c}'s turn.") |> reload()}
+      {:noreply, socket |> put_flash(:info, "Removed #{name_of(socket, c)}'s turn.") |> reload()}
     end)
   end
 
@@ -506,12 +614,20 @@ defmodule PolyphonyWeb.PlayLive do
               character_id: c,
               beat: beat,
               packet_id: new_id,
-              packet: %TurnPacket{moves: moves, self_state: self_state},
+              # The author edited names back into the whisper line; ids go to the log.
+              packet:
+                Cast.resolve_addressees(
+                  socket.assigns.cast,
+                  %TurnPacket{moves: moves, self_state: self_state}
+                ),
               edited: true
             })
 
           {:noreply,
-           socket |> assign(editing: nil) |> put_flash(:info, "Updated #{c}'s turn.") |> reload()}
+           socket
+           |> assign(editing: nil)
+           |> put_flash(:info, "Updated #{name_of(socket, c)}'s turn.")
+           |> reload()}
       end
     end)
   end
@@ -529,6 +645,44 @@ defmodule PolyphonyWeb.PlayLive do
        |> start_async(:mentions, fn -> Autofill.extract_mentions(prose, user_id: uid) end)}
     end)
   end
+
+  # ── The GM's own moves ────────────────────────────────────────────────────────
+
+  # Narrate: the one thing only the GM writes, because it isn't anybody's turn. It
+  # commits a world event at the current beat — the same event the Director emits,
+  # from a human instead — so it's visible to every member and reads as fiction.
+  def handle_event("narrate_open", _params, socket),
+    do: {:noreply, assign(socket, narrating: true, panel: nil)}
+
+  def handle_event("cancel_narrate", _params, socket),
+    do: {:noreply, assign(socket, narrating: false)}
+
+  def handle_event("narrate", %{"text" => text}, socket) do
+    case String.trim(text) do
+      "" ->
+        {:noreply, put_flash(socket, :error, "Say what happens.")}
+
+      content ->
+        safe(socket, fn ->
+          :ok =
+            App.dispatch(%RecordWorldEvent{
+              scene_id: socket.assigns.scene_id,
+              beat: max(socket.assigns.next_beat - 1, 1),
+              content: content
+            })
+
+          {:noreply, socket |> assign(narrating: false) |> reload()}
+        end)
+    end
+  end
+
+  # The author panels are one-at-a-time: the bottom bar is small, and two open
+  # drawers would push the transcript off the screen on a phone.
+  def handle_event("toggle_cast", _params, socket),
+    do: {:noreply, assign(socket, panel: toggle(socket.assigns.panel, :cast), narrating: false)}
+
+  def handle_event("toggle_intros", _params, socket),
+    do: {:noreply, assign(socket, panel: toggle(socket.assigns.panel, :intros), narrating: false)}
 
   def handle_event("continue", _params, socket) do
     cond do
@@ -563,7 +717,7 @@ defmodule PolyphonyWeb.PlayLive do
     safe(socket, fn ->
       case find_owned(socket, name) do
         {:full, entry} ->
-          {:noreply, admit(socket, name, Library.payload(entry))}
+          {:noreply, admit(socket, entry, Library.payload(entry))}
 
         _ ->
           {:noreply,
@@ -652,7 +806,7 @@ defmodule PolyphonyWeb.PlayLive do
     safe(socket, fn ->
       case find_owned(socket, name) do
         {:full, entry} ->
-          {:noreply, admit(socket, name, Library.payload(entry))}
+          {:noreply, admit(socket, entry, Library.payload(entry))}
 
         _ ->
           {:noreply,
@@ -738,7 +892,15 @@ defmodule PolyphonyWeb.PlayLive do
 
         {as, {moves, self_state}} ->
           beat = socket.assigns.next_beat
-          packet = %TurnPacket{moves: moves, self_state: self_state}
+
+          # The player types "(whisper to Bram: …)" — a name. `addressed_to` is the
+          # routing key visibility matches on, so resolve it to an id here, at the
+          # last moment before the packet becomes a fact in the log (§5.2).
+          packet =
+            Cast.resolve_addressees(
+              socket.assigns.cast,
+              %TurnPacket{moves: moves, self_state: self_state}
+            )
 
           :ok =
             App.dispatch(%CommitPacket{
@@ -874,20 +1036,15 @@ defmodule PolyphonyWeb.PlayLive do
     end
   end
 
-  # Resolve the acting character's sheet from the author's library by name, falling
-  # back to a name-only sheet so a draft still works for a character with no full sheet.
-  defp character_sheet(socket, name) do
-    key = String.downcase(to_string(name))
-
-    case Map.get(owner_characters(socket.assigns.current_user), key) do
-      %{} = entry ->
-        case Library.payload(entry) do
-          %CharacterSheet{} = sheet -> sheet
-          _ -> %CharacterSheet{name: to_string(name)}
-        end
-
-      _ ->
-        %CharacterSheet{name: to_string(name)}
+  # The acting character's sheet, resolved through `Rebuild.sheet_for/2`: the **id**
+  # they entered the scene under first (§5.2 — the lookup a rename used to break),
+  # then the legacy name match, so a scene keyed by names still drafts. Falls back to
+  # a name-only sheet when nothing resolves, so Expand still works for a character
+  # without one.
+  defp character_sheet(socket, character_id) do
+    case Rebuild.sheet_for(socket.assigns.scene_id, character_id) do
+      %CharacterSheet{} = sheet -> sheet
+      _ -> %CharacterSheet{name: name_of(socket, character_id)}
     end
   end
 
@@ -1063,8 +1220,19 @@ defmodule PolyphonyWeb.PlayLive do
   defp trace_response({:error, reason}), do: "ERROR: " <> inspect(reason)
   defp trace_response(other), do: inspect(other)
 
+  defp toggle(current, panel), do: if(current == panel, do: nil, else: panel)
+
   # A character's control mode, defaulting to autonomous (matches the beat walk).
   defp control_of(modes, character), do: Map.get(modes, character) || "autonomous"
+
+  # ── Names (§5.2) ──────────────────────────────────────────────────────────────
+  #
+  # The single edge between the id-keyed log and the name-keyed fiction. Every
+  # human-facing string on this page goes through here; nothing that routes does.
+
+  defp name_of(%{assigns: %{cast: cast}}, id), do: Cast.render_name(cast, id)
+  defp name_of(%Cast{} = cast, id), do: Cast.render_name(cast, id)
+  defp name_of(_socket, id), do: to_string(id)
 
   # Group the flat message stream into blocks: a character's turn (one committed
   # packet, all its moves) carries edit/reroll/delete affordances; everything else
@@ -1080,54 +1248,46 @@ defmodule PolyphonyWeb.PlayLive do
   # land with the latest action rather than at the top. A character viewer only ever gets
   # their own turn failures (§1.7), which always carry a beat, so they sort in place.
   defp transcript_items(messages, failures, current_beat) do
-    {blocks, _} =
-      messages
-      |> turn_blocks()
-      |> Enum.map_reduce(0, fn b, last ->
-        eff = b.beat || last
-        {Map.put(b, :eff_beat, eff), eff}
-      end)
-
+    # Blocking and beat rules live in `PolyphonyWeb.Transcript`, shared with the
+    # published reading view — the reading view *is* this screen with a different
+    # bottom bar, and a second implementation of prose rendering is how the two drift.
+    blocks = Transcript.blocks(messages)
     items = Enum.map(blocks, &{:block, &1}) ++ Enum.map(failures, &{:fail, &1})
 
-    Enum.sort_by(items, fn
+    items
+    |> Enum.sort_by(fn
       {:block, b} -> {b.eff_beat, 0}
       {:fail, f} -> {f.beat || current_beat, 1}
     end)
+    |> mark_beat_rules()
   end
 
-  defp turn_blocks(messages) do
-    messages
-    |> Enum.reduce([], fn m, acc ->
-      payload = m[:payload] || %{}
-      pid = payload[:packet_id]
+  # A beat rule opens a beat exactly once, so it's decided by walking the *sorted*
+  # items — which is why this stays here rather than in the shared module: play
+  # interleaves failures with turns, and a rule must open above whichever came first.
+  defp mark_beat_rules(items) do
+    {marked, _} =
+      Enum.map_reduce(items, nil, fn
+        {:block, b} = item, previous ->
+          beat = b.eff_beat
 
-      case acc do
-        [%{type: :turn, packet_id: ^pid} = head | rest] when not is_nil(pid) ->
-          [%{head | msgs: head.msgs ++ [m]} | rest]
+          if is_integer(beat) and beat > 0 and beat != previous do
+            {{:block, Map.put(b, :beat_rule, beat)}, beat}
+          else
+            {item, previous}
+          end
 
-        _ when is_nil(pid) ->
-          [%{type: :event, packet_id: nil, character: nil, beat: nil, msgs: [m]} | acc]
+        item, previous ->
+          {item, previous}
+      end)
 
-        _ ->
-          [
-            %{
-              type: :turn,
-              packet_id: pid,
-              character: payload[:character_id] || payload[:speaker_id],
-              beat: payload[:beat],
-              msgs: [m]
-            }
-            | acc
-          ]
-      end
-    end)
-    |> Enum.reverse()
+    marked
   end
 
   # The editable text of a turn: the whole turn — thoughts, speech, actions, and
   # demeanor — serialized one move per line (see `TurnEdit`), not just its spoken lines.
-  defp turn_text(block), do: TurnEdit.serialize(block.msgs)
+  defp turn_text(block, cast),
+    do: TurnEdit.serialize(block.msgs, &Cast.render_name(cast, &1))
 
   # ── Beat-loop progress ─────────────────────────────────────────────────────────
 
@@ -1139,21 +1299,18 @@ defmodule PolyphonyWeb.PlayLive do
   defp beat_busy?(%{phase: phase}), do: phase in [:director, :generating]
   defp beat_busy?(_), do: false
 
-  # The `.waiting` CSS variant (dot colour): the Director is accent-2, a cast turn accent.
-  defp progress_state(%{phase: :generating}), do: "cast"
-  defp progress_state(_), do: "director"
+  # The broadcaster announces a subject by character id (§5.2); the player reads a name.
+  defp progress_label(%{phase: :director}, _cast), do: "The director is setting the scene…"
 
-  defp progress_label(%{phase: :director}), do: "The director is setting the scene…"
+  defp progress_label(%{phase: :generating, subject: c}, cast) when is_binary(c) and c != "",
+    do: "#{Cast.render_name(cast, c)} is writing their turn…"
 
-  defp progress_label(%{phase: :generating, subject: c}) when is_binary(c) and c != "",
-    do: "#{c} is writing their turn…"
+  defp progress_label(%{phase: :generating}, _cast), do: "A character is writing their turn…"
 
-  defp progress_label(%{phase: :generating}), do: "A character is writing their turn…"
+  defp progress_label(%{phase: :awaiting_user, subject: c}, cast) when is_binary(c) and c != "",
+    do: "Waiting for you to write #{Cast.render_name(cast, c)}…"
 
-  defp progress_label(%{phase: :awaiting_user, subject: c}) when is_binary(c) and c != "",
-    do: "Waiting for you to write #{c}…"
-
-  defp progress_label(_), do: "Working…"
+  defp progress_label(_, _cast), do: "Working…"
 
   # A short, human reason for a failure line — the model's reason if any, else the kind.
   defp failure_reason(%{reason: r}) when is_binary(r) and r != "", do: r
@@ -1161,168 +1318,384 @@ defmodule PolyphonyWeb.PlayLive do
   defp failure_reason(_), do: "generation failed"
 
   # ── Render ─────────────────────────────────────────────────────────────────────
+  #
+  # Ported from `ux/polyphony-play.html`. The register is the outer decision: a
+  # character viewer gets `.page` (reading — wide measure, prose, machinery at the
+  # edges) and the omniscient author gets `.stage` (working — gutter labels and the
+  # editorial layer). Same components, same tokens, different density.
+  #
+  # The stage register has **no composer**, by design: to write a character you
+  # become them. The GM's bottom bar is Narrate / Introductions / Continue instead,
+  # and the strip's sentence is the way across — it names who is waiting to be
+  # written.
 
   def render(assigns) do
     ~H"""
-    <div class="play">
-      <div class="row play-head">
-        <h1>Scene</h1>
-        <button
-          :if={@viewer == :omniscient and (@debug_events or @debug_trace)}
-          id="scene-debug-copy-btn"
-          type="button"
-          class="btn ghost sm"
-          phx-hook="CopyText"
-          data-copy-target="scene-debug-copy"
-          title="Copy the debug timeline to paste elsewhere"
-        >Copy debug</button>
-        <div class="spacer"></div>
-        <form id="viewer-form" phx-change="view_as">
-          <label class="faint" style="display:inline; margin-right:.4rem;">Viewing as</label>
-          <select name="as" style="width:auto;">
-            <option value="" selected={@viewer == :omniscient}>Omniscient</option>
-            <option :for={c <- @roster} value={c} selected={@viewer == {:character, c}}><%= c %></option>
-          </select>
-        </form>
+    <Kit.frame
+      register={@register}
+      class="flex flex-col min-h-0"
+      style="height:100dvh"
+    >
+      <%!-- The kit's standard header: context small, the scene's location as the
+            title, perspective control top right, overflow last. --%>
+      <Kit.header title={@scene_title} eyebrow={@campaign_name}>
+        <:actions>
+          <form id="viewer-form" phx-change="view_as">
+            <label for="viewer-select" class="sr-only">Viewing as</label>
+            <select
+              id="viewer-select"
+              name="as"
+              class="viewas appearance-none bg-transparent"
+              style={Voice.var("--vc", viewer_colour(@viewer, @voices))}
+            >
+              <option value="" selected={@viewer == :omniscient}>Omniscient</option>
+              <option :for={c <- @roster} value={c} selected={@viewer == {:character, c}}><%= name_of(@cast, c) %></option>
+            </select>
+          </form>
+          <Layouts.nav_menu current_user={@current_user} />
+        </:actions>
+      </Kit.header>
+
+      <%!-- Connection. Silent when healthy: a permanent "everything is fine" light is
+            noise and trains people to stop reading the one place that matters. These
+            are driven by the classes LiveView puts on the container, so they need no
+            server state — and because reconnecting replays the canonical scene, the
+            copy can promise recovery. --%>
+      <div
+        class="hidden [.phx-loading_&]:flex items-center gap-2 px-4 py-2 row"
+        style="background:color-mix(in srgb,var(--lamp) 12%,transparent)"
+      >
+        <Kit.dot colour="var(--lamp)" />
+        <span class="text-[12.5px]">Reconnecting — you won't lose the scene.</span>
+      </div>
+      <div
+        class="hidden [.phx-error_&]:flex items-center gap-2 px-4 py-2 row"
+        style="background:color-mix(in srgb,var(--pencil) 12%,transparent)"
+      >
+        <Kit.dot colour="var(--pencil)" />
+        <span class="text-[12.5px]">No connection. The scene will catch up when you're back.</span>
       </div>
 
-      <details :if={@viewer == :omniscient and @roster != []} class="card cast-panel">
-        <summary>Cast &amp; control <span class="faint">— who drives each character</span></summary>
-        <ul class="rel-list">
-          <li :for={c <- @roster} class="row rel-item">
-            <span><%= c %></span>
-            <span class="spacer"></span>
-            <form id={"control-#{c}"} phx-change="set_control">
-              <input type="hidden" name="character" value={c} />
-              <select name="control" style="width:auto;">
-                <option value="autonomous" selected={control_of(@control_modes, c) == "autonomous"}>Automated</option>
-                <option value="assisted" selected={control_of(@control_modes, c) == "assisted"}>Draft &amp; approve</option>
-                <option value="user_controlled" selected={control_of(@control_modes, c) == "user_controlled"}>I write their turns</option>
-              </select>
-            </form>
-          </li>
-        </ul>
-        <div class="row" style="margin-top:.5rem;">
-          <button class="btn ghost sm" type="button" phx-click="find_mentions">Find mentioned characters</button>
-          <span class="faint">Stub anyone named in the scene who doesn't exist yet.</span>
+      <div :if={@viewer == :omniscient and (@debug_events or @debug_trace)} class="px-4">
+        <div class="dbg-head dim flex items-center gap-2 py-2">
+          <span>Debug timeline — <%= length(@debug_feed) %> entries</span>
+          <Kit.btn
+            id="scene-debug-copy-btn"
+            kind={:ghost}
+            size={:sm}
+            type="button"
+            phx-hook="CopyText"
+            data-copy-target="scene-debug-copy"
+          >
+            Copy
+          </Kit.btn>
         </div>
-      </details>
+        <pre id="scene-debug-copy" hidden><%= @debug_feed_text %></pre>
+      </div>
 
-      <div class="card transcript-card">
-        <div id="transcript" class="transcript" phx-hook="Autoscroll">
-          <%= if @viewer == :omniscient and (@debug_events or @debug_trace) do %>
-            <div class="dbg-head faint">
-              Debug timeline — <%= length(@debug_feed) %> entries
-              <span class="faint">· raw event stream + LLM calls + errors, oldest first (UTC)</span>
+      <%!-- Only the transcript scrolls: the header, the strip and the bottom bar hold
+            their places, which is what makes the strip "always visible". The kit's
+            `.scroller` is a panel height (520px) and would fight that, so the fill is
+            done with utilities and the transcript keeps its own scrollbar. --%>
+      <div id="transcript" class="flex-1 min-h-0 overflow-y-auto px-4" phx-hook="Autoscroll">
+        <%= if @viewer == :omniscient and (@debug_events or @debug_trace) do %>
+          <div id="debug-timeline">
+            <div :for={entry <- @debug_feed} class={"dbg-entry dbg-#{entry.kind}"}>
+              <%= render_debug_entry(entry) %>
             </div>
-            <pre id="scene-debug-copy" hidden><%= @debug_feed_text %></pre>
-            <div id="debug-timeline">
-              <div :for={entry <- @debug_feed} class={"dbg-entry dbg-#{entry.kind}"}>
-                <%= render_debug_entry(entry) %>
-              </div>
-            </div>
-          <% else %>
+          </div>
+        <% else %>
           <%= for {item, i} <- Enum.with_index(transcript_items(@messages, @failures, max(@next_beat - 1, 0))) do %>
             <%= case item do %>
               <% {:block, block} -> %>
-                <div id={"blk-#{i}"} class="turn-block">
-                  <div :for={m <- block.msgs}><%= render_move(m) %></div>
-
-                  <div
-                    :if={@viewer == :omniscient and block.type == :turn and @editing != block.packet_id}
-                    class="turn-controls"
-                  >
-                    <button class="btn ghost xs" phx-click="reroll_turn" phx-value-beat={block.beat} phx-value-character={block.character}>Reroll</button>
-                    <button class="btn ghost xs" phx-click="edit_turn" phx-value-packet={block.packet_id}>Edit</button>
-                    <button class="btn danger xs" phx-click="delete_turn" phx-value-beat={block.beat} phx-value-character={block.character} phx-value-packet={block.packet_id} data-confirm="Remove this turn?">Delete</button>
-                  </div>
-
-                  <form
-                    :if={@viewer == :omniscient and block.type == :turn and @editing == block.packet_id}
-                    id={"edit-#{block.packet_id}"}
-                    phx-submit="save_edit"
-                    class="turn-edit"
-                  >
-                    <input type="hidden" name="beat" value={block.beat} />
-                    <input type="hidden" name="character" value={block.character} />
-                    <input type="hidden" name="packet" value={block.packet_id} />
-                    <textarea name="text" rows="2" class="say-input"><%= turn_text(block) %></textarea>
-                    <div class="row" style="margin-top:.35rem;">
-                      <button class="btn xs" type="submit">Save</button>
-                      <button class="btn ghost xs" type="button" phx-click="cancel_edit">Cancel</button>
-                    </div>
-                  </form>
-                </div>
+                <.turn_block
+                  id={"blk-#{i}"}
+                  block={block}
+                  register={@register}
+                  cast={@cast}
+                  voices={@voices}
+                  beat_rule={block[:beat_rule]}
+                  editable={@viewer == :omniscient and block.type == :turn}
+                  editing={@editing}
+                  control={control_of(@control_modes, block.character)}
+                />
               <% {:fail, f} -> %>
-                <div id={"fail-#{i}"} class="turn-block turn-fail">
-                  <span>⚠ Couldn't generate <strong><%= f.subject || "a turn" %></strong>
-                    <span class="faint">— <%= failure_reason(f) %></span></span>
-                  <div :if={f.retryable} class="row" style="margin-top:.35rem;">
-                    <button class="btn sm" phx-click="retry_failure" phx-value-id={f.id}>Retry</button>
+                <Kit.fail_move
+                  id={"fail-#{i}"}
+                  class="my-3"
+                  title={"#{if f.subject, do: name_of(@cast, f.subject), else: "A turn"} didn't generate"}
+                  detail={failure_reason(f)}
+                >
+                  <div :if={f.retryable} class="flex flex-wrap gap-0.5 mt-1.5 -ml-1">
+                    <Kit.btn kind={:pen} phx-click="retry_failure" phx-value-id={f.id}>Retry</Kit.btn>
                   </div>
-                </div>
+                </Kit.fail_move>
             <% end %>
           <% end %>
-          <% end %>
-        </div>
+          <Kit.empty :if={@messages == [] and @failures == []} headline={empty_headline(@viewer)}>
+            Nothing has happened here yet.
+          </Kit.empty>
+        <% end %>
       </div>
 
-      <div :if={@introductions != []} class="card intro-queue">
-        <h3>New characters to bring on</h3>
-        <ul class="rel-list">
-          <li :for={i <- @introductions} class="row rel-item">
-            <span>
-              <strong><%= i.name %></strong>
-              <span :if={i.reason not in [nil, ""]} class="faint">— <%= i.reason %></span>
-              <span :if={i.resolution.status == :stub} class="badge stub">pending</span>
-              <span :if={i.resolution.status == :new} class="badge stub">new</span>
+      <Kit.strip sentence={@strip.sentence} tone={@strip.tone}>
+        <:slot_item
+          :for={s <- @strip.slots}
+          label={s.label}
+          state={s.state}
+          colour={s.colour}
+          you={s.you}
+        />
+      </Kit.strip>
+
+      <%!-- The bottom bar. A player writes; the GM directs. --%>
+      <div
+        class="shrink-0 px-4 py-3"
+        style="background:var(--b2);border-top:1px solid var(--rule)"
+      >
+        <Kit.waiting_line :if={beat_busy?(@progress)} label={progress_label(@progress, @cast)} />
+
+        <form :if={@speaker} id="say-form" phx-submit="say">
+          <div class="flex items-center gap-1.5 mb-2 flex-wrap">
+            <span class="lbl dim">Say it as</span>
+            <span class="pill" style={"border-color:#{Voice.of(@voices, @speaker)};color:#{Voice.of(@voices, @speaker)}"}>
+              <%= name_of(@cast, @speaker) %>
             </span>
-            <span class="spacer"></span>
-            <button :if={i.resolution.status == :ready} class="btn sm" phx-click="intro_admit" phx-value-name={i.name}>Admit</button>
-            <button :if={i.resolution.status != :ready} class="btn sm" phx-click="intro_generate" phx-value-name={i.name}>Generate &amp; admit</button>
-            <button class="btn ghost sm" phx-click="intro_edit" phx-value-name={i.name}>Edit</button>
-            <button class="btn danger sm" phx-click="intro_dismiss" phx-value-name={i.name}>Dismiss</button>
-          </li>
-        </ul>
-      </div>
-
-      <div class="composer card">
-        <.waiting :if={beat_busy?(@progress)} state={progress_state(@progress)} label={progress_label(@progress)} />
-        <.waiting :if={not beat_busy?(@progress) and @waiting == :director} state="director" label="Rerolling…" />
-        <form id="say-form" phx-submit="say">
+            <span class="lbl dim">· whisper with (whisper to NAME: …)</span>
+          </div>
+          <label for="say-input" class="sr-only">What does <%= name_of(@cast, @speaker) %> do?</label>
           <textarea
-            :if={@speaker}
             id="say-input"
             name="text"
             rows="1"
-            class="say-input"
+            class="field say-input px-3.5 py-3 text-[15px] w-full"
             phx-hook="ComposerInput"
             phx-update="ignore"
             autocomplete="off"
-            placeholder={"Speak as #{@speaker}…  ·  whisper with (whisper to NAME: …)"}
+            placeholder={"What does #{name_of(@cast, @speaker)} do?"}
           ></textarea>
-          <div class="row composer-actions">
-            <span :if={@speaker} class="faint">as <strong><%= @speaker %></strong></span>
-            <span :if={is_nil(@speaker)} class="faint">Pick a character above to speak.</span>
-            <div class="spacer"></div>
-            <button
-              :if={@speaker}
+          <div class="flex items-center justify-between mt-2.5 gap-2">
+            <Kit.btn
+              kind={:ghost}
               type="button"
-              class="btn ghost sm"
               data-composer-expand="true"
               disabled={@composing or beat_busy?(@progress)}
               title="Draft or expand this turn for you — you can edit it before sending"
             >
-              <%= if @composing, do: "✨ …", else: "✨ Expand" %>
-            </button>
-            <button class="btn ghost sm" type="button" phx-click="continue" disabled={beat_busy?(@progress)}>Continue</button>
-            <button :if={@speaker} class="btn" type="submit" disabled={beat_busy?(@progress)}>Send</button>
+              <%= if @composing, do: "✦ …", else: "✦ Expand" %>
+            </Kit.btn>
+            <Kit.btn kind={:primary} type="submit" disabled={beat_busy?(@progress)}>
+              Take the turn
+            </Kit.btn>
+          </div>
+        </form>
+
+        <%!-- The GM has no composer: to write a character you become them, which the
+              strip's sentence says out loud. Narrate is the one thing only the GM can
+              write, because it isn't anybody's turn. --%>
+        <div :if={is_nil(@speaker)}>
+          <form :if={@narrating} id="narrate-form" phx-submit="narrate" class="mb-2">
+            <label for="narrate-input" class="lbl dim">What happens</label>
+            <textarea
+              id="narrate-input"
+              name="text"
+              rows="2"
+              class="field say-input px-3.5 py-3 text-[15px] w-full mt-1.5"
+              autocomplete="off"
+              placeholder="The tide bell rings twice…"
+            ></textarea>
+            <div class="flex justify-end gap-1.5 mt-2">
+              <Kit.btn kind={:ghost} type="button" phx-click="cancel_narrate">Cancel</Kit.btn>
+              <Kit.btn kind={:primary} type="submit">Narrate it</Kit.btn>
+            </div>
+          </form>
+
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex gap-2">
+              <Kit.btn :if={not @narrating} kind={:ghost} type="button" phx-click="narrate_open">
+                Narrate
+              </Kit.btn>
+              <Kit.btn kind={:ghost} type="button" phx-click="toggle_cast">
+                Cast <span class="dim"><%= length(@roster) %></span>
+              </Kit.btn>
+              <Kit.btn :if={@introductions != []} kind={:ghost} type="button" phx-click="toggle_intros">
+                Introductions <span class="dim"><%= length(@introductions) %></span>
+              </Kit.btn>
+            </div>
+            <Kit.btn kind={:primary} type="button" phx-click="continue" disabled={beat_busy?(@progress)}>
+              Continue
+            </Kit.btn>
+          </div>
+        </div>
+      </div>
+
+      <%!-- Author panels: the cast's control modes, and the Director's pending
+            introductions. Both are GM tooling — a player never sees either. --%>
+      <div :if={@panel == :cast and @viewer == :omniscient} class="row px-4 py-3">
+        <div class="lbl dim mb-2">Who drives each character</div>
+        <div :for={c <- @roster} class="flex items-center justify-between gap-2 py-1.5">
+          <span class="text-[13px] font-semibold" style={"color:#{Voice.of(@voices, c)}"}>
+            <%= name_of(@cast, c) %>
+          </span>
+          <form id={"control-#{c}"} phx-change="set_control">
+            <input type="hidden" name="character" value={c} />
+            <label for={"control-select-#{c}"} class="sr-only">Control mode</label>
+            <select id={"control-select-#{c}"} name="control" class="field px-2 py-1 text-[12px]">
+              <option value="autonomous" selected={control_of(@control_modes, c) == "autonomous"}>
+                Automated
+              </option>
+              <option value="assisted" selected={control_of(@control_modes, c) == "assisted"}>
+                Draft &amp; approve
+              </option>
+              <option value="user_controlled" selected={control_of(@control_modes, c) == "user_controlled"}>
+                I write their turns
+              </option>
+            </select>
+          </form>
+        </div>
+        <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="find_mentions" class="mt-2">
+          Find mentioned characters
+        </Kit.btn>
+      </div>
+
+      <div :if={@panel == :intros and @introductions != []} class="row px-4 py-3">
+        <div class="lbl dim mb-2">The Director suggests</div>
+        <div :for={i <- @introductions} class="flex items-center gap-2.5 py-1.5">
+          <div class="min-w-0 flex-1">
+            <div class="text-[13px] font-semibold"><%= i.name %></div>
+            <div :if={i.reason not in [nil, ""]} class="text-[11px] dim"><%= i.reason %></div>
+          </div>
+          <Kit.btn
+            :if={i.resolution.status == :ready}
+            kind={:primary}
+            size={:sm}
+            phx-click="intro_admit"
+            phx-value-name={i.name}
+          >
+            Admit
+          </Kit.btn>
+          <Kit.btn
+            :if={i.resolution.status != :ready}
+            kind={:primary}
+            size={:sm}
+            phx-click="intro_generate"
+            phx-value-name={i.name}
+          >
+            ✦ Write &amp; admit
+          </Kit.btn>
+          <Kit.btn kind={:pen} size={:sm} phx-click="intro_edit" phx-value-name={i.name}>Edit</Kit.btn>
+          <Kit.btn kind={:pen} size={:sm} phx-click="intro_dismiss" phx-value-name={i.name}>
+            Not now
+          </Kit.btn>
+        </div>
+      </div>
+    </Kit.frame>
+    """
+  end
+
+  # ── Transcript blocks ─────────────────────────────────────────────────────────
+
+  attr(:id, :string, required: true)
+  attr(:block, :map, required: true)
+  attr(:register, :atom, required: true)
+  attr(:cast, :any, required: true)
+  attr(:voices, :map, required: true)
+  attr(:beat_rule, :any, default: nil)
+  attr(:editable, :boolean, default: false)
+  attr(:editing, :string, default: nil)
+  attr(:control, :string, default: nil)
+
+  defp turn_block(assigns) do
+    assigns =
+      assigns
+      |> assign(:colour, Voice.of(assigns.voices, assigns.block.character))
+      |> assign(:name, name_of(assigns.cast, assigns.block.character))
+
+    ~H"""
+    <div id={@id} class="turn-block">
+      <Kit.beat_rule :if={@beat_rule} beat={@beat_rule} />
+
+      <%!-- An event with no packet — a world beat, an entrance — is nobody's turn,
+            so it carries no attribution and no editorial controls. --%>
+      <div :if={@block.type == :event} class="py-1">
+        <div :for={m <- @block.msgs}><%= Transcript.render_move(m, @cast, @register, @voices) %></div>
+      </div>
+
+      <div
+        :if={@block.type == :turn}
+        class={["mb-4", @register == :stage && "pl-3"]}
+        style={@register == :stage && "box-shadow:inset 2px 0 0 #{@colour}"}
+      >
+        <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+          <span
+            class={["ttl font-semibold", @register == :stage && "text-[14px]", @register == :page && "text-[13px] tracking-[.06em]"]}
+            style={"color:#{@colour}"}
+          >
+            <%= if @register == :page, do: String.upcase(@name), else: @name %>
+          </span>
+          <Kit.pill :if={@register == :stage and @control} class="dim">
+            <%= control_label(@control) %>
+          </Kit.pill>
+        </div>
+
+        <div :for={m <- Transcript.ordered_moves(@block.msgs)}>
+          <%= Transcript.render_move(m, @cast, @register, @voices) %>
+        </div>
+
+        <div :if={@editable and @editing != @block.packet_id} class="turn-controls flex flex-wrap gap-0.5 mt-2 -ml-1">
+          <Kit.btn kind={:pen} phx-click="reroll_turn" phx-value-beat={@block.beat} phx-value-character={@block.character}>
+            Reroll
+          </Kit.btn>
+          <Kit.btn kind={:pen} phx-click="edit_turn" phx-value-packet={@block.packet_id}>Edit</Kit.btn>
+          <Kit.btn
+            kind={:pen}
+            phx-click="delete_turn"
+            phx-value-beat={@block.beat}
+            phx-value-character={@block.character}
+            phx-value-packet={@block.packet_id}
+            data-confirm="Remove this turn?"
+          >
+            Delete
+          </Kit.btn>
+        </div>
+
+        <form
+          :if={@editable and @editing == @block.packet_id}
+          id={"edit-#{@block.packet_id}"}
+          phx-submit="save_edit"
+          class="turn-edit mt-2"
+        >
+          <input type="hidden" name="beat" value={@block.beat} />
+          <input type="hidden" name="character" value={@block.character} />
+          <input type="hidden" name="packet" value={@block.packet_id} />
+          <label for={"edit-text-#{@block.packet_id}"} class="sr-only">Edit this turn</label>
+          <textarea
+            id={"edit-text-#{@block.packet_id}"}
+            name="text"
+            rows="3"
+            class="field say-input px-3 py-2 text-[14px] w-full"
+          ><%= turn_text(@block, @cast) %></textarea>
+          <div class="flex gap-1.5 mt-1.5">
+            <Kit.btn kind={:primary} size={:sm} type="submit">Save</Kit.btn>
+            <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="cancel_edit">Cancel</Kit.btn>
           </div>
         </form>
       </div>
     </div>
     """
   end
+
+  defp control_label("assisted"), do: "Draft & approve"
+  defp control_label("user_controlled"), do: "Yours"
+  defp control_label(_), do: "Automated"
+
+  defp empty_headline(:omniscient), do: "Nobody has moved yet."
+  defp empty_headline(_), do: "Nothing has happened yet."
+
+  # The viewpoint's hue: a character's voice, or the register's plain foreground for
+  # the omniscient author (per the kit's perspective-control spec).
+  defp viewer_colour(:omniscient, _voices), do: Voice.neutral()
+  defp viewer_colour({:character, id}, voices), do: Voice.of(voices, id)
 
   # One debug-timeline entry, stacked (never a horizontal table — unreadable on mobile):
   # a wrapping meta line, then the detail below it. Entries are separated by a rule via
@@ -1367,70 +1740,5 @@ defmodule PolyphonyWeb.PlayLive do
     </div>
     <div class="dbg-detail err"><%= @detail %></div>
     """
-  end
-
-  # An action reads as narration: prepend the actor's name only if the content doesn't
-  # already begin with it, so third-person model output isn't doubled.
-  defp action_text(name, content) do
-    trimmed = String.trim_leading(content)
-
-    if name != "" and String.starts_with?(String.downcase(trimmed), String.downcase(name)),
-      do: trimmed,
-      else: String.trim("#{name} #{trimmed}")
-  end
-
-  # Render a broadcaster message (kind + payload with atom keys) as a transcript line.
-  defp render_move(%{kind: "SpeechUttered", payload: p}) do
-    assigns = %{p: p, whisper: to_string(p[:audibility]) == "private"}
-
-    ~H"""
-    <div class={"move speech #{if @whisper, do: "whisper"}"}>
-      <span class="who"><%= @p[:speaker_id] %>:</span> <%= @p[:content] %>
-    </div>
-    """
-  end
-
-  defp render_move(%{kind: "ThoughtOccurred", payload: p}) do
-    assigns = %{p: p}
-    ~H|<div class="move thought">(<%= @p[:character_id] %> thinks: <%= @p[:content] %>)</div>|
-  end
-
-  defp render_move(%{kind: "ActionTaken", payload: p}) do
-    # Actions are narration, not dialogue — italic prose, no "Name:" prefix. The model
-    # writes them in the third person already naming the actor ("Todd snaps his head…"),
-    # so prefixing the name unconditionally produced "Todd Todd …"; only prepend it when
-    # the content doesn't already open with it (e.g. a first-person "I reach out…").
-    assigns = %{text: action_text(to_string(p[:character_id]), to_string(p[:content]))}
-    ~H|<div class="move action"><%= @text %></div>|
-  end
-
-  defp render_move(%{kind: "WorldEventOccurred", payload: p}) do
-    assigns = %{p: p}
-    ~H|<div class="move world"><%= @p[:content] %></div>|
-  end
-
-  defp render_move(%{kind: "DemeanorReported", payload: p}) do
-    case String.trim(to_string(p[:demeanor] || "")) do
-      "" ->
-        # No demeanor to report — render nothing rather than "X seems ."
-        assigns = %{}
-        ~H||
-
-      demeanor ->
-        assigns = %{p: p, demeanor: demeanor}
-        ~H|<div class="move action"><%= @p[:character_id] %> seems <%= @demeanor %>.</div>|
-    end
-  end
-
-  defp render_move(%{kind: kind, payload: p})
-       when kind in ["CharacterEntered", "CharacterExited"] do
-    verb = if kind == "CharacterEntered", do: "enters", else: "leaves"
-    assigns = %{p: p, verb: verb}
-    ~H|<div class="move action">(<%= @p[:character_id] %> <%= @verb %>)</div>|
-  end
-
-  defp render_move(_other) do
-    assigns = %{}
-    ~H||
   end
 end

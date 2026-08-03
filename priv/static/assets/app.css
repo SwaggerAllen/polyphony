@@ -1,6 +1,28 @@
-/*
-! tailwindcss v3.4.3 | MIT License | https://tailwindcss.com
-*/
+/* The application stylesheet — a build manifest. Order is the whole content of this
+   file, and it is load-bearing: every rule is a plain class selector, so where two
+   stylesheets name the same class the later one wins.
+ *
+ *   1. Tailwind — preflight, then the utilities the templates reference.
+ *   2. kit.css  — the design kit, generated from ux/polyphony-kit.css.
+ *
+ * The kit is last so it wins a utility it overlaps with, which is the precedence the
+ * mocks have: they link the kit after the Tailwind CDN. That's also why Tailwind's
+ * directives live in their own file — `@import` has to lead a stylesheet, so a file
+ * can't ask for anything *after* its own `@tailwind` lines.
+ *
+ * There is no third layer. The first-cut design system that used to sit here is gone
+ * (see docs/frontend.md): screens are being rebuilt from the kit, and the ones that
+ * haven't been yet render unstyled in the meantime — deliberately, since the app has
+ * no users until the rebuild lands.
+ *
+ * Rebuild with `mix assets.build` after touching either file; `mix kit.port`
+ * regenerates kit.css from the design. */
+
+/* Tailwind's three layers, as their own file so the build manifests can order them
+   explicitly. `@import` has to lead a stylesheet, so a file that wants something
+   *after* Tailwind can't just write these directives at the top of itself. */
+
+/* ! tailwindcss v3.4.3 | MIT License | https://tailwindcss.com */
 
 /*
 1. Prevent padding and border from affecting element width. (https://github.com/mozdevs/cssremedy/issues/4)
@@ -554,12 +576,215 @@ video {
   --tw-contain-style:  ;
 }
 
+.container {
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .container {
+    max-width: 640px;
+  }
+}
+
+@media (min-width: 768px) {
+  .container {
+    max-width: 768px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    max-width: 1024px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .container {
+    max-width: 1280px;
+  }
+}
+
+@media (min-width: 1536px) {
+  .container {
+    max-width: 1536px;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.pointer-events-none {
+  pointer-events: none;
+}
+
+.pointer-events-auto {
+  pointer-events: auto;
+}
+
 .visible {
   visibility: visible;
 }
 
+.invisible {
+  visibility: hidden;
+}
+
+.collapse {
+  visibility: collapse;
+}
+
+.static {
+  position: static;
+}
+
+.fixed {
+  position: fixed;
+}
+
+.absolute {
+  position: absolute;
+}
+
+.relative {
+  position: relative;
+}
+
 .sticky {
   position: sticky;
+}
+
+.inset-x-0 {
+  left: 0px;
+  right: 0px;
+}
+
+.right-0 {
+  right: 0px;
+}
+
+.top-0 {
+  top: 0px;
+}
+
+.top-full {
+  top: 100%;
+}
+
+.z-20 {
+  z-index: 20;
+}
+
+.z-50 {
+  z-index: 50;
+}
+
+.m-4 {
+  margin: 1rem;
+}
+
+.mx-4 {
+  margin-left: 1rem;
+  margin-right: 1rem;
+}
+
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.my-3 {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.my-4 {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.-ml-1 {
+  margin-left: -0.25rem;
+}
+
+.mb-0 {
+  margin-bottom: 0px;
+}
+
+.mb-0\.5 {
+  margin-bottom: 0.125rem;
+}
+
+.mb-1 {
+  margin-bottom: 0.25rem;
+}
+
+.mb-1\.5 {
+  margin-bottom: 0.375rem;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+
+.mb-2\.5 {
+  margin-bottom: 0.625rem;
+}
+
+.mb-3 {
+  margin-bottom: 0.75rem;
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
+.mb-5 {
+  margin-bottom: 1.25rem;
+}
+
+.ml-auto {
+  margin-left: auto;
+}
+
+.mt-0 {
+  margin-top: 0px;
+}
+
+.mt-0\.5 {
+  margin-top: 0.125rem;
+}
+
+.mt-1 {
+  margin-top: 0.25rem;
+}
+
+.mt-1\.5 {
+  margin-top: 0.375rem;
+}
+
+.mt-2 {
+  margin-top: 0.5rem;
+}
+
+.mt-2\.5 {
+  margin-top: 0.625rem;
+}
+
+.mt-3 {
+  margin-top: 0.75rem;
+}
+
+.mt-4 {
+  margin-top: 1rem;
 }
 
 .block {
@@ -578,24 +803,525 @@ video {
   display: table;
 }
 
+.grid {
+  display: grid;
+}
+
+.contents {
+  display: contents;
+}
+
 .hidden {
   display: none;
+}
+
+.h-11 {
+  height: 2.75rem;
+}
+
+.min-h-0 {
+  min-height: 0px;
+}
+
+.min-h-\[100dvh\] {
+  min-height: 100dvh;
+}
+
+.w-11 {
+  width: 2.75rem;
+}
+
+.w-14 {
+  width: 3.5rem;
+}
+
+.w-28 {
+  width: 7rem;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.min-w-0 {
+  min-width: 0px;
+}
+
+.min-w-\[11rem\] {
+  min-width: 11rem;
+}
+
+.min-w-\[14rem\] {
+  min-width: 14rem;
+}
+
+.min-w-\[15rem\] {
+  min-width: 15rem;
+}
+
+.min-w-\[8rem\] {
+  min-width: 8rem;
+}
+
+.max-w-md {
+  max-width: 28rem;
+}
+
+.max-w-sm {
+  max-width: 24rem;
+}
+
+.flex-1 {
+  flex: 1 1 0%;
+}
+
+.shrink-0 {
+  flex-shrink: 0;
 }
 
 .grow {
   flex-grow: 1;
 }
 
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.list-none {
+  list-style-type: none;
+}
+
+.appearance-none {
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.items-start {
+  align-items: flex-start;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.items-baseline {
+  align-items: baseline;
+}
+
+.justify-end {
+  justify-content: flex-end;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-0 {
+  gap: 0px;
+}
+
+.gap-0\.5 {
+  gap: 0.125rem;
+}
+
+.gap-1 {
+  gap: 0.25rem;
+}
+
+.gap-1\.5 {
+  gap: 0.375rem;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-2\.5 {
+  gap: 0.625rem;
+}
+
+.gap-3 {
+  gap: 0.75rem;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.gap-x-2 {
+  -moz-column-gap: 0.5rem;
+       column-gap: 0.5rem;
+}
+
+.gap-y-1 {
+  row-gap: 0.25rem;
+}
+
+.space-y-1 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
+}
+
+.space-y-1\.5 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.375rem * var(--tw-space-y-reverse));
+}
+
+.space-y-2 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.5rem * var(--tw-space-y-reverse));
+}
+
+.space-y-2\.5 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.625rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.625rem * var(--tw-space-y-reverse));
+}
+
+.space-y-3 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.75rem * var(--tw-space-y-reverse));
+}
+
+.space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(1rem * var(--tw-space-y-reverse));
+}
+
+.overflow-hidden {
+  overflow: hidden;
+}
+
+.overflow-y-auto {
+  overflow-y: auto;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+
+.rounded-xl {
+  border-radius: 0.75rem;
+}
+
+.rounded-r-lg {
+  border-top-right-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+
 .border {
   border-width: 1px;
 }
 
-.italic {
-  font-style: italic;
+.bg-\[var\(--b3\)\] {
+  background-color: var(--b3);
+}
+
+.bg-transparent {
+  background-color: transparent;
+}
+
+.p-2 {
+  padding: 0.5rem;
+}
+
+.p-2\.5 {
+  padding: 0.625rem;
+}
+
+.p-3 {
+  padding: 0.75rem;
+}
+
+.p-4 {
+  padding: 1rem;
+}
+
+.p-5 {
+  padding: 1.25rem;
+}
+
+.px-2 {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+.px-2\.5 {
+  padding-left: 0.625rem;
+  padding-right: 0.625rem;
+}
+
+.px-3 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.px-3\.5 {
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+}
+
+.px-4 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.px-5 {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+.py-1 {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.py-1\.5 {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+
+.py-10 {
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+}
+
+.py-2 {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.py-2\.5 {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+
+.py-3 {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.py-3\.5 {
+  padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
+}
+
+.py-4 {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.py-5 {
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.py-6 {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+
+.py-7 {
+  padding-top: 1.75rem;
+  padding-bottom: 1.75rem;
+}
+
+.py-8 {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.py-9 {
+  padding-top: 2.25rem;
+  padding-bottom: 2.25rem;
+}
+
+.pb-3 {
+  padding-bottom: 0.75rem;
+}
+
+.pl-3 {
+  padding-left: 0.75rem;
+}
+
+.pl-3\.5 {
+  padding-left: 0.875rem;
+}
+
+.pl-6 {
+  padding-left: 1.5rem;
+}
+
+.pt-0 {
+  padding-top: 0px;
+}
+
+.pt-0\.5 {
+  padding-top: 0.125rem;
+}
+
+.pt-1 {
+  padding-top: 0.25rem;
+}
+
+.pt-2 {
+  padding-top: 0.5rem;
+}
+
+.pt-2\.5 {
+  padding-top: 0.625rem;
+}
+
+.pt-3 {
+  padding-top: 0.75rem;
+}
+
+.pt-4 {
+  padding-top: 1rem;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-\[10px\] {
+  font-size: 10px;
+}
+
+.text-\[11\.5px\] {
+  font-size: 11.5px;
+}
+
+.text-\[11px\] {
+  font-size: 11px;
+}
+
+.text-\[12\.5px\] {
+  font-size: 12.5px;
+}
+
+.text-\[12px\] {
+  font-size: 12px;
+}
+
+.text-\[13\.5px\] {
+  font-size: 13.5px;
+}
+
+.text-\[13px\] {
+  font-size: 13px;
+}
+
+.text-\[14\.5px\] {
+  font-size: 14.5px;
+}
+
+.text-\[14px\] {
+  font-size: 14px;
+}
+
+.text-\[15px\] {
+  font-size: 15px;
+}
+
+.text-\[16px\] {
+  font-size: 16px;
+}
+
+.text-\[17px\] {
+  font-size: 17px;
+}
+
+.text-\[18px\] {
+  font-size: 18px;
+}
+
+.text-\[19px\] {
+  font-size: 19px;
+}
+
+.text-\[22px\] {
+  font-size: 22px;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.capitalize {
+  text-transform: capitalize;
+}
+
+.leading-\[1\.55\] {
+  line-height: 1.55;
+}
+
+.leading-\[1\.75\] {
+  line-height: 1.75;
+}
+
+.leading-\[1\.7\] {
+  line-height: 1.7;
+}
+
+.leading-none {
+  line-height: 1;
+}
+
+.leading-relaxed {
+  line-height: 1.625;
+}
+
+.leading-snug {
+  line-height: 1.375;
+}
+
+.tracking-\[\.06em\] {
+  letter-spacing: .06em;
+}
+
+.text-\[var\(--lamp\)\] {
+  color: var(--lamp);
 }
 
 .underline {
   text-decoration-line: underline;
+}
+
+.opacity-50 {
+  opacity: 0.5;
 }
 
 .blur {
@@ -607,1155 +1333,802 @@ video {
   filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
-   Polyphony design system — mobile-first, dark-by-default. Authored as a small
-   set of semantic component classes on top of Tailwind's base reset. Tailwind
-   utilities are available in templates; these named classes carry the app's look
-   and sit after @tailwind utilities so they win where they overlap.
-   ──────────────────────────────────────────────────────────────────────────── */
+/* ============================================================================
+   GENERATED FILE — DO NOT EDIT.
 
-:root {
-  --bg: #0f1115;
-  --bg-2: #171a21;
-  --bg-3: #1f232c;
-  --border: #2b303b;
-  --fg: #e6e8ee;
-  --fg-dim: #9aa2b1;
-  --fg-faint: #6b7280;
-  --accent: #7c9cff;
-  --accent-2: #a78bfa;
-  --good: #4ade80;
-  --warn: #fbbf24;
-  --bad: #f87171;
-  --radius: 10px;
-  --maxw: 820px;
+   Ported from ux/polyphony-kit.css by `mix kit.port`, verbatim but for the kit's
+   §11 mock chrome. The design kit is the single source of truth: change it in
+   ux/, re-run the task, commit both. KitPortTest fails if the two disagree.
+   ============================================================================ */
+
+/* ============================================================================
+   POLYPHONY — UI KIT
+   The single source of truth for tokens and components across every mock.
+   Every screen file links this. Nothing here is defined twice anywhere else.
+
+   PORTING NOTE
+   The token block below maps onto daisyUI theme variables. Everything under
+   COMPONENTS is a Tailwind @apply candidate or a LiveView function component.
+   Class names are deliberately short and semantic so they survive the port.
+   ============================================================================ */
+
+/* ============================================================================
+   1 · TOKENS
+   Two registers × two themes. The register is the outer decision:
+
+     .stage  — working / live. Omniscient play, and every authoring screen.
+     .page   — reading. Character play, and published campaigns.
+
+   Both take .dark or .light. Usage: <div class="fr stage dark">
+
+   daisyUI mapping:
+     --b1 --b2 --b3   → base-100 / base-200 / base-300
+     --bc --bcm       → base-content / base-content at 60%
+     --rule           → border colour
+     --pri --pric     → primary / primary-content
+     --lamp           → info      · "now"
+     --pencil         → error     · "correction"
+     --ok             → success   · "done"
+     --secret         → a custom semantic; no daisyUI equivalent
+     --v1..--v8       → per-character voice colours, assigned by cast order
+   ============================================================================ */
+
+.fr {
+  --f-title: Spectral, Georgia, serif;
+  --f-ui:    Archivo, system-ui, sans-serif;
+  --f-mono:  "IBM Plex Mono", monospace;
+  font-family: var(--f-ui);
+  background: var(--b1);
+  color: var(--bc);
 }
 
-* {
-  box-sizing: border-box;
+.stage.dark {
+  --b1:#15171C;
+  --b2:#1D2027;
+  --b3:#282C35;
+  --bc:#E9E5D9;
+  --bcm:#8C897E;
+  --rule:#2E323C;
+  --pri:#E9E5D9;
+  --pric:#15171C;
+  --pencil:#E0604A;
+  --lamp:#EDB25E;
+  --ok:#6FBF92;
+  --secret:#9B8FD4;
+  --v1:#7BA7D9;
+  --v2:#C08FD4;
+  --v3:#6FBF92;
+  --v4:#D9AE55;
+  --v5:#E09080;
+  --v6:#8FD4CE;
+  --v7:#B9B6E0;
+  --v8:#D9A0BE;
 }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
+.stage.light {
+  --b1:#F6F3E9;
+  --b2:#EEEADC;
+  --b3:#E2DCCA;
+  --bc:#1A1D24;
+  --bcm:#6E6B61;
+  --rule:#D6CFBB;
+  --pri:#232833;
+  --pric:#F6F3E9;
+  --pencil:#A8302A;
+  --lamp:#8F5C10;
+  --ok:#2F6E4F;
+  --secret:#5A4E94;
+  --v1:#35618E;
+  --v2:#7A4E8C;
+  --v3:#2F6E4F;
+  --v4:#A5761B;
+  --v5:#9C4F3C;
+  --v6:#2F6E6E;
+  --v7:#5A5A94;
+  --v8:#94436A;
 }
 
-body {
-  background: var(--bg);
-  color: var(--fg);
-  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  /* Column layout so a full-height page (the scene view) can fill the viewport
-     below the sticky header, while ordinary pages still grow and scroll. */
-  display: flex;
-  flex-direction: column;
-  min-height: 100dvh;
+.page.dark {
+  --b1:#191419;
+  --b2:#211B22;
+  --b3:#2B232D;
+  --bc:#F0E9E0;
+  --bcm:#8B8090;
+  --rule:#302836;
+  --pri:#F0E9E0;
+  --pric:#191419;
+  --pencil:#E2604F;
+  --lamp:#F0A64C;
+  --ok:#5FBF8E;
+  --secret:#B7A8E8;
+  --v1:#8FB6E0;
+  --v2:#CE9BDE;
+  --v3:#7FCBA0;
+  --v4:#E0B96A;
+  --v5:#E8A090;
+  --v6:#9CDDD6;
+  --v7:#C4C1E8;
+  --v8:#E2AECA;
 }
 
-.wrap {
-  flex: 1 1 auto;
-  min-height: 0;
+.page.light {
+  --b1:#FAF6EC;
+  --b2:#F3EEE0;
+  --b3:#E7DFCD;
+  --bc:#241F26;
+  --bcm:#6F6875;
+  --rule:#DED4C4;
+  --pri:#241F26;
+  --pric:#FAF6EC;
+  --pencil:#A8302A;
+  --lamp:#9A6210;
+  --ok:#2F6E4F;
+  --secret:#5A4E94;
+  --v1:#35618E;
+  --v2:#7A4E8C;
+  --v3:#2F6E4F;
+  --v4:#A5761B;
+  --v5:#9C4F3C;
+  --v6:#2F6E6E;
+  --v7:#5A5A94;
+  --v8:#94436A;
 }
 
-a {
-  color: var(--accent);
-  text-decoration: none;
+/* ============================================================================
+   2 · TYPE
+   Archivo for everything, including all prose in a transcript.
+   Spectral names things: screen titles, campaign and scene names, character
+   labels, and Director narration — the one place serif does body work.
+   Plex Mono for beats, ids, money.
+   Nothing uses italic as a semantic. Structure carries meaning.
+   ============================================================================ */
+
+.ttl  {
+  font-family: var(--f-title);
 }
 
-a:hover {
-  text-decoration: underline;
+.mono {
+  font-family: var(--f-mono);
 }
 
-h1, h2, h3 {
-  line-height: 1.2;
-  margin: 0 0 .5rem;
+.dim  {
+  color: var(--bcm);
 }
 
-h1 {
-  font-size: 1.5rem;
+.lbl  {
+  font-family: var(--f-mono);
+  font-size:10px;
+  letter-spacing:.13em;
+  text-transform:uppercase;
 }
 
-h2 {
-  font-size: 1.2rem;
+/* ============================================================================
+   3 · SURFACES
+   ============================================================================ */
+
+.sheet {
+  border:1px solid var(--rule);
+  border-radius:14px;
+  background:var(--b1);
+  overflow:hidden;
 }
 
-p {
-  margin: 0 0 .75rem;
+.row   {
+  border-bottom:1px solid var(--rule);
 }
 
-small, .dim {
-  color: var(--fg-dim);
+.field {
+  background:var(--b1);
+  border:1px solid var(--rule);
+  border-radius:10px;
 }
 
-.faint {
-  color: var(--fg-faint);
+.scroller {
+  max-height:520px;
+  overflow-y:auto;
 }
 
-.wrap {
-  max-width: var(--maxw);
-  margin: 0 auto;
-  padding: 1rem;
+.scroller::-webkit-scrollbar {
+  width:6px;
 }
 
-/* Top bar */
-
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: .6rem 1rem;
-  background: var(--bg-2);
-  border-bottom: 1px solid var(--border);
+.scroller::-webkit-scrollbar-thumb {
+  background:var(--rule);
+  border-radius:99px;
 }
 
-.topbar .brand {
-  font-weight: 700;
-  letter-spacing: .02em;
-  color: var(--fg);
-}
-
-.topbar .spacer {
-  flex: 1;
-}
-
-.topbar nav a {
-  color: var(--fg-dim);
-  font-size: .9rem;
-}
-
-.topbar nav a:hover {
-  color: var(--fg);
-  text-decoration: none;
-}
-
-/* Header nav: a CSS-only hamburger (checkbox hack, no JS). On a wide screen the
-   links sit inline and the ☰ toggle is hidden; on a narrow screen they collapse
-   into a dropdown the ☰ opens. Navigation is a full page load, so it resets. */
-
-.topnav {
-  position: relative;
-}
-
-.nav-toggle-cb {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.nav-toggle {
-  cursor: pointer;
-  font-size: 1.3rem;
-  line-height: 1;
-  color: var(--fg-dim);
-  padding: .1rem .35rem;
-  -webkit-user-select: none;
-     -moz-user-select: none;
-          user-select: none;
-}
-
-.nav-toggle:hover {
-  color: var(--fg);
-}
-
-.nav-links {
-  display: flex;
-  gap: 1rem;
-}
-
-/* Mobile: the ☰ shows and the links drop down under the header when checked. */
-
-@media (max-width: 640px) {
-  .nav-links {
-    display: none;
-    position: absolute;
-    right: 0;
-    top: calc(100% + .4rem);
-    flex-direction: column;
-    gap: 0;
-    min-width: 11rem;
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: .35rem 0;
-    box-shadow: 0 6px 20px rgba(0,0,0,.25);
-    z-index: 20;
-  }
-
-  .nav-links a {
-    padding: .55rem .9rem;
-    margin: 0;
-  }
-
-  .nav-links a:hover {
-    background: var(--bg-3, rgba(255,255,255,.05));
-  }
-
-  .nav-toggle-cb:checked ~ .nav-links {
-    display: flex;
-  }
-}
-
-/* Desktop: inline links, no toggle. */
-
-@media (min-width: 641px) {
-  .nav-toggle {
-    display: none;
-  }
-}
-
-/* Cards / lists */
-
-.card {
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem;
-  margin-bottom: .75rem;
-}
-
-.card h3 {
-  margin: 0 0 .25rem;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  gap: .75rem;
-}
-
-.row .spacer {
-  flex: 1;
-}
-
-.grid {
-  display: grid;
-  gap: .75rem;
-}
-
-@media (min-width: 640px) {
-  .grid.cols-2 {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-.badge {
-  display: inline-block;
-  font-size: .72rem;
-  padding: .1rem .45rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  color: var(--fg-dim);
-  background: var(--bg-3);
-}
-
-.badge.public {
-  color: var(--good);
-  border-color: #245;
-}
-
-.badge.unlisted {
-  color: var(--warn);
-}
-
-.badge.private {
-  color: var(--fg-dim);
-}
-
-.badge.stub {
-  color: var(--accent-2);
-}
-
-/* Forms */
-
-form {
-  margin: 0;
-}
-
-label {
-  display: block;
-  font-size: .85rem;
-  color: var(--fg-dim);
-  margin: .5rem 0 .2rem;
-}
-
-input[type=text], input[type=email], input[type=number], textarea, select {
-  width: 100%;
-  padding: .55rem .7rem;
-  background: var(--bg-3);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--fg);
-  font: inherit;
-}
-
-textarea {
-  min-height: 5rem;
-  resize: vertical;
-}
-
-input:focus, textarea:focus, select:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.field-error {
-  color: var(--bad);
-  font-size: .8rem;
-  margin-top: .2rem;
-}
+/* ============================================================================
+   4 · CONTROLS
+   Pencil is the editorial layer — reroll, edit, delete, branch, and every
+   error. It is never a primary action.
+   ============================================================================ */
 
 .btn {
-  display: inline-block;
-  padding: .5rem .9rem;
-  border-radius: 8px;
-  cursor: pointer;
-  background: var(--accent);
-  color: #0b1020;
-  border: none;
-  font: inherit;
-  font-weight: 600;
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  border-radius:8px;
+  padding:.4rem .7rem;
+  font-size:13px;
+  font-weight:600;
+  border:1px solid transparent;
+  cursor:default;
 }
 
-.btn:hover {
-  filter: brightness(1.08);
-  text-decoration: none;
+.btn-pri  {
+  background:var(--pri);
+  color:var(--pric);
 }
 
-.btn.ghost {
-  background: transparent;
-  color: var(--fg);
-  border: 1px solid var(--border);
+.btn-gh   {
+  background:transparent;
+  color:var(--bc);
+  border-color:var(--rule);
 }
 
-.btn.danger {
-  background: var(--bad);
-  color: #250;
+.btn-pen  {
+  background:transparent;
+  color:var(--pencil);
+  border-color:transparent;
+  padding:.2rem .35rem;
+  font-size:12px;
+  font-weight:500;
 }
 
-.btn:disabled {
-  opacity: .5;
-  cursor: not-allowed;
+.btn-red  {
+  background:var(--pencil);
+  color:var(--b1);
 }
 
-.btn.sm {
-  padding: .3rem .6rem;
-  font-size: .8rem;
+.btn-off  {
+  background:var(--b3);
+  color:var(--bcm);
 }
 
-/* Flash */
+/* disabled-looking */
 
-.flash {
-  padding: .6rem .9rem;
-  border-radius: 8px;
-  margin-bottom: .75rem;
+.btn-sm   {
+  padding:.25rem .5rem;
+  font-size:12px;
 }
 
-.flash.info {
-  background: #14351f;
-  color: var(--good);
-  border: 1px solid #245;
+.pill {
+  display:inline-flex;
+  align-items:center;
+  gap:.3rem;
+  border:1px solid var(--rule);
+  border-radius:999px;
+  padding:.1rem .5rem;
+  font-size:11px;
+  line-height:1.6;
 }
 
-.flash.error {
-  background: #3a1720;
-  color: var(--bad);
-  border: 1px solid #522;
+.dot {
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  display:inline-block;
 }
 
-/* Scene view: a full-height flex column that fills the space between the header and
-   the composer. Only the transcript scrolls; the header row and composer stay put. */
-
-/* Anchor the scene view directly to the viewport height. A percentage/flex chain from
-   <body> doesn't resolve here because LiveView wraps the view in a container <div>
-   between .wrap and .play, so the composer scrolled off on mobile. `calc(100dvh - chrome)`
-   is viewport-relative — it needs no cooperating ancestor — so .play always gets a real
-   height, and only the transcript's bordered section scrolls. dvh tracks the mobile URL
-   bar; the vh line is the fallback for older engines. `--chrome-h` ≈ topbar + wrap padding. */
-
-:root {
-  --chrome-h: 4.75rem;
+.av  {
+  width:28px;
+  height:28px;
+  border-radius:8px;
+  flex-shrink:0;
 }
 
-.play {
-  display: flex;
-  flex-direction: column;
-  gap: .5rem;
-  min-height: 0;
-  height: calc(100vh - var(--chrome-h));
-  height: calc(100dvh - var(--chrome-h));
+/* One boolean pattern, everywhere. Colour by meaning:
+   --sc:var(--lamp) for "always in mind", --sc:var(--secret) for "secret". */
+
+.sw    {
+  width:34px;
+  height:19px;
+  border-radius:999px;
+  position:relative;
+  flex-shrink:0;
+  background:var(--b3);
 }
 
-.play > .card {
-  margin-bottom: 0;
+.sw i  {
+  position:absolute;
+  top:2px;
+  left:2px;
+  width:15px;
+  height:15px;
+  border-radius:999px;
+  background:var(--bcm);
 }
 
-.play-head {
-  flex: 0 0 auto;
+.sw-on {
+  background:color-mix(in srgb, var(--sc) 40%, transparent);
 }
 
-.transcript-card {
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: 0;
-  overflow: hidden;
-  display: flex;
+.sw-on i {
+  left:auto;
+  right:2px;
+  background:var(--sc);
 }
 
-.play .intro-queue {
-  flex: 0 0 auto;
-  max-height: 30vh;
-  overflow-y: auto;
+.seg   {
+  display:flex;
+  border:1px solid var(--rule);
+  border-radius:8px;
+  overflow:hidden;
 }
 
-.play .composer {
-  flex: 0 0 auto;
-  position: static;
+.seg > * {
+  flex:1;
+  text-align:center;
+  padding:.35rem .5rem;
+  font-size:12px;
+  font-weight:600;
 }
 
-.composer-actions {
-  margin-top: .5rem;
+.seg-on  {
+  background:var(--b3);
 }
 
-.play .cast-panel {
-  flex: 0 0 auto;
-  max-height: 30vh;
-  overflow-y: auto;
+.chk    {
+  width:18px;
+  height:18px;
+  border-radius:5px;
+  border:1.5px solid var(--rule);
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:11px;
+  font-weight:700;
 }
 
-.move.failure {
-  color: var(--bad);
+.chk-on  {
+  background:var(--lamp);
+  border-color:var(--lamp);
+  color:var(--b1);
 }
 
-/* An inline generation failure, sitting in the transcript at the beat it occurred. */
+/* Outlined tick = inherited from a group. Can't be individually removed. */
 
-.turn-fail {
-  border-left: 3px solid var(--bad);
-  padding: .35rem 0 .35rem .6rem;
-  margin: .35rem 0;
-  color: var(--bad);
+.chk-via {
+  border-color:var(--secret);
+  color:var(--secret);
 }
 
-/* Turn management: controls appear on hover over a character's turn (omniscient). */
-
-.turn-block {
-  position: relative;
+.bar    {
+  height:5px;
+  border-radius:99px;
+  background:var(--b3);
+  overflow:hidden;
 }
 
-.turn-controls {
-  display: none;
-  gap: .25rem;
-  padding: .1rem 0 .35rem;
+.bar i  {
+  display:block;
+  height:100%;
+  background:var(--lamp);
 }
 
-.turn-block:hover .turn-controls {
-  display: flex;
+/* ============================================================================
+   5 · THE PERSPECTIVE CONTROL
+   The single most important idiom in the product. Identical markup, identical
+   position (top right of the header) on every surface with a viewpoint:
+   play as a character, play as omniscient, reading a published campaign,
+   its contents list, and preview on the world bible and character sheet.
+
+   <span class="viewas" style="--vc:var(--v2)"><i></i>Ilias ▾</span>
+
+   --vc is the character's voice colour; var(--bc) for omniscient,
+   var(--lamp) for limited omniscient, var(--bcm) for spectator.
+   ============================================================================ */
+
+.viewas   {
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  border:1px solid var(--vc);
+  color:var(--vc);
+  border-radius:999px;
+  padding:.12rem .5rem;
+  font-size:11.5px;
+  font-weight:600;
+  line-height:1.6;
+  white-space:nowrap;
 }
 
-.turn-edit {
-  padding: .25rem 0 .5rem;
+.viewas i {
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  background:var(--vc);
+  display:inline-block;
 }
 
-.turn-edit .say-input {
-  min-height: 3rem;
+/* ============================================================================
+   6 · THE INFO AFFORDANCE
+   Sits beside a section header, never inside a menu. One drawer per section,
+   covering the concepts in it — not one popover per setting.
+   Test for whether something needs one: does this label mean something
+   different here than a first-time reader would assume?
+   ============================================================================ */
+
+.info {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:15px;
+  height:15px;
+  border-radius:999px;
+  border:1px solid var(--bcm);
+  color:var(--bcm);
+  font-size:9.5px;
+  font-weight:700;
+  line-height:1;
+  flex-shrink:0;
 }
 
-.cast-panel summary {
-  cursor: pointer;
-  font-size: .9rem;
+/* ============================================================================
+   7 · TRANSCRIPT
+   Move types are told apart by structure, never by slant.
+   ============================================================================ */
+
+/* Director narration. Rules above and below, hanging dash, Spectral. */
+
+.m-world   {
+  border-top:1px solid var(--rule);
+  border-bottom:1px solid var(--rule);
+  padding:.7rem 0;
 }
 
-.cast-panel .rel-list {
-  margin: .5rem 0 0;
+/* Interior monologue. Voice-coloured rule + a faint tint of the same hue.
+   Set --vc to the speaker's voice colour. */
+
+.m-thought {
+  border-left:2px solid var(--vc);
+  background:color-mix(in srgb, var(--vc) 7%, transparent);
+  border-radius:0 8px 8px 0;
+  padding:.5rem .7rem;
 }
 
-/* Scene transcript */
+/* A generation that failed, rendered where it happened. */
 
-.transcript {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: .5rem;
-  width: 100%;
+.m-fail    {
+  background:color-mix(in srgb, var(--pencil) 9%, transparent);
+  border-left:2px solid var(--pencil);
+  border-radius:0 8px 8px 0;
+  padding:.7rem .8rem;
 }
 
-.beat-sep {
-  color: var(--fg-faint);
-  font-size: .75rem;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  margin: 1rem 0 .5rem;
-  border-top: 1px solid var(--border);
-  padding-top: .5rem;
+/* "Now" — the live turn, the current beat, an unsaved draft.
+   The only bright thing on screen, so attention has one meaning everywhere. */
+
+.m-live    {
+  background:radial-gradient(120% 160% at 6% 0%,
+             color-mix(in srgb, var(--lamp) 15%, transparent) 0%, transparent 60%);
 }
 
-.move {
-  margin: .35rem 0;
+/* A beat divider. Sticky within the transcript, plain by design — it records
+   that a beat opened and never changes afterwards. */
+
+.beat-rule         {
+  position:sticky;
+  top:0;
+  z-index:5;
+  background:var(--b1);
+  display:flex;
+  align-items:center;
+  gap:.7rem;
+  padding:.55rem 0 .5rem;
 }
 
-.move .who {
-  font-weight: 700;
+.beat-rule::after  {
+  content:"";
+  flex:1;
+  height:1px;
+  background:var(--rule);
 }
 
-.move.speech {
+/* ============================================================================
+   8 · STATUS STRIP
+   Above the composer in both registers: a slot per cast member, then one
+   sentence. No beat number — the transcript rule owns that. No navigation.
+   Slots are voice-coloured and flex, so names become initials around six.
+   ============================================================================ */
+
+.strip {
+  border-top:1px solid var(--rule);
+  background:var(--b2);
+  padding:.55rem .9rem;
 }
 
-.move.thought {
-  color: var(--accent-2);
-  font-style: italic;
+.slots {
+  display:flex;
+  gap:4px;
+  align-items:center;
 }
 
-.move.action {
-  color: var(--fg-dim);
-  font-style: italic;
+.slot  {
+  height:20px;
+  min-width:20px;
+  border-radius:5px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:var(--f-mono);
+  font-size:9.5px;
+  font-weight:600;
+  flex:1 1 0;
 }
 
-.move.world {
-  color: var(--fg-dim);
+.slot-took {
+  background:var(--sc);
+  color:var(--b1);
 }
 
-.move.world::before {
-  content: "❖ ";
-  color: var(--fg-faint);
+/* took their turn */
+
+.slot-now  {
+  background:color-mix(in srgb, var(--lamp) 22%, transparent);
+  border:1.5px solid var(--lamp);
+  color:var(--lamp);
 }
 
-.whisper {
-  color: var(--accent);
+/* happening now */
+
+.slot-wait {
+  border:1px solid var(--rule);
+  color:var(--bcm);
 }
 
-.whisper::after {
-  content: " (whisper)";
-  color: var(--fg-faint);
-  font-size: .75rem;
+/* still to come */
+
+.slot-pass {
+  border:1px dashed var(--rule);
+  color:var(--bcm);
 }
 
-/* Debug timeline (author bring-up): LLM calls, raw events, and errors interleaved.
-   Stacked, never a horizontal table — each entry's properties wrap and a rule (the
-   bottom border) separates entries, so it stays readable on a phone. */
+/* passed */
 
-.dbg-head {
-  padding: .3rem 0;
-  font-size: .8rem;
-  flex-wrap: wrap;
-  gap: .3rem;
+.slot-fail {
+  border:1.5px solid var(--pencil);
+  color:var(--pencil);
 }
 
-.dbg-entry {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: .78rem;
-  padding: .4rem 0;
-  border-bottom: 1px solid var(--border);
+.slot-you  {
+  box-shadow:0 0 0 2px var(--b2), 0 0 0 3.5px var(--bc);
 }
 
-.dbg-entry summary {
-  cursor: pointer;
+/* ============================================================================
+   9 · NAVIGATION
+   One primitive for long forms (character sheet, world bible) and one for
+   sectioned screens (campaign, library, browse, admin). Both scroll
+   horizontally and never wrap.
+   ============================================================================ */
+
+.tabs {
+  display:flex;
+  overflow-x:auto;
+  border-bottom:1px solid var(--rule);
+  background:var(--b2);
+  width:100%;
+  min-width:0;
 }
 
-.dbg-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: .35rem .5rem;
+.tabs::-webkit-scrollbar {
+  display:none;
 }
 
-.dbg-entry summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: .35rem .5rem;
+.tabs {
+  scrollbar-width:none;
 }
 
-.dbg-time {
-  color: var(--fg-faint);
+.tab      {
+  padding:.6rem .8rem;
+  font-size:13px;
+  font-weight:600;
+  white-space:nowrap;
+  color:var(--bcm);
+  border-bottom:2px solid transparent;
 }
 
-.dbg-tag {
-  font-size: .68rem;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  padding: .02rem .35rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  color: var(--fg-dim);
-  background: var(--bg-3);
+.tab-on   {
+  color:var(--bc);
+  border-bottom-color:var(--lamp);
 }
 
-.dbg-tag.ev {
-  color: var(--accent-2);
+/* Amber dot = unbuilt, on the campaign's first run. */
+
+.tab-todo::after {
+  content:"";
+  display:inline-block;
+  width:5px;
+  height:5px;
+  border-radius:99px;
+  background:var(--lamp);
+  margin-left:.35rem;
+  vertical-align:middle;
 }
 
-.dbg-tag.llm {
-  color: var(--accent);
+.jump {
+  display:flex;
+  gap:.15rem;
+  overflow-x:auto;
+  padding:.5rem .9rem;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  background:var(--b2);
+  border-bottom:1px solid var(--rule);
 }
 
-.dbg-tag.err, .dbg-tag.llm.err {
-  color: var(--bad);
-  border-color: #522;
+.jump::-webkit-scrollbar {
+  display:none;
 }
 
-.dbg-kv, .dbg-label {
-  margin: .25rem 0 .1rem;
+.jump {
+  scrollbar-width:none;
 }
 
-.dbg-label {
-  color: var(--fg-dim);
-  text-transform: uppercase;
-  font-size: .68rem;
-  letter-spacing: .04em;
+.jump span    {
+  font-family:var(--f-mono);
+  font-size:10px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--bcm);
+  padding:.15rem .4rem;
+  white-space:nowrap;
+  border-radius:5px;
 }
 
-.dbg-detail {
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: .15rem 0 0;
-  max-height: 18rem;
-  overflow: auto;
-  background: var(--bg-3);
-  padding: .4rem .5rem;
-  border-radius: 6px;
+.jump .on     {
+  color:var(--bc);
+  background:var(--b3);
 }
 
-.dbg-detail.err {
-  color: var(--bad);
-  background: transparent;
-  padding: .1rem 0;
+/* Scene scrubber on a character sheet — one stop per closed scene. */
+
+.scrub {
+  display:flex;
+  gap:.15rem;
+  overflow-x:auto;
+  padding:.5rem .9rem;
+  width:100%;
+  min-width:0;
+  background:var(--b2);
+  border-bottom:1px solid var(--rule);
 }
 
-/* Waiting states — three distinct kinds (FS principle) */
-
-.waiting {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  color: var(--fg-dim);
-  font-size: .9rem;
-  padding: .5rem;
+.scrub::-webkit-scrollbar {
+  display:none;
 }
 
-.waiting .dot {
-  width: .5rem;
-  height: .5rem;
-  border-radius: 50%;
-  background: var(--fg-dim);
-  animation: pulse 1.2s ease-in-out infinite;
+.scrub {
+  scrollbar-width:none;
 }
 
-.waiting.director .dot {
-  background: var(--accent-2);
+.scrub span {
+  font-family:var(--f-mono);
+  font-size:10px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--bcm);
+  padding:.15rem .45rem;
+  white-space:nowrap;
+  border-radius:5px;
 }
 
-.waiting.cast .dot {
-  background: var(--accent);
+.scrub .on  {
+  color:var(--bc);
+  background:var(--b3);
 }
 
-.waiting.you .dot {
-  background: var(--good);
-  animation: none;
+/* ============================================================================
+   10 · MARKED LIST ITEMS
+   Left-rule + tint, used wherever an item in a list carries a state.
+   Secret takes the structure because visibility has consequences;
+   "always in mind" is a chip instead, so the two compose.
+   ============================================================================ */
+
+.secret {
+  border-left:2px solid var(--secret);
+  background:color-mix(in srgb, var(--secret) 8%, transparent);
+  border-radius:0 8px 8px 0;
+  padding-left:.65rem;
 }
 
-@keyframes pulse {
-  0%,100% {
-    opacity: .3;
+.core   {
+  border-left:2px solid var(--lamp);
+  background:color-mix(in srgb, var(--lamp) 7%, transparent);
+  border-radius:0 8px 8px 0;
+  padding-left:.65rem;
+}
+
+.prop   {
+  border-left:2px solid var(--lamp);
+  padding-left:.65rem;
+}
+
+/* proposed */
+
+.canon  {
+  border-left:2px solid var(--ok);
+  padding-left:.65rem;
+}
+
+/* accepted */
+
+.drop   {
+  border-left:2px solid var(--rule);
+  padding-left:.65rem;
+  opacity:.55;
+}
+
+.bound  {
+  border-left:2px solid var(--pencil);
+  padding-left:.65rem;
+}
+
+/* won't */
+
+.compel {
+  border-left:2px solid var(--v2);
+  padding-left:.65rem;
+}
+
+/* can't stop */
+
+.urgent {
+  border-left:2px solid var(--pencil);
+  background:color-mix(in srgb, var(--pencil) 7%, transparent);
+}
+
+.arch   {
+  opacity:.6;
+}
+
+.was    {
+  text-decoration:line-through;
+  text-decoration-color:var(--bcm);
+  text-decoration-thickness:1px;
+}
+
+.chip-core {
+  display:inline-flex;
+  align-items:center;
+  gap:.3rem;
+  border:1px solid var(--lamp);
+  color:var(--lamp);
+  border-radius:999px;
+  padding:.02rem .4rem;
+  font-family:var(--f-mono);
+  font-size:9.5px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.cover {
+  border:1px dashed var(--rule);
+  border-radius:10px;
+}
+
+.skel  {
+  height:12px;
+  border-radius:4px;
+  background:var(--b3);
+}
+
+.last\:mb-0:last-child {
+  margin-bottom: 0px;
+}
+
+@media (min-width: 768px) {
+  .md\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  50% {
-    opacity: 1;
-  }
 }
 
-/* Composer */
-
-.composer {
-  position: sticky;
-  bottom: 0;
-  background: var(--bg-2);
-  border-top: 1px solid var(--border);
-  padding: .75rem;
-}
-
-.composer .row {
-  align-items: center;
-}
-
-.say-input {
-  width: 100%;
-  min-height: 2.6rem;
-  max-height: 40vh;
-  resize: none;
-  overflow-y: auto;
-  field-sizing: content;
-  line-height: 1.5;
-}
-
-/* Authoring auto-generation: the per-field "✨ Generate" row + the brief card. */
-
-.gen-label {
-  margin-top: .75rem;
-  align-items: baseline;
-}
-
-.gen-label > span:first-child {
-  font-weight: inherit;
-}
-
-.gen-btn {
-  white-space: nowrap;
-}
-
-.gen-brief {
-  border-color: var(--accent);
-}
-
-.gen-brief textarea {
-  margin-bottom: .5rem;
-}
-
-.library-filter {
-  margin-bottom: .75rem;
-}
-
-/* Library grouped by world: a world header card with its characters/campaigns nested
-   as a member list beneath it. */
-
-.world-group .group-head {
-  border-bottom: 1px solid var(--border);
-  padding-bottom: .5rem;
-  margin-bottom: .25rem;
-}
-
-.world-group .group-head h3 {
-  margin: 0;
-}
-
-.member-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.member-list .member {
-  padding: .4rem 0 .4rem .75rem;
-  border-bottom: 1px solid var(--border);
-  gap: .5rem;
-}
-
-.member-list .member:last-child {
-  border-bottom: none;
-}
-
-.member-empty {
-  padding: .5rem 0 .25rem .75rem;
-}
-
-/* One create button per artifact type, stacked in a tidy column (equal width) rather
-   than wrapping side-by-side, which read as ragged. */
-
-.new-buttons {
-  flex-direction: column;
-  align-items: stretch;
-  gap: .5rem;
-  max-width: 16rem;
-}
-
-/* Quick Build progress bar: a filling track + the phase it's on. */
-
-.qb-progress {
+.phx-error .\[\.phx-error_\&\]\:flex {
   display: flex;
-  flex-direction: column;
-  gap: .3rem;
 }
 
-.qb-track {
-  height: .5rem;
-  background: var(--border);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.qb-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 999px;
-  transition: width .3s ease;
-}
-
-.qb-count {
-  opacity: .7;
-}
-
-.pending-banner {
-  border-color: var(--accent-2);
-}
-
-.intro-queue {
-  border-color: var(--accent-2);
-}
-
-.intro-queue h3 {
-  margin-bottom: .25rem;
-}
-
-.save-row {
-  gap: .75rem;
-}
-
-.saved-note {
-  color: var(--good);
-  font-size: .9rem;
-  font-weight: 600;
-}
-
-.rel-list {
-  list-style: none;
-  padding: 0;
-  margin: .5rem 0;
-}
-
-.rel-item {
-  padding: .35rem 0;
-  border-bottom: 1px solid var(--border);
-  gap: .5rem;
-}
-
-.rel-add {
-  gap: .5rem;
-  margin-top: .5rem;
-}
-
-/* Library entry controls sit on their own wrapping row under the name, so the
-   edit/archive/delete buttons never overflow the card on a narrow screen. */
-
-.entry-actions {
-  flex-wrap: wrap;
-  gap: .4rem;
-  margin-top: .35rem;
-}
-
-/* A boundary rendered as stacked parts (topic, condition, pressure, category), each on
-   its own line — far easier to read than one dense · -separated string. */
-
-.boundary-item {
-  align-items: flex-start;
-}
-
-.boundary-parts {
+.phx-loading .\[\.phx-loading_\&\]\:flex {
   display: flex;
-  flex-direction: column;
-  gap: .15rem;
-}
-
-/* Block-field editor: paragraphs as focus-styled, auto-growing textareas that read
-   like prose until you click into them (no toggle logic — the textarea is always
-   live, just styled to look like text when unfocused). */
-
-.field-block {
-  margin-bottom: 1.25rem;
-}
-
-/* Collapsible sections (block fields + the Boundaries/Relationships cards). Native
-   <details>; a rotating ▸ marker replaces the default triangle. Content collapses under
-   the heading so a long sheet stays navigable. */
-
-.field-summary, .card-summary {
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: baseline;
-  gap: .5rem;
-  flex-wrap: wrap;
-  -webkit-user-select: none;
-     -moz-user-select: none;
-          user-select: none;
-}
-
-.field-summary::-webkit-details-marker, .card-summary::-webkit-details-marker {
-  display: none;
-}
-
-.field-summary::before, .card-summary::before {
-  content: "▸";
-  color: var(--fg-faint);
-  font-size: .8em;
-  transition: transform .12s ease;
-  display: inline-block;
-}
-
-details[open] > .field-summary::before, details[open] > .card-summary::before {
-  transform: rotate(90deg);
-}
-
-.field-summary {
-  margin-bottom: .3rem;
-  color: var(--fg-dim);
-}
-
-.field-summary .field-title {
-  color: var(--fg);
-  font-weight: 600;
-}
-
-.card-summary {
-  font-weight: 700;
-  font-size: 1.15rem;
-  color: var(--fg);
-}
-
-.field-actions {
-  margin-top: .2rem;
-}
-
-.para {
-  display: flex;
-  gap: .35rem;
-  align-items: flex-start;
-  margin: .15rem 0;
-}
-
-.para-input {
-  flex: 1;
-  min-height: 2.4rem;
-  resize: none;
-  overflow: hidden;
-  /* Native content-sizing where supported (Chromium/Safari): the field grows to fit
-     its text with no JavaScript. The AutoGrow hook is a fallback for browsers without
-     it (e.g. older Firefox). */
-  field-sizing: content;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: .4rem .5rem;
-  line-height: 1.55;
-}
-
-.para-input:hover {
-  border-color: var(--border);
-}
-
-.para-input:focus {
-  border-color: var(--accent);
-  background: var(--bg-2);
-}
-
-.para-input::-moz-placeholder {
-  color: var(--fg-faint);
-}
-
-.para-input::placeholder {
-  color: var(--fg-faint);
-}
-
-.para-controls {
-  display: flex;
-  gap: .2rem;
-  padding-top: .35rem;
-}
-
-.add-para {
-  margin-top: .1rem;
-}
-
-.btn.xs {
-  padding: .15rem .45rem;
-  font-size: .78rem;
-}
-
-.list-empty {
-  color: var(--fg-faint);
-  padding: 2rem 1rem;
-  text-align: center;
-}
-
-hr.sep {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 1rem 0;
-}
-
-code, pre {
-  background: var(--bg-3);
-  border-radius: 6px;
-}
-
-code {
-  padding: .05rem .3rem;
-  font-size: .85em;
-}
-
-pre {
-  padding: .75rem;
-  overflow-x: auto;
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Debug drawer — a floating server-log viewer (bring-up aid, gated by
-   :debug_drawer). Fixed bottom-right, out of the content flow.
-   ──────────────────────────────────────────────────────────────────────────── */
-
-/* Flush to the very bottom-right corner so the collapsed opener never sits on top of
-   the composer's Send/Continue buttons. */
-
-.debug-drawer {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  z-index: 9999;
-  font-size: .8rem;
-}
-
-.debug-drawer-toggle {
-  background: var(--bg-3);
-  color: var(--fg-dim);
-  border: 1px solid var(--border);
-  border-right: none;
-  border-bottom: none;
-  border-radius: 8px 0 0 0;
-  padding: .35rem .6rem;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,.4);
-}
-
-.debug-drawer-toggle:hover {
-  color: var(--fg);
-}
-
-.debug-count {
-  display: inline-block;
-  min-width: 1.2em;
-  text-align: center;
-  margin-left: .3rem;
-  background: var(--accent);
-  color: #0a0d16;
-  border-radius: 999px;
-  padding: 0 .35em;
-  font-size: .72rem;
-  font-weight: 700;
-}
-
-.debug-drawer-body {
-  width: min(640px, 92vw);
-  height: min(45vh, 420px);
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 6px 24px rgba(0,0,0,.5);
-  overflow: hidden;
-}
-
-.debug-drawer-head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: .4rem;
-  row-gap: .35rem;
-  padding: .5rem .6rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.debug-drawer-head .debug-title {
-  font-weight: 700;
-  color: var(--fg);
-}
-
-.debug-drawer-head .spacer {
-  flex: 1;
-}
-
-.debug-empty {
-  color: var(--fg-faint);
-  padding: 1rem .6rem;
-}
-
-.debug-log-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: .4rem .6rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-
-.debug-line {
-  white-space: pre-wrap;
-  word-break: break-word;
-  padding: .1rem 0;
-  border-bottom: 1px solid rgba(255,255,255,.03);
-}
-
-.debug-time {
-  color: var(--fg-faint);
-  margin-right: .5rem;
-}
-
-.debug-lvl {
-  text-transform: uppercase;
-  font-size: .7rem;
-  margin-right: .5rem;
-}
-
-.debug-msg {
-  color: var(--fg);
-}
-
-.lvl-emergency .debug-lvl, .lvl-alert .debug-lvl,
-.lvl-critical .debug-lvl, .lvl-error .debug-lvl {
-  color: var(--bad);
-}
-
-.lvl-warning .debug-lvl, .lvl-warn .debug-lvl {
-  color: var(--warn);
-}
-
-.lvl-notice .debug-lvl, .lvl-info .debug-lvl {
-  color: var(--good);
-}
-
-.lvl-debug .debug-lvl {
-  color: var(--accent-2);
-}
-
-/* Socket status — a labelled pill in the drawer head, plus a dot on the collapsed
-   toggle so connection state is visible either way. Driven by app.js. */
-
-.socket-status {
-  display: inline-flex;
-  align-items: center;
-  gap: .35rem;
-  font-size: .7rem;
-  color: var(--fg-dim);
-  text-transform: lowercase;
-}
-
-.socket-status::before {
-  content: "";
-  width: .5rem;
-  height: .5rem;
-  border-radius: 50%;
-  background: var(--fg-faint);
-}
-
-.socket-dot {
-  display: inline-block;
-  width: .5rem;
-  height: .5rem;
-  border-radius: 50%;
-  margin-left: .1rem;
-  background: var(--fg-faint);
-  vertical-align: middle;
-}
-
-.socket-status.connected::before, .socket-dot.connected {
-  background: var(--good);
-}
-
-.socket-status.connecting::before, .socket-dot.connecting {
-  background: var(--warn);
-}
-
-.socket-status.disconnected::before, .socket-dot.disconnected {
-  background: var(--bad);
-  animation: pulse 1.2s ease-in-out infinite;
 }

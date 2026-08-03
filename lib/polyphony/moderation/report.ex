@@ -16,6 +16,8 @@ defmodule Polyphony.Moderation.Report do
   @reasons ~w(csam real_person_sexual other_illegal harassment nonconsensual_content other)a
   @absolute_lines ~w(csam real_person_sexual)a
   @statuses ~w(open actioned dismissed)
+  @typedoc "A row of this table. `Ecto.Schema` generates no `t/0`, so it is declared here."
+  @type t :: %__MODULE__{}
 
   schema "reports" do
     field(:reporter_id, :id)
@@ -39,6 +41,42 @@ defmodule Polyphony.Moderation.Report do
   @doc "Is `reason` an absolute line (CSAM / real-person sexual content)?"
   @spec absolute_line?(atom() | String.t()) :: boolean()
   def absolute_line?(reason), do: to_atom(reason) in @absolute_lines
+
+  @doc "Reports filed **against** `owner_id`, newest first."
+  def list_for_owner(repo, owner_id) do
+    import Ecto.Query
+
+    repo.all(
+      from(r in __MODULE__, where: r.owner_id == ^owner_id, order_by: [desc: r.inserted_at])
+    )
+  end
+
+  @doc """
+  Reports **made by** `reporter_id`, newest first.
+
+  The other direction, and a real signal: someone whose reports are nearly all
+  dismissed is campaigning rather than reporting.
+  """
+  def list_by_reporter(repo, reporter_id) do
+    import Ecto.Query
+
+    repo.all(
+      from(r in __MODULE__, where: r.reporter_id == ^reporter_id, order_by: [desc: r.inserted_at])
+    )
+  end
+
+  @doc "Every report on one item — how a fourth report on the same thing becomes visible."
+  def list_for_item(repo, item_type, item_id) do
+    import Ecto.Query
+    t = to_string(item_type)
+
+    repo.all(
+      from(r in __MODULE__,
+        where: r.item_type == ^t and r.item_id == ^item_id,
+        order_by: [desc: r.inserted_at]
+      )
+    )
+  end
 
   def new_changeset(attrs) do
     %__MODULE__{}
