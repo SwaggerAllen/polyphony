@@ -56,6 +56,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
          entry: entry,
          sheet: sheet,
          name: sheet.name || "",
+         pronouns: sheet.pronouns || "",
          role: sheet.role || "",
          blocks: blocks_from_sheet(sheet),
          generating: MapSet.new(),
@@ -107,6 +108,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
       sheet = %CharacterSheet{
         socket.assigns.sheet
         | name: name,
+          pronouns: blank_to_nil(socket.assigns.pronouns),
           role: blank_to_nil(socket.assigns.role),
           premise: join_blocks(blocks["premise"]),
           appearance: join_blocks(blocks["appearance"]),
@@ -129,6 +131,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
           entry: entry,
           sheet: sheet,
           name: sheet.name || "",
+          pronouns: sheet.pronouns || "",
           blocks: blocks_from_sheet(sheet),
           saved: true,
           dirty: false
@@ -433,13 +436,14 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   defp assign_form(socket, params) do
     name = params["name"] || socket.assigns.name
+    pronouns = params["pronouns"] || socket.assigns.pronouns
 
     blocks =
       Map.new(@block_fields, fn f ->
         {f, param_blocks(params["b_#{f}"], socket.assigns.blocks[f])}
       end)
 
-    assign(socket, name: name, blocks: blocks)
+    assign(socket, name: name, pronouns: pronouns, blocks: blocks)
   end
 
   defp update_blocks(socket, field, fun),
@@ -796,6 +800,17 @@ defmodule PolyphonyWeb.SheetEditorLive do
       <form id="sheet-form" phx-submit="save" phx-change="sync">
         <label class="gen-label"><span>Name</span></label>
         <input type="text" name="name" value={@name} phx-debounce="600" />
+        <label for="sheet-pronouns">Pronouns</label>
+        <%!-- Free text, never a menu: the set isn't closed, and a fixed list would be
+              a decision about people rather than about data. --%>
+        <input
+          id="sheet-pronouns"
+          type="text"
+          name="pronouns"
+          value={@pronouns}
+          placeholder="she / her"
+          phx-debounce="600"
+        />
 
         <.block_field
           :for={{f, label} <- field_specs()}

@@ -261,6 +261,9 @@ defmodule Polyphony.Context do
   defp render_sheet(%CharacterSheet{} = s) do
     [
       s.name && "You are #{s.name}.",
+      # Immediately after the name, because it governs every sentence written about
+      # them — including the third-person prose the model writes for their actions.
+      s.pronouns && "Referred to as #{s.pronouns}.",
       s.premise && s.premise,
       s.appearance && "Appearance: #{s.appearance}",
       s.voice && "Voice: #{s.voice}",

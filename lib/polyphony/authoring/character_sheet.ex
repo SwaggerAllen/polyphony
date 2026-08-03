@@ -117,6 +117,18 @@ defmodule Polyphony.Authoring.CharacterSheet do
 
   @derive Jason.Encoder
   defstruct name: nil,
+            # How to refer to them: free text ("she / her", "they / them", "he / him",
+            # "ey / em"), never an enum — the set isn't closed, and a fixed list would
+            # be a design decision about people rather than about data.
+            #
+            # This is a *generation* field before it's a display one. Every character
+            # prompt renders this sheet; with nothing here the model infers pronouns
+            # from a name, which is a guess, and a wrong guess lands inside the fiction
+            # — the story misgenders someone, which reads as the story being wrong
+            # about them rather than as a setting being unset. `ux/README.md` puts it
+            # under copy rules: *pronouns are a field*, because half a sheet's own copy
+            # is written about the character and has to be parameterised on it.
+            pronouns: nil,
             premise: nil,
             appearance: nil,
             voice: nil,

@@ -203,7 +203,13 @@ they should stay in the scene as un-actionable with a retry, not be silently evi
 eviction would be a membership event the room can see, for a reason that has nothing to do
 with the fiction.
 
-### 2.11 Pronouns are a field · **new** — ⚠️ *affects generated prose, not just UI*
+### 2.11 Pronouns are a field · **change** — ✅ **Shipped**
+`pronouns` on `CharacterSheet` (free text, never an enum — the set isn't closed), rendered into
+the character's context immediately after their name because it governs every sentence written
+about them, offered by `Autofill` with explicit guidance not to infer from the name, and
+editable on the sheet. `PronounsTest` pins the whole path. Original ask below.
+
+
 `ux/README.md` says it plainly under copy rules: *pronouns are a field. Half the copy on a
 character sheet is written about them, so those strings need parameterising rather than
 hardcoding.* `CharacterSheet` has no such field, and nothing else records one.

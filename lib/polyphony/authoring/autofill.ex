@@ -24,6 +24,9 @@ defmodule Polyphony.Authoring.Autofill do
   # {field, type, guidance}. type: :string (a single value) | :lines (one item/line).
   @character [
     {"name", :string, "the character's name (just the name, a few words)"},
+    {"pronouns", :string,
+     "the pronouns they go by, as a pair like \"she / her\", \"he / him\" or " <>
+       "\"they / them\" — write what suits the character, and don't assume from the name"},
     {"premise", :string, "a one-line hook — who they are and what drives them"},
     {"appearance", :string, "how they look and physically carry themselves"},
     {"voice", :string, "how they speak — diction, rhythm, verbal tics"},
