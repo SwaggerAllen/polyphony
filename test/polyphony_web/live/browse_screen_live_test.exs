@@ -388,9 +388,61 @@ defmodule PolyphonyWeb.BrowseScreenLiveTest do
 
       assert [report] = Moderation.list_open()
       assert report.reason == "harassment"
-      # Targets the frozen snapshot, so a take-down leaves the author's original alone.
+      # Targets the frozen snapshot; the take-down spreads from there to the author's
+      # own campaign and every fork of it (§B3).
       assert report.item_id == story.id
       assert report.reporter_id == user.id
+    end
+  end
+
+  describe "a link that doesn't lead anywhere" do
+    test "a taken-down story says so rather than serving itself", %{conn: conn} do
+      story = publish(user_fixture(), stair(), %{perspectives: [@halden]})
+      Library.hide(story.id, "takedown")
+
+      {:ok, _v, html} = live(conn, ~p"/browse?#{[story: story.id]}")
+
+      assert html =~ "This isn&#39;t available"
+      assert html =~ "check your email"
+      # A take-down keeps the entry's own visibility, so the old URL must not serve it.
+      refute html =~ "The Ninth Gate"
+    end
+
+    test "and it is gone from the catalogue with it", %{conn: conn} do
+      story = publish(user_fixture(), stair(), %{perspectives: [@halden]})
+      Library.hide(story.id, "takedown")
+
+      {:ok, _v, html} = live(conn, ~p"/browse")
+
+      refute html =~ "The Ninth Gate"
+    end
+
+    test "an unpublished one gets the plainer answer", %{conn: conn} do
+      story = publish(user_fixture(), stair(), %{perspectives: [@halden]})
+      Library.set_visibility(story.id, "private")
+
+      {:ok, _v, html} = live(conn, ~p"/browse?#{[story: story.id]}")
+
+      assert html =~ "Nothing here"
+      assert html =~ "It may have been unpublished."
+    end
+
+    test "an id that isn't one is a miss, not a crash", %{conn: conn} do
+      {:ok, _v, html} = live(conn, ~p"/browse?story=not-an-id")
+
+      assert html =~ "Nothing here"
+    end
+
+    test "a reader's shelf marks a taken-down story gone rather than linking to it" do
+      %{conn: conn, user: user} = register_and_log_in_user(%{conn: Phoenix.ConnTest.build_conn()})
+      scene = stair()
+      story = publish(user_fixture(), scene, %{perspectives: [@halden]})
+
+      {:ok, _v, _html} = live(conn, ~p"/browse?#{[story: story.id, scene: scene, as: @halden]}")
+      Library.hide(story.id, "takedown")
+
+      assert [row] = Reading.shelf(Owner.of(user))
+      assert row.state == :gone
     end
   end
 

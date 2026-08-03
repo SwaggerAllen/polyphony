@@ -71,14 +71,28 @@ defmodule PolyphonyWeb.BrowseLive do
   # ── Loading ──────────────────────────────────────────────────────────────────
 
   defp load(socket) do
-    story = socket.assigns.story_id && Library.get(socket.assigns.story_id)
-    story = if story && published?(story), do: story, else: nil
+    entry = socket.assigns.story_id && Library.get(socket.assigns.story_id)
+    story = if entry && published?(entry), do: entry, else: nil
 
     socket
     |> assign(story: story, snapshot: story && Library.payload(story))
+    |> assign(gone: gone_reason(socket.assigns.story_id, entry, story))
     |> assign(bookmark: bookmark_for(socket, story))
     |> assign(stories: story_rows(), worlds: world_rows())
   end
+
+  # A link that named a story and didn't get one has to say so. Dropping the reader on
+  # the catalogue reads as "you clicked the wrong thing", which is the one thing that
+  # didn't happen — and a bookmark to a republished-away scene lands here too.
+  #
+  # Taken-down is its own answer rather than folded into "gone", because the author
+  # follows the same link, finds their own copy missing as well, and needs to know why
+  # (§B3 — a take-down takes everything).
+  defp gone_reason(nil, _entry, _story), do: nil
+  defp gone_reason(_id, _entry, story) when not is_nil(story), do: nil
+
+  defp gone_reason(_id, entry, _story),
+    do: if(entry && Library.hidden?(entry), do: :down, else: :gone)
 
   # Grouped by root (§3.1d), because three forks share a title until someone renames
   # one — a flat list of near-identical names is unusable. Author is the delineator.
@@ -336,9 +350,46 @@ defmodule PolyphonyWeb.BrowseLive do
 
   # ── Render ───────────────────────────────────────────────────────────────────
 
+  def render(%{story: nil, gone: reason} = assigns) when not is_nil(reason),
+    do: dead_end(assigns)
+
   def render(%{story: nil} = assigns), do: catalogue(assigns)
   def render(%{scene: nil} = assigns), do: front_page(assigns)
   def render(assigns), do: reader(assigns)
+
+  # ── A link that doesn't lead anywhere ────────────────────────────────────────
+
+  # In the reading register, because the reader arrived here expecting to read.
+  defp dead_end(assigns) do
+    ~H"""
+    <Kit.frame register={:page} class="flex flex-col min-h-[100dvh]">
+      <Kit.header title="Browse" subtitle="What people have shared" back={~p"/browse"}>
+        <:actions>
+          <Layouts.nav_menu current_user={@current_user} />
+        </:actions>
+      </Kit.header>
+
+      <div class="flex-1 min-h-0 overflow-y-auto">
+        <Kit.sheet class="m-4">
+          <Kit.empty :if={@gone == :down} headline="This isn't available">
+            It was taken down after a report. If it was yours, check your email — this covers
+            your own copy too.
+            <:action>
+              <.link navigate={~p"/browse"} class="btn btn-gh btn-sm">Back to browse</.link>
+            </:action>
+          </Kit.empty>
+
+          <Kit.empty :if={@gone == :gone} headline="Nothing here">
+            This link doesn't lead anywhere any more. It may have been unpublished.
+            <:action>
+              <.link navigate={~p"/browse"} class="btn btn-gh btn-sm">Back to browse</.link>
+            </:action>
+          </Kit.empty>
+        </Kit.sheet>
+      </div>
+    </Kit.frame>
+    """
+  end
 
   # ── The catalogue ────────────────────────────────────────────────────────────
 
@@ -691,11 +742,18 @@ defmodule PolyphonyWeb.BrowseLive do
 
   # ── Copy ─────────────────────────────────────────────────────────────────────
 
-  # A **frozen** snapshot, and readable. The catalogue already only lists these, and a
-  # direct URL has to agree with it: a live campaign is somebody's working copy, not a
-  # story, and opening one here would read its scene list as a published contents.
+  # A **frozen** snapshot, readable, and not taken down. The catalogue already only
+  # lists these, and a direct URL has to agree with it: a live campaign is somebody's
+  # working copy, not a story, and opening one here would read its scene list as a
+  # published contents.
+  #
+  # Hidden is checked here and not left to the list query, because the list query isn't
+  # what a direct link goes through — a taken-down story keeps its `visibility`, so
+  # without this its old URL still serves it (§B3).
   defp published?(entry),
-    do: Library.snapshot?(entry) and entry.visibility in ~w(public unlisted)
+    do:
+      Library.snapshot?(entry) and entry.visibility in ~w(public unlisted) and
+        not Library.hidden?(entry)
 
   defp story_name(snapshot), do: Session.title(snapshot)
   defp blurb(snapshot), do: Session.blurb(snapshot)

@@ -94,8 +94,18 @@ defmodule Polyphony.Library do
 
   defp assign_hue(payload, _owner, _opts), do: payload
 
-  @doc "Fetch a row (payload still encoded — use `payload/1`), or nil."
-  def get(id, opts \\ []), do: LibraryEntry.get(repo(opts), id)
+  @doc """
+  Fetch a row (payload still encoded — use `payload/1`), or nil.
+
+  Ids arrive from URL params, so an id that isn't one is a **miss**, not a crash — the
+  database would answer a cast error, and "no such entry" is the honest reading.
+  """
+  def get(id, opts \\ []) do
+    case library_id(id) do
+      nil -> nil
+      id -> LibraryEntry.get(repo(opts), id)
+    end
+  end
 
   @doc """
   Every entry owned by `owner` (a `%Owner{}`, `%User{}`, or bare id) — excludes

@@ -193,7 +193,13 @@ defmodule Polyphony.Reading do
   defp state(_bookmark, source), do: if(readable?(source), do: :reading, else: :gone)
 
   defp readable?(nil), do: false
-  defp readable?(source), do: Library.live?(source) and source.visibility in ~w(public unlisted)
+
+  # Taken down counts as gone here, not as a shelf row that links to a dead end — the
+  # row's own `:gone` copy is the honest answer (§B3).
+  defp readable?(source),
+    do:
+      Library.live?(source) and source.visibility in ~w(public unlisted) and
+        not Library.hidden?(source)
 
   defp source_of(%Bookmark{published_id: nil}, _opts), do: nil
   defp source_of(%Bookmark{published_id: id}, opts), do: Library.get(id, opts)
