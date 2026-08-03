@@ -336,6 +336,16 @@
 /* Wide enough to read a wrapped line, never wider than the screen. */
 .dock-panel { width:min(100vw - 1rem, 46rem); max-height:min(70vh, 32rem);
               box-shadow:0 8px 32px rgb(0 0 0 / 55%); }
+
+/* Open/closed is a class on <body>, not an inline style on the panel, and that is
+   load-bearing rather than stylistic. A dock hangs off a LiveView; every server
+   round-trip patches its DOM, which re-asserts whatever the template said and drops
+   whatever script had set. Driving it from an ancestor the LiveView does not own
+   means a re-render cannot close it — or, worse, close it *and* hide the control
+   that reopens it. */
+.dock-panel { display:none; }
+.dock-open .dock-panel { display:flex; flex-direction:column; }
+.dock-open .dock-tab   { display:none; }
 /* 44px: the smallest reliably tappable target, and a dock is opened one-handed
    while something is already going wrong. */
 .dock-tab { min-height:44px; box-shadow:0 2px 12px rgb(0 0 0 / 35%); }

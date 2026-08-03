@@ -8831,22 +8831,12 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
   function initDebugDrawer(liveSocket2) {
     const drawer = document.getElementById("debug-drawer");
     if (!drawer) return;
-    const body = document.getElementById("debug-drawer-body");
     const toggle = document.getElementById("debug-drawer-toggle");
     const closeBtn = document.getElementById("debug-drawer-close");
     const copyBtn = document.getElementById("debug-copy");
-    if (toggle && body) {
-      toggle.addEventListener("click", () => {
-        body.style.display = "flex";
-        toggle.style.display = "none";
-      });
-    }
-    if (closeBtn && body && toggle) {
-      closeBtn.addEventListener("click", () => {
-        body.style.display = "none";
-        toggle.style.display = "";
-      });
-    }
+    const setOpen = (open) => document.body.classList.toggle("dock-open", open);
+    if (toggle) toggle.addEventListener("click", () => setOpen(true));
+    if (closeBtn) closeBtn.addEventListener("click", () => setOpen(false));
     if (copyBtn) {
       copyBtn.addEventListener("click", () => {
         const list = document.getElementById("debug-log-list");
