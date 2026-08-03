@@ -146,6 +146,16 @@
           <div class="field px-3 py-2.5 text-[14px] dim mb-3">you@example.com</div>
           <button class="btn btn-pri w-full justify-center mb-3">Send me a link</button>
           <p class="text-[12px] leading-relaxed dim text-center">No password to remember. We'll email you a link that signs you in.</p></div>
+        <!-- Its own field and its own submit, not one input that takes either: keeping
+             type=email on the address means the browser's validation still catches a
+             typo'd domain before it becomes a silent no-match. Sign-in moved to
+             email-only, and an account older than that is reachable only by handle. -->
+        <div class="px-5 py-4 row" style="background:var(--b2)">
+          <div class="lbl dim mb-1.5">Or your username</div>
+          <div class="flex gap-1.5">
+            <div class="field px-3 py-2.5 text-[14px] dim mono flex-1">yourhandle</div>
+            <button class="btn btn-gh">Send</button></div>
+          <p class="text-[11.5px] leading-relaxed dim mt-2">The link still goes to the email on that account.</p></div>
         <div class="px-5 py-3 row" style="background:var(--b2);border-top:1px solid var(--rule);border-bottom:none">
           <p class="text-[12.5px] text-center dim">Got an invite? <span style="color:var(--bc)">Use it here</span></p></div>
       </div></div>
