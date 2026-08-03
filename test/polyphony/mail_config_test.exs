@@ -103,6 +103,22 @@ defmodule Polyphony.MailConfigTest do
       assert config[:tls_options][:verify] == :verify_peer
     end
 
+    test "a port left on the host still wins, so it is warned about" do
+      # Deleting SMTP_PORT is not enough on its own: the host's own port is still
+      # honoured, which is right (an explicit choice is an explicit choice) but is the
+      # one case where "I removed the port" doesn't do what it sounds like.
+      assert mailer_config(%{"SMTP_HOST" => "smtp.example.com:25", "MAIL_FROM" => "a@e.com"})[
+               :port
+             ] == 25
+
+      warning =
+        ExUnit.CaptureIO.capture_io(fn ->
+          mailer_config(%{"SMTP_HOST" => "smtp.example.com:25", "MAIL_FROM" => "a@e.com"})
+        end)
+
+      assert warning =~ "WARNING port 25"
+    end
+
     test "MX lookups are off — a submission relay is connected to directly" do
       config =
         mailer_config(%{"SMTP_HOST" => "smtp.example.com", "MAIL_FROM" => "a@example.com"})

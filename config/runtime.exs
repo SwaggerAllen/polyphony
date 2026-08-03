@@ -209,5 +209,16 @@ if config_env() == :prod do
       "[boot] mail relay=#{smtp_host}:#{smtp_port} from=#{mail_from} " <>
         "auth=#{if System.get_env("SMTP_USERNAME"), do: "set", else: "MISSING"}"
     )
+
+    # Not overridden — an explicit choice is honoured — but said out loud, because a
+    # port 25 that arrived on the host rather than in SMTP_PORT is almost always a
+    # paste rather than a decision, and it fails as a connection timeout that mentions
+    # nothing about ports.
+    if smtp_port == 25 do
+      IO.puts(
+        "[boot] mail WARNING port 25 is server-to-server relay and blocked outbound " <>
+          "by most hosts, App Platform included. Submission is 587 (or 2525)."
+      )
+    end
   end
 end
