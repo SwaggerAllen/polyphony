@@ -8860,12 +8860,19 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
     }
     const pill = document.getElementById("socket-status");
     const dot = document.getElementById("socket-status-toggle");
+    const COLOUR = {
+      connecting: "var(--lamp)",
+      connected: "var(--ok)",
+      disconnected: "var(--pencil)"
+    };
     const setStatus = (state, label) => {
+      const colour = COLOUR[state] || "var(--bcm)";
       if (pill) {
-        pill.className = `socket-status ${state}`;
+        pill.style.color = colour;
+        pill.style.borderColor = colour;
         pill.textContent = label;
       }
-      if (dot) dot.className = `socket-dot ${state}`;
+      if (dot) dot.style.background = colour;
     };
     setStatus("connecting", "connecting\u2026");
     const socket = liveSocket2.socket;

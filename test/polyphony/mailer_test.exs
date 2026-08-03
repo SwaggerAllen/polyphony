@@ -67,7 +67,14 @@ defmodule Polyphony.MailerTest do
     end
 
     test "it satisfies the transport behaviour the notification path talks to" do
+      # `Code.ensure_loaded!/1` is load-bearing: modules load lazily, so
+      # `function_exported?/3` answers false for a perfectly good module that nothing
+      # has called yet — which made this pass or fail on test order.
+      Code.ensure_loaded!(Transport.Email)
+
       assert function_exported?(Transport.Email, :deliver_email, 3)
+
+      # The behaviour is what lets `Notifications` swap transports by config alone.
       behaviours = Transport.Email.module_info(:attributes)[:behaviour] || []
       assert Transport in behaviours
     end

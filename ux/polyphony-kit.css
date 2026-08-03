@@ -316,7 +316,33 @@
 
 
 /* ============================================================================
-   11 · MOCK CHROME
+   11 · DOCK
+   A panel pinned to the viewport rather than to the page — the debug drawer
+   today, and the shape any toast or mobile action sheet would take.
+
+   Only the pinning lives here. What sits inside is ordinary kit: a .sheet, a
+   .row for its head, .pill and .dot for status, .scroller for the list. That is
+   the whole reason this is three rules rather than a stylesheet of its own —
+   a floating panel is a *position*, not a second design language.
+
+   The insets are not decoration. A dock is read one-handed on a phone, where the
+   home indicator and a landscape notch will otherwise sit on top of whatever the
+   dock puts in its corner.
+   ============================================================================ */
+
+.dock { position:fixed; right:0; bottom:0; z-index:60;
+        padding:0 calc(env(safe-area-inset-right) + .5rem)
+                calc(env(safe-area-inset-bottom) + .5rem) 0; }
+/* Wide enough to read a wrapped line, never wider than the screen. */
+.dock-panel { width:min(100vw - 1rem, 46rem); max-height:min(70vh, 32rem);
+              box-shadow:0 8px 32px rgb(0 0 0 / 55%); }
+/* 44px: the smallest reliably tappable target, and a dock is opened one-handed
+   while something is already going wrong. */
+.dock-tab { min-height:44px; box-shadow:0 2px 12px rgb(0 0 0 / 35%); }
+
+
+/* ============================================================================
+   12 · MOCK CHROME
    Wall labels and notes around the frames. Not part of the product — strip
    these at port time.
    ============================================================================ */

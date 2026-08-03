@@ -4,7 +4,6 @@
  *
  *   1. Tailwind — preflight, then the utilities the templates reference.
  *   2. kit.css  — the design kit, generated from ux/polyphony-kit.css.
- *   3. debug.css — the bring-up drawer, which is not product surface.
  *
  * The kit is last so it wins a utility it overlaps with, which is the precedence the
  * mocks have: they link the kit after the Tailwind CDN. That's also why Tailwind's
@@ -16,13 +15,11 @@
  * unstyled in the meantime — deliberately, since the app has no users until the
  * rebuild lands.
  *
- * debug.css is the one exception, and only because it is *not* product surface: the
- * debug drawer is a diagnostic tool, appears in none of the ux/ mocks, and so has no
- * kit component to be ported from. It is hand-written but keyed entirely off the
- * kit's tokens, and it must stay out of kit.css, which `mix kit.port` overwrites.
+ * There is no third layer. Even the debug drawer — internal, in none of the mocks —
+ * is built from kit classes over a `.dock` primitive in the kit itself (§11), because
+ * a floating panel is a position, not a second design language.
  *
- * Rebuild with `mix assets.build` after touching any of these; `mix kit.port`
+ * Rebuild with `mix assets.build` after touching either file; `mix kit.port`
  * regenerates kit.css from the design. */
 @import "./tailwind-full.css";
 @import "./kit.css";
-@import "./debug.css";

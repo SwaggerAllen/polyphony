@@ -13,6 +13,9 @@ defmodule PolyphonyWeb.DebugDrawerTest do
   use PolyphonyWeb.ConnCase, async: false
 
   import ExUnit.CaptureLog
+  import Phoenix.LiveViewTest, only: [live_isolated: 2]
+
+  require Logger
 
   alias Polyphony.Notifications
 
@@ -96,43 +99,90 @@ defmodule PolyphonyWeb.DebugDrawerTest do
       assert File.exists?(@built_css),
              "run `mix assets.build` — the committed bundle is what the app serves"
 
-      %{css: File.read!(@built_css)}
+      %{css: File.read!(@built_css), markup: render_drawer()}
     end
 
     # The drawer went unstyled because its rules lived in a stylesheet that was
     # deleted, and nothing failed: the class names simply stopped matching anything.
-    # This is the check that would have caught it.
-    test "every structural class the markup uses is defined", %{css: css} do
-      for class <- ~w(
-            debug-drawer debug-drawer-body debug-drawer-head debug-drawer-toggle
-            debug-title debug-count debug-empty debug-log-list
-            debug-line debug-time debug-lvl debug-msg
-            socket-status socket-dot
-          ) do
-        assert css =~ ".#{class}", "no rule for .#{class} in #{@built_css}"
+    # Asserting against the *rendered markup* rather than a fixed list is what keeps
+    # this honest — rename a class in the template and this still checks the new one.
+    test "every kit class the drawer renders is defined in the kit", %{css: css, markup: markup} do
+      kit_classes =
+        ~w(dock dock-panel dock-tab sheet row pill dot scroller ttl lbl mono dim btn btn-sm btn-gh)
+
+      for class <- kit_classes, String.contains?(markup, class) do
+        assert css =~ ".#{class}", "the drawer renders .#{class} but the kit defines no rule"
       end
     end
 
-    test "the panel lays out as a column, since app.js owns `display`", %{css: css} do
-      # app.js toggles display none ⇄ flex so the drawer works with no socket. If the
-      # stylesheet set `display` too it would fight that; the direction must still be
-      # declared or the head and log stack sideways.
-      assert css =~ ~r/\.debug-drawer-body\s*\{[^}]*flex-direction:\s*column/
-      refute css =~ ~r/\.debug-drawer-body\s*\{[^}]*[^-]display:/
+    test "the dock lives in the kit, not a stylesheet of its own", %{css: css} do
+      # The point of the rework: a floating panel is a position, not a second design
+      # language. `mix kit.port` regenerates kit.css from ux/, so this also asserts the
+      # primitive survived the port.
+      assert File.read!("ux/polyphony-kit.css") =~ ".dock {"
+      assert css =~ ~r/\.dock\s*\{[^}]*position:\s*fixed/
+      refute File.exists?("assets/css/debug.css")
     end
 
-    test "long unbroken tokens wrap instead of widening the panel", %{css: css} do
+    test "long unbroken tokens wrap instead of widening the panel" do
       # A magic-link URL is one long token; without this it forces horizontal scroll
       # on a phone and the rest of the log becomes unreadable.
-      assert css =~ ~r/\.debug-msg\s*\{[^}]*overflow-wrap:\s*anywhere/
+      assert render_line(%{level: :info, message: "[mail] x"}) =~ "overflow-wrap:anywhere"
     end
 
-    test "severity outranks the mail tint, so a failed send reads as an error", %{css: css} do
-      # Same specificity, so source order decides: .mail must come first.
-      mail = :binary.match(css, ".debug-line.mail .debug-msg") |> elem(0)
-      error = :binary.match(css, ".debug-line.lvl-error") |> elem(0)
-
-      assert mail < error, "the .mail rule must precede the level colours"
+    test "the panel is capped to the viewport, for a phone", %{css: css} do
+      assert css =~ ~r/\.dock-panel\s*\{[^}]*width:\s*min\(100vw/
+      assert css =~ ~r/\.dock-panel\s*\{[^}]*max-height:\s*min\(70vh/
+      # A dock is opened one-handed; 44px is the smallest reliably tappable target.
+      assert css =~ ~r/\.dock-tab\s*\{[^}]*min-height:\s*44px/
     end
   end
+
+  describe "severity in the log" do
+    test "a failed send reads as an error, not as one more mail line" do
+      # Both an error and a [mail] line; severity has to win, or a failure hides in
+      # the colour of the thing that was working.
+      error_mail = render_line(%{level: :error, message: "[mail] FAILED"})
+
+      assert error_mail =~ "var(--pencil)"
+      refute error_mail =~ "var(--secret)"
+    end
+
+    test "an ordinary mail line is picked out of the stream" do
+      assert render_line(%{level: :info, message: "[mail] sent"}) =~
+               "var(--secret)"
+    end
+  end
+
+  # Rendered through the real LiveView, so these assertions track the template rather
+  # than a copy of it — and **isolated**, because the drawer is a sticky nested
+  # LiveView and its stream does not render into the parent page's static HTML.
+  defp render_drawer(entries \\ []) do
+    # A `describe` setup may already have rendered once; starting twice is not an error.
+    case start_supervised({Polyphony.DebugLog, []}) do
+      {:ok, _} -> :ok
+      {:error, {:already_started, _}} -> :ok
+    end
+
+    if entries != [] do
+      level = Logger.level()
+      Logger.configure(level: :info)
+      on_exit(fn -> Logger.configure(level: level) end)
+
+      capture_log(fn ->
+        for e <- entries do
+          if e.level == :error, do: Logger.error(e.message), else: Logger.info(e.message)
+        end
+      end)
+
+      Process.sleep(120)
+    end
+
+    {:ok, _view, html} =
+      live_isolated(Phoenix.ConnTest.build_conn(), PolyphonyWeb.DebugDrawerLive)
+
+    html
+  end
+
+  defp render_line(entry), do: render_drawer([entry])
 end

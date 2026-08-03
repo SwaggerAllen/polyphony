@@ -169,12 +169,12 @@ for it.
   See the README "Toolchain notes".
 - **The debug drawer is the mobile console.** `DEBUG_DRAWER=true` turns on a floating
   log viewer (`PolyphonyWeb.DebugDrawerLive`) — the only way to see server logs from a
-  phone. Its styles are `assets/css/debug.css`, the one layer after the kit in
-  `app.css`, allowed because the drawer is a diagnostic tool with no kit component; a
-  test keeps it inside the `debug-`/`socket-` namespace. Mail lines are tagged
-  `[mail]` and picked out. **It is not admin-gated** (it can't be — its best use is
-  diagnosing sign-in while signed out), so nothing that reaches a log may carry a live
-  token or a whole email address.
+  phone. It is built from ordinary kit classes over the kit's own `.dock` primitive
+  (§11): internal is not an excuse for a second design language, and only the
+  *pinning* was missing from the kit. Mail lines are tagged `[mail]` and picked out.
+  **It is not admin-gated** (it can't be — its best use is diagnosing sign-in while
+  signed out), so nothing that reaches a log may carry a live token or a whole email
+  address.
 - **Email is the front door.** Sign-in is magic-link only, so an unconfigured mailer
   means nobody can log in — and it fails *quietly*, because the default
   `Transport.Log` records the notification as `"sent"`. `runtime.exs` arms the real
