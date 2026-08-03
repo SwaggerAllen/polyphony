@@ -76,6 +76,7 @@ defmodule PolyphonyWeb.BrowseLive do
 
     socket
     |> assign(story: story, snapshot: story && Library.payload(story))
+    |> assign(bookmark: bookmark_for(socket, story))
     |> assign(stories: story_rows(), worlds: world_rows())
   end
 
@@ -140,26 +141,17 @@ defmodule PolyphonyWeb.BrowseLive do
 
       snapshot ->
         pub = Session.publication(snapshot)
-        requested = parse_mode(as)
 
+        # The URL wins, then where they were last time, then what the publication leads
+        # with. Coming back into a different head is coming back to a different story,
+        # so a bookmark is a stronger signal than a default (§3.1e).
         mode =
-          if requested && Publication.offers?(pub, requested),
-            do: requested,
-            else: Publication.default_mode(pub)
+          [Publication.from_param(as), bookmarked_mode(socket), Publication.default_mode(pub)]
+          |> Enum.find(&(&1 && Publication.offers?(pub, &1)))
 
         assign(socket, pub: pub, mode: mode)
     end
   end
-
-  defp parse_mode(nil), do: nil
-  defp parse_mode("limited"), do: :limited
-  defp parse_mode("spectator"), do: :spectator
-  defp parse_mode(id), do: {:character, to_string(id)}
-
-  defp mode_param(:limited), do: "limited"
-  defp mode_param(:spectator), do: "spectator"
-  defp mode_param({:character, id}), do: to_string(id)
-  defp mode_param(_), do: nil
 
   defp load_scene(%{assigns: %{snapshot: nil}} = socket),
     do: assign(socket, events: [], scene: nil, gap: nil, names: %{})
@@ -205,15 +197,24 @@ defmodule PolyphonyWeb.BrowseLive do
     if story && scene do
       Reading.mark(Owner.of(socket.assigns.current_user), story.id, %{
         scene_id: Map.get(scene, :id),
-        perspective: perspective_of(mode)
+        perspective: Publication.to_param(mode)
       })
     end
 
     socket
   end
 
-  defp perspective_of({:character, id}), do: id
-  defp perspective_of(mode), do: mode
+  # Where this reader left off, if they've been here before. Nil for a signed-out
+  # visitor, who has no shelf to keep a place on. Read once per mount rather than per
+  # render, since three parts of the front page ask about it.
+  defp bookmark_for(%{assigns: %{current_user: user}}, story)
+       when not is_nil(user) and not is_nil(story),
+       do: Reading.bookmark(Owner.of(user), story.id)
+
+  defp bookmark_for(_socket, _story), do: nil
+
+  defp bookmarked_mode(socket),
+    do: socket.assigns[:bookmark] && Publication.from_param(socket.assigns.bookmark.perspective)
 
   # ── Events ───────────────────────────────────────────────────────────────────
 
@@ -461,7 +462,7 @@ defmodule PolyphonyWeb.BrowseLive do
             <div class="flex flex-col gap-2">
               <.link
                 :for={m <- Publication.modes(@pub)}
-                patch={~p"/browse?#{[story: @story.id, as: mode_param(m)]}"}
+                patch={~p"/browse?#{[story: @story.id, as: Publication.to_param(m)]}"}
                 class="flex items-center gap-2.5"
               >
                 <Kit.dot colour={mode_colour(m, voices(@snapshot))} />
@@ -513,13 +514,19 @@ defmodule PolyphonyWeb.BrowseLive do
           </Kit.row>
 
           <div class="px-5 py-4">
+            <%!-- The shelf promises exactly one thing — you can get back to where you
+                  were — and this is where it's kept. A reader who has never opened this
+                  one starts at the beginning; a reader who has picks up mid-scene. --%>
             <.link
               :if={@mode && Session.scenes(@snapshot) != []}
-              patch={scene_path(@story.id, List.first(Session.scenes(@snapshot)), @mode)}
+              patch={scene_path(@story.id, resume_scene(assigns), @mode)}
               class="btn btn-pri w-full justify-center mb-2"
             >
-              Start reading
+              <%= if resuming?(assigns), do: "Carry on reading", else: "Start reading" %>
             </.link>
+            <p :if={resuming?(assigns)} class="text-[11px] leading-relaxed dim text-center mb-2">
+              <%= resume_line(assigns) %>
+            </p>
             <.take_actions {assigns} />
           </div>
         </Kit.sheet>
@@ -606,7 +613,7 @@ defmodule PolyphonyWeb.BrowseLive do
               <optgroup label="Who can show you this">
                 <option
                   :for={m <- can_show(@snapshot, @scene, @pub, @mode)}
-                  value={mode_param(m)}
+                  value={Publication.to_param(m)}
                   selected={m == @mode}
                 >
                   <%= Publication.label(m, nil, @names) %>
@@ -617,7 +624,7 @@ defmodule PolyphonyWeb.BrowseLive do
               <optgroup :if={cannot_show(@snapshot, @scene, @pub, @mode) != []} label="Not in this one">
                 <option
                   :for={m <- cannot_show(@snapshot, @scene, @pub, @mode)}
-                  value={mode_param(m)}
+                  value={Publication.to_param(m)}
                   selected={m == @mode}
                 >
                   <%= Publication.label(m, nil, @names) %> — wasn't there
@@ -686,19 +693,8 @@ defmodule PolyphonyWeb.BrowseLive do
 
   defp published?(entry), do: entry.kind == "campaign" and entry.visibility in ~w(public unlisted)
 
-  defp story_name(snapshot) do
-    case Map.get(snapshot || %{}, :bible) do
-      %{name: n} when is_binary(n) and n != "" -> n
-      _ -> "An untitled story"
-    end
-  end
-
-  defp blurb(snapshot) do
-    case Map.get(snapshot || %{}, :bible) do
-      %{cover: c} when is_binary(c) and c != "" -> c
-      _ -> nil
-    end
-  end
+  defp story_name(snapshot), do: Session.title(snapshot)
+  defp blurb(snapshot), do: Session.blurb(snapshot)
 
   defp embedded_bible(snapshot) do
     case Map.get(snapshot || %{}, :bible) do
@@ -773,12 +769,51 @@ defmodule PolyphonyWeb.BrowseLive do
   defp scene_path(story_id, scene, mode) do
     params =
       [story: story_id, scene: Map.get(scene || %{}, :id)] ++
-        case mode_param(mode) do
+        case Publication.to_param(mode) do
           nil -> []
           as -> [as: as]
         end
 
     ~p"/browse?#{params}"
+  end
+
+  # Where "carry on" goes: the bookmarked scene if it's still in this snapshot,
+  # otherwise the beginning. A scene that has gone (an author republished with fewer)
+  # falls back rather than linking into nothing.
+  defp resume_scene(assigns),
+    do: bookmarked_scene(assigns) || List.first(Session.scenes(assigns.snapshot))
+
+  # The bookmarked scene, but only if it's still in this snapshot: an author who
+  # republished with fewer scenes shouldn't strand a reader on a link into nothing.
+  defp bookmarked_scene(%{bookmark: %{scene_id: id}} = assigns) when not is_nil(id) do
+    assigns.snapshot
+    |> Session.scenes()
+    |> Enum.find(&(to_string(Map.get(&1, :id)) == to_string(id)))
+  end
+
+  defp bookmarked_scene(_assigns), do: nil
+
+  # Being bookmarked at scene 1 still counts as coming back — otherwise "carry on"
+  # would only ever appear from scene 2 onwards, which is the wrong side of the line
+  # for the reader who closed the tab mid-first-scene.
+  defp resuming?(assigns), do: bookmarked_scene(assigns) != nil
+
+  defp resume_line(assigns) do
+    case Session.position(assigns.snapshot, Map.get(resume_scene(assigns) || %{}, :id)) do
+      {i, n} -> "You were on scene #{i} of #{n}#{as_line(assigns)}."
+      nil -> "Picking up where you left off#{as_line(assigns)}."
+    end
+  end
+
+  # Only the leading word drops case — the label carries a name, and downcasing the
+  # whole phrase turns "As Ruthe Kell" into "as ruthe kell".
+  defp as_line(%{mode: nil}), do: ""
+
+  defp as_line(assigns) do
+    case Publication.label(assigns.mode, nil, assigns.names) do
+      <<first::utf8, rest::binary>> -> ", " <> String.downcase(<<first::utf8>>) <> rest
+      label -> ", " <> label
+    end
   end
 
   defp unreachable?(snapshot, scene, mode), do: Session.gap(snapshot, scene, mode) != nil

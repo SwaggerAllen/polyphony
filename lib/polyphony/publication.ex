@@ -137,6 +137,40 @@ defmodule Polyphony.Publication do
   def viewer(_pub, :spectator), do: :spectator
   def viewer(_pub, {:character, id}), do: {:character, to_string(id)}
 
+  @doc """
+  A mode as a URL/storage value, and back.
+
+  One implementation, because three callers need it and they must agree: the reading
+  view's `?as=`, the bookmark that remembers where you were (§3.1e), and the library's
+  link back into both. A perspective that round-trips differently through a URL than
+  through storage is a bookmark that quietly lands you in the wrong head.
+
+  Always a string, so a stored value and a query parameter are the same thing.
+  """
+  @spec to_param(mode() | nil) :: String.t() | nil
+  def to_param(:limited), do: "limited"
+  def to_param(:spectator), do: "spectator"
+  def to_param({:character, id}), do: to_string(id)
+  def to_param(_), do: nil
+
+  @doc """
+  Parse a param back into a mode — `nil` when there's nothing to parse.
+
+  Anything unrecognised reads as a character id rather than as an error, and
+  `offers?/2` is what actually decides whether it's allowed. Parsing is not
+  authorization, and keeping the two apart is what stops a typo in a URL becoming a
+  500 instead of a fallback.
+  """
+  @spec from_param(String.t() | atom() | nil) :: mode() | nil
+  def from_param(nil), do: nil
+  def from_param(""), do: nil
+  def from_param(:limited), do: :limited
+  def from_param(:spectator), do: :spectator
+  def from_param("limited"), do: :limited
+  def from_param("spectator"), do: :spectator
+  def from_param({:character, _} = mode), do: mode
+  def from_param(id), do: {:character, to_string(id)}
+
   @doc "How a mode reads on the front page and in the selector."
   @spec label(mode(), String.t() | nil, map()) :: String.t()
   def label(mode, author \\ nil, names \\ %{})

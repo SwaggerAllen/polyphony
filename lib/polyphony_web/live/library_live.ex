@@ -44,6 +44,7 @@ defmodule PolyphonyWeb.LibraryLive do
 
   alias Polyphony.{Campaigns, Characters, Groups, Library, Owner, Reading}
   alias Polyphony.Authoring.{CharacterSheet, Group}
+  alias Polyphony.Reading.Session
   alias PolyphonyWeb.{Kit, Layouts, Voice}
 
   @tabs ~w(campaigns reading worlds people groups shelves)
@@ -899,8 +900,10 @@ defmodule PolyphonyWeb.LibraryLive do
 
   # ── Reading copy ─────────────────────────────────────────────────────────────
 
-  defp reading_name(%{state: :gone, source: nil}), do: "A story you were reading"
-  defp reading_name(%{source: source}), do: entry_name(source)
+  # A published story is named by its world, not by the snapshot — `entry_name/1` is
+  # for the owner's own library entries and would render every story here as untitled.
+  defp reading_name(%{source: nil}), do: "A story you were reading"
+  defp reading_name(%{source: source}), do: Session.title(Library.payload(source))
 
   defp reading_badge(%{state: :gone}), do: "Gone"
   defp reading_badge(%{state: :finished}), do: "Finished"
@@ -932,12 +935,26 @@ defmodule PolyphonyWeb.LibraryLive do
     end
   end
 
-  # The published reading screen (§3.1b) lands with browse; until it does, an unlisted
-  # story opens through its share link and a public one through browse. Deliberately
-  # not a route that doesn't exist yet — a bookmark that leads nowhere is worse than
-  # one that leads somewhere slightly further away than it should.
-  defp reading_path(%{source: %{share_token: token}}) when is_binary(token), do: ~p"/s/#{token}"
-  defp reading_path(_), do: ~p"/browse"
+  # Straight back to the scene, in the head they were in. All three parts of the
+  # bookmark (§3.1e) ride in the URL, so the link is the whole promise the shelf makes
+  # — landing on a front page and asking them to find their place again would be a
+  # slower way of keeping nothing.
+  #
+  # `browse` re-checks the grant, so a perspective the author has since withdrawn falls
+  # back rather than opening: the link carries an intent, never an authorization.
+  defp reading_path(%{source: %{id: id}, bookmark: bookmark}) do
+    params =
+      [story: id] ++
+        param(:scene, bookmark.scene_id) ++
+        param(:as, bookmark.perspective)
+
+    ~p"/browse?#{params}"
+  end
+
+  defp reading_path(_row), do: ~p"/browse"
+
+  defp param(_key, nil), do: []
+  defp param(key, value), do: [{key, to_string(value)}]
 
   # ── Shared ───────────────────────────────────────────────────────────────────
 

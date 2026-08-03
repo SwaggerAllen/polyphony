@@ -394,6 +394,87 @@ defmodule PolyphonyWeb.BrowseScreenLiveTest do
     end
   end
 
+  describe "carrying on" do
+    test "the library links straight back to the scene, in the head they were in", %{conn: conn} do
+      scene = stair()
+      story = publish(user_fixture(), scene, %{perspectives: [@halden, @ruthe]})
+
+      # Read a scene as Ruthe…
+      {:ok, _v, _html} = live(conn, ~p"/browse?#{[story: story.id, scene: scene, as: @ruthe]}")
+
+      # …then come at it from the shelf.
+      {:ok, _v, shelf} = live(conn, ~p"/library?tab=reading")
+
+      # Named by its world, not rendered "Untitled campaign" — a snapshot has no
+      # `:name`, and asking it for one is how a titled story loses its title.
+      assert shelf =~ "The Ninth Gate"
+      assert shelf =~ "As Ruthe Kell"
+      assert shelf =~ "Carry on reading"
+      assert shelf =~ "story=#{story.id}"
+      assert shelf =~ "scene=#{scene}"
+      assert shelf =~ "as=#{@ruthe}"
+
+      {:ok, _v, back} = live(conn, ~p"/browse?#{[story: story.id, scene: scene, as: @ruthe]}")
+      # Her interiority, not his — the same story they left.
+      assert back =~ "Eleven years she has had the answer ready."
+      refute back =~ "He does not know."
+    end
+
+    test "the front page picks up where they were rather than at the beginning", %{conn: conn} do
+      scene = stair()
+
+      story =
+        publish(user_fixture(), scene, %{perspectives: [@halden, @ruthe]}, %{
+          scenes: [
+            %{id: "first", title: "Before", cast: [@halden, @ruthe], beats: 1},
+            %{id: scene, title: "The stair at Ninth", cast: [@halden, @ruthe], beats: 2}
+          ]
+        })
+
+      {:ok, _v, fresh} = live(conn, ~p"/browse?#{[story: story.id]}")
+      assert fresh =~ "Start reading"
+      refute fresh =~ "Carry on reading"
+
+      {:ok, _v, _} = live(conn, ~p"/browse?#{[story: story.id, scene: scene, as: @ruthe]}")
+      {:ok, _v, returning} = live(conn, ~p"/browse?#{[story: story.id]}")
+
+      assert returning =~ "Carry on reading"
+      assert returning =~ "You were on scene 2 of 2, as Ruthe Kell."
+      # And the perspective comes back with it — a bookmark beats a default.
+      assert returning =~ "scene=#{scene}"
+      assert returning =~ "as=#{@ruthe}"
+    end
+
+    test "a perspective the author has since withdrawn falls back rather than opening", %{
+      conn: conn,
+      user: user
+    } do
+      scene = stair()
+      story = publish(user_fixture(), scene, %{perspectives: [@halden, @ruthe]})
+      {:ok, _v, _} = live(conn, ~p"/browse?#{[story: story.id, scene: scene, as: @ruthe]}")
+
+      # The author republishes without Ruthe. The bookmark still names her.
+      narrowed = publish(user_fixture(), scene, %{perspectives: [@halden]})
+      Reading.mark(Owner.of(user), narrowed.id, %{scene_id: scene, perspective: @ruthe})
+
+      {:ok, _v, html} = live(conn, ~p"/browse?#{[story: narrowed.id, scene: scene]}")
+
+      # The link carries an intent, never an authorization.
+      refute html =~ "Eleven years she has had the answer ready."
+    end
+
+    test "a bookmarked scene that's gone falls back to the beginning", %{conn: conn, user: user} do
+      scene = stair()
+      story = publish(user_fixture(), scene, %{perspectives: [@halden]})
+      Reading.mark(Owner.of(user), story.id, %{scene_id: "a-scene-since-removed"})
+
+      {:ok, _v, html} = live(conn, ~p"/browse?#{[story: story.id]}")
+
+      # Rather than linking into nothing.
+      assert html =~ "scene=#{scene}"
+    end
+  end
+
   describe "an unlisted share link" do
     test "is a grant, so it opens the reading surface rather than a card", %{conn: conn} do
       story = publish(user_fixture(), stair(), %{perspectives: [@halden]})

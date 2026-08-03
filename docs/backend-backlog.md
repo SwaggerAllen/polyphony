@@ -688,9 +688,13 @@ usually temporary and losing someone's place isn't recoverable from their side. 
 default-deny: anything not positively public-or-unlisted-and-live reads as gone, so a stale row
 can never offer a link into somebody's unpublished draft.
 
-Still open: the reading destination itself. The published reading view (§3.1b) doesn't exist yet,
-so *Carry on reading* goes to the share link when there is one and to browse otherwise. It should
-resume at the bookmarked scene/beat/perspective once there's a screen that can.
+*Carry on reading* now resumes at the bookmarked scene **and perspective**: all three parts of the
+bookmark ride in the URL, and `Publication.to_param/1` / `from_param/1` are the single shared
+vocabulary so a perspective round-trips identically through storage and through a query string.
+The front page picks the bookmark over its own default, because coming back into a different head
+is coming back to a different story. The link carries an intent, never an authorization — browse
+re-checks the grant, so a perspective the author has since withdrawn falls back rather than
+opening.
 
 ### 3.2 View-as outside the play screen · **new**
 

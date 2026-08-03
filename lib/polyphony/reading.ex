@@ -157,12 +157,7 @@ defmodule Polyphony.Reading do
   def position(_bookmark, nil), do: nil
 
   def position(%Bookmark{scene_id: scene_id}, source) do
-    scenes = (Library.payload(source) || %{}) |> Map.get(:scenes) || []
-
-    case Enum.find_index(scenes, &(to_string(&1) == to_string(scene_id))) do
-      nil -> nil
-      i -> {i + 1, length(scenes)}
-    end
+    Polyphony.Reading.Session.position(Library.payload(source) || %{}, scene_id)
   end
 
   @doc """
@@ -179,8 +174,10 @@ defmodule Polyphony.Reading do
       when p in [nil, :omniscient, "omniscient"],
       do: "Everything"
 
+  # The reading modes share one vocabulary with the URL and with `Publication`, so the
+  # label comes from there rather than from a second table that could disagree with it.
   def perspective_label(%Bookmark{perspective: p}, names) do
-    "As " <> to_string(Map.get(names, to_string(p), p))
+    Polyphony.Publication.label(Polyphony.Publication.from_param(p), nil, names)
   end
 
   # ── Internals ───────────────────────────────────────────────────────────────

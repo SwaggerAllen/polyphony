@@ -136,6 +136,35 @@ defmodule Polyphony.ReadingTest do
       assert Reading.position(row.bookmark, row.source) == {2, 3}
     end
 
+    test "and it reads a real snapshot's scenes, not just a list of ids" do
+      reader = person()
+      author = person()
+
+      # What publishing actually stores: a scene is a map, not a bare id. Asking
+      # `to_string/1` of one raises, so a shelf tested only against string lists looks
+      # fine and falls over on the first real bookmark.
+      story =
+        Library.put(%{
+          owner: author,
+          kind: "campaign",
+          visibility: "public",
+          frozen: true,
+          payload:
+            Polyphony.Library.Snapshot.build(%{
+              campaign_id: "c",
+              scenes: [
+                %{id: "s1", title: "The stair", cast: [], beats: 4},
+                %{id: "s2", title: "Sixth", cast: [], beats: 5}
+              ]
+            })
+        })
+
+      Reading.mark(reader, story.id, %{scene_id: "s2"})
+
+      [row] = Reading.shelf(reader)
+      assert Reading.position(row.bookmark, row.source) == {2, 2}
+    end
+
     test "a scene the published entry doesn't list has no position rather than a wrong one" do
       reader = person()
       story = published(person())
@@ -156,6 +185,15 @@ defmodule Polyphony.ReadingTest do
       # Identity fallback, same as `Scene.Cast` — an unmapped id passes through.
       assert Reading.perspective_label(%Bookmark{perspective: "c9"}, %{}) == "As c9"
       assert Reading.perspective_label(%Bookmark{perspective: :omniscient}) == "Everything"
+    end
+
+    test "and the non-character modes read as themselves rather than as a name" do
+      # One vocabulary shared with the URL and with `Publication` — a bookmark that
+      # said "As limited" would mean the two had drifted.
+      assert Reading.perspective_label(%Bookmark{perspective: "limited"}) ==
+               "Everyone the author shared"
+
+      assert Reading.perspective_label(%Bookmark{perspective: "spectator"}) == "As a spectator"
     end
   end
 

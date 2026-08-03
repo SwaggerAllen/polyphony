@@ -80,14 +80,33 @@ defmodule Polyphony.Reading.Session do
   @spec scenes(Snapshot.t() | map()) :: [map()]
   def scenes(snapshot), do: Map.get(snapshot, :scenes) || []
 
+  @doc """
+  A scene's id, whichever shape the list is in.
+
+  A published snapshot carries `%{id:, title:, cast:, beats:}` per scene; a campaign
+  payload written before that carries bare ids. Both are real and neither is going to
+  stop existing, so the shape question is answered **once, here**, rather than at every
+  call site — where getting it wrong raises rather than returning a wrong answer, which
+  is how a bookmark on a real published story crashes a shelf that tested fine against
+  a list of strings.
+  """
+  @spec scene_id(map() | String.t()) :: String.t()
+  def scene_id(%{} = scene), do: to_string(Map.get(scene, :id))
+  def scene_id(id), do: to_string(id)
+
+  @doc "The index of `scene_id` in `snapshot`, or nil if it isn't in it."
+  @spec index_of(Snapshot.t() | map(), term()) :: non_neg_integer() | nil
+  def index_of(snapshot, scene_id) do
+    want = to_string(scene_id)
+    Enum.find_index(scenes(snapshot), &(scene_id(&1) == want))
+  end
+
   @doc "Where `scene_id` sits in the story, one-based, or nil if it isn't in it."
   @spec position(Snapshot.t() | map(), term()) :: {pos_integer(), pos_integer()} | nil
   def position(snapshot, scene_id) do
-    all = scenes(snapshot)
-
-    case Enum.find_index(all, &(to_string(Map.get(&1, :id)) == to_string(scene_id))) do
+    case index_of(snapshot, scene_id) do
       nil -> nil
-      i -> {i + 1, length(all)}
+      i -> {i + 1, length(scenes(snapshot))}
     end
   end
 
@@ -96,7 +115,7 @@ defmodule Polyphony.Reading.Session do
   def next_scene(snapshot, scene_id) do
     all = scenes(snapshot)
 
-    case Enum.find_index(all, &(to_string(Map.get(&1, :id)) == to_string(scene_id))) do
+    case index_of(snapshot, scene_id) do
       nil -> List.first(all)
       i -> Enum.at(all, i + 1)
     end
@@ -130,6 +149,36 @@ defmodule Polyphony.Reading.Session do
         if to_string(Map.get(c, :source_id)) == to_string(character_id),
           do: Map.get(c, :sheet)
       end)
+    end
+  end
+
+  @doc """
+  What a published story is called.
+
+  A snapshot has no name of its own — it takes the world's, because that's what a
+  reader is being offered. Asking a snapshot for `:name` gets nothing and renders
+  *Untitled campaign* over a story that plainly has a title, so the question is
+  answered here rather than by each surface guessing.
+  """
+  @spec title(Snapshot.t() | map()) :: String.t()
+  def title(snapshot) do
+    snapshot = snapshot || %{}
+
+    # The bible's name first, then the payload's own — a snapshot has the former and a
+    # campaign entry the latter, and a bookmark can point at either.
+    case {Map.get(snapshot, :bible), Map.get(snapshot, :name)} do
+      {%{name: n}, _} when is_binary(n) and n != "" -> n
+      {_, n} when is_binary(n) and n != "" -> n
+      _ -> "An untitled story"
+    end
+  end
+
+  @doc "The outward blurb, and only that — never the bible itself (§2.12)."
+  @spec blurb(Snapshot.t() | map()) :: String.t() | nil
+  def blurb(snapshot) do
+    case Map.get(snapshot || %{}, :bible) do
+      %{cover: c} when is_binary(c) and c != "" -> c
+      _ -> nil
     end
   end
 
