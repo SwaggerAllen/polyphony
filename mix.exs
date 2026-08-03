@@ -129,6 +129,14 @@ defmodule Polyphony.MixProject do
 
       {:jason, "~> 1.4"},
 
+      # Email (§B4). Swoosh's SMTP adapter speaks to every provider worth using
+      # (Resend, Postmark, SendGrid, Mailgun, SES all offer SMTP), so this commits to
+      # a protocol rather than a vendor — and needs no HTTP client, keeping the
+      # zero-extra-dependency line the DeepInfra adapter already holds. Swapping in an
+      # API adapter later is a config line plus its client dep.
+      {:swoosh, "~> 1.27"},
+      {:gen_smtp, "~> 1.3"},
+
       # CI checks, no runtime footprint. `mix deps.audit` scans the lock against the
       # Elixir security advisory DB; `mix sobelow` is Phoenix-aware static analysis
       # (XSS via raw/1, CSRF, directory traversal, config secrets).

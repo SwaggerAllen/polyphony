@@ -167,6 +167,12 @@ for it.
   legacy 1.14-era pins are gone (`ecto_sql ~> 3.14`, `postgrex ~> 0.22`); the DeepInfra
   adapter still uses Erlang `:httpc` rather than Req, which remains optional cleanup.
   See the README "Toolchain notes".
+- **Email is the front door.** Sign-in is magic-link only, so an unconfigured mailer
+  means nobody can log in — and it fails *quietly*, because the default
+  `Transport.Log` records the notification as `"sent"`. `runtime.exs` arms the real
+  SMTP transport only when `SMTP_HOST` **and** `MAIL_FROM` are both set. The login
+  screen's on-page link is `:expose_magic_link`, false in prod and pinned by a test:
+  it hands a working session to anyone who types a known address.
 - **No egress to DeepInfra** in the sandbox. Everything runs on `Polyphony.LLM.Mock`
   (deterministic lorem via `:erlang.phash2`, offline) or `LLM.Stub` (tests). Never
   rely on `Math.random`/`Date` — determinism matters for replay.

@@ -5,6 +5,21 @@ import Config
 config :polyphony,
   ecto_repos: [Polyphony.Repo]
 
+# Whether the sign-in screen may print the magic link on the page instead of relying
+# on email. **Never true in prod** — printing it means anyone who types a known
+# address gets a working 15-minute session for that account.
+#
+# It is a named policy flag rather than an env comparison at the call site, and it is
+# read with a `:prod`-safe default, because the version this replaced asked
+# `Application.get_env(:polyphony, :env) == :prod` about a key nothing ever set: the
+# comparison was false everywhere, so the guard failed *open* and shipped the link in
+# production. A flag that has to be switched on can only fail closed.
+config :polyphony, :expose_magic_link, config_env() != :prod
+
+# Swoosh talks SMTP here, not a provider HTTP API, so it needs no API client — saying
+# so explicitly stops it requiring Finch/Hackney we don't otherwise carry.
+config :swoosh, :api_client, false
+
 # Register the pgvector Postgrex extension so `Pgvector.Ecto.Vector` columns
 # (scene/summary embeddings, §8) round-trip. Per-env DB settings merge on top.
 config :polyphony, Polyphony.Repo, types: Polyphony.PostgrexTypes

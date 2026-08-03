@@ -49,9 +49,18 @@ defmodule PolyphonyWeb.LoginLive do
   def handle_event("different", _params, socket),
     do: {:noreply, assign(socket, sent_to: nil, dev_link: nil)}
 
-  # In dev the link is surfaced so the flow works with no mailer; in prod it only ever
-  # goes to email.
-  defp dev_link(url), do: if(Application.get_env(:polyphony, :env) == :prod, do: nil, else: url)
+  # Outside prod the link is surfaced so the flow works with no mailer; in prod it only
+  # ever goes to email. Defaulting to `false` is the whole point — an absent or
+  # misspelled config must hide the link, never print it.
+  @expose_magic_link Application.compile_env(:polyphony, :expose_magic_link, false) == true
+
+  # Branched at compile time rather than runtime, so a prod build contains no clause
+  # that can return the URL at all — there is nothing left to accidentally reach.
+  if @expose_magic_link do
+    defp dev_link(url), do: url
+  else
+    defp dev_link(_url), do: nil
+  end
 
   def render(assigns) do
     ~H"""
