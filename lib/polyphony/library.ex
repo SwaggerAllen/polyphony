@@ -385,6 +385,12 @@ defmodule Polyphony.Library do
 
   `attrs` are the campaign's live dependencies (see `Snapshot.build/2`) plus `:owner`
   (or the legacy `:owner_id`), and optional `:derived_from_id` / `:derived_from_version`.
+
+  **A campaign has at most one published copy, and republishing replaces it in place**,
+  keeping its id so every existing link, bookmark and share URL resolves to the current
+  story rather than to the version somebody happened to start. Returns the entry, or
+  `{:error, :hidden}` when the campaign or its published copy is under moderation —
+  republishing is not a way to undo a take-down.
   """
   def publish_campaign(attrs, opts \\ []) do
     attrs = Map.new(attrs)
@@ -394,26 +400,82 @@ defmodule Polyphony.Library do
 
     # A snapshot descends from the campaign it froze. Recorded structurally rather than
     # only inside the payload, so "has this been published?" is an indexed read like
-    # every other provenance question (§3.1d) — and so a republish groups with the
-    # earlier one instead of looking like an unrelated story.
+    # every other provenance question (§3.1d).
     campaign_id = Map.get(attrs, :derived_from_id) || live_campaign_id(attrs, opts)
+    visibility = Keyword.get(opts, :visibility, "public")
+    existing = campaign_id && publication_of(campaign_id, opts)
 
-    put(
-      %{
-        # `:owner` or the legacy `:owner_id`, matching `put/2` — the campaign screen
-        # passes the former, and demanding the latter meant the Publish button raised.
-        owner: Map.get(attrs, :owner) || Map.fetch!(attrs, :owner_id),
-        kind: "campaign",
-        visibility: Keyword.get(opts, :visibility, "public"),
-        frozen: true,
-        derived_from_id: campaign_id,
-        derived_from_version: Map.get(attrs, :derived_from_version),
-        root_id: campaign_id && root_id_of(campaign_id, opts),
-        payload: snapshot
-      },
-      opts
-    )
+    cond do
+      hidden_anywhere?(campaign_id, existing, opts) ->
+        {:error, :hidden}
+
+      existing ->
+        republish(existing, snapshot, visibility, opts)
+
+      true ->
+        put(
+          %{
+            # `:owner` or the legacy `:owner_id`, matching `put/2` — the campaign screen
+            # passes the former, and demanding the latter meant Publish raise.
+            owner: Map.get(attrs, :owner) || Map.fetch!(attrs, :owner_id),
+            kind: "campaign",
+            visibility: visibility,
+            frozen: true,
+            derived_from_id: campaign_id,
+            derived_from_version: Map.get(attrs, :derived_from_version),
+            root_id: campaign_id && root_id_of(campaign_id, opts),
+            payload: snapshot
+          },
+          opts
+        )
+    end
   end
+
+  # Republishing **replaces** the published copy rather than adding a version beside it.
+  #
+  # The alternative accumulates a copy per publish that nobody will ever read again,
+  # and — worse — leaves every existing link, bookmark and share URL pointing at a
+  # stale one, since they all address the entry by id. Keeping the id is what makes
+  # *carry on reading* land on the continuation instead of the version somebody
+  # happened to start.
+  #
+  # The honest cost, accepted deliberately: a reader partway through can have the story
+  # change under them. Their place is re-found by scene id, which is the event-store
+  # stream id and therefore stable across republishes, so in the ordinary case (the
+  # campaign grew) they simply see more of it.
+  #
+  # `hidden_at` is **not** cleared. A take-down applies to the story, not to one row of
+  # it, and republishing is not an appeal.
+  defp republish(entry, snapshot, visibility, opts) do
+    LibraryEntry.update(repo(opts), entry, %{
+      payload: encode(snapshot),
+      visibility: visibility,
+      version: entry.version + 1,
+      share_token: entry.share_token || token_for(visibility)
+    })
+  end
+
+  # Neither the campaign nor its published copy may be under moderation. Without this a
+  # take-down is undone by pressing Publish again — which is exactly what happened
+  # before republishing targeted the existing entry.
+  defp hidden_anywhere?(nil, existing, _opts), do: not is_nil(existing) and hidden?(existing)
+
+  defp hidden_anywhere?(campaign_id, existing, opts) do
+    campaign = get(campaign_id, opts)
+
+    (campaign && hidden?(campaign)) or (existing && hidden?(existing)) || false
+  end
+
+  @doc """
+  The campaign's published copy, or nil — there is at most **one**.
+
+  Republishing replaces it in place (see `publish_campaign/2`), so this is the entry
+  every link, bookmark and share URL for that story resolves to, now and after the next
+  publish.
+  """
+  @spec publication_of(LibraryEntry.t() | term(), keyword()) :: LibraryEntry.t() | nil
+  def publication_of(entry_or_id, opts \\ []),
+    do: entry_or_id |> publications_of(opts) |> List.first()
 
   # `campaign_id` is a library id when the snapshot was built from a stored campaign and
   # an arbitrary string when it wasn't — an export, a scene-scoped id, a fixture. Only

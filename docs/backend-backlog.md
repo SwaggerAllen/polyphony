@@ -675,6 +675,33 @@ a dozen artifacts called Saltmarch. Flat lists become unusable.
 - `derived_from` is already stored on every derived entry and has never been displayed. Show it: a
   reader should always be able to walk back to where something started.
 
+### 3.1f A campaign has one published copy, replaced on republish · **decision** — ✅ **Shipped**
+
+Publishing produced a new frozen entry each time, so republishing after playing on left every
+link, bookmark and share URL pointing at the version somebody happened to start — and browse
+showed the *oldest* publication as the story with the newest listed under it as "1 other version".
+
+**Author call:** one published copy per campaign, replaced in place. The alternative accumulates a
+copy per publish that nobody reads again, and keeping the id is what makes *carry on reading* land
+on the continuation. The entry stays `frozen: true` — that axis means *self-contained*, embedding
+pinned dependencies rather than referencing the owner's working set. What changed is that the
+published copy is **replaced**, not versioned.
+
+The accepted cost, stated rather than designed around: a reader partway through can have the story
+change under them. In the ordinary case (the campaign grew) their place is re-found by scene id —
+the event-store stream id, stable across republishes — so they simply see more of it. When a scene
+they were on is gone, the shelf says so instead of quietly starting them over.
+
+Two consequences worth keeping straight:
+
+- **Republishing is not an appeal.** A take-down hides the campaign *and* its published copy, and
+  `publish_campaign/2` returns `{:error, :hidden}` for either. Before the copy was replaced in
+  place, pressing Publish again minted a fresh public entry and put the taken-down story straight
+  back in browse — the hole this design closed rather than opened.
+- **`derived_from_version` is attribution, not reconstruction.** A fork is a full copy and there is
+  no version history to rebuild a source from, so a replaced publication doesn't invalidate
+  anything: the fork still records which story it came from.
+
 ### 3.1e Reading position on a published campaign · **new** — ✅ **Shipped**
 
 `Polyphony.Reading` + `Reading.Bookmark` — scene, beat and **perspective** together, because

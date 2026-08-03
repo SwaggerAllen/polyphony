@@ -936,8 +936,17 @@ defmodule PolyphonyWeb.LibraryLive do
 
   defp reading_place(row) do
     case Reading.position(row.bookmark, row.source) do
-      {i, n} -> "Scene #{i} of #{n}."
-      nil -> "Partway through."
+      {i, n} ->
+        "Scene #{i} of #{n}."
+
+      # The one place the republish trade shows: there is a single published copy and
+      # updating it replaces what a reader was in the middle of. Usually the story just
+      # got longer and the scene id still resolves; when it doesn't, say so rather than
+      # quietly starting them over.
+      nil ->
+        if row.bookmark.scene_id,
+          do: "The scene you were on isn't in this version any more.",
+          else: "Partway through."
     end
   end
 

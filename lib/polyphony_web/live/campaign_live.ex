@@ -141,7 +141,8 @@ defmodule PolyphonyWeb.CampaignLive do
       bible_name: bible_label(bibles, world_id),
       llm: Settings.from_payload(payload),
       global_models: global_models(),
-      content: CampaignConfig.from_payload(payload)
+      content: CampaignConfig.from_payload(payload),
+      published?: Library.published?(socket.assigns.entry)
     )
     |> preflight()
   end
@@ -342,24 +343,37 @@ defmodule PolyphonyWeb.CampaignLive do
           %{source_id: c.id, source_version: c.version, sheet: Library.payload(c)}
         end)
 
-      Library.publish_campaign(
-        %{
-          owner: owner,
-          campaign_id: entry.id,
-          published_beat: 0,
-          bible: bible,
-          characters: characters,
-          arc: [],
-          content: CampaignConfig.from_payload(payload),
-          # The grant travels **with the snapshot**, not on the live campaign: it is the
-          # thing readers hold, and it must not change under someone partway through.
-          publication: publication(socket),
-          scenes: Preflight.scenes(socket.assigns.scenes)
-        },
-        visibility: "public"
-      )
+      result =
+        Library.publish_campaign(
+          %{
+            owner: owner,
+            campaign_id: entry.id,
+            published_beat: 0,
+            bible: bible,
+            characters: characters,
+            arc: [],
+            content: CampaignConfig.from_payload(payload),
+            # The grant travels with the published copy, since that's the thing readers
+            # hold — and it is replaced wholesale on a republish, so narrowing it here
+            # narrows it for everyone reading.
+            publication: publication(socket),
+            scenes: Preflight.scenes(socket.assigns.scenes)
+          },
+          visibility: "public"
+        )
 
-      {:noreply, put_flash(socket, :info, "Published a public snapshot of this campaign.")}
+      case result do
+        {:error, :hidden} ->
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "This one was taken down. Publishing again isn't the way to appeal it."
+           )}
+
+        _ ->
+          {:noreply, socket |> put_flash(:info, publish_note(socket)) |> load()}
+      end
     end)
   end
 
@@ -1000,7 +1014,7 @@ defmodule PolyphonyWeb.CampaignLive do
           data-confirm={publish_confirm(assigns)}
           disabled={@pub_perspectives == [] and not @pub_spectator}
         >
-          Publish
+          <%= if @published?, do: "Update what's published", else: "Publish" %>
         </Kit.btn>
         <span :if={@pub_perspectives == [] and not @pub_spectator} class="text-[11px] dim">
           Pick at least one way to read it.
@@ -1008,6 +1022,16 @@ defmodule PolyphonyWeb.CampaignLive do
       </div>
     </Kit.row>
     """
+  end
+
+  # Said before and after, because it's the surprising half: there is one published
+  # copy, and this replaces it — including for anyone partway through reading it.
+  # The load-time assign, not a fresh read: by the time this runs the publish has
+  # happened, so asking the database would always say "updated".
+  defp publish_note(socket) do
+    if socket.assigns.published?,
+      do: "Updated the published copy. Anyone reading it gets this version.",
+      else: "Published. Anyone with the link reads this."
   end
 
   defp publication(socket) do
@@ -1042,8 +1066,14 @@ defmodule PolyphonyWeb.CampaignLive do
         true -> "no interiority"
       end
 
-    "Publish a public snapshot? Readers get #{read}." <>
-      if(assigns.pub_forkable, do: " They can also take a copy and carry it on.", else: "")
+    fork = if assigns.pub_forkable, do: " They can also take a copy and carry it on.", else: ""
+
+    if assigns.published? do
+      "Replace what's published? Readers get #{read}, including anyone partway through — " <>
+        "there's one published copy and this becomes it." <> fork
+    else
+      "Publish a public copy? Readers get #{read}." <> fork
+    end
   end
 
   # ── Cast ──────────────────────────────────────────────────────────────────────

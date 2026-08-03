@@ -107,15 +107,28 @@ defmodule Polyphony.SnapshotShapeTest do
       refute Library.published?(campaign(owner))
     end
 
-    test "republishing groups with the first one rather than looking unrelated" do
+    test "there is one published copy, and republishing replaces it" do
       owner = owner()
       entry = campaign(owner)
       first = publish(owner, entry)
       second = publish(owner, entry)
 
-      assert first.root_id == entry.id
-      assert second.root_id == entry.id
-      assert length(Library.publications_of(entry)) == 2
+      # Same row, bumped — so every link, bookmark and share URL still resolves, and
+      # no copy accumulates that nobody will read again.
+      assert second.id == first.id
+      assert second.version > first.version
+      assert [%{id: id}] = Library.publications_of(entry)
+      assert id == first.id
+      assert Library.publication_of(entry).id == first.id
+    end
+
+    test "the published copy still descends from the campaign it froze" do
+      owner = owner()
+      entry = campaign(owner)
+      published = publish(owner, entry)
+
+      assert published.derived_from_id == entry.id
+      assert published.root_id == entry.id
     end
   end
 
