@@ -157,14 +157,29 @@ if config_env() == :prod do
   # and SES all speak it, so the choice of provider is a credential rather than a
   # deploy. Port 587 with STARTTLS is what every one of them wants; 465 is implicit
   # TLS, which needs SMTP_SSL=true instead.
-  smtp_host = System.get_env("SMTP_HOST")
+  # A relay is a **hostname**, never `host:port` — gen_smtp hands the string straight
+  # to DNS, so `smtp.postmarkapp.com:587` resolves to nothing and fails as `:nxdomain`,
+  # an error that names DNS rather than the configuration mistake. Providers publish their SMTP
+  # settings as "server: X, ports: 25/587/2525", which invites exactly that paste, so
+  # a port on the host is split off and used rather than rejected.
+  {smtp_host, host_port} =
+    case String.split(System.get_env("SMTP_HOST") || "", ":", parts: 2) do
+      [host, port] -> {String.trim(host), String.trim(port)}
+      [host] -> {String.trim(host), nil}
+    end
+
+  # Explicit SMTP_PORT wins; then a port found on the host; then 587, the submission
+  # port every provider offers. **Not 25**: it is for server-to-server relay, and most
+  # hosts — App Platform included — block it outbound.
+  smtp_port = String.to_integer(System.get_env("SMTP_PORT") || host_port || "587")
+
   mail_from = System.get_env("MAIL_FROM")
 
   if smtp_host not in [nil, ""] and mail_from not in [nil, ""] do
     config :polyphony, Polyphony.Mailer,
       adapter: Swoosh.Adapters.SMTP,
       relay: smtp_host,
-      port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
+      port: smtp_port,
       username: System.get_env("SMTP_USERNAME"),
       password: System.get_env("SMTP_PASSWORD"),
       ssl: System.get_env("SMTP_SSL", "false") in ~w(true 1),
@@ -180,10 +195,19 @@ if config_env() == :prod do
         depth: 3
       ],
       retries: 2,
-      no_mx_lookups: false
+      # A submission relay is connected to directly. Looking up MX records for it asks
+      # "who accepts mail *for* this domain", which is a different question and the
+      # wrong one — it costs a DNS round trip per send and, for a host that does
+      # publish MX records, would send the mail somewhere else entirely.
+      no_mx_lookups: true
 
     config :polyphony, :mail_from, mail_from
     config :polyphony, :mail_from_name, System.get_env("MAIL_FROM_NAME") || "Polyphony"
     config :polyphony, :notification_transport, Polyphony.Notifications.Transport.Email
+
+    IO.puts(
+      "[boot] mail relay=#{smtp_host}:#{smtp_port} from=#{mail_from} " <>
+        "auth=#{if System.get_env("SMTP_USERNAME"), do: "set", else: "MISSING"}"
+    )
   end
 end

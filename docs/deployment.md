@@ -81,9 +81,21 @@ is the symptom.
 both set**. Half-configured stays on the logging transport deliberately, so the
 failure is "no mail configured" rather than a stream of relay errors.
 
-- `SMTP_HOST` / `SMTP_PORT` — the relay. Port defaults to `587` (STARTTLS), which is
-  what every provider wants. Use `465` with `SMTP_SSL=true` for implicit TLS.
-- `SMTP_USERNAME` / `SMTP_PASSWORD` — provider credentials.
+- `SMTP_HOST` — the relay **hostname, with no port on it**. `SMTP_PORT` carries the
+  port. A host of `smtp.example.com:587` is handed straight to DNS by gen_smtp and
+  fails as `:nxdomain` — an error that names DNS rather than the mistake — so a port
+  found on the host is now split off and used, but keeping them separate is clearer.
+- `SMTP_PORT` — defaults to `587` (STARTTLS), which every provider offers. Use `465`
+  with `SMTP_SSL=true` for implicit TLS. **Avoid `25`**: it is server-to-server relay
+  and App Platform, like most hosts, blocks it outbound — which surfaces as a network
+  timeout rather than anything mentioning ports.
+- `SMTP_USERNAME` / `SMTP_PASSWORD` — provider credentials. **Postmark uses the
+  Server API token as both**, which is easy to miss when you are looking for a
+  username; there is no separate SMTP user.
+
+The boot log prints what was resolved — `[boot] mail relay=host:port from=… auth=set`
+— so a misconfiguration is visible on startup rather than at the first failed send.
+`auth=MISSING` means `SMTP_USERNAME` never arrived.
 - `MAIL_FROM` — the sender address. **It must be on a domain you have verified with
   the provider**; an unverified sender is the most common reason mail vanishes without
   an error.
