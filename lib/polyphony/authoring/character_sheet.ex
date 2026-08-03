@@ -48,52 +48,104 @@ defmodule Polyphony.Authoring.CharacterSheet do
 
   defmodule Boundary do
     @moduledoc """
-    A characterization limit (§A3, FS V4.6) — how the character holds a `topic`
-    (romance, violence, betrayal…). **Not a content filter:** a boundary produces a
-    refusal *in the character's voice*, generated like any other beat, never a
-    post-generation block. `on_pressure` is the in-character reaction when pushed.
+    A place the character can be **pushed** (§A3, FS V4.6) — and the moment it gives.
+    **Not a content filter:** it produces a beat *in the character's voice*, generated
+    like any other, never a post-generation block.
 
-      * `:open`        — no gate.
-      * `:closed`      — a hard line; refusal in character.
+    ## Two directions, one gate
+
+    `direction` says which way the pressure runs, and it is grouping rather than
+    wording — `ux/polyphony-character.html` §05 is explicit that the two are separate
+    lists so an item can never be read backwards, which is exactly what went wrong
+    when everything was one list of "lines":
+
+      * `:refusal`    — *something she won't do.*
+      * `:compulsion` — *something she can't stop doing.* The same gate with the sign
+        flipped, and dramatically it is the better half: covering for her father is a
+        stronger story engine than any refusal on the sheet.
+
+    `stance` is unchanged by the direction — it only ever answers *does the gate
+    hold?* What holding **means** is what flips. A held refusal is "she won't"; a held
+    compulsion is "she can't stop". A released refusal is "she will now"; a released
+    compulsion is "she has broken it".
+
+      * `:open`        — no gate at all.
+      * `:closed`      — never gives (a hard line, or a compulsion that is simply
+        always true of her).
       * `:conditional` — held until `condition` is met by the campaign's canon arc,
-        which the Director evaluates (`Polyphony.Authoring.BoundaryGate`). Its
-        composition with the arc layer is what makes slow burn mechanically real —
-        the boundary holds until the story earns it, not a prompt hint the model
-        forgets.
+        judged by `Polyphony.Authoring.BoundaryGate`. Composing with the arc layer is
+        what makes slow burn mechanically real — it holds until the story earns it,
+        rather than being a prompt hint the model forgets.
+
+    `on_pressure` is the in-character reaction when pushed *before* it gives (for a
+    compulsion, when someone tries to stop her). `after_release` is what she is like
+    **once it has turned** — the mock's *and then* / *and now*. It is written when the
+    line is created but she is **not told it until it is true of her**, so it only
+    reaches her context once `BoundaryGate` releases the gate; telling her in advance
+    would let her play the aftermath before earning it.
+
+    ## The ceiling, and which way it fails
 
     `category` (§A5) is an **optional** link to a content-governance bucket
-    (`:sexual | :graphic_violence | :other`). It does not conflate the layers — the
-    boundary is still pure characterization (stance, condition, on_pressure). The
-    category only lets the campaign ceiling *cap* this boundary: a boundary in a
-    category the campaign disabled is forced closed at assembly (`Polyphony.Content`).
-    A pure-characterization boundary leaves it `nil` and the register never touches it.
+    (`:sexual | :graphic_violence | :other`). It doesn't conflate the layers — this is
+    still pure characterization — it only lets the campaign ceiling *cap* the item
+    (`Polyphony.Content.gate_boundary/2`). A pure-characterization item leaves it
+    `nil` and the register never touches it.
+
+    The direction matters here, and it is the one place getting it wrong is a real
+    bug: **the ceiling always pushes toward refusal.** Capping a refusal means forcing
+    it closed — she won't. Capping a *compulsion* by forcing it closed would mean she
+    always does it, which is backwards, so the cap turns it into a refusal instead.
     """
     @derive Jason.Encoder
-    defstruct [:topic, :stance, :condition, :on_pressure, :category]
+    defstruct [
+      :topic,
+      :stance,
+      :condition,
+      :on_pressure,
+      :after_release,
+      :category,
+      direction: :refusal
+    ]
 
     @type stance :: :open | :conditional | :closed
+    @type direction :: :refusal | :compulsion
     @type t :: %__MODULE__{
             topic: String.t(),
             stance: stance(),
+            direction: direction(),
             condition: String.t() | nil,
             on_pressure: String.t() | nil,
+            after_release: String.t() | nil,
             category: Polyphony.Content.category() | nil
           }
 
+    @doc "The two directions, refusals first — the order the sheet lists them in."
+    @spec directions() :: [direction()]
+    def directions, do: [:refusal, :compulsion]
+
+    @doc "How a direction is written as a section heading (`ux/polyphony-character.html` §05)."
+    @spec direction_label(direction()) :: String.t()
+    def direction_label(:compulsion), do: "What they can't stop doing"
+    def direction_label(_), do: "What they won't do"
+
     @doc """
     Build a boundary from a string-keyed map (the shape `Autofill.suggest_boundaries`
-    returns and the editor form submits): `topic`, `stance`, `condition`, `on_pressure`,
-    `category`. Unknown/blank stance ⇒ `:closed`; unknown/blank category ⇒ `nil`; blank
-    condition / on_pressure ⇒ `nil`. Shared by the sheet editor and Quick Build so the
-    AI-suggested and hand-entered paths stay in lockstep.
+    returns and the editor form submits): `topic`, `stance`, `direction`, `condition`,
+    `on_pressure`, `after_release`, `category`. Unknown/blank stance ⇒ `:closed`;
+    unknown direction ⇒ `:refusal`; unknown/blank category ⇒ `nil`; blank strings ⇒
+    `nil`. Shared by the sheet editor and Quick Build so the AI-suggested and
+    hand-entered paths stay in lockstep.
     """
     @spec from_map(map()) :: t()
     def from_map(m) when is_map(m) do
       %__MODULE__{
         topic: String.trim(to_string(m["topic"] || m[:topic] || "")),
         stance: parse_stance(m["stance"] || m[:stance]),
+        direction: parse_direction(m["direction"] || m[:direction]),
         condition: blank_to_nil(m["condition"] || m[:condition]),
         on_pressure: blank_to_nil(m["on_pressure"] || m[:on_pressure]),
+        after_release: blank_to_nil(m["after_release"] || m[:after_release]),
         category: parse_category(m["category"] || m[:category])
       }
     end
@@ -101,6 +153,11 @@ defmodule Polyphony.Authoring.CharacterSheet do
     defp parse_stance("open"), do: :open
     defp parse_stance("conditional"), do: :conditional
     defp parse_stance(_), do: :closed
+
+    # Anything unrecognised is a refusal: it's the reading that can only make a
+    # character *less* likely to act, which is the direction to fail in.
+    defp parse_direction(d) when d in ["compulsion", :compulsion], do: :compulsion
+    defp parse_direction(_), do: :refusal
 
     defp parse_category("sexual"), do: :sexual
     defp parse_category("graphic_violence"), do: :graphic_violence

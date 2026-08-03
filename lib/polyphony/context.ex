@@ -283,35 +283,75 @@ defmodule Polyphony.Context do
 
   # Boundaries (§A3) — the resolved gate state, framed **in character** so a refusal
   # is generated as a scene beat, not enforced as a filter (§V4.6).
+  #
+  # Both directions render here. A compulsion is the same gate with the sign flipped
+  # — held means she can't stop rather than she won't — and it is written that way
+  # rather than as a negated refusal, because a model handed "you will not not do
+  # this" writes a worse beat than one handed "you can't help it".
   defp render_boundaries([]), do: nil
 
   defp render_boundaries(resolved) do
-    "Your boundaries (a refusal here is you being yourself — a scene beat, not a rule):\n" <>
-      bullets(Enum.map(resolved, &boundary_line/1))
+    "Where you can be pushed (what happens here is you being yourself — a scene beat, " <>
+      "not a rule):\n" <> bullets(Enum.map(resolved, &boundary_line/1))
   end
+
+  defp boundary_line(%{boundary: %Boundary{stance: :open, topic: t, direction: :compulsion}}),
+    do: "#{t}: you do this freely."
 
   defp boundary_line(%{boundary: %Boundary{stance: :open, topic: t}}),
     do: "#{t}: you are open to this."
+
+  defp boundary_line(%{
+         boundary: %Boundary{stance: :closed, topic: t, direction: :compulsion, on_pressure: p}
+       }),
+       do: "#{t}: you always do this — you can't help it.#{resisted(p)}"
 
   defp boundary_line(%{boundary: %Boundary{stance: :closed, topic: t, on_pressure: p}}),
     do: "#{t}: a hard line — you will not.#{on_pressure(p)}"
 
   defp boundary_line(%{
-         boundary: %Boundary{stance: :conditional, topic: t, condition: c},
+         boundary: %Boundary{stance: :conditional, topic: t, condition: c} = b,
          released: true
-       }),
-       do: "#{t}: you held back until #{c}; that has happened, so you are open to it now."
+       }) do
+    case b.direction do
+      :compulsion ->
+        "#{t}: you couldn't stop until #{c}; that has happened, and it no longer holds you." <>
+          after_release(b.after_release)
+
+      _ ->
+        "#{t}: you held back until #{c}; that has happened, so you are open to it now." <>
+          after_release(b.after_release)
+    end
+  end
 
   defp boundary_line(%{
-         boundary: %Boundary{stance: :conditional, topic: t, condition: c, on_pressure: p},
+         boundary: %Boundary{stance: :conditional, topic: t, condition: c} = b,
          released: false
-       }),
-       do: "#{t}: you will not — not until #{c}, and that has not happened.#{on_pressure(p)}"
+       }) do
+    case b.direction do
+      # The after-state is deliberately absent while it holds: she isn't told what
+      # she'll be like afterwards until it's true of her, or she plays it early.
+      :compulsion ->
+        "#{t}: you can't stop — not until #{c}, and that has not happened.#{resisted(b.on_pressure)}"
+
+      _ ->
+        "#{t}: you will not — not until #{c}, and that has not happened.#{on_pressure(b.on_pressure)}"
+    end
+  end
+
+  defp boundary_line(%{boundary: %Boundary{topic: t, direction: :compulsion}}),
+    do: "#{t}: you keep doing this."
 
   defp boundary_line(%{boundary: %Boundary{topic: t}}), do: "#{t}: you hold back here."
 
   defp on_pressure(p) when p in [nil, ""], do: ""
   defp on_pressure(p), do: " When pushed: #{p}"
+
+  defp resisted(p) when p in [nil, ""], do: ""
+  defp resisted(p), do: " When someone tries to stop you: #{p}"
+
+  defp after_release(a) when a in [nil, ""], do: ""
+  defp after_release(a), do: " Since then: #{a}"
 
   defp render_facts(_label, []), do: nil
   defp render_facts(label, facts), do: "#{label}:\n" <> bullets(Enum.map(facts, & &1.statement))

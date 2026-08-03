@@ -93,6 +93,33 @@ asks pass recorded the interesting **follow-on** work and sometimes skipped the 
 sits on. These four are what a second read found: a field, a generation, a scheduled job and a
 query. None of them is clever, which is exactly why they were missed.
 
+**And §2.16, found the same way one step later** — by starting the character-sheet port and reading
+the mock section by section against the domain rather than against this file. That is the cheaper
+version of the same pass, and worth doing before every screen: the mocks are the specification, and
+a backlog is only ever a summary of one reading of them.
+
+### 2.16 A character can be pushed in two directions · **change** — ✅ **Shipped**
+`direction` on `CharacterSheet.Boundary` (`:refusal | :compulsion`, defaulting to refusal), plus
+`after_release` — the mock's *and then* / *and now*, written when the line is created but withheld
+from the character's context until the gate actually releases, so she can't play the aftermath
+before earning it. `Autofill` proposes both directions; `Context` writes a compulsion as a
+compulsion rather than as a negated refusal, because a model handed "you will not not do this"
+writes a worse beat than one handed "you can't help it". `CompulsionTest` pins the axis.
+
+The bug this closed is in `Polyphony.Content`. Capping meant forcing `stance: :closed`, which for a
+compulsion means *she always does it* — so the content ceiling would have **compelled** the content
+it exists to forbid. The cap now flips direction as well as stance, per the design's own rule:
+*the ceiling always pushes toward refusal. That's the correct direction to fail in.* Original ask
+below, reconstructed from the mock.
+
+
+`ux/polyphony-character.html` §05 asks for two lists, not one: **what she won't do** and **what she
+can't stop doing**. `Boundary` modelled only the first. The design argues the split is the point —
+*direction lives in the grouping, not the wording*, so an item can never be read backwards, which
+is exactly what went wrong when everything was one list of "lines" — and that compulsions are the
+more dramatic half: *covering for her father is a better story engine than any refusal on the
+sheet.*
+
 ### 2.1 Concealed and partial presence · **new**
 There is currently no way for a character to be in a scene but hidden, or known to only
 some of the people present. `Membership` is a half-open interval and `visible_to?/3` judges

@@ -196,11 +196,17 @@ defmodule Polyphony.Authoring.Autofill do
   end
 
   @doc """
-  Propose **boundaries** (lines the character holds, §A3 — played as scene beats, never
-  filters) from their fields + context. Returns
-  `{:ok, [%{"topic","stance","condition","on_pressure","category"}]}`; `:existing`
-  topics are shown as "don't repeat" and filtered out. `stance` ∈ closed|conditional|open;
-  `category` ∈ sexual|graphic_violence|other|"" (blank ⇒ pure characterization).
+  Propose **pressures** (§A3 — played as scene beats, never filters) from the
+  character's fields + context. Returns
+  `{:ok, [%{"topic","stance","direction","condition","on_pressure","after_release","category"}]}`;
+  `:existing` topics are shown as "don't repeat" and filtered out. `stance` ∈
+  closed|conditional|open; `direction` ∈ refusal|compulsion; `category` ∈
+  sexual|graphic_violence|other|"" (blank ⇒ pure characterization).
+
+  Both directions are asked for, and roughly evenly: the thing a character *can't
+  stop* doing is the same gate with the sign flipped and is usually the better story
+  engine, so a suggester that only proposed refusals would quietly halve what the
+  feature is for.
   """
   @spec suggest_boundaries(map(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def suggest_boundaries(current, opts \\ []) do
@@ -213,24 +219,28 @@ defmodule Polyphony.Authoring.Autofill do
       %{
         role: "system",
         content:
-          "You are helping an author populate a role-play character's boundaries — lines " <>
-            "this character holds in the story. A refusal is played as a scene beat, never a " <>
-            "content filter. Propose 2–4 **conditional** boundaries: lines the character holds " <>
-            "FOR NOW but that the right story development could change — slow burns, not " <>
-            "permanent hard 'no's. For each, give the condition: what must be earned or happen " <>
-            "in the story before they'd cross it. Choose topics that plausibly shift with the " <>
-            "story (intimacy, trust, loyalty, opening up, using violence, revealing a secret), " <>
-            "NOT absolute taboos. TWO RULES: (1) The topic and its condition must share the " <>
-            "same scope. If the line is about a SPECIFIC person, name them in the topic (e.g. " <>
-            "\"Physical intimacy with Jack\") — never gate a broad, everyone topic on one " <>
-            "person's arc. If the topic is general, keep the condition general too. (2) The " <>
-            "condition must be ONE concrete development the story can clearly reach — a single " <>
-            "checkable event, not several things bundled together (avoid \"and\"/\"both\"), and " <>
-            "not a vague mood. Return ONLY a JSON array of objects, each with keys \"topic\" " <>
-            "(what the line is about), \"condition\" (REQUIRED, non-empty — the one thing that " <>
-            "must happen first), \"on_pressure\" (how they react when pushed, optional), and " <>
-            "\"category\" (\"sexual\", \"graphic_violence\", \"other\", or \"\" for pure " <>
-            "characterization). Do NOT repeat a topic already listed."
+          "You are helping an author populate the places a role-play character can be " <>
+            "pushed. These are played as scene beats, never as a content filter. Propose 2–4 " <>
+            "**conditional** ones: things that hold FOR NOW but that the right story " <>
+            "development could change — slow burns, not permanent absolutes. Mix the two " <>
+            "DIRECTIONS roughly evenly: a \"refusal\" is something they won't do; a " <>
+            "\"compulsion\" is something they can't stop doing (covering for someone, signing " <>
+            "whatever is put in front of them, going back to a place). A compulsion is often " <>
+            "the more dramatic of the two — propose at least one. Choose topics that " <>
+            "plausibly shift with the story (intimacy, trust, loyalty, opening up, using " <>
+            "violence, revealing a secret, protecting someone), NOT absolute taboos. TWO " <>
+            "RULES: (1) The topic and its condition must share the same scope. If it is about " <>
+            "a SPECIFIC person, name them in the topic (e.g. \"Physical intimacy with Jack\") " <>
+            "— never gate a broad, everyone topic on one person's arc. If the topic is " <>
+            "general, keep the condition general too. (2) The condition must be ONE concrete " <>
+            "development the story can clearly reach — a single checkable event, not several " <>
+            "bundled together (avoid \"and\"/\"both\"), and not a vague mood. Return ONLY a " <>
+            "JSON array of objects, each with keys \"topic\" (what it is about), " <>
+            "\"direction\" (\"refusal\" or \"compulsion\"), \"condition\" (REQUIRED, " <>
+            "non-empty — the one thing that must happen first), \"on_pressure\" (how they " <>
+            "react when pushed against it, optional), \"after_release\" (what they are like " <>
+            "once it turns, optional), and \"category\" (\"sexual\", \"graphic_violence\", " <>
+            "\"other\", or \"\" for pure characterization). Do NOT repeat a topic already listed."
       },
       %{
         role: "user",
@@ -265,15 +275,20 @@ defmodule Polyphony.Authoring.Autofill do
 
   defp normalize_boundary(item) do
     category = item["category"] |> to_string() |> String.trim() |> String.downcase()
+    direction = item["direction"] |> to_string() |> String.trim() |> String.downcase()
 
     %{
       "topic" => String.trim(to_string(item["topic"] || "")),
-      # Generated boundaries are always **conditional** slow-burns (§A3) — an auto-proposed
+      # Generated pressures are always **conditional** slow-burns (§A3) — an auto-proposed
       # hard line or "open" non-boundary isn't worth surfacing; the author sets those by
       # hand in the editor, where every stance is available.
       "stance" => "conditional",
+      # Anything the model didn't say plainly is a refusal: it's the reading that can
+      # only make a character less likely to act, which is the direction to fail in.
+      "direction" => if(direction == "compulsion", do: "compulsion", else: "refusal"),
       "condition" => String.trim(to_string(item["condition"] || "")),
       "on_pressure" => String.trim(to_string(item["on_pressure"] || "")),
+      "after_release" => String.trim(to_string(item["after_release"] || "")),
       "category" => if(category in @categories, do: category, else: "")
     }
   end
