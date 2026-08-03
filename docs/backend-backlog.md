@@ -86,6 +86,13 @@ failures stay omniscient-only; `PlayLive` loads per-viewer. See `completed-roadm
 
 ## 2 · New — not modelled yet
 
+**A note on how §2.11–2.14 were found.** They came out of a deliberate pass over the `ux/` mocks
+against this file, prompted by groups: §3.0b described *group arc* as though groups existed, so
+the campaign port walked into a tab with nothing behind it. The lesson generalises — the original
+asks pass recorded the interesting **follow-on** work and sometimes skipped the plain artifact it
+sits on. These four are what a second read found: a field, a generation, a scheduled job and a
+query. None of them is clever, which is exactly why they were missed.
+
 ### 2.1 Concealed and partial presence · **new**
 There is currently no way for a character to be in a scene but hidden, or known to only
 some of the people present. `Membership` is a half-open interval and `visible_to?/3` judges
@@ -195,6 +202,62 @@ assumes membership implies a full sheet needs to tolerate it. And if the generat
 they should stay in the scene as un-actionable with a retry, not be silently evicted —
 eviction would be a membership event the room can see, for a reason that has nothing to do
 with the fiction.
+
+### 2.11 Pronouns are a field · **new** — ⚠️ *affects generated prose, not just UI*
+`ux/README.md` says it plainly under copy rules: *pronouns are a field. Half the copy on a
+character sheet is written about them, so those strings need parameterising rather than
+hardcoding.* `CharacterSheet` has no such field, and nothing else records one.
+
+This is not only a UI concern, which is why it's here rather than in a design note. Every
+character prompt renders a sheet, and with nothing to render the model infers pronouns from a
+name — which is a guess, gets people wrong, and gets them wrong *in the fiction*, where it
+reads as the story misgendering someone rather than as a missing setting. It also makes the
+sheet's own copy ("what she won't do") either hardcoded or awkward.
+
+Wanted: a `pronouns` field on `CharacterSheet` (free text, not an enum — the set isn't closed),
+rendered into the character's context prefix and into the authored sheet's own labels, and
+offered by `Autofill` when a sheet is generated. Cheap, and it stops being cheap to retrofit
+once there are sheets and transcripts in the world.
+
+### 2.12 The world's cover is written, and must not spoil · **new**
+The world bible's **cover** (`ux/polyphony-world.html` §Cover) is *the only part strangers see
+before they take your world* — a short written blurb, not an image, generated from everything
+below it *including the secrets*, with instructions to give none of them away.
+
+`WorldBible` has no cover field, and `Autofill` has no such generation. The interesting half is
+the constraint: this is the one generation whose input deliberately includes concealed material
+and whose output must not contain it. That is a prompt-level obligation the rest of the system
+solves structurally (a character is never *told* what they can't know), so it needs its own
+care — and a test that a seeded secret doesn't survive into the cover.
+
+### 2.13 Deleted things really go, on a clock · **new**
+`Library` has `soft_delete/2`, `restore/2` and `purge/2`, but no retention window and nothing
+that calls `purge`. The library design leans on the number: *deleted things wait 30 days before
+they're really gone*, and a trashed row reads "Gone for good in 24 days" — the mock's note says
+the countdown is the whole point, *the only place the recovery window is a number rather than a
+claim*.
+
+Wanted: a defined retention window, a `deleted_at`-derived days-remaining the UI can show, and
+something that actually purges on schedule (an Oban job). Without the last one the countdown is
+a claim again, which is the thing the design set out to avoid.
+
+### 2.14 Reading a sheet as of a past scene · **new**
+The character sheet's **scrubber** (`polyphony-kit.css` §9, `ux/polyphony-arc.html` "sheet time
+travel") winds a sheet back — one stop per closed scene, because arc is extracted at scene close
+and that's the only meaningful resolution.
+
+Most of the data is already there: `arc_entries` records `source_scene_id` and `beat`, so the
+history exists. What's missing is the read — `Effective.sheet/3` folds *all* canon arc with no
+"as of" parameter. Wanted: `sheet_as_of(sheet, character_id, scene_id)` that folds only entries
+canon at or before that scene, plus the ordered list of a character's closed scenes for the
+scrubber's stops. Small, and it makes the arc screen's most distinctive control possible.
+
+### 2.15 Search over the library · **new** — *deliberately later*
+Library, browse and the character picker all draw a search field, and `Library.list_for_owner`
+has no query at all. Recorded so a later pass doesn't re-find it as a surprise — but the design
+already schedules it: *long lists: render everything for now. Realistic ceilings are small and
+structure does the work pagination would. If a group gets long, add search before paging.*
+So this is wanted when a real library gets long, not to make the mocks implementable.
 
 ### 2.5b Attaching a world copies it · **change**
 
