@@ -78,8 +78,15 @@ defmodule Polyphony.Notifications do
     transport = transport(opts)
 
     case transport.deliver_email(email, subject, body) do
-      {:ok, _} ->
-        Logger.info("[mail] #{type} → #{redact(email)} sent via #{inspect(transport)}")
+      {:ok, receipt} ->
+        # The relay's own reply, not just the fact of one. A 250 from an SMTP provider
+        # carries their message id — Postmark's is the handle you search their Activity
+        # feed by — and that is exactly the question "we sent it, so where is it?"
+        # needs answered. Without it the trail stops at our own boundary.
+        Logger.info(
+          "[mail] #{type} → #{redact(email)} sent via #{inspect(transport)} — #{receipt(receipt)}"
+        )
+
         {:ok, record(recipient_id, email, type, subject, body, "sent", opts)}
 
       {:error, reason} ->
@@ -93,6 +100,11 @@ defmodule Polyphony.Notifications do
   end
 
   defp redact(email), do: Transport.redact(email)
+
+  # Bounded: a relay's reply is short, but it is remote input reaching a log that the
+  # debug drawer renders.
+  defp receipt(reply) when is_binary(reply), do: reply |> String.trim() |> String.slice(0, 200)
+  defp receipt(other), do: inspect(other)
 
   defp record(recipient_id, email, type, subject, body, status, opts) do
     Notification.put(repo(opts), %{

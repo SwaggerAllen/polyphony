@@ -74,6 +74,23 @@ defmodule PolyphonyWeb.DebugDrawerTest do
       refute log =~ "someone@example.com"
     end
 
+    test "the relay's own reply is logged, not just the fact of one" do
+      user = user_fixture()
+
+      # A 250 carries the provider's message id — Postmark's is what you search their
+      # Activity feed by. It is the only thing that connects "we sent it" to what the
+      # provider then did with it, and the trail is otherwise blind past our boundary.
+      log =
+        with_info_logs(fn ->
+          Notifications.deliver(user, :magic_link, %{url: "x"},
+            force: true,
+            transport: __MODULE__.StubRelay
+          )
+        end)
+
+      assert log =~ "250 OK; MessageID=abc-123"
+    end
+
     test "an account with no email says so instead of going quiet" do
       # This branch returns before `dispatch/6`, so it used to log nothing — which
       # reads exactly like the send never having been attempted. There is no email
@@ -170,6 +187,14 @@ defmodule PolyphonyWeb.DebugDrawerTest do
       assert render_line(%{level: :info, message: "[mail] sent"}) =~
                "var(--secret)"
     end
+  end
+
+  defmodule StubRelay do
+    @moduledoc false
+    @behaviour Polyphony.Notifications.Transport
+
+    @impl true
+    def deliver_email(_to, _subject, _body), do: {:ok, "250 OK; MessageID=abc-123\r\n"}
   end
 
   # Rendered through the real LiveView, so these assertions track the template rather
