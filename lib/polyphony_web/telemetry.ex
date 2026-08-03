@@ -3,19 +3,16 @@ defmodule PolyphonyWeb.Telemetry do
   Telemetry supervision, and the metric definitions LiveDashboard renders at
   `/admin/dashboard`.
 
-  **Every metric here corresponds to an event something already emits** — Ecto, Oban,
-  Phoenix and `telemetry_poller` all publish these out of the box. Nothing in
-  `Polyphony` itself emits telemetry yet, so there is deliberately no metric named
-  after the domain: a chart that is permanently empty is worse than an absent one,
-  because it reads as "nothing is happening" rather than "nothing is measured".
+  **Every metric here corresponds to an event something actually emits** — a chart
+  that is permanently empty is worse than an absent one, because it reads as "nothing
+  is happening" rather than "nothing is measured". Oban, Ecto, Phoenix and
+  `telemetry_poller` publish theirs out of the box; `polyphony.llm.*` is ours, from the
+  span in `Polyphony.LLM.call/2`.
 
-  The gap that leaves is worth naming. **Generation is the slow, expensive, failable
-  part** — a beat fans out to one LLM call per cast member, each of which can be slow,
-  blank, refused, or costly, and none of that appears in a request duration because the
-  work happens in an Oban job long after the response went out. `oban.job.*` below sees
-  the job, not the call inside it. Closing that means a `:telemetry.span` around
-  `Polyphony.LLM.call/2`, which is small but is new instrumentation in the generation
-  path, so it is its own decision.
+  **Generation is the thing worth measuring.** A beat fans out to one LLM call per cast
+  member, each of which can be slow, blank, refused, or capped, and none of it appears
+  in a request duration — the work happens in an Oban job long after the response went
+  out. `oban.job.*` sees the job; `polyphony.llm.*` sees the call inside it.
 
   History is not wired: LiveDashboard keeps what it observes while a tab is open and
   forgets the rest, which is the right trade for a bring-up tool. Anything worth
@@ -38,6 +35,32 @@ defmodule PolyphonyWeb.Telemetry do
   @spec metrics() :: [Telemetry.Metrics.t()]
   def metrics do
     [
+      # ── Generation ────────────────────────────────────────────────────────────
+      #
+      # Bucketed rather than averaged. Generation latency is not normally distributed:
+      # a mean hides the tail that decides whether a beat feels alive or stalled, and
+      # the tail is the entire question.
+      distribution("polyphony.llm.call.stop.duration",
+        unit: {:native, :millisecond},
+        tags: [:provider],
+        reporter_options: [buckets: [250, 500, 1_000, 2_500, 5_000, 10_000, 30_000]],
+        description: "Provider round trip for one call"
+      ),
+      counter("polyphony.llm.call.stop.duration",
+        tags: [:provider, :outcome],
+        description: "Completed calls, by provider and whether they returned usable text"
+      ),
+      counter("polyphony.llm.call.exception.duration",
+        tags: [:provider],
+        description: "Calls that raised rather than returned an error"
+      ),
+      # The circuit breaker firing looks exactly like generation breaking, from the
+      # outside. It should be readable as a number rather than diagnosed.
+      counter("polyphony.llm.blocked.count",
+        tags: [:usage_kind],
+        description: "Calls refused by the spend cap (§B5) — never reached a provider"
+      ),
+
       # ── Oban: where the beat loop actually runs ───────────────────────────────
       #
       # A beat *is* jobs. If they stall, queue, or die the scene stops, and no HTTP

@@ -72,9 +72,10 @@ defmodule PolyphonyWeb.DashboardAccessTest do
   describe "the metrics it renders" do
     test "every metric names an event something actually emits" do
       # A permanently empty chart reads as "nothing is happening" rather than "nothing
-      # is measured", which is worse than no chart. Nothing in `Polyphony` emits
-      # telemetry yet, so no metric may claim to be about the domain.
-      emitters = ~w(oban polyphony.repo phoenix vm)
+      # is measured", which is worse than no chart. Each prefix here is something that
+      # demonstrably publishes: the first three out of the box, `polyphony.llm` from
+      # the span in `LLM.call/2` (pinned by Polyphony.LLMTelemetryTest).
+      emitters = ~w(oban polyphony.repo phoenix vm polyphony.llm)
 
       for metric <- PolyphonyWeb.Telemetry.metrics() do
         name = Enum.map_join(metric.name, ".", &to_string/1)

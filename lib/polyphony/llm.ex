@@ -34,15 +34,47 @@ defmodule Polyphony.LLM do
 
     if allowed?(opts) do
       provider = Keyword.get(opts, :provider) || Provider.default()
-      result = provider.complete(messages, opts)
+      meta = telemetry_meta(provider, opts)
+
+      # Spans **only the provider round trip**. Metering and tracing below are our own
+      # bookkeeping; folding them in would quietly inflate the one number worth
+      # trusting. Emits `[:polyphony, :llm, :call, :start | :stop | :exception]`.
+      result =
+        :telemetry.span([:polyphony, :llm, :call], meta, fn ->
+          result = provider.complete(messages, opts)
+          {result, Map.put(meta, :outcome, outcome(result))}
+        end)
+
       meter(result, messages, opts)
       trace(messages, result, opts)
       result
     else
       # Circuit breaker (§B5): an attributed caller over a hard cap doesn't spend.
+      #
+      # Its own event rather than an outcome on the span: nothing was called, so there
+      # is no duration to report, and a duration of ~0µs would drag the latency
+      # distribution toward a call that never happened. It needs to be visible on its
+      # own terms — a silently-capped campaign looks exactly like generation breaking.
+      :telemetry.execute([:polyphony, :llm, :blocked], %{count: 1}, telemetry_meta(nil, opts))
       {:error, :cost_cap_reached}
     end
   end
+
+  # Deliberately carries no messages and no response text. This metadata reaches every
+  # attached handler and the dashboard; the fiction is not telemetry.
+  defp telemetry_meta(provider, opts) do
+    %{
+      provider: provider,
+      model: opts[:model],
+      usage_kind: Keyword.get(opts, :usage_kind, "generation")
+    }
+  end
+
+  # Binary on purpose. The failure *reason* is genuinely interesting but unbounded
+  # (`:empty_response`, refusals, transport errors), and an unbounded tag is an
+  # unbounded number of series. Reasons stay in the log, where they cost nothing.
+  defp outcome({:ok, _}), do: :ok
+  defp outcome(_), do: :error
 
   # The circuit breaker: refuse an attributed call once a hard cap is hit, so a stuck
   # Director loop (or heavy-model testing) can't run unbounded. Unattributed internal
