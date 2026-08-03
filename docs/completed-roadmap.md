@@ -247,6 +247,51 @@ Connection state is rendered from the classes LiveView already puts on the conta
 replays the canonical scene, the copy can promise recovery. Silent when healthy: a permanent
 "everything is fine" light is noise.
 
+### What the character sheet needed first (`backend-backlog.md` §2.5, §2.12, §2.14)
+Groups taught the lesson; this was applying it. Before porting a screen, check what it reads —
+and the character sheet mock reads four things the backend didn't have. Built together rather
+than one at a time, so the port doesn't have to come back for them.
+
+**Cast tiers (§2.5).** `tier` on `CharacterSheet` — `:main | :recurring | :incidental` — and
+deliberately a *second* axis from `status`. The two came apart the moment the design settled that
+**no character ever plays without a full sheet**: if the walk-on the Director admits gets a
+generated sheet like everyone else, `status` can no longer tell the bellman from the lead.
+`Polyphony.Characters` holds the operations, with `promote/2` and `demote/2` symmetric on purpose
+— the design's point is that a character who has served their purpose is *demoted rather than
+deleted*, and a demote that quietly failed would push authors back to deleting someone the
+transcript still refers to. What tiers do *not* do yet is decide context residency: the Director's
+roster is a scene's own cast, not a campaign-wide one, so nothing has to choose who stays in the
+room when they aren't in it. That question arrives with autogeneration-on-admit.
+
+**The cover, and the one place the guarantee inverts (§2.12).** `cover` on `CharacterSheet` and
+`WorldBible`, written by `Authoring.Cover`. Everywhere else the engine keeps a secret by never
+putting it in the prompt — a character is not *told* what they can't know, so they cannot leak it,
+which is why dramatic irony is structural rather than instructed. The cover is the exception: the
+secrets are the input, because they're what makes a blurb feel like it's about something, and the
+constraint lives in the prompt.
+
+A prompt-level obligation earns a mechanical backstop. `Cover.generate/2` checks the returned
+prose against the secrets it showed the model, retries once with a sharper instruction, and
+returns `{:error, :leaked}` rather than a spoiler cover — a missing cover is recoverable, a
+published one that gives away the twist is not. The check catches verbatim quotation only (a whole
+statement, or a run of six consecutive words), which is the failure a model actually has with a
+secret sitting in its context. `CoverTest` asserts that paraphrase gets through, on purpose: the
+floor should not be mistaken for a ceiling.
+
+**Sheet time travel (§2.14).** `Effective.sheet_as_of/4` folds only the arc extracted at or before
+a stop; `Effective.scene_stops/2` gives the stops. A stop is a *closed* scene — a summary row is
+written at scene close and only then, so its existence is what "closed" means, and it's the right
+resolution because arc is extracted at close and there is nothing to wind back to between two of
+them. The edges are where the thinking went: hand-authored canon has no source scene and so applies
+at every stop, or the newest stop would disagree with `sheet/3` and the scrubber's right-hand end
+wouldn't be the sheet you have; arc from a still-open scene belongs after every stop; and an
+unrecognised scene degrades toward *less* arc, because this backs a read-only preview (§3.2) where
+showing more than was asked for is a spoiler and showing less is merely stale.
+
+**"In 3 scenes" (§2.14, the header line).** `Membership.scenes_for_character/2` and `scene_count/2`
+— distinct scenes in first-entry order. Distinct because re-entry opens a second interval, and
+someone who steps out and comes back is in one scene: the header must not count the door twice.
+
 ---
 
 ## Immediate milestone — the backend the frontend design needs

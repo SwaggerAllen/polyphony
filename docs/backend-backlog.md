@@ -161,7 +161,21 @@ Two constraints the design assumes:
   rewrite of history — that is a branch (1.1). Keep the two words apart in the API so the
   distinction survives contact with the UI.
 
-### 2.5 Cast tiers — context residency, separate from sheet status · **new**
+### 2.5 Cast tiers — context residency, separate from sheet status · **new** — ✅ **Shipped (the axis)**
+`tier` on `CharacterSheet` (`:main | :recurring | :incidental`), with `tiers/0`, `resident?/1` and
+`tier_label/1`; `Polyphony.Characters` holds the operations — `set_tier/3`, symmetric `promote/2`
+and `demote/2` that step one place and saturate at the ends, `by_tier/1` for the cast list's
+sections, and `resident/1`. A walk-on written during play (`Authoring.Stub`) starts `:incidental`.
+`CharactersTest` pins that the axis stays independent of `status` and that demotion works as well
+as promotion — the design's point being that a character who has served their purpose is *demoted
+rather than deleted*.
+
+**Still open:** nothing *consumes* residency yet, because there is nothing to consume it from —
+the Director's roster is a scene's own cast (`Context.Rebuild.roster/1`), not a campaign-wide one,
+so no read currently has to choose who stays in the room when they aren't in it. That arrives with
+the rest of this entry: **autogeneration-on-admit** and its timing constraint (the scene must not
+block on the generation, but the character must). Original ask below.
+
 
 Design principle this falls out of: **no character ever plays without a full sheet.** Admitting
 a walk-on autogenerates one rather than admitting a stub — it's a real advantage of the
@@ -225,7 +239,22 @@ rendered into the character's context prefix and into the authored sheet's own l
 offered by `Autofill` when a sheet is generated. Cheap, and it stops being cheap to retrofit
 once there are sheets and transcripts in the world.
 
-### 2.12 The world's cover is written, and must not spoil · **new**
+### 2.12 The world's cover is written, and must not spoil · **new** — ✅ **Shipped**
+`cover` on both `WorldBible` and `CharacterSheet` (a character has the same problem — a stranger
+reads a blurb before they take them), written by `Authoring.Cover.generate/2`. It is deliberately
+*not* a field in `Autofill`'s spec: every other generated field is a fold over what's in the form,
+while this one takes concealed material as input and can only be written once there is something
+to cover.
+
+The interesting half got a mechanical backstop rather than only a prompt. `Cover` checks the
+returned prose against the secrets it was shown, retries once with a sharper instruction, and
+returns `{:error, :leaked}` instead of a spoiler cover — a missing cover is recoverable, a
+published one that gives away the twist isn't. The check catches **verbatim quotation** (a whole
+statement, or a run of six consecutive words), which is the failure mode a model actually has with
+a secret sitting in its context; `CoverTest` asserts both halves, and asserts out loud that
+paraphrase is *not* caught, so nobody mistakes the floor for a ceiling. Original ask below.
+
+
 The world bible's **cover** (`ux/polyphony-world.html` §Cover) is *the only part strangers see
 before they take your world* — a short written blurb, not an image, generated from everything
 below it *including the secrets*, with instructions to give none of them away.
@@ -247,7 +276,25 @@ Wanted: a defined retention window, a `deleted_at`-derived days-remaining the UI
 something that actually purges on schedule (an Oban job). Without the last one the countdown is
 a claim again, which is the thing the design set out to avoid.
 
-### 2.14 Reading a sheet as of a past scene · **new**
+### 2.14 Reading a sheet as of a past scene · **new** — ✅ **Shipped**
+`Effective.sheet_as_of/4` folds only the canon arc extracted at or before a given stop, and
+`Effective.scene_stops/2` gives the stops themselves — the scenes a character has *closed*, oldest
+first, each carrying its own summary so a stop can be labelled without a second read. A summary
+row is written at scene close and only then, so its existence is what "closed" means here, and
+that is the right resolution: arc is extracted at close, so there is nothing to wind back to
+between two of them.
+
+Three edges a naive cut-off gets wrong, all pinned by `EffectiveAsOfTest`: hand-authored canon has
+no source scene and so applies at every stop (otherwise the newest stop would disagree with
+`sheet/3`, and the scrubber's right-hand end wouldn't be the sheet you have); arc from a still-open
+scene belongs after every stop that exists; and an unrecognised scene degrades toward *less* arc,
+because this backs a read-only preview where showing more than was asked for is a spoiler.
+
+Alongside it, `ReadModels.Membership.scenes_for_character/2` and `scene_count/2` — distinct scenes
+in first-entry order, so someone who leaves and comes back is counted once ("In 3 scenes" must not
+count the door twice). Original ask below.
+
+
 The character sheet's **scrubber** (`polyphony-kit.css` §9, `ux/polyphony-arc.html` "sheet time
 travel") winds a sheet back — one stop per closed scene, because arc is extracted at scene close
 and that's the only meaningful resolution.
@@ -548,7 +595,9 @@ whatever the published reading view turns out to be.
 
 - **You author omniscient and preview as a character.** Preview is explicitly marked and
   **read-only** — editing a sheet while seeing a filtered version of it is how someone deletes
-  something they couldn't see.
+  something they couldn't see. *(The sheet-scrubber direction of this now has its read:
+  `Effective.sheet_as_of/4` (§2.14) degrades toward less arc rather than more, precisely because
+  what it feeds is a read-only preview.)*
 - **An unassigned viewer is a real state**, not an error: a multiplayer participant before
   character assignment, and any reader outside a granted perspective. Default-deny already
   gives the right answer — they see nothing.

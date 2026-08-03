@@ -91,4 +91,29 @@ defmodule Polyphony.ReadModels.Membership do
       )
     )
   end
+
+  @doc """
+  The scenes a character has ever been in, distinct and in first-entry order.
+
+  Distinct because re-entry opens a second interval: someone who leaves a scene and
+  comes back is in *one* scene, and "In 3 scenes" on their sheet must not count the
+  door twice. Ordered by when they first entered each, which is the only ordering
+  the membership table itself knows — for a chronology of *closed* scenes, ask
+  `SceneSummary`, which is written at scene close.
+  """
+  def scenes_for_character(repo, character_id) do
+    cid = to_string(character_id)
+
+    repo.all(
+      from(m in __MODULE__,
+        where: m.character_id == ^cid,
+        group_by: m.scene_id,
+        order_by: [asc: min(m.entered_beat), asc: m.scene_id],
+        select: m.scene_id
+      )
+    )
+  end
+
+  @doc "How many distinct scenes a character has been in (\"In 3 scenes\")."
+  def scene_count(repo, character_id), do: repo |> scenes_for_character(character_id) |> length()
 end

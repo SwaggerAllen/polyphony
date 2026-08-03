@@ -9,6 +9,10 @@ defmodule Polyphony.Authoring.WorldBible do
   """
   @derive Jason.Encoder
   defstruct name: nil,
+            # The outward blurb — the only part strangers see before they take this
+            # world. Written from everything below it, secrets included, under
+            # instruction to give none of them away (§2.12).
+            cover: nil,
             setting: nil,
             tone: nil,
             rules: [],
