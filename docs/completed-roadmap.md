@@ -147,6 +147,38 @@ and working tokens outside any screen's frame — without it the kit's colours r
 nothing and every page renders on browser-default white — and a screen still nests its own
 frame to change register, as play does for a character viewer.
 
+### Groups (the prerequisite the backend-asks pass missed)
+The campaign port stopped at the Groups tab because nothing was behind it — and that's the
+interesting part. `backend-backlog.md` had §3.0b, *group arc and how it reaches members*, which
+reads as though groups exist; the pass recorded the sophisticated follow-on and not the artifact
+it depends on. Building the frontend is what surfaced it.
+
+`Polyphony.Groups` + `Polyphony.Authoring.Group` cover the artifact the design describes: *a
+group is written like a character and used as a starting point for others — a crew, a household,
+an order. It saves writing the same person five times, and gives secrets somewhere to point.*
+
+- **Character-shaped, stored as a library entry** (kind `"group"`), so ownership, visibility,
+  archiving and versioning come for free. It carries the fields that seed a person and not the
+  ones that only make sense for a person — no relationships, no boundaries, no arc of its own.
+- **Seeding is a copy.** `write_character/4` seeds a new character from the group's fields and
+  facts — including its secrets, since knowing them is what belonging means — and joins them.
+  Anything the author already wrote wins; the group is a starting point. Editing the template
+  afterwards reaches nobody already written from it, which is what makes group arc a fan-out
+  through review (§3.0b) rather than a silent propagation.
+- **Membership is live, stored on the group**, ordered, keyed by stable library id (§5.2), with a
+  character's groups *derived* so the two directions can't disagree. That's what an audience
+  naming a group has to resolve against: the design's rule is that groups are named, not
+  expanded — the membership moves.
+- **Joining doesn't backfill.** `add_member/3` adds membership and nothing else. If Wren joins
+  the Tidewatch in scene 9 she doesn't silently gain its secrets — she learns them in a scene.
+  The reveal is fiction, not a migration, the same principle as world-arc catch-up, and it's the
+  one a helpful implementation would quietly break. Pinned by a test.
+
+Still open, and now recorded on §3.0b: the arc fan-out itself, and an **audience that names a
+group** — `Fact` has `concealed: true` but no audience field, so nothing yet points at one. That
+second one is what the audience-picker mock depends on, and why its inherited-tick treatment
+can't be built yet.
+
 ### The campaign screen, ported (`ux/polyphony-campaign.html`)
 The hub, and the screen the design pass changed most: one long scroll of every setting
 became **tabs** — Settings · World · Cast · Premise · Scenes — because almost none of it is

@@ -369,7 +369,14 @@ which a writing tool should do regardless of any model reason.
 Depends entirely on 5.1 — scene-close fan-out has no caller today, so there is nothing to gate on
 and this cannot be built until that's wired.
 
-### 3.0b Group arc, and how it reaches members · **new**
+### 3.0b Group arc, and how it reaches members · **new** — *groups themselves now exist*
+
+**Prerequisite shipped.** Groups existed only in the design until the frontend rebuild reached
+the campaign screen and found the Groups tab had nothing behind it — the backend-asks pass had
+recorded group *arc* without recording that groups themselves weren't built. `Polyphony.Groups`
++ `Authoring.Group` now cover the artifact: a character-shaped template stored as a library
+entry (kind `"group"`), live membership by stable id, and writing a character from a group
+(seed + join). Detail in `completed-roadmap.md`. What follows is still open.
 
 A group is a character-shaped sheet (2.5 / character authoring), so it can be revised by play the
 same way a character is — a different prompt over the same extraction.
@@ -391,6 +398,14 @@ For current members, a group-targeting change **fans out**:
   single event. One unit, one accept-all, expandable per member.
 - **Gating (3.0) applies to the member proposals, not the template.** A pending template change
   blocks nobody, since it only affects characters who don't exist yet.
+
+**Also still open: an audience that names a group.** `Group.secrets/1` gives a secret somewhere
+to point, but a `Fact` still carries only `concealed: true` — there's no audience field, so
+nothing yet *points*. Pointing one at a group and resolving it **when a character enters the
+story** (which is what makes a scene-9 walk-on arrive already knowing) is the audience-picker
+work: it needs `Visibility` in the loop, not just `Groups`. That's the piece the
+`polyphony-audience-picker.html` mock depends on, and the reason its inherited-tick treatment
+(`.chk-via`) can't be built yet.
 
 ### 3.1b Limited omniscient — the published reading mode · **new**
 
