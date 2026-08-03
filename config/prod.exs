@@ -7,6 +7,11 @@ import Config
 # (see runtime.exs).
 config :polyphony, PolyphonyWeb.Endpoint,
   cache_static_manifest: "priv/static/cache_manifest.json",
+  # HTTPS-only, and say so with HSTS. App Platform terminates TLS at the edge and
+  # forwards over plain HTTP, so the scheme has to be read from `x-forwarded-proto`
+  # — without `rewrite_on` every request looks like http and this would redirect
+  # forever. Magic-link sign-in rides on these URLs, which is reason enough.
+  force_ssl: [hsts: true, rewrite_on: [:x_forwarded_proto]],
   server: true
 
 # Persistent event store (prod only — see config/config.exs for the adapter

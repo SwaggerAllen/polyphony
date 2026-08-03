@@ -247,14 +247,16 @@ image ships Elixir 1.14 / OTP 25, so a `SessionStart` hook
 puts it on `PATH`; it short-circuits (no-op) once the base image itself is current,
 and runs asynchronously so it rarely costs startup time.
 
-Two legacy version pins remain in `mix.exs` from the old 1.14 days:
-`ecto_sql ~> 3.11.0` and `postgrex ~> 0.17.5`. The pinned `postgrex 0.17.5` carries
-advisory **GHSA-r73h-97w8-m54h** (SQL injection via channel name in
-`Postgrex.Notifications.listen/3` / `unlisten/3`). **This app never calls
-`Postgrex.Notifications`** — the domain event notifications go through the
-`eventstore` library's own listener and all app queries are parameterized Ecto — so
-the vulnerable path isn't exercised. Bumping these pins to patched lines is now
-unblocked on the modern toolchain and is a tracked cleanup.
+The two legacy pins from the 1.14 days (`ecto_sql ~> 3.11.0`, `postgrex ~> 0.17.5`)
+are **gone** — now `ecto_sql ~> 3.14` / `postgrex ~> 0.22`, which clears advisory
+GHSA-r73h-97w8-m54h on `Postgrex.Notifications` (never on a path this app called, but
+no longer something to reason about) and pulls `decimal` 3.x. Cowboy/cowlib moved with
+them for their own advisories.
+
+Two cowlib advisories have no fixed release yet (EEF-CVE-2026-43966,
+EEF-CVE-2026-43969 — header escaping and cookie encoding). They aren't reachable from
+anything this app constructs, and CI's `mix hex.audit` step is non-blocking *only*
+because of them; make it blocking as soon as a fix ships.
 
 Relatedly, the DeepInfra adapter uses Erlang's built-in `:httpc` rather than Req —
 a zero-dependency choice from the 1.14 era. The provider behaviour keeps the HTTP
@@ -279,5 +281,4 @@ The frontend and deployment path are now in. Near-term work is scheduled in
 [`docs/backend-backlog.md`](docs/backend-backlog.md) (the standing worklist, with the
 milestone that gates the current design). The post-v1 tiers (deferred inspector views,
 the notify-me-later push worker, richer authoring) and their rationale live in
-[`docs/decisions.md`](docs/decisions.md). Standing cleanups: bump the legacy
-`postgrex`/`ecto_sql` pins now that the toolchain allows it, optional move to ReqLLM.
+[`docs/decisions.md`](docs/decisions.md). Standing cleanup: optional move to ReqLLM.

@@ -4,13 +4,39 @@ defmodule PolyphonyWeb.Router do
   import PolyphonyWeb.Auth
   import PhoenixStorybook.Router
 
+  # Content-Security-Policy. `put_secure_browser_headers` sets the other headers but
+  # never a CSP, and this app renders **other people's prose** — a published story is
+  # authored by a stranger and read by anyone, which is the shape XSS likes.
+  #
+  # Each source list is as narrow as the app actually needs:
+  #
+  #   * `script-src 'self'` — the one script is `/assets/app.js`; nothing is inline, so
+  #     no nonce and no `unsafe-inline`. This is the directive that matters.
+  #   * `style-src` needs `'unsafe-inline'` for the kit's inline `style=` attributes
+  #     (token colours computed per character), and Google Fonts' stylesheet.
+  #   * `connect-src` names `ws:`/`wss:` explicitly rather than leaning on `'self'`,
+  #     which not every browser reads as covering the LiveView socket.
+  #   * `frame-ancestors 'none'` — clickjacking; `object-src 'none'` — legacy plugins.
+  @csp """
+  default-src 'self'; \
+  script-src 'self'; \
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; \
+  font-src 'self' data: https://fonts.gstatic.com; \
+  img-src 'self' data:; \
+  connect-src 'self' ws: wss:; \
+  base-uri 'self'; \
+  form-action 'self'; \
+  frame-ancestors 'none'; \
+  object-src 'none'\
+  """
+
   pipeline :browser do
     plug(:accepts, ["html"])
     plug(:fetch_session)
     plug(:fetch_live_flash)
     plug(:put_root_layout, html: {PolyphonyWeb.Layouts, :root})
     plug(:protect_from_forgery)
-    plug(:put_secure_browser_headers)
+    plug(:put_secure_browser_headers, %{"content-security-policy" => @csp})
     plug(:fetch_current_user)
   end
 

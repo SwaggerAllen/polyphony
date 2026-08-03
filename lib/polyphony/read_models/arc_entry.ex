@@ -238,6 +238,13 @@ defmodule Polyphony.ReadModels.ArcEntry do
   end
 
   defp decode_audience(nil), do: nil
+
+  # Sobelow flags every `binary_to_term`; `:safe` is the mitigation it asks for, and
+  # the binary is this module's own encoded audience read back from our own table.
+  # Registered because the attribute is read by Sobelow, not the compiler, which
+  # would otherwise warn it is set and never used (and CI compiles as errors).
+  Module.register_attribute(__MODULE__, :sobelow_skip, accumulate: true)
+  @sobelow_skip ["Misc.BinToTerm"]
   defp decode_audience(bin), do: :erlang.binary_to_term(bin, [:safe])
 
   defp safe_atom(nil), do: nil

@@ -34,11 +34,16 @@ mix assets.setup             # fetch the esbuild + tailwind binaries (once)
 mix test                     # full suite; the alias migrates the test DB first
 mix test test/polyphony/foo_test.exs   # one file
 mix test --only feature      # real-browser (Wallaby) E2E; excluded by default, needs a browser
+                             # run bin/setup-chromedriver first — the sandbox's driver
+                             # and its Chromium are different majors
 mix format                   # always run before committing
 mix compile --warnings-as-errors       # must stay clean
 mix run -e "…"               # exercise the loop offline against LLM.Mock
 mix assets.build             # rebuild priv/static/assets/{app,storybook}.{js,css} after assets/
 mix kit.port                 # regenerate assets/css/kit.css from ux/polyphony-kit.css
+mix deps.audit               # dependency advisories (CI: blocking)
+mix sobelow --exit low --skip  # Phoenix static analysis (CI: blocking)
+mix deps.unlock --check-unused # stale mix.lock entries (CI: blocking)
 mix phx.server               # the LiveView frontend at :4000 (watches + rebuilds assets),
                              # and the component catalogue at :4000/storybook
 ```
@@ -143,10 +148,10 @@ for it.
 
 ## Environment gotchas
 
-- **Elixir 1.17 / OTP 27** (via the SessionStart hook; see Commands above). Two
-  legacy pins linger from the 1.14 era — `ecto_sql ~> 3.11.0`, `postgrex ~> 0.17.5` —
-  and the DeepInfra adapter still uses Erlang `:httpc` rather than Req. All three are
-  now bumpable and tracked as cleanup; see the README "Toolchain notes".
+- **Elixir 1.17 / OTP 27** (via the SessionStart hook; see Commands above). The two
+  legacy 1.14-era pins are gone (`ecto_sql ~> 3.14`, `postgrex ~> 0.22`); the DeepInfra
+  adapter still uses Erlang `:httpc` rather than Req, which remains optional cleanup.
+  See the README "Toolchain notes".
 - **No egress to DeepInfra** in the sandbox. Everything runs on `Polyphony.LLM.Mock`
   (deterministic lorem via `:erlang.phash2`, offline) or `LLM.Stub` (tests). Never
   rely on `Math.random`/`Date` — determinism matters for replay.

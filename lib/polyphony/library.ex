@@ -745,6 +745,12 @@ defmodule Polyphony.Library do
   defp encode(payload), do: :erlang.term_to_binary(payload)
   # `:safe` refuses to fabricate atoms/modules; every embedded struct
   # (CharacterSheet, WorldBible, Snapshot, …) is already loaded.
+  # Sobelow flags every `binary_to_term`; `:safe` is the mitigation it asks for, and
+  # the binary is our own `encode/1` output read back from our own table.
+  # Registered because the attribute is read by Sobelow, not the compiler, which
+  # would otherwise warn it is set and never used (and CI compiles as errors).
+  Module.register_attribute(__MODULE__, :sobelow_skip, accumulate: true)
+  @sobelow_skip ["Misc.BinToTerm"]
   defp decode(bin), do: :erlang.binary_to_term(bin, [:safe])
 
   defp token_for("unlisted"), do: gen_token()

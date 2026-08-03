@@ -51,8 +51,8 @@ defmodule Polyphony.MixProject do
       # Persistence for read models (pgvector for scene/summary embeddings later).
       # These lower bounds were chosen for the original Elixir 1.14 toolchain and
       # still resolve cleanly on the modern one; left as-is to avoid churn.
-      {:ecto_sql, "~> 3.11.0"},
-      {:postgrex, "~> 0.17.5"},
+      {:ecto_sql, "~> 3.14"},
+      {:postgrex, "~> 0.22"},
       {:pgvector, "~> 0.3.0"},
 
       # Job dispatch (§2): Postgres-backed, retries, concurrency control.
@@ -97,7 +97,13 @@ defmodule Polyphony.MixProject do
       # client swappable, so moving to ReqLLM on the modern toolchain later is a
       # one-module change.
 
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+
+      # CI checks, no runtime footprint. `mix deps.audit` scans the lock against the
+      # Elixir security advisory DB; `mix sobelow` is Phoenix-aware static analysis
+      # (XSS via raw/1, CSRF, directory traversal, config secrets).
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false}
     ]
   end
 
