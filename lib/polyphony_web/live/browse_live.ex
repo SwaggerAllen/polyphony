@@ -691,7 +691,11 @@ defmodule PolyphonyWeb.BrowseLive do
 
   # ── Copy ─────────────────────────────────────────────────────────────────────
 
-  defp published?(entry), do: entry.kind == "campaign" and entry.visibility in ~w(public unlisted)
+  # A **frozen** snapshot, and readable. The catalogue already only lists these, and a
+  # direct URL has to agree with it: a live campaign is somebody's working copy, not a
+  # story, and opening one here would read its scene list as a published contents.
+  defp published?(entry),
+    do: Library.snapshot?(entry) and entry.visibility in ~w(public unlisted)
 
   defp story_name(snapshot), do: Session.title(snapshot)
   defp blurb(snapshot), do: Session.blurb(snapshot)

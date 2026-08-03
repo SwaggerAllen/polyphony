@@ -330,6 +330,39 @@ defmodule Polyphony.Library do
     )
   end
 
+  @doc """
+  Is this entry a **published snapshot** rather than a working artifact?
+
+  They share the `"campaign"` kind because they share a table, and nothing else: a
+  snapshot can't be played, finished, cast or reviewed, and its payload is a
+  `Library.Snapshot` with none of a campaign's fields. Anything that means "a campaign
+  the owner is working on" must ask this rather than infer it from `kind`, which is how
+  a frozen copy ends up in a list that then tries to read `:character_ids` off it.
+  """
+  @spec snapshot?(LibraryEntry.t()) :: boolean()
+  def snapshot?(%LibraryEntry{kind: "campaign", frozen: true}), do: true
+  def snapshot?(%LibraryEntry{}), do: false
+
+  @doc """
+  The published snapshots taken from `entry`, newest first — empty if it's never been
+  published.
+  """
+  @spec publications_of(LibraryEntry.t() | term(), keyword()) :: [LibraryEntry.t()]
+  def publications_of(%LibraryEntry{} = entry, opts), do: publications_of(entry.id, opts)
+
+  def publications_of(id, opts) do
+    id
+    |> copies_of(opts)
+    |> Enum.filter(&snapshot?/1)
+    |> Enum.sort_by(& &1.inserted_at, {:desc, NaiveDateTime})
+  end
+
+  def publications_of(entry_or_id), do: publications_of(entry_or_id, [])
+
+  @doc "Has this campaign been published? (Its snapshot is a separate entry.)"
+  @spec published?(LibraryEntry.t() | term(), keyword()) :: boolean()
+  def published?(entry_or_id, opts \\ []), do: publications_of(entry_or_id, opts) != []
+
   @doc "Is this entry live (neither archived nor soft-deleted)?"
   def live?(%LibraryEntry{archived_at: nil, deleted_at: nil}), do: true
   def live?(%LibraryEntry{}), do: false
@@ -350,8 +383,8 @@ defmodule Polyphony.Library do
   entry. Publishing implies freeze; `:visibility` (default `"public"`) is a separate
   choice, and `:include_proposed` (default `false`) resolves the proposed arc tail.
 
-  `attrs` are the campaign's live dependencies (see `Snapshot.build/2`) plus
-  `:owner_id`, and optional `:derived_from_id` / `:derived_from_version`.
+  `attrs` are the campaign's live dependencies (see `Snapshot.build/2`) plus `:owner`
+  (or the legacy `:owner_id`), and optional `:derived_from_id` / `:derived_from_version`.
   """
   def publish_campaign(attrs, opts \\ []) do
     attrs = Map.new(attrs)
@@ -359,18 +392,58 @@ defmodule Polyphony.Library do
     snapshot =
       Snapshot.build(attrs, include_proposed: Keyword.get(opts, :include_proposed, false))
 
+    # A snapshot descends from the campaign it froze. Recorded structurally rather than
+    # only inside the payload, so "has this been published?" is an indexed read like
+    # every other provenance question (§3.1d) — and so a republish groups with the
+    # earlier one instead of looking like an unrelated story.
+    campaign_id = Map.get(attrs, :derived_from_id) || live_campaign_id(attrs, opts)
+
     put(
       %{
-        owner_id: Map.fetch!(attrs, :owner_id),
+        # `:owner` or the legacy `:owner_id`, matching `put/2` — the campaign screen
+        # passes the former, and demanding the latter meant the Publish button raised.
+        owner: Map.get(attrs, :owner) || Map.fetch!(attrs, :owner_id),
         kind: "campaign",
         visibility: Keyword.get(opts, :visibility, "public"),
         frozen: true,
-        derived_from_id: Map.get(attrs, :derived_from_id),
+        derived_from_id: campaign_id,
         derived_from_version: Map.get(attrs, :derived_from_version),
+        root_id: campaign_id && root_id_of(campaign_id, opts),
         payload: snapshot
       },
       opts
     )
+  end
+
+  # `campaign_id` is a library id when the snapshot was built from a stored campaign and
+  # an arbitrary string when it wasn't — an export, a scene-scoped id, a fixture. Only
+  # the former is a real ancestor, and asking the database about the latter is a cast
+  # error rather than a miss, so the shape is checked before the lookup.
+  defp live_campaign_id(attrs, opts) do
+    with id when not is_nil(id) <- library_id(Map.get(attrs, :campaign_id)),
+         %LibraryEntry{frozen: false} = entry <- get(id, opts) do
+      entry.id
+    else
+      _ -> nil
+    end
+  end
+
+  defp library_id(id) when is_integer(id), do: id
+
+  defp library_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {n, ""} -> n
+      _ -> nil
+    end
+  end
+
+  defp library_id(_), do: nil
+
+  defp root_id_of(id, opts) do
+    case get(id, opts) do
+      nil -> nil
+      entry -> root_of(entry)
+    end
   end
 
   # ── Copy-on-instantiate / copy-on-fork ───────────────────────────────────────

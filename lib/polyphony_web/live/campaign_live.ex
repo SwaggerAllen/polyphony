@@ -23,6 +23,7 @@ defmodule PolyphonyWeb.CampaignLive do
   }
 
   alias Polyphony.Events.SceneOpened
+  alias Polyphony.Campaigns
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Publication
   alias Polyphony.Publication.Preflight
@@ -49,7 +50,10 @@ defmodule PolyphonyWeb.CampaignLive do
   def mount(%{"id" => id}, _session, socket) do
     entry = Library.get(id)
 
-    if entry && entry.kind == "campaign" do
+    # A frozen snapshot shares the `"campaign"` kind and nothing else — opening the
+    # editor on one would try to read a cast and a premise off a `Library.Snapshot`.
+    # It's a readable thing, so it goes where reading happens.
+    if entry && Campaigns.campaign?(entry) do
       {:ok,
        socket
        |> assign(
@@ -73,9 +77,19 @@ defmodule PolyphonyWeb.CampaignLive do
        )
        |> load()}
     else
-      {:ok, socket |> put_flash(:error, "Campaign not found.") |> redirect(to: ~p"/library")}
+      redirect_missing(socket, entry)
     end
   end
+
+  defp redirect_missing(socket, %{frozen: true} = entry),
+    do:
+      {:ok,
+       socket
+       |> put_flash(:info, "That's a published copy — here's how it reads.")
+       |> redirect(to: ~p"/browse?#{[story: entry.id]}")}
+
+  defp redirect_missing(socket, _entry),
+    do: {:ok, socket |> put_flash(:error, "Campaign not found.") |> redirect(to: ~p"/library")}
 
   # The tab lives in the URL, so it's linkable, survives a reload, and back works
   # between sections of a screen that used to be one long scroll.

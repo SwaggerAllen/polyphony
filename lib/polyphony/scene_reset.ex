@@ -134,8 +134,13 @@ defmodule Polyphony.SceneReset do
 
   # A campaign payload carries the scene ids it opened. Those streams are gone, so
   # the list has to go too or the overview links into nothing.
+  #
+  # **Frozen snapshots are left alone.** They share the `"campaign"` kind, but their
+  # `scenes` is a frozen record of what was published rather than a link into a live
+  # stream — blanking it would empty the contents list and the reading position of
+  # every reader who has one, to fix a dangling link that isn't there.
   defp clear_campaign_scenes! do
-    from(e in LibraryEntry, where: e.kind == "campaign")
+    from(e in LibraryEntry, where: e.kind == "campaign" and e.frozen == false)
     |> Repo.all()
     |> Enum.count(fn entry ->
       case Library.payload(entry) do

@@ -39,13 +39,31 @@ defmodule Polyphony.Campaigns do
   @spec kind() :: String.t()
   def kind, do: @kind
 
-  @doc "Every campaign owned by `owner`, newest first (the library's own order)."
+  @doc """
+  Every campaign owned by `owner`, newest first (the library's own order).
+
+  **Published snapshots are excluded.** They share the `"campaign"` kind because they
+  share a table, and nothing else: a snapshot can't be played, finished, cast or
+  reviewed, and its payload is a `Library.Snapshot` with none of a campaign's fields.
+  Handing one to anything in this module used to raise — `Snapshot` is a struct, so
+  `payload[:scenes]` has no `Access` to go through — which meant publishing anything
+  took the library down.
+  """
   @spec list(term(), keyword()) :: [map()]
   def list(owner, opts \\ []) do
     owner
     |> Library.list_for_owner(opts)
-    |> Enum.filter(&(&1.kind == @kind))
+    |> Enum.filter(&campaign?/1)
   end
+
+  @doc """
+  Is this library entry a campaign somebody is working on, rather than a frozen copy
+  of one? The one place the distinction is made, so callers stop inferring it from
+  `kind`.
+  """
+  @spec campaign?(map()) :: boolean()
+  def campaign?(%{kind: @kind} = entry), do: not Library.snapshot?(entry)
+  def campaign?(_entry), do: false
 
   @doc """
   Where a campaign is in its life.
@@ -59,10 +77,14 @@ defmodule Polyphony.Campaigns do
   @spec status(map() | nil) :: status()
   def status(nil), do: :unstarted
 
+  # `Map.get/2` rather than `payload[...]`: the latter needs `Access`, which a struct
+  # doesn't implement, so a payload of an unexpected shape raised instead of answering.
+  # Defence in depth — `list/2` already keeps snapshots out — but a lifecycle read is
+  # exactly the kind of thing that gets called from somewhere new.
   def status(payload) do
     cond do
-      payload[:finished_at] -> :finished
-      (payload[:scenes] || []) != [] -> :playing
+      Map.get(payload, :finished_at) -> :finished
+      (Map.get(payload, :scenes) || []) != [] -> :playing
       true -> :unstarted
     end
   end
@@ -109,12 +131,18 @@ defmodule Polyphony.Campaigns do
   will stop them.
   """
   @spec pending_review(map(), keyword()) :: non_neg_integer()
-  def pending_review(entry, opts \\ []) do
+  def pending_review(entry, opts \\ [])
+
+  # Nothing is ever waiting on a frozen copy: it has no cast to propose about and no
+  # next scene to gate.
+  def pending_review(%{frozen: true}, _opts), do: 0
+
+  def pending_review(entry, opts) do
     repo = Keyword.get(opts, :repo, Repo)
     payload = Library.payload(entry) || %{}
 
     cast_count =
-      (payload[:character_ids] || [])
+      (Map.get(payload, :character_ids) || [])
       |> Enum.uniq()
       |> Enum.map(&length(ArcEntry.list_proposed(repo, &1)))
       |> Enum.sum()
@@ -134,17 +162,26 @@ defmodule Polyphony.Campaigns do
   def by_character(owner, opts \\ []) do
     for campaign <- list(owner, opts),
         payload = Library.payload(campaign) || %{},
-        id <- payload[:character_ids] || [],
+        id <- Map.get(payload, :character_ids) || [],
         into: %{},
         do: {to_string(id), campaign}
   end
 
-  @doc "A campaign's name, or the placeholder the library shows for an unnamed one."
+  @doc """
+  A campaign's name, or the placeholder the library shows for an unnamed one.
+
+  A frozen snapshot has no name of its own and takes its world's, so it's routed to
+  the read that knows that rather than rendering as *Untitled campaign* over a story
+  that plainly has a title.
+  """
   @spec name(map()) :: String.t()
   def name(entry) do
-    case Library.payload(entry) do
-      %{name: n} when is_binary(n) and n != "" -> n
-      _ -> "Untitled campaign"
+    cond do
+      Library.snapshot?(entry) -> Polyphony.Reading.Session.title(Library.payload(entry))
+      true -> named(Library.payload(entry))
     end
   end
+
+  defp named(%{name: n}) when is_binary(n) and n != "", do: n
+  defp named(_payload), do: "Untitled campaign"
 end

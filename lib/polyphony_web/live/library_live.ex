@@ -85,7 +85,7 @@ defmodule PolyphonyWeb.LibraryLive do
     by_id = Map.new(entries, &{&1.id, &1})
 
     entries
-    |> Enum.filter(&(&1.kind == "campaign"))
+    |> Enum.filter(&Campaigns.campaign?/1)
     |> Enum.map(&campaign_row(&1, by_id))
     # The open one is what you came back for, so it's first; the one you never opened
     # is last, because it's the least likely thing you're looking for.
@@ -107,13 +107,19 @@ defmodule PolyphonyWeb.LibraryLive do
       named?: named?(payload),
       status: status,
       status_label: Campaigns.status_label(status),
-      published?: entry.visibility == "public" and entry.frozen,
+      # Publishing freezes a *copy*, so the campaign here is still live and playable —
+      # what's published is a separate entry descended from it (§3.1d).
+      published?: Library.published?(entry),
       world: world_name(by_id, payload),
       people: length(Map.get(payload, :character_ids) || []),
       scenes: length(Map.get(payload, :scenes) || []),
       premise: blank_to_nil(Map.get(payload, :premise)),
       pending: Campaigns.pending_review(entry),
-      copies: Library.copy_count(entry.id)
+      copies:
+        entry.id
+        |> Library.publications_of()
+        |> Enum.map(&Library.copy_count(&1.id))
+        |> Enum.sum()
     }
   end
 
@@ -141,7 +147,7 @@ defmodule PolyphonyWeb.LibraryLive do
 
   defp attached_bibles(entries) do
     for entry <- entries,
-        entry.kind == "campaign",
+        Campaigns.campaign?(entry),
         id = to_int(Map.get(Library.payload(entry) || %{}, :bible_id)),
         into: MapSet.new(),
         do: id
