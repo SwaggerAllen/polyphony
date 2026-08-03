@@ -11,11 +11,16 @@ defmodule Polyphony.Authoring.EffectiveSheet do
 
     * `:discovery` → **union**: append (a new fact, or into `initial_knowledge`).
     * `:revision`  → **override**: replace the named scalar field.
+    * `:release`   → **open the line that gave**. `BoundaryGate` resolves a conditional
+      boundary scene-locally from canon; a canon `:release` makes it permanent, which
+      is the distinction the design draws — the gate resolved it in play, review is
+      where it stops being scene-local.
 
   Proposed and retracted entries are ignored — only the reviewed canon applies.
   """
 
   alias Polyphony.Authoring.{CharacterSheet, ArcEntry}
+  alias Polyphony.Authoring.CharacterSheet.Boundary
 
   @overridable_scalars ~w(premise appearance voice temperament backstory)
 
@@ -26,6 +31,17 @@ defmodule Polyphony.Authoring.EffectiveSheet do
     |> Enum.filter(&(&1.status == :canon))
     |> Enum.sort_by(&(&1.beat || 0))
     |> Enum.reduce(sheet, &apply_entry/2)
+  end
+
+  # A line gave, permanently. Matched on the topic the extractor named; an unmatched
+  # topic is a no-op rather than a crash, because a retitled boundary must not take the
+  # sheet down with it.
+  defp apply_entry(%ArcEntry{kind: :release, released_topic: topic}, sheet)
+       when is_binary(topic) and topic != "" do
+    %CharacterSheet{
+      sheet
+      | boundaries: Enum.map(sheet.boundaries || [], &release_if(&1, topic))
+    }
   end
 
   # Revision of a known scalar field → override.
@@ -50,4 +66,10 @@ defmodule Polyphony.Authoring.EffectiveSheet do
   # Anything else (e.g. a revision naming an unknown field) is left as-is rather
   # than silently corrupting the sheet.
   defp apply_entry(%ArcEntry{}, sheet), do: sheet
+
+  defp release_if(%Boundary{topic: t} = b, topic) do
+    if normalize(t) == normalize(topic), do: %Boundary{b | stance: :open}, else: b
+  end
+
+  defp normalize(s), do: s |> to_string() |> String.trim() |> String.downcase()
 end

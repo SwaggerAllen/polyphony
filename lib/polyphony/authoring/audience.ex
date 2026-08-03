@@ -46,21 +46,32 @@ defmodule Polyphony.Authoring.Audience do
   into them. That is why locations, when they exist, are a third kind of entry in the
   same list rather than a new mechanism.
 
-  ## What isn't here
+  ## Whoever was there
 
-  **"Whoever was there"** — the people in the scene a fact came from. It needs a
-  source scene, and nothing that carries an audience has one yet: authored canon has
-  no originating scene, and arc entries (which do) don't carry audiences. It goes in
-  with audiences on arc, not before, because a row that can never resolve is worse
-  than an absent one.
+  `scene: true` resolves to the cast of the scene the fact came from. It only means
+  anything where there *is* such a scene, which is why it appears on **arc** entries
+  and not on authored canon — a world's starting canon has no originating scene, and a
+  row that can never resolve is worse than an absent one. Callers pass the members
+  through `opts[:scene_members]`; without them it resolves to nobody, default-deny.
+
+  ## What still isn't here
+
+  **Locations.** *Anyone who's been to the Ninth Gate* is an audience like any other,
+  and the design checked the shape against this component: it needs no change, because
+  a location audience means **belonging** — the people who live and work there — not
+  transit. It goes in the day locations do.
   """
 
   alias Polyphony.Groups
 
   @derive Jason.Encoder
-  defstruct group_ids: [], character_ids: []
+  defstruct group_ids: [], character_ids: [], scene: false
 
-  @type t :: %__MODULE__{group_ids: [String.t()], character_ids: [String.t()]}
+  @type t :: %__MODULE__{
+          group_ids: [String.t()],
+          character_ids: [String.t()],
+          scene: boolean()
+        }
 
   @doc "Nobody — the default, and usually the right answer."
   @spec empty() :: t()
@@ -69,7 +80,7 @@ defmodule Polyphony.Authoring.Audience do
   @doc "Is this audience nobody at all? (Before resolution — a named group may be empty too.)"
   @spec empty?(t() | nil) :: boolean()
   def empty?(nil), do: true
-  def empty?(%__MODULE__{group_ids: [], character_ids: []}), do: true
+  def empty?(%__MODULE__{group_ids: [], character_ids: [], scene: false}), do: true
   def empty?(%__MODULE__{}), do: false
 
   @doc """
@@ -85,9 +96,14 @@ defmodule Polyphony.Authoring.Audience do
   def from(%{} = m) do
     %__MODULE__{
       group_ids: ids(m["group_ids"] || m[:group_ids]),
-      character_ids: ids(m["character_ids"] || m[:character_ids])
+      character_ids: ids(m["character_ids"] || m[:character_ids]),
+      scene: (m["scene"] || m[:scene]) in [true, "true"]
     }
   end
+
+  @doc "Toggle *whoever was there* — the cast of the scene the fact came from."
+  @spec toggle_scene(t()) :: t()
+  def toggle_scene(%__MODULE__{} = a), do: %__MODULE__{a | scene: not a.scene}
 
   defp ids(nil), do: []
   defp ids(list) when is_list(list), do: list |> Enum.map(&to_string/1) |> Enum.uniq()
@@ -141,9 +157,13 @@ defmodule Polyphony.Authoring.Audience do
 
   def resolve(%__MODULE__{} = a, opts) do
     from_groups = Enum.flat_map(a.group_ids, &Groups.member_ids(&1, repo_opts(opts)))
+    from_scene = if a.scene, do: scene_members(opts), else: []
 
-    (owner_list(opts) ++ a.character_ids ++ from_groups) |> Enum.uniq()
+    (owner_list(opts) ++ a.character_ids ++ from_groups ++ from_scene) |> Enum.uniq()
   end
+
+  defp scene_members(opts),
+    do: opts |> Keyword.get(:scene_members, []) |> Enum.map(&to_string/1)
 
   @doc """
   Does `character_id` start out knowing this?
@@ -180,11 +200,14 @@ defmodule Polyphony.Authoring.Audience do
   def summary(nil, _label_for), do: "nobody knows"
 
   def summary(%__MODULE__{} = a, label_for) do
+    scene_label = if a.scene, do: ["whoever was there"], else: []
+
     labels =
-      for id <- a.group_ids ++ a.character_ids,
-          label = label_for.(id),
-          is_binary(label) and label != "",
-          do: label
+      scene_label ++
+        for id <- a.group_ids ++ a.character_ids,
+            label = label_for.(id),
+            is_binary(label) and label != "",
+            do: label
 
     case labels do
       [] -> "nobody knows"

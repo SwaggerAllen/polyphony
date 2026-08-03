@@ -55,7 +55,12 @@ defmodule Polyphony.LLM.Mock do
 
     Jason.encode!(%{
       entries: [
-        %{kind: "discovery", statement: capitalize(lorem(seed, 5)) <> ".", sheet_field: nil}
+        %{
+          kind: "discovery",
+          statement: capitalize(lorem(seed, 5)) <> ".",
+          sheet_field: nil,
+          reason: capitalize(lorem(seed + 1, 6)) <> "."
+        }
       ]
     })
   end
@@ -66,7 +71,13 @@ defmodule Polyphony.LLM.Mock do
 
     Jason.encode!(%{
       entries: [
-        %{kind: "discovery", scope: "global", statement: capitalize(lorem(seed, 5)) <> "."}
+        %{
+          kind: "discovery",
+          scope: "global",
+          known_by: "everyone",
+          statement: capitalize(lorem(seed, 5)) <> ".",
+          reason: capitalize(lorem(seed + 1, 6)) <> "."
+        }
       ]
     })
   end

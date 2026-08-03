@@ -10,7 +10,7 @@ defmodule Polyphony.Authoring.Effective do
   """
 
   alias Polyphony.Repo
-  alias Polyphony.ReadModels.{ArcEntry, SceneSummary}
+  alias Polyphony.ReadModels.{ArcEntry, Membership, SceneSummary}
   alias Polyphony.Authoring.{CharacterSheet, WorldBible, EffectiveSheet, EffectiveWorldBible}
 
   @doc "The character's sheet with their canon arc applied."
@@ -86,6 +86,14 @@ defmodule Polyphony.Authoring.Effective do
   def world_bible(raw, campaign_id, reach \\ :all, repo \\ Repo) do
     bible = raw || %WorldBible{}
     entries = if campaign_id, do: ArcEntry.canon_for_world(repo, campaign_id), else: []
-    EffectiveWorldBible.apply(bible, entries, reach)
+
+    EffectiveWorldBible.apply(bible, entries, reach,
+      # A *whoever was there* world fact resolves against the cast of the scene it came
+      # from. Fixed history, so it is safe to expand once at fold time.
+      scene_members: fn
+        nil -> []
+        scene_id -> Membership.all_members(repo, scene_id)
+      end
+    )
   end
 end

@@ -93,6 +93,25 @@ defmodule Polyphony.ReadModels.Membership do
   end
 
   @doc """
+  Everyone who was ever in `scene_id` — the cast a *whoever was there* audience means.
+
+  Ever, not at a beat: someone who walked in for the last two beats was there when it
+  happened, and the audience is about having been present at all.
+  """
+  def all_members(repo, scene_id) do
+    sid = to_string(scene_id)
+
+    repo.all(
+      from(m in __MODULE__,
+        where: m.scene_id == ^sid,
+        group_by: m.character_id,
+        order_by: [asc: min(m.entered_beat)],
+        select: m.character_id
+      )
+    )
+  end
+
+  @doc """
   The scenes a character has ever been in, distinct and in first-entry order.
 
   Distinct because re-entry opens a second interval: someone who leaves a scene and

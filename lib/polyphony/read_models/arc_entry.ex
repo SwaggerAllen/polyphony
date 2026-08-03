@@ -23,6 +23,10 @@ defmodule Polyphony.ReadModels.ArcEntry do
     field(:kind, :string)
     field(:sheet_field, :string)
     field(:statement, :string)
+    # The "Because" line every proposal carries (`ux/polyphony-arc.html` §02).
+    field(:reason, :string)
+    # `:release` only — which line gave.
+    field(:released_topic, :string)
     field(:status, :string, default: "proposed")
     field(:promotable, :boolean, default: true)
     field(:beat, :integer)
@@ -30,6 +34,9 @@ defmodule Polyphony.ReadModels.ArcEntry do
     # World arc only (null for character rows):
     field(:scope, :string)
     field(:location_id, :string)
+    field(:concealed, :boolean, default: false)
+    # Encoded `Polyphony.Authoring.Audience` — who starts out knowing a world fact.
+    field(:audience, :binary)
     timestamps(type: :naive_datetime_usec)
   end
 
@@ -43,6 +50,8 @@ defmodule Polyphony.ReadModels.ArcEntry do
       kind: to_string(entry.kind),
       sheet_field: entry.sheet_field,
       statement: entry.statement,
+      reason: entry.reason,
+      released_topic: entry.released_topic,
       status: to_string(entry.status || :proposed),
       promotable: entry.promotable,
       beat: entry.beat,
@@ -57,12 +66,15 @@ defmodule Polyphony.ReadModels.ArcEntry do
       subject_type: "world",
       kind: to_string(entry.kind),
       statement: entry.statement,
+      reason: entry.reason,
       status: to_string(entry.status || :proposed),
       promotable: entry.promotable,
       beat: entry.beat,
       source_scene_id: entry.source_scene_id && to_string(entry.source_scene_id),
       scope: to_string(entry.scope || :global),
-      location_id: entry.location_id && to_string(entry.location_id)
+      location_id: entry.location_id && to_string(entry.location_id),
+      concealed: entry.concealed,
+      audience: entry.audience && :erlang.term_to_binary(entry.audience)
     })
   end
 
@@ -115,8 +127,52 @@ defmodule Polyphony.ReadModels.ArcEntry do
   @doc "Promote a proposed entry to canon (the review gate's accept)."
   def accept(repo, id), do: set_status(repo, id, "canon")
 
+  @doc """
+  Accept every proposal for a subject at once — the *Accept all N* the design calls
+  the intended fast path, and the only one.
+
+  The gate exists to keep state consistent, not to force careful reading: one tap is
+  already as cheap as an escape hatch gets, which is why there isn't a second one.
+  Returns how many were promoted.
+  """
+  def accept_all(repo, subject_id, subject_type \\ "character") do
+    sid = to_string(subject_id)
+
+    {count, _} =
+      repo.update_all(
+        from(a in __MODULE__,
+          where:
+            a.subject_id == ^sid and a.subject_type == ^subject_type and a.status == "proposed"
+        ),
+        set: [status: "canon"]
+      )
+
+    count
+  end
+
   @doc "Retract a proposed entry (review's reject) — it never reaches canon."
   def reject(repo, id), do: set_status(repo, id, "retracted")
+
+  @doc """
+  Take back something already accepted.
+
+  A real action rather than accept-or-reject at review time only: something you
+  accepted in March can turn out wrong in June (`ux/polyphony-arc.html` §04). The same
+  transition as a reject — canon stops being canon — which is why it's the same write.
+  """
+  def retract(repo, id), do: set_status(repo, id, "retracted")
+
+  @doc "Canon entries for a subject, newest last — what a sheet's provenance reads."
+  def list_canon(repo, subject_id, subject_type \\ "character") do
+    sid = to_string(subject_id)
+
+    repo.all(
+      from(a in __MODULE__,
+        where: a.subject_id == ^sid and a.subject_type == ^subject_type and a.status == "canon",
+        order_by: [asc: a.inserted_at]
+      )
+    )
+  end
 
   @doc "Correct a proposal before review (statement, and for world arc `scope`)."
   def edit(repo, id, attrs) do
@@ -127,6 +183,19 @@ defmodule Polyphony.ReadModels.ArcEntry do
 
     repo.get!(__MODULE__, id)
     |> Ecto.Changeset.change(changes)
+    |> repo.update!()
+  end
+
+  @doc """
+  Re-file a row under a different subject type.
+
+  Groups file their own arc under `"group"` (`Authoring.GroupArc`), and `put/3` writes
+  characters — so the fan-out corrects it here rather than duplicating the whole insert
+  for one column.
+  """
+  def set_subject_type(repo, id, subject_type) do
+    repo.get!(__MODULE__, id)
+    |> Ecto.Changeset.change(subject_type: to_string(subject_type))
     |> repo.update!()
   end
 
@@ -143,6 +212,8 @@ defmodule Polyphony.ReadModels.ArcEntry do
       kind: safe_atom(row.kind),
       sheet_field: row.sheet_field,
       statement: row.statement,
+      reason: row.reason,
+      released_topic: row.released_topic,
       beat: row.beat,
       source_scene_id: row.source_scene_id,
       status: safe_atom(row.status),
@@ -154,14 +225,20 @@ defmodule Polyphony.ReadModels.ArcEntry do
     %WorldArcEntry{
       kind: safe_atom(row.kind),
       statement: row.statement,
+      reason: row.reason,
       scope: safe_atom(row.scope || "global"),
       location_id: row.location_id,
+      concealed: row.concealed,
+      audience: decode_audience(row.audience),
       beat: row.beat,
       source_scene_id: row.source_scene_id,
       status: safe_atom(row.status),
       promotable: row.promotable
     }
   end
+
+  defp decode_audience(nil), do: nil
+  defp decode_audience(bin), do: :erlang.binary_to_term(bin, [:safe])
 
   defp safe_atom(nil), do: nil
   defp safe_atom(s), do: String.to_existing_atom(s)
