@@ -333,13 +333,13 @@ The current LiveView is the first-cut UI; the redesign is speced in `ux/` (mocks
   foundation is built** — the kit's *tokens and classes* are now derived from `ux/` by
   `mix kit.port` rather than hand-copied, and its *markup* lives in `PolyphonyWeb.Kit` as
   function components. Detail in `completed-roadmap.md`. **Remaining: the screens.** Each
-  one ports by calling those components instead of re-deriving class strings. The kit is
-  loaded last and wins the class names it shares with the first-cut system, so **unported
-  screens look wrong until they're ported** — an accepted cost, since the app has no users
-  until the rebuild lands, and the alternative was a stylesheet scoped to coexist with the
-  styles it replaces. Screens still on the first-cut UI: play, campaign, sheet editor, world
-  bible, arc review, library, browse, settings, admin. The backend prerequisites are the
-  `backend-backlog.md` immediate milestone.
+  one ports by calling those components instead of re-deriving class strings. The first-cut
+  design system has been **deleted**, so **unported screens render unstyled until they're
+  rebuilt** — an accepted cost, since the app has no users until the rebuild lands. Their
+  LiveViews and tests stay until each replacement lands: they're the record of how a screen
+  drives the domain, and the behaviour the new one must still satisfy. Screens left to
+  rebuild: play, campaign, sheet editor, world bible, arc review, library, browse, settings,
+  admin. The backend prerequisites are the `backend-backlog.md` immediate milestone.
 - **Build the play view id-native (finishes the identity migration).** ✅ **Done.** The
   character-identity mint-flip (`backend-backlog.md §5.2`, phases 2b-emit + 3 + 4) landed
   here rather than overhaul-then-discard the current LiveView: characters enter by library

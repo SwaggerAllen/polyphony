@@ -31,15 +31,18 @@ and its bare `body`/`h2` rules would leak into every page). Everything above tha
 byte for byte, comments included, and `KitPortTest` asserts exactly that. The app's
 stylesheet *is* the design's; a class means the same thing in both.
 
-`app.css` is an ordered manifest — Tailwind, then `legacy.css` (the first-cut design
-system), then the kit — and the order is load-bearing: every rule is a plain class selector,
-so the kit wins the names it shares (`.row`, `.btn`, `.dim`, `.field`, `.dot`) and any
-utility it overlaps with, which is the precedence the mocks have. **Unported screens are
-expected to look wrong until they're ported** — an explicit author decision, since the app
-has no users until the rebuild lands. The kit was briefly scoped to a `.fr` root so the two
-systems could coexist; that bought compatibility nobody needed at the cost of a stylesheet
-that no longer matched the design, and it's gone. `legacy.css` shrinks as screens port and
-the last one takes the file.
+`app.css` is an ordered manifest — Tailwind, then the kit — and the order is load-bearing:
+the kit is last so it outranks a utility it overlaps with, the precedence the mocks have.
+
+Two compatibility layers were built and then removed, both on the same author call — that
+the app has no users until the rebuild lands, so nothing should be designed around unported
+screens continuing to work. First the kit was scoped to a `.fr` root so it could coexist
+with the first-cut design system; that bought compatibility nobody needed at the cost of a
+stylesheet that no longer matched the design. Then the first-cut system itself was
+**deleted**. Screens that haven't been ported now render unstyled, which is the honest
+state of a rebuild in progress. Their LiveViews and tests are kept — they're the record of
+how each screen drives the domain, and the specification the replacement has to satisfy —
+and each goes when its replacement lands.
 
 ### The kit's markup is `PolyphonyWeb.Kit`
 The other half of the port: the kit's structural idioms as function components, lifted from

@@ -114,11 +114,11 @@ for it.
   — a verbatim copy minus the kit's mock chrome, never hand-edited (a test fails if it
   drifts) — and the kit's markup lives in `PolyphonyWeb.Kit` as function components. A
   ported screen calls those inside a `Kit.frame/1`, which sets the register and theme the
-  tokens key on. `app.css` is an ordered manifest (Tailwind → first-cut system → kit) and
-  the kit is last, so it wins the class names it shares with the old styles. **Unported
-  screens are expected to look wrong in the meantime** — nobody is using the app until the
-  rebuild lands, and that's the price of the shipped CSS matching the design exactly.
-  Review components at `/storybook`, and give any new one a story — the suite requires it.
+  tokens key on. `app.css` is an ordered manifest (Tailwind → kit) and the kit is last, so
+  it outranks a utility it overlaps with — the precedence the mocks have. The first-cut
+  design system is **deleted**, so **screens that haven't been ported render unstyled**;
+  that's deliberate, the app has no users until the rebuild lands. Review components at
+  `/storybook`, and give any new one a story — the suite requires it.
 
 ## Identity & numbering (easy to get wrong)
 

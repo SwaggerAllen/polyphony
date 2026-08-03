@@ -35,16 +35,17 @@ The redesign speced in `ux/` is being ported screen by screen. Two files carry i
   ported screen calls these; it doesn't re-derive class strings, and it defines nothing
   screen-local the kit already provides.
 
-`app.css` is an ordered manifest — Tailwind, then `legacy.css` (the first-cut design
-system), then the kit — and the order is load-bearing: every rule is a plain class selector,
-so the kit wins the names it shares (`.row`, `.btn`, `.dim`, `.field`, `.dot`) and any
-utility it overlaps with. That's the precedence the mocks have, since they link the kit
-after the Tailwind CDN.
+`app.css` is an ordered manifest — Tailwind, then the kit — and the order is load-bearing:
+the kit is last so it outranks a utility it overlaps with, which is the precedence the mocks
+have (they link the kit after the Tailwind CDN).
 
-**Screens that haven't been ported will look wrong until they are.** That's deliberate: the
-app has no users until the rebuild lands, so the shipped CSS matches the design exactly
-rather than being scoped to coexist with the styles it replaces. `legacy.css` shrinks as
-screens port, and the last one takes the file.
+**The first-cut design system is gone**, and with it any styling for the screens that
+haven't been ported: they render as unstyled markup until each is rebuilt from the kit. That
+is deliberate rather than an oversight — the app has no users until the rebuild lands, so
+there's no reason to carry 400 lines of superseded CSS, and no reason for the shipped
+stylesheet to be anything other than the design file. The screens themselves and their
+tests **are** kept, as the record of how each one drives the domain; each goes when its
+replacement lands.
 
 Browse the components at **`/storybook`** (`mix phx.server`, then
 <http://localhost:4000/storybook>) — one page per component with its states. It's on in dev
@@ -61,7 +62,7 @@ components.
   Floki, so that's the only test-only web dep.
 - **Real asset pipeline, committed outputs.** Source lives in `assets/` — `js/app.js`
   (LiveSocket + an autoscroll hook, importing `phoenix`/`phoenix_live_view` from `deps/`)
-  and `css/app.css` (Tailwind base/utilities + the mobile-first dark design system).
+  and `css/app.css` (a manifest: Tailwind, then the ported design kit).
   esbuild bundles the JS and Tailwind builds the CSS via standalone binaries (no Node.js),
   fetched by `mix assets.setup`. The **built outputs** (`priv/static/assets/app.{js,css}`)
   are committed, so the app still compiles and serves with no build step — offline and in

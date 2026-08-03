@@ -80,14 +80,15 @@ defmodule PolyphonyWeb.KitPortTest do
     assert length(kit_classes) > 50
   end
 
-  test "the kit is loaded last, so it wins the names it shares" do
+  test "the kit is loaded last, and is the only design system left" do
     app = File.read!("assets/css/app.css")
+    imports = app |> then(&Regex.scan(~r/@import "\.\/(.+)\.css"/, &1)) |> Enum.map(&List.last/1)
 
     # app.css is an ordered manifest and the order is the point: Tailwind, then the
-    # first-cut system, then the kit. Reorder it and unported screens quietly take
-    # their old styling back while the ported ones lose theirs.
-    assert [_tailwind, _legacy, _kit] = imports = Regex.scan(~r/@import "\.\/(.+)\.css"/, app)
-    assert Enum.map(imports, &List.last/1) == ["tailwind-full", "legacy", "kit"]
+    # kit, so the kit outranks a utility it overlaps with. A third entry means a
+    # second design system came back.
+    assert imports == ["tailwind-full", "kit"]
+    refute File.exists?("assets/css/legacy.css")
   end
 
   defp classes(css), do: Regex.scan(~r/\.[a-z][a-z0-9-]*/, css) |> List.flatten() |> Enum.uniq()

@@ -1,15 +1,21 @@
 /* The application stylesheet — a build manifest. Order is the whole content of this
-   file, and it is load-bearing: every rule here is a plain class selector, so where
-   two stylesheets name the same class the later one wins.
+   file, and it is load-bearing: every rule is a plain class selector, so where two
+   stylesheets name the same class the later one wins.
  *
- *   1. Tailwind      — preflight, then the utilities the templates reference.
- *   2. legacy.css    — the first-cut design system, still serving unported screens.
- *   3. kit.css       — the design kit, generated from ux/polyphony-kit.css.
+ *   1. Tailwind — preflight, then the utilities the templates reference.
+ *   2. kit.css  — the design kit, generated from ux/polyphony-kit.css.
  *
- * The kit is last so it wins the names it shares with the first-cut system, and so
- * it wins a utility it overlaps with — which is the precedence the mocks have, since
- * they link the kit after the Tailwind CDN. Rebuild with `mix assets.build` after
- * touching any of them; `mix kit.port` regenerates kit.css from the design file. */
+ * The kit is last so it wins a utility it overlaps with, which is the precedence the
+ * mocks have: they link the kit after the Tailwind CDN. That's also why Tailwind's
+ * directives live in their own file — `@import` has to lead a stylesheet, so a file
+ * can't ask for anything *after* its own `@tailwind` lines.
+ *
+ * There is no third layer. The first-cut design system that used to sit here is gone
+ * (see docs/frontend.md): screens are being rebuilt from the kit, and the ones that
+ * haven't been yet render unstyled in the meantime — deliberately, since the app has
+ * no users until the rebuild lands.
+ *
+ * Rebuild with `mix assets.build` after touching either file; `mix kit.port`
+ * regenerates kit.css from the design. */
 @import "./tailwind-full.css";
-@import "./legacy.css";
 @import "./kit.css";
