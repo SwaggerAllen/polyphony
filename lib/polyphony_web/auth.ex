@@ -49,13 +49,30 @@ defmodule PolyphonyWeb.Auth do
     assign(conn, :current_user, user)
   end
 
-  @doc "Log `user` in: store the id, renew the session, redirect home."
+  @doc """
+  Log `user` in: store the id, renew the session, redirect home.
+
+  Signing in **cancels a pending deletion**, which is what makes *sign back in within
+  30 days and none of this happens* a promise rather than a hope. It's done here rather
+  than on a settings screen because coming back is the act that means it.
+  """
   def log_in_user(conn, user) do
+    {user, note} = un_delete(user)
+
     conn
     |> renew_session()
     |> put_session(:user_id, user.id)
-    |> put_flash(:info, "Signed in as @#{user.username}.")
+    |> put_flash(:info, "Signed in as @#{user.username}.#{note}")
     |> redirect(to: ~p"/library")
+  end
+
+  defp un_delete(%{deletion_requested_at: nil} = user), do: {user, ""}
+
+  defp un_delete(user) do
+    case Accounts.cancel_deletion(user) do
+      {:ok, restored} -> {restored, " Your account isn't being deleted any more."}
+      _ -> {user, ""}
+    end
   end
 
   @doc "Log out: drop the session."

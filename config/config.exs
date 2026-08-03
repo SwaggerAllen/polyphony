@@ -45,7 +45,11 @@ config :polyphony, Oban,
     # The recovery window is only a number rather than a claim if something actually
     # purges on schedule (§2.13). Daily is enough for a 30-day window, and the job is
     # idempotent, so a missed run catches up on the next one.
-    {Oban.Plugins.Cron, crontab: [{"0 4 * * *", Polyphony.Jobs.PurgeTrash}]}
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"0 4 * * *", Polyphony.Jobs.PurgeTrash},
+       {"20 4 * * *", Polyphony.Jobs.PurgeAccounts}
+     ]}
   ]
 
 # LLM provider config (§2, §3). DeepInfra direct by default; the workhorse MoE

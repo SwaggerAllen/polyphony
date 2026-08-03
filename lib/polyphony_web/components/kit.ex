@@ -353,6 +353,12 @@ defmodule PolyphonyWeb.Kit do
 
   @doc "A progress bar. `fraction` is 0.0–1.0; anything outside is clamped."
   attr(:fraction, :float, required: true)
+
+  attr(:colour, :string,
+    default: nil,
+    doc: "nil for the kit's lamp; a token when it means something else"
+  )
+
   attr(:class, :string, default: nil)
 
   def bar(assigns) do
@@ -360,10 +366,15 @@ defmodule PolyphonyWeb.Kit do
 
     ~H"""
     <div class={["bar", @class]}>
-      <i style={"width:#{:erlang.float_to_binary(@pct, decimals: 1)}%"}></i>
+      <i style={bar_style(@pct, @colour)}></i>
     </div>
     """
   end
+
+  defp bar_style(pct, nil), do: "width:#{:erlang.float_to_binary(pct, decimals: 1)}%"
+
+  defp bar_style(pct, colour),
+    do: bar_style(pct, nil) <> ";background:#{colour}"
 
   @doc """
   The info affordance.

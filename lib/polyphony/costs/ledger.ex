@@ -28,6 +28,45 @@ defmodule Polyphony.Costs.Ledger do
     )
   end
 
+  @doc """
+  Spend by `user_id` since `since`, grouped by campaign — `[%{campaign_id:, amount:}]`.
+
+  `campaign_id: nil` is a real group, not a leftover: writing characters and worlds
+  costs money outside any scene, and folding it into a campaign would misattribute it.
+  """
+  def sum_by_campaign(repo, user_id, since) do
+    repo.all(
+      from(l in __MODULE__,
+        where: l.user_id == ^user_id and l.inserted_at >= ^since,
+        group_by: l.campaign_id,
+        select: %{campaign_id: l.campaign_id, amount: coalesce(sum(l.amount), 0)}
+      )
+    )
+  end
+
+  @doc """
+  What a generation has recently cost this user, on average — nil with no history.
+
+  Sampled from the most recent `limit` generations rather than all time, so the
+  estimate tracks the models they're using now rather than the ones they used in March.
+  """
+  def average_generation(repo, user_id, limit \\ 20) do
+    amounts =
+      repo.all(
+        from(l in __MODULE__,
+          where: l.user_id == ^user_id and l.kind == "generation" and l.amount > 0,
+          order_by: [desc: l.inserted_at],
+          limit: ^limit,
+          select: l.amount
+        )
+      )
+
+    case amounts do
+      [] -> nil
+      list -> div(Enum.sum(list), length(list))
+    end
+  end
+
   @doc "Total spend on `campaign_id` (lifetime)."
   def sum_for_campaign(repo, campaign_id) do
     repo.one(

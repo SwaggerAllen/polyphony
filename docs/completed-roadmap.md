@@ -558,6 +558,45 @@ Still open and recorded: the reading position resumes at the story rather than a
 scene until the front page consults it, and the library's by-campaign version grouping (the other
 half of §3.1d) isn't built.
 
+### Settings and auth, ported (`ux/polyphony-settings-auth.html`)
+Two things here were load-bearing, and the first had been a promise with nothing behind it.
+
+**A cap you can actually change** (§B5). The error copy has said *you can raise it in Settings*
+for a long time, and both ceilings lived in app config — identical for everyone, editable only by
+a deploy. Now a cap resolves **stored → opts → config → default**: `users.daily_cap` is the
+account's own number, a campaign's `spend_cap` is the story's, and a null means "the configured
+default" rather than zero, so raising the default still reaches everyone who never touched theirs.
+They protect against different things — a daily cap against a runaway loop, a lifetime one against
+a single story eating the month — so they live in different places, and each *where it went* row
+links to the campaign that owns its own.
+
+Spend is shown as **turns remaining, not a percentage**, estimated from what this account's recent
+generations actually cost: nobody knows what 86% of their budget feels like. It returns nil rather
+than guessing with no history, because a made-up number here is worse than an absent one. And
+per-campaign spend — which had never been shown anywhere, which is how one story eats a month
+unnoticed — is a list, with authoring outside any scene as its own honest row.
+
+**Leaving is a decision on a clock.** `deletion_requested_at` plus `Jobs.PurgeAccounts` on a
+nightly cron; signing in cancels it, which is what makes *sign back in within 30 days and none of
+this happens* a promise rather than a hope. A forked copy of a published story is **not** touched:
+it's theirs now, and deleting someone else's work to honour this request would be the wrong trade.
+The confirmation counts what goes rather than describing it, because "all your work" is easy to
+skim past and "three campaigns, two worlds and forty-one characters" isn't.
+
+**18+ is eligibility, not a content setting.** Unchecked ends the signup rather than limiting it,
+and the screen it ends on has no retry and no way back — a door that reopens on the same screen
+isn't a door. Two properties that were already right were pinned rather than changed: refusing
+somebody creates **no row about them** (`register/2` checks attestation before it touches the
+database) and **doesn't burn the invite**, so whoever sent it can pass it on.
+
+Sign-in is magic-link only, so *check your email* is the whole experience: both escape routes and
+the spam line before anyone needs it, and an unknown address gets the identical screen because an
+enumeration oracle is a worse trade than a moment of ambiguity.
+
+Still open and recorded: the mock's **signed-in-on device list** isn't built. Sessions are
+cookie-only today, so it would mean a persisted session store — a change to auth transport rather
+than a domain gap, and showing a device list backed by nothing would be worse than not showing one.
+
 ---
 
 ## Immediate milestone — the backend the frontend design needs

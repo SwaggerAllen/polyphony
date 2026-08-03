@@ -22,6 +22,12 @@ defmodule Storybook.Kit.Bar do
       %Variation{id: :part_way, attributes: %{fraction: 0.62}},
       %Variation{id: :full, attributes: %{fraction: 1.0}},
       %Variation{
+        id: :spent,
+        description:
+          "A ceiling reached means something different from progress toward one, so the colour changes to say so — the settings screen's spent state.",
+        attributes: %{fraction: 1.0, colour: "var(--pencil)"}
+      },
+      %Variation{
         id: :out_of_range,
         description: "Clamped rather than overflowing its track — a bad count never draws wrong.",
         attributes: %{fraction: 1.8}

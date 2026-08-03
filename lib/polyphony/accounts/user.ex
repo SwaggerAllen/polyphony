@@ -29,6 +29,13 @@ defmodule Polyphony.Accounts.User do
     field(:flagged_for_review_at, :naive_datetime_usec)
     # §C: account-level opt-out from proactive analysis (reactive/report access ignores it).
     field(:proactive_opt_out_at, :naive_datetime_usec)
+    # The account's own daily spend ceiling in micro-cents (§B5). Null means "use the
+    # configured default" — so a default stays a default rather than being frozen into
+    # every row the day it was introduced.
+    field(:daily_cap, :integer)
+    # Leaving is a decision on a clock, not an event: signing back in inside the window
+    # cancels it (`ux/polyphony-settings-auth.html` §04).
+    field(:deletion_requested_at, :naive_datetime_usec)
     timestamps(type: :naive_datetime_usec)
   end
 

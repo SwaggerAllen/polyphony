@@ -244,6 +244,121 @@ defmodule Polyphony.Accounts do
 
   # ── Profile / username ─────────────────────────────────────────────────────────
 
+  @doc """
+  Set this account's own daily spend ceiling, in micro-cents.
+
+  Passing `nil` puts them back on the configured default rather than on zero — the two
+  are very different answers and only one of them is a setting anybody wants.
+  """
+  @spec set_daily_cap(User.t(), integer() | nil, keyword()) ::
+          {:ok, User.t()} | {:error, Ecto.Changeset.t()}
+  def set_daily_cap(%User{} = user, cap, opts \\ []) do
+    cap = if is_integer(cap) and cap > 0, do: cap, else: nil
+
+    user
+    |> Ecto.Changeset.change(daily_cap: cap)
+    |> repo(opts).update()
+  end
+
+  # ── Leaving ──────────────────────────────────────────────────────────────────
+
+  @doc """
+  How long a deleted account waits before it really goes. The same window as the
+  library's trash (§2.13), for the same reason: the number has to mean something.
+  """
+  @spec deletion_window_days() :: pos_integer()
+  def deletion_window_days, do: 30
+
+  @doc """
+  Ask for the account to be deleted — a decision on a clock, not an event.
+
+  Nothing is destroyed here. *Sign back in within 30 days and none of this happens*,
+  which is the whole design of it: leaving in anger is common and irreversible deletion
+  of somebody's authored work is not something to do on a single tap.
+  """
+  @spec request_deletion(User.t(), keyword()) :: {:ok, User.t()} | {:error, term()}
+  def request_deletion(%User{} = user, opts \\ []) do
+    user
+    |> Ecto.Changeset.change(deletion_requested_at: now(opts))
+    |> repo(opts).update()
+  end
+
+  @doc "Change your mind. Called on sign-in too, which is what makes the promise true."
+  @spec cancel_deletion(User.t(), keyword()) :: {:ok, User.t()} | {:error, term()}
+  def cancel_deletion(user, opts \\ [])
+  def cancel_deletion(%User{deletion_requested_at: nil} = user, _opts), do: {:ok, user}
+
+  def cancel_deletion(%User{} = user, opts) do
+    user
+    |> Ecto.Changeset.change(deletion_requested_at: nil)
+    |> repo(opts).update()
+  end
+
+  @doc "Is this account on its way out, and how many days are left?"
+  @spec days_until_deletion(User.t(), keyword()) :: non_neg_integer() | nil
+  def days_until_deletion(user, opts \\ [])
+  def days_until_deletion(%User{deletion_requested_at: nil}, _opts), do: nil
+
+  def days_until_deletion(%User{deletion_requested_at: at}, opts) do
+    elapsed = NaiveDateTime.diff(now(opts), at, :second)
+    remaining = deletion_window_days() * 24 * 60 * 60 - elapsed
+
+    if remaining <= 0, do: 0, else: ceil(remaining / (24 * 60 * 60))
+  end
+
+  @doc """
+  Delete the accounts whose window has run out, and everything they own.
+
+  The half that makes the countdown a number rather than a claim — the same argument as
+  the library's trash (§2.13). Returns how many went.
+
+  A **forked copy is not touched**: it lives in the forker's library with its own root
+  (§3.1d), and deleting somebody else's work to honour this request would be the wrong
+  trade. What goes is this account's own entries, published originals included.
+  """
+  @spec purge_expired_deletions(keyword()) :: non_neg_integer()
+  def purge_expired_deletions(opts \\ []) do
+    repo = repo(opts)
+    cutoff = NaiveDateTime.add(now(opts), -deletion_window_days() * 24 * 60 * 60, :second)
+
+    import Ecto.Query
+
+    repo.all(
+      from(u in User,
+        where: not is_nil(u.deletion_requested_at) and u.deletion_requested_at < ^cutoff
+      )
+    )
+    |> Enum.reduce(0, fn user, count ->
+      case purge_account(user, opts) do
+        :ok -> count + 1
+        _ -> count
+      end
+    end)
+  end
+
+  @doc """
+  Delete one account and its library outright. Irreversible; the window is the safety.
+  """
+  @spec purge_account(User.t(), keyword()) :: :ok | {:error, term()}
+  def purge_account(%User{} = user, opts \\ []) do
+    repo = repo(opts)
+
+    Enum.each(
+      Polyphony.Library.list_for_owner(
+        Polyphony.Owner.of(user),
+        opts ++ [include_archived: true, include_deleted: true]
+      ),
+      fn entry ->
+        Polyphony.Library.purge(entry.id, opts)
+      end
+    )
+
+    repo.delete(user)
+    :ok
+  rescue
+    error -> {:error, error}
+  end
+
   @doc "Update profile fields (never email or role)."
   def update_profile(%User{} = user, attrs, opts \\ []),
     do: repo(opts).update(User.profile_changeset(user, attrs))
