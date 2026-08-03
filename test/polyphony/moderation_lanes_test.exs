@@ -18,7 +18,7 @@ defmodule Polyphony.ModerationLanesTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{Accounts, Library, Moderation, Owner, Repo}
+  alias Polyphony.{Accounts, Campaigns, Library, Moderation, Owner, Repo}
   alias Polyphony.Accounts.User
 
   setup do
@@ -185,6 +185,80 @@ defmodule Polyphony.ModerationLanesTest do
       assert {:error, :forbidden} = Moderation.take_down(nobody, r, "because")
       assert Library.get(entry.id).visibility == "public"
       assert Moderation.audit_trail(nobody.id) == []
+    end
+  end
+
+  describe "a take-down removes the thing, not its listing" do
+    test "it's gone from the owner's own library, not just from browse" do
+      admin = admin()
+      owner = user()
+      entry = published(owner)
+
+      assert Enum.any?(Library.list_for_owner(Owner.of(owner)), &(&1.id == entry.id))
+
+      {:ok, _} = Moderation.take_down(admin, report(user(), owner, entry), "upheld")
+
+      # The deleted experience: it isn't in their library any more.
+      refute Enum.any?(Library.list_for_owner(Owner.of(owner)), &(&1.id == entry.id))
+      refute Enum.any?(Campaigns.list(Owner.of(owner)), &(&1.id == entry.id))
+    end
+
+    test "and the campaign it was published from goes with it" do
+      admin = admin()
+      owner = user()
+
+      campaign =
+        Library.put(%{
+          owner: Owner.of(owner),
+          kind: "campaign",
+          payload: %{kind: :campaign, name: "The Long Quiet", character_ids: [], scenes: []}
+        })
+
+      snapshot =
+        Library.publish_campaign(
+          %{owner: Owner.of(owner), campaign_id: campaign.id, characters: [], arc: []},
+          visibility: "public"
+        )
+
+      {:ok, _} = Moderation.take_down(admin, report(user(), owner, snapshot), "upheld")
+
+      # She loses the campaign, not just its listing.
+      assert Library.hidden?(Library.get(campaign.id))
+      refute Enum.any?(Library.list_for_owner(Owner.of(owner)), &(&1.id == campaign.id))
+    end
+
+    test "moderation can still see it — that's what the §C grant is for" do
+      admin = admin()
+      owner = user()
+      entry = published(owner)
+      r = report(user(), owner, entry)
+
+      {:ok, _} = Moderation.take_down(admin, r, "upheld")
+      {:ok, entries} = Moderation.access_report_content(admin, r)
+
+      assert Enum.any?(entries, &(&1.id == entry.id))
+    end
+
+    test "and a purge still takes it, because a purge has to be complete" do
+      admin = admin()
+      owner = user()
+      entry = published(owner)
+      {:ok, _} = Moderation.take_down(admin, report(user(), owner, entry), "upheld")
+
+      :ok = Accounts.purge_account(Accounts.get(owner.id))
+
+      assert Library.get(entry.id) == nil
+    end
+
+    test "lifting it puts everything back where the owner had it" do
+      admin = admin()
+      owner = user()
+      entry = published(owner)
+      {:ok, _} = Moderation.take_down(admin, report(user(), owner, entry), "upheld")
+
+      {:ok, _} = Moderation.leave_fork(admin, entry.id)
+
+      assert Enum.any?(Library.list_for_owner(Owner.of(owner)), &(&1.id == entry.id))
     end
   end
 

@@ -133,7 +133,9 @@ defmodule Polyphony.Moderation do
       %{owner_id: report.owner_id, why: Keyword.get(opts, :why)},
       opts,
       fn ->
-        {:ok, Library.list_for_owner(report.owner_id, opts)}
+        # The §C grant is the one read that sees past a take-down — reviewing what was
+        # hidden is the whole point of it.
+        {:ok, Library.list_for_owner(report.owner_id, Keyword.put(opts, :include_hidden, true))}
       end
     )
   end
@@ -156,10 +158,11 @@ defmodule Polyphony.Moderation do
       fn ->
         unpublish(report, opts)
         # A take-down takes everything and **spreads**: the public copy and the
-        # author's own, plus every fork descended from it. The forks can't go down
-        # blind — one may have diverged past anything objectionable — so they go dark
-        # *and* into a review lane, where somebody looks.
-        open_fork_review(report, opts)
+        # author's own, plus every fork descended from it. *She loses the campaign,
+        # not just its listing* — so the author's copies go down with it, and only
+        # other people's forks go to the review lane, because one may have diverged
+        # past anything objectionable and can't be taken down blind.
+        spread_takedown(report, reason, opts)
         if absolute and report.owner_id, do: flag_account(report.owner_id, opts)
 
         {:ok, resolve(report, "actioned", "takedown", reason, admin, opts)}
@@ -283,15 +286,34 @@ defmodule Polyphony.Moderation do
     |> Enum.count(&(&1.id != report.id and &1.status == "dismissed"))
   end
 
-  # Forks go dark **and** into a review lane rather than down with the original.
-  defp open_fork_review(%Report{item_type: "library_entry", item_id: id}, opts)
+  # The reported thing goes dark, and so does everything of the **author's** it belongs
+  # to — that is what "removes the thing, not its listing" means, and it's why the owner
+  # gets the deleted experience rather than a private copy they can still open and
+  # republish from.
+  #
+  # **Somebody else's fork is a different question**, so it goes dark *and* into a
+  # review lane: it may have diverged twenty scenes past anything objectionable, and
+  # taking it down blind would destroy work containing none of what was reported.
+  defp spread_takedown(%Report{item_type: "library_entry", item_id: id} = report, reason, opts)
        when is_integer(id) do
+    Library.hide(id, takedown_reason(reason), opts)
+
     for entry <- Library.family(id, opts), entry.id != id do
-      Library.hide(entry.id, "fork_of_takedown", opts)
+      if same_owner?(entry, report),
+        do: Library.hide(entry.id, takedown_reason(reason), opts),
+        else: Library.hide(entry.id, "fork_of_takedown", opts)
     end
   end
 
-  defp open_fork_review(_report, _opts), do: :ok
+  defp spread_takedown(_report, _reason, _opts), do: :ok
+
+  defp takedown_reason(reason) when is_binary(reason) and reason != "", do: reason
+  defp takedown_reason(_reason), do: "takedown"
+
+  defp same_owner?(entry, %Report{owner_id: owner_id}) when not is_nil(owner_id),
+    do: to_string(entry.owner_id) == to_string(owner_id)
+
+  defp same_owner?(_entry, _report), do: false
 
   defp hide_everything_shared(owner, reason, opts) do
     for entry <- Library.shared_by(owner, opts), do: Library.hide(entry.id, reason, opts)

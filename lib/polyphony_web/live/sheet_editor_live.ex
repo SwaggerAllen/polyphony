@@ -90,7 +90,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def mount(%{"id" => id}, _session, socket) do
     entry = Library.get(id)
 
-    if entry && entry.kind == "character" do
+    if entry && entry.kind == "character" && not Library.hidden?(entry) do
       # struct/2 fills any field the stored struct predates (e.g. world_bible_id).
       sheet = struct(CharacterSheet, Map.from_struct(Library.payload(entry)))
       worlds = load_worlds(socket.assigns.current_user)
@@ -132,7 +132,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
        |> assign_knows()
        |> assign_characters(other_characters(socket.assigns.current_user, entry.id))}
     else
-      {:ok, socket |> put_flash(:error, "Character not found.") |> redirect(to: ~p"/library")}
+      # A take-down removes the thing rather than its listing, so this is the deleted
+      # experience — with the one difference that matters: they're told why.
+      {:ok,
+       socket |> put_flash(:error, gone_note(entry, "Character")) |> redirect(to: ~p"/library")}
     end
   end
 
@@ -2129,4 +2132,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
       trimmed -> trimmed
     end
   end
+
+  defp gone_note(%{hidden_at: at}, _noun) when not is_nil(at),
+    do: "That was taken down after a report. Check your email."
+
+  defp gone_note(_entry, noun), do: "#{noun} not found."
 end

@@ -308,7 +308,13 @@ defmodule Polyphony.Library do
   @spec hidden?(LibraryEntry.t()) :: boolean()
   def hidden?(%LibraryEntry{hidden_at: at}), do: not is_nil(at)
 
-  @doc "Everything currently hidden — the review lane's list."
+  @doc """
+  Everything currently hidden — the review lane's list.
+
+  Queries the hidden rows directly rather than through `list_for_owner/2`, which now
+  filters them out by default: a take-down removes the thing from its owner's library,
+  and this is the read that still has to see it.
+  """
   @spec hidden(keyword()) :: [LibraryEntry.t()]
   def hidden(opts \\ []), do: LibraryEntry.list_hidden(repo(opts))
 

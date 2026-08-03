@@ -52,8 +52,9 @@ defmodule PolyphonyWeb.CampaignLive do
 
     # A frozen snapshot shares the `"campaign"` kind and nothing else — opening the
     # editor on one would try to read a cast and a premise off a `Library.Snapshot`.
-    # It's a readable thing, so it goes where reading happens.
-    if entry && Campaigns.campaign?(entry) do
+    # It's a readable thing, so it goes where reading happens. A taken-down one is
+    # gone, and says so in its own words.
+    if entry && Campaigns.campaign?(entry) && not Library.hidden?(entry) do
       {:ok,
        socket
        |> assign(
@@ -80,6 +81,15 @@ defmodule PolyphonyWeb.CampaignLive do
       redirect_missing(socket, entry)
     end
   end
+
+  # A take-down removes the thing, not its listing — so this is the deleted experience
+  # with the one difference that matters: they're told why, and where the rest of it is.
+  defp redirect_missing(socket, %{hidden_at: at} = _entry) when not is_nil(at),
+    do:
+      {:ok,
+       socket
+       |> put_flash(:error, "That was taken down after a report. Check your email.")
+       |> redirect(to: ~p"/library")}
 
   defp redirect_missing(socket, %{frozen: true} = entry),
     do:

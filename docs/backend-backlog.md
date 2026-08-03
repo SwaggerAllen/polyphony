@@ -698,6 +698,13 @@ Two consequences worth keeping straight:
   `publish_campaign/2` returns `{:error, :hidden}` for either. Before the copy was replaced in
   place, pressing Publish again minted a fresh public entry and put the taken-down story straight
   back in browse — the hole this design closed rather than opened.
+- **A take-down removes the thing, not its listing.** `hidden_at` is now a default filter in
+  `LibraryEntry.visible/2` alongside archived and deleted, so a taken-down artifact is gone from
+  its owner's library, not merely from browse — the deleted experience, with copy that says why.
+  `take_down/4` hides the reported entry and everything of the **author's** it belongs to; only
+  *other people's* forks go to the review lane, since those may have diverged past anything
+  objectionable. Two reads opt back in and say so: the §C moderation grant (whose whole purpose is
+  reading what nobody else can) and an account purge (which has to be complete).
 - **`derived_from_version` is attribution, not reconstruction.** A fork is a full copy and there is
   no version history to rebuild a source from, so a replaced publication doesn't invalidate
   anything: the fork still records which story it came from.

@@ -174,7 +174,17 @@ defmodule Polyphony.ReadModels.LibraryEntry do
     |> Enum.group_by(&(&1.root_id || &1.id))
   end
 
-  # Default-hide soft-deleted and archived rows; callers opt in explicitly.
+  # Default-hide soft-deleted, archived and **moderation-hidden** rows; callers opt in
+  # explicitly.
+  #
+  # Hidden belongs here rather than only on the public reads: a take-down removes the
+  # thing, not just its listing, so it has to be gone from the owner's own library too.
+  # Checking it at the query is what makes that true everywhere at once instead of at
+  # each screen that remembers.
+  #
+  # The two callers that must see past it are moderation itself (the §C grant exists
+  # precisely to read what nobody else can) and an account purge (which has to be
+  # complete). Both say so.
   defp visible(query, opts) do
     query
     |> then(fn q ->
@@ -182,6 +192,9 @@ defmodule Polyphony.ReadModels.LibraryEntry do
     end)
     |> then(fn q ->
       if opts[:include_archived], do: q, else: from(e in q, where: is_nil(e.archived_at))
+    end)
+    |> then(fn q ->
+      if opts[:include_hidden], do: q, else: from(e in q, where: is_nil(e.hidden_at))
     end)
   end
 end

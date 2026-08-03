@@ -396,7 +396,8 @@ defmodule Polyphony.Accounts do
     Enum.each(
       Polyphony.Library.list_for_owner(
         Polyphony.Owner.of(user),
-        opts ++ [include_archived: true, include_deleted: true]
+        # A purge has to be complete, moderation-hidden entries included.
+        opts ++ [include_archived: true, include_deleted: true, include_hidden: true]
       ),
       fn entry ->
         Polyphony.Library.purge(entry.id, opts)

@@ -197,6 +197,56 @@ defmodule PolyphonyWeb.AdminScreenLiveTest do
     end
   end
 
+  describe "what the author sees after a take-down" do
+    test "their campaign is gone from the library, and the editor says why", %{conn: conn} do
+      {admin_conn, admin} = admin_conn(Phoenix.ConnTest.build_conn())
+      _ = admin_conn
+      author = user_fixture()
+      author_conn = log_in_user(conn, author)
+
+      campaign =
+        Library.put(%{
+          owner: Owner.of(author),
+          kind: "campaign",
+          payload: %{kind: :campaign, name: "The Long Quiet", character_ids: [], scenes: []}
+        })
+
+      snapshot =
+        Library.publish_campaign(
+          %{owner: Owner.of(author), campaign_id: campaign.id, characters: [], arc: []},
+          visibility: "public"
+        )
+
+      {:ok, _view, before} = live(author_conn, ~p"/library")
+      assert before =~ "The Long Quiet"
+
+      {:ok, _} = Moderation.take_down(admin, report(user_fixture(), author, snapshot), "upheld")
+
+      # The deleted experience: it isn't in their library.
+      {:ok, _view, html} = live(author_conn, ~p"/library")
+      refute html =~ "The Long Quiet"
+
+      # And going straight to it says why, rather than "not found".
+      assert {:error, {:redirect, %{to: "/library", flash: flash}}} =
+               live(author_conn, ~p"/campaigns/#{campaign.id}")
+
+      assert flash["error"] =~ "taken down after a report"
+    end
+
+    test "and it's off browse and off its share link", %{conn: conn} do
+      {_c, admin} = admin_conn(Phoenix.ConnTest.build_conn())
+      author = user_fixture()
+      entry = published(author, "unlisted")
+      token = Library.get(entry.id).share_token
+
+      {:ok, _} = Moderation.take_down(admin, report(user_fixture(), author, entry), "upheld")
+
+      assert Library.get_by_share_token(token) == nil
+      {:ok, _view, html} = live(conn, ~p"/browse")
+      refute html =~ "The Long Quiet"
+    end
+  end
+
   describe "suspension" do
     test "hides everything shared and shows how long is left", %{conn: conn} do
       {conn, _admin} = admin_conn(conn)

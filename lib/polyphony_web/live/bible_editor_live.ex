@@ -79,7 +79,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
   def mount(%{"id" => id}, _session, socket) do
     entry = Library.get(id)
 
-    if entry && entry.kind == "world_bible" do
+    if entry && entry.kind == "world_bible" && not Library.hidden?(entry) do
       bible = struct(WorldBible, Map.from_struct(Library.payload(entry)))
 
       {:ok,
@@ -106,7 +106,10 @@ defmodule PolyphonyWeb.BibleEditorLive do
        |> assign_lineage()
        |> assign_audience_sources()}
     else
-      {:ok, socket |> put_flash(:error, "World bible not found.") |> redirect(to: ~p"/library")}
+      # A take-down removes the thing rather than its listing, so this is the deleted
+      # experience — with the one difference that matters: they're told why.
+      {:ok,
+       socket |> put_flash(:error, gone_note(entry, "World bible")) |> redirect(to: ~p"/library")}
     end
   end
 
@@ -1311,4 +1314,9 @@ defmodule PolyphonyWeb.BibleEditorLive do
       n -> "#{n} things are held back. They have no idea."
     end
   end
+
+  defp gone_note(%{hidden_at: at}, _noun) when not is_nil(at),
+    do: "That was taken down after a report. Check your email."
+
+  defp gone_note(_entry, noun), do: "#{noun} not found."
 end
