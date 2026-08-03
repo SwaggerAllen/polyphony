@@ -74,6 +74,24 @@ defmodule PolyphonyWeb.DebugDrawerTest do
       refute log =~ "someone@example.com"
     end
 
+    test "an account with no email says so instead of going quiet" do
+      # This branch returns before `dispatch/6`, so it used to log nothing — which
+      # reads exactly like the send never having been attempted. There is no email
+      # *verification* in this system, so a blank address is the only way an account
+      # can be undeliverable, and it has to say so.
+      log = with_info_logs(fn -> Notifications.deliver("", :magic_link, %{url: "x"}) end)
+
+      assert log =~ "[mail] magic_link"
+      assert log =~ "no email address"
+    end
+
+    test "an unrecognised notification type says so too" do
+      log = with_info_logs(fn -> Notifications.deliver("a@b.io", :not_a_type, %{}) end)
+
+      assert log =~ "[mail] not_a_type"
+      assert log =~ "not a known notification type"
+    end
+
     test "the sign-in token is fingerprinted, never logged whole" do
       user = user_fixture()
       token = PolyphonyWeb.Auth.sign_token(user.id)
