@@ -3,6 +3,7 @@ defmodule PolyphonyWeb.Router do
 
   import PolyphonyWeb.Auth
   import PhoenixStorybook.Router
+  import Phoenix.LiveDashboard.Router
 
   # Content-Security-Policy. `put_secure_browser_headers` sets the other headers but
   # never a CSP, and this app renders **other people's prose** — a published story is
@@ -29,6 +30,14 @@ defmodule PolyphonyWeb.Router do
   frame-ancestors 'none'; \
   object-src 'none'\
   """
+
+  # LiveDashboard ships inline `<script>` and `<style>`, which `script-src 'self'`
+  # refuses — so the page loads and does nothing. Rather than weaken the policy for
+  # everyone, this pipeline mints a per-request nonce, hands it to the dashboard
+  # through assigns, and names it in a CSP that applies to this route only.
+  pipeline :dashboard_csp do
+    plug(:put_dashboard_nonce)
+  end
 
   pipeline :browser do
     plug(:accepts, ["html"])
@@ -85,6 +94,24 @@ defmodule PolyphonyWeb.Router do
     end
   end
 
+  # Runtime introspection. **Admin-only, in every environment** — it lists processes,
+  # reads ETS, and shows the environment, so it is a bigger exposure than anything else
+  # the app serves. That is why it is gated on the role rather than on a build flag:
+  # a flag protects a dev machine, `require_admin` protects the deployment.
+  #
+  # `allow_destructive_actions` stays off. The dashboard can kill processes, and there
+  # is no version of that which is a good idea against a running scene.
+  scope "/admin" do
+    pipe_through([:browser, :dashboard_csp])
+
+    live_dashboard("/dashboard",
+      metrics: PolyphonyWeb.Telemetry,
+      on_mount: [{PolyphonyWeb.Auth, :require_admin}],
+      csp_nonce_assign_key: %{img: :img_nonce, style: :style_nonce, script: :script_nonce},
+      allow_destructive_actions: false
+    )
+  end
+
   # The sent-mail viewer (Swoosh's Local adapter). Compiled in only where
   # `:dev_mailbox` is on — dev, and nowhere else by default — because it renders every
   # message the app has sent, magic links included. The `false` default is the point:
@@ -100,6 +127,22 @@ defmodule PolyphonyWeb.Router do
   # default, elsewhere via STORYBOOK=true — so the routes don't exist at all in a
   # plain prod boot. It renders components and reads nothing from the domain,
   # which is why it needs no auth pipeline.
+  defp put_dashboard_nonce(conn, _opts) do
+    nonce = 18 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
+
+    conn
+    |> Plug.Conn.assign(:script_nonce, nonce)
+    |> Plug.Conn.assign(:style_nonce, nonce)
+    |> Plug.Conn.assign(:img_nonce, nonce)
+    |> Plug.Conn.put_resp_header(
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' 'nonce-#{nonce}'; " <>
+        "style-src 'self' 'nonce-#{nonce}' 'unsafe-inline'; img-src 'self' data:; " <>
+        "connect-src 'self' ws: wss:; base-uri 'self'; form-action 'self'; " <>
+        "frame-ancestors 'none'; object-src 'none'"
+    )
+  end
+
   if Application.compile_env(:polyphony, :storybook, false) do
     scope "/" do
       storybook_assets()

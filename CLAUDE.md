@@ -175,6 +175,15 @@ for it.
   **It is not admin-gated** (it can't be — its best use is diagnosing sign-in while
   signed out), so nothing that reaches a log may carry a live token or a whole email
   address.
+- **LiveDashboard is at `/admin/dashboard`**, gated on `require_admin` in *every*
+  env — it lists processes, reads ETS and shows the environment, so a build flag
+  wouldn't be enough. `allow_destructive_actions` is off (it can kill processes).
+  Metrics live in `PolyphonyWeb.Telemetry.metrics/0` and **only name events something
+  already emits** (Oban, Ecto, Phoenix, VM) — nothing in `Polyphony` emits telemetry,
+  so there is no domain metric; a permanently empty chart reads as "nothing is
+  happening" rather than "nothing is measured". The route has its own CSP with a
+  per-request nonce, because the dashboard ships inline `<script>` that
+  `script-src 'self'` otherwise refuses — silently.
 - **Mail is viewable locally.** Dev uses Swoosh's `Local` adapter with the real
   `Transport.Email`, so `mix phx.server` then `/dev/mailbox` shows the actual sent
   message — body, and the provider headers — rather than the link the login screen
