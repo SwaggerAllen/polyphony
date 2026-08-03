@@ -107,6 +107,13 @@ deploy. The TLS options in `runtime.exs` verify the relay's certificate against 
 system CA bundle — `gen_smtp` defaults to `:verify_none`, which would hand the
 credentials to anyone who can answer for the host.
 
+Verification also needs `customize_hostname_check` with the `:https` match fun, and
+this is not optional in practice: Erlang's default check is strict RFC 6125 and will
+**not** match `*.postmarkapp.com` against `smtp.postmarkapp.com`. Providers almost
+always serve a wildcard, so without it every send dies at the handshake with
+`:tls_failed` and a `hostname_check_failed` alert — which reads like a bad
+certificate rather than a missing option.
+
 > If outbound SMTP turns out to be blocked, swapping to a provider's HTTP API is a
 > config line plus that adapter's HTTP client dep — `Polyphony.Mailer` and the
 > `Transport` seam don't change.
