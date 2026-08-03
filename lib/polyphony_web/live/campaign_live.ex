@@ -11,7 +11,16 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.{Library, Owner, Context, App}
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
-  alias Polyphony.Authoring.{Autofill, CharacterSheet, QuickBuild, Effective, SceneGate}
+
+  alias Polyphony.Authoring.{
+    Autofill,
+    CharacterSheet,
+    QuickBuild,
+    Effective,
+    SceneGate,
+    WorldBible
+  }
+
   alias Polyphony.Events.SceneOpened
   alias Polyphony.Content.CampaignConfig
   alias PolyphonyWeb.Kit
@@ -115,13 +124,18 @@ defmodule PolyphonyWeb.CampaignLive do
   def handle_event("toggle_quick_build", _params, socket),
     do: {:noreply, assign(socket, quick_build_open: not socket.assigns.quick_build_open)}
 
+  # **Attaching a world copies it** (`backend-backlog.md` §2.5b). A campaign
+  # accumulates world arc, and two campaigns cannot write different histories onto one
+  # bible — so what the campaign holds is its own copy, and the library entry stays a
+  # template. The honest cost is stated on the screen rather than implied away: fixing
+  # a typo in the library copy doesn't fix the campaigns started from it.
   def handle_event("select_world", %{"bible_id" => id}, socket) do
     safe(socket, fn ->
-      bible_id = if id == "", do: nil, else: String.to_integer(id)
+      {bible_id, note} = attach_world(socket, id)
       payload = Map.put(socket.assigns.payload, :bible_id, bible_id)
       {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
 
-      {:noreply, socket |> assign(entry: entry) |> load() |> put_flash(:info, "World updated.")}
+      {:noreply, socket |> assign(entry: entry) |> load() |> put_flash(:info, note)}
     end)
   end
 
@@ -503,7 +517,7 @@ defmodule PolyphonyWeb.CampaignLive do
       "setting" => Map.get(wb, :setting) || "",
       "tone" => Map.get(wb, :tone) || "",
       "rules" => Enum.join(Map.get(wb, :rules) || [], "\n"),
-      "starting_canon" => Enum.join(Map.get(wb, :starting_canon) || [], "\n")
+      "starting_canon" => Enum.join(WorldBible.public(Map.get(wb, :starting_canon) || []), "\n")
     }
   end
 
@@ -1061,6 +1075,32 @@ defmodule PolyphonyWeb.CampaignLive do
         :info,
         "Skipped #{length(pending)} pending character(s) — generate them, then re-add to a scene."
       )
+
+  defp attach_world(_socket, ""), do: {nil, "World removed."}
+
+  defp attach_world(socket, id) do
+    source = Library.get(String.to_integer(id))
+
+    cond do
+      is_nil(source) ->
+        {nil, "That world is gone."}
+
+      # Already this campaign's own copy — re-selecting it must not copy the copy.
+      source.id == socket.assigns.payload[:bible_id] ->
+        {source.id, "World updated."}
+
+      true ->
+        copy = Library.copy(source, socket.assigns.current_user)
+        {copy.id, "This campaign has its own copy of #{world_name(source)} now."}
+    end
+  end
+
+  defp world_name(entry) do
+    case Library.payload(entry) do
+      %{name: n} when is_binary(n) and n != "" -> n
+      _ -> "that world"
+    end
+  end
 
   defp normalize_id(nil), do: nil
   defp normalize_id(id) when is_integer(id), do: id

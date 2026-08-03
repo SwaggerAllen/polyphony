@@ -995,8 +995,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
           "name" => wb.name || "",
           "setting" => wb.setting || "",
           "tone" => wb.tone || "",
-          "rules" => Enum.join(wb.rules || [], "\n"),
-          "starting_canon" => Enum.join(wb.starting_canon || [], "\n")
+          # The world as this character may know it — generation grounded in a secret
+          # would write a character who knows it.
+          "rules" => Enum.join(WorldBible.public(wb.rules), "\n"),
+          "starting_canon" => Enum.join(WorldBible.public(wb.starting_canon), "\n")
         }
     end
   end

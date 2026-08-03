@@ -29,9 +29,13 @@ defmodule Polyphony.Authoring.EffectiveWorldBible do
       |> Enum.filter(&(&1.status == :canon))
       |> Enum.filter(&reaches?(&1, reach))
       |> Enum.sort_by(&(&1.beat || 0))
-      |> Enum.map(& &1.statement)
+      # Folded in as **public** entries. A world-arc fact reached whoever was in
+      # reach of it (`scope`/`location_id`) — that is *where* it landed, which is a
+      # different axis from *who knows*, and there is no way yet to accumulate a
+      # concealed one. When there is (`backend-backlog.md` §3.3), it lands here.
+      |> Enum.map(&%WorldBible.Entry{statement: &1.statement})
 
-    %{bible | starting_canon: bible.starting_canon ++ additions}
+    %{bible | starting_canon: WorldBible.entries(bible.starting_canon) ++ additions}
   end
 
   defp reaches?(%WorldArcEntry{scope: :global}, _reach), do: true

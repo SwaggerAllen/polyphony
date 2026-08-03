@@ -245,15 +245,22 @@ defmodule Polyphony.Context do
 
   defp render_bible(nil), do: nil
 
+  # **The character-facing read, and the only one that may be.** `public/1` drops
+  # concealed rules and canon; `statements/1` would hand a character the world's
+  # secrets in their own prefix, which is the world-level version of the leak
+  # `Polyphony.Visibility` exists to prevent — and it would leak into a *prompt*,
+  # where nobody can see it happen. The Director reads the unfiltered list, in
+  # `Director.SceneBrief`, because the Director is omniscient.
   defp render_bible(%WorldBible{} = b) do
-    rules = if b.rules == [], do: nil, else: "Rules:\n" <> bullets(b.rules)
+    rules = WorldBible.public(b.rules)
+    canon = WorldBible.public(b.starting_canon)
 
     [
       b.name && "World: #{b.name}",
       b.setting && "Setting: #{b.setting}",
       b.tone && "Tone: #{b.tone}",
-      rules,
-      b.starting_canon != [] && "Canon:\n" <> bullets(b.starting_canon)
+      rules != [] && "Rules:\n" <> bullets(rules),
+      canon != [] && "Canon:\n" <> bullets(canon)
     ]
     |> compact_join()
   end

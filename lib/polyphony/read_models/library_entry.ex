@@ -80,6 +80,16 @@ defmodule Polyphony.ReadModels.LibraryEntry do
 
   def get_by_share_token(_repo, _), do: nil
 
+  @doc "Live entries copied from `source_id` (§2.5b provenance)."
+  def copies_of(repo, source_id) do
+    repo.all(
+      from(e in __MODULE__,
+        where: e.derived_from_id == ^source_id and is_nil(e.deleted_at),
+        order_by: [asc: e.inserted_at]
+      )
+    )
+  end
+
   # Default-hide soft-deleted and archived rows; callers opt in explicitly.
   defp visible(query, opts) do
     query

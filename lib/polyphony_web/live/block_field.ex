@@ -64,6 +64,26 @@ defmodule PolyphonyWeb.BlockField do
 
   def drop_block(list, idx), do: list |> List.delete_at(idx) |> ensure_one()
 
+  @doc """
+  Move the item at `idx` by `delta` places, saturating at the ends.
+
+  The design's list item menu carries *Move up* (`ux/polyphony-world.html` §04,
+  `polyphony-character.html` §03) because order is authored: rules read as a set of
+  laws and canon reads as a chronology, and both are worse shuffled. Saturating
+  rather than wrapping means the control is always safe to press — the top item's
+  *Move up* does nothing rather than sending it to the bottom.
+  """
+  def move_block(list, idx, delta) do
+    to = idx + delta
+
+    if idx in 0..(length(list) - 1)//1 and to in 0..(length(list) - 1)//1 do
+      item = Enum.at(list, idx)
+      list |> List.delete_at(idx) |> List.insert_at(to, item)
+    else
+      list
+    end
+  end
+
   @doc "Append a fresh paragraph, dropping any blank placeholder blocks first."
   def append_paragraph(blocks, para), do: Enum.reject(blocks, &(String.trim(&1) == "")) ++ [para]
 

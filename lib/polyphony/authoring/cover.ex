@@ -78,7 +78,7 @@ defmodule Polyphony.Authoring.Cover do
     for %Fact{concealed: true, statement: s} <- facts || [], present?(s), do: s
   end
 
-  def secrets_of(%WorldBible{}), do: []
+  def secrets_of(%WorldBible{} = bible), do: WorldBible.secrets(bible)
 
   @doc """
   Does `prose` quote any of `secrets`?
@@ -177,8 +177,8 @@ defmodule Polyphony.Authoring.Cover do
         kv("World", w.name),
         kv("Setting", w.setting),
         kv("Tone", w.tone),
-        kv("Rules", w.rules),
-        kv("Starting canon", w.starting_canon)
+        kv("Rules", WorldBible.statements(w.rules)),
+        kv("Starting canon", WorldBible.statements(w.starting_canon))
       ]
       |> Enum.reject(&is_nil/1)
 

@@ -252,15 +252,24 @@ defmodule Polyphony.Library do
   # ── Copy-on-instantiate / copy-on-fork ───────────────────────────────────────
 
   @doc """
-  Instantiate a shared character into `new_owner`'s library: copy the **sheet only**
-  (never arc), version-pinned to the source, as a new **private, live, fully
-  editable** owned entry. Returns the new row.
+  Copy an entry into `new_owner`'s library as a new **private, live, fully editable**
+  entry, version-pinned to the source through `derived_from`.
+
+  The one primitive behind every "this is a template" relationship in the design
+  (§2.5b): attaching a world to a campaign, saving someone else's world, and saving a
+  campaign's world back to your library are all this, in different directions.
+
+  A copy carries only the **payload**. Arc lives in `arc_entries` keyed by subject id,
+  so a copy starts with none — which is the point: two campaigns cannot accumulate
+  different histories on one bible, and a template that has been started from stays a
+  template.
   """
-  def instantiate_character(%LibraryEntry{kind: "character"} = source, new_owner, opts \\ []) do
+  @spec copy(LibraryEntry.t(), term(), keyword()) :: LibraryEntry.t()
+  def copy(%LibraryEntry{} = source, new_owner, opts \\ []) do
     put(
       %{
-        owner_id: new_owner,
-        kind: "character",
+        owner: new_owner,
+        kind: source.kind,
         visibility: "private",
         frozen: false,
         derived_from_id: source.id,
@@ -270,6 +279,78 @@ defmodule Polyphony.Library do
       opts
     )
   end
+
+  @doc "Instantiate a shared character (`copy/3` with the kind pinned)."
+  def instantiate_character(%LibraryEntry{kind: "character"} = source, new_owner, opts \\ []),
+    do: copy(source, new_owner, opts)
+
+  @doc """
+  The live entries copied from `id` — what "used in 2 campaigns" counts.
+
+  Derived rather than stored, and derived from the copies rather than from the
+  campaigns, because the copy is the thing that exists: one copy per attach, and it
+  survives its campaign being renamed or the template being edited.
+  """
+  @spec copies_of(term(), keyword()) :: [LibraryEntry.t()]
+  def copies_of(id, opts \\ []), do: LibraryEntry.copies_of(repo(opts), id)
+
+  @doc "How many live copies were taken from `id`."
+  @spec copy_count(term(), keyword()) :: non_neg_integer()
+  def copy_count(id, opts \\ []), do: id |> copies_of(opts) |> length()
+
+  @doc """
+  Mint a **new** share token, invalidating the old one.
+
+  Deliberately destructive and deliberately explicit: the design's own copy is *a new
+  link breaks the old one*, which is the entire reason the control exists — it is how
+  you un-share something you shared with the wrong person.
+  """
+  @spec rotate_share_token(term(), keyword()) :: {:ok, LibraryEntry.t()} | {:error, term()}
+  def rotate_share_token(id, opts \\ []) do
+    repo = repo(opts)
+
+    case LibraryEntry.get(repo, id) do
+      nil -> {:error, :not_found}
+      row -> {:ok, LibraryEntry.update(repo, row, %{share_token: gen_token()})}
+    end
+  end
+
+  @doc """
+  Is `owner` already using `name` for something of this `kind`?
+
+  Names are not unique in the database — two campaigns may legitimately both have a
+  character called "the bellman" — but within one owner's list of *worlds* a repeat
+  is almost always a mistake heading for confusion, and the design catches it at the
+  field (`ux/polyphony-world.html` §03, "you already have a world called Saltmarch").
+  Compared case- and whitespace-insensitively, because that is how a person reads it.
+  `except` skips one entry, so saving a world under its own name is not a clash.
+  """
+  @spec name_taken?(term(), String.t(), String.t(), keyword()) :: boolean()
+  def name_taken?(owner, kind, name, opts \\ []) do
+    case normalize_name(name) do
+      "" ->
+        false
+
+      wanted ->
+        except = Keyword.get(opts, :except)
+
+        owner
+        |> list_for_owner(opts)
+        |> Enum.any?(fn e ->
+          e.kind == to_string(kind) and e.id != except and
+            normalize_name(payload_name(e)) == wanted
+        end)
+    end
+  end
+
+  defp payload_name(entry) do
+    case payload(entry) do
+      %{name: n} -> n
+      _ -> nil
+    end
+  end
+
+  defp normalize_name(name), do: name |> to_string() |> String.trim() |> String.downcase()
 
   @doc """
   Fork a published campaign into `new_owner`'s library. Copies the whole campaign at

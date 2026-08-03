@@ -380,8 +380,8 @@ defmodule Polyphony.Authoring.QuickBuild do
       name: fields["name"],
       setting: fields["setting"],
       tone: fields["tone"],
-      rules: lines(fields["rules"]),
-      starting_canon: lines(fields["starting_canon"])
+      rules: WorldBible.entries(lines(fields["rules"])),
+      starting_canon: WorldBible.entries(lines(fields["starting_canon"]))
     }
   end
 
