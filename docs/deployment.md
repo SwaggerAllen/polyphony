@@ -96,6 +96,24 @@ failure is "no mail configured" rather than a stream of relay errors.
 The boot log prints what was resolved — `[boot] mail relay=host:port from=… auth=set`
 — so a misconfiguration is visible on startup rather than at the first failed send.
 `auth=MISSING` means `SMTP_USERNAME` never arrived.
+
+### When the log says `sent` and nothing arrives
+
+A `sent` line means the relay returned a 250 and took the message. It is *theirs*
+now, and nothing after that point is visible to this app — so the send line carries
+the relay's own reply, which for Postmark includes the MessageID to search their
+Activity feed by. Start there; it will say what happened next. Common answers:
+
+- **The token is a Test token.** Postmark servers issue separate Live and Test
+  credentials, and the Test one accepts everything and delivers nothing. This is the
+  single easiest way to get a clean 250 and an empty inbox.
+- **The account is pending approval.** New Postmark accounts can only send to your
+  own confirmed address until they approve it.
+- **`MAIL_FROM` isn't a confirmed Sender Signature.** Usually rejected at send time,
+  but worth confirming it matches exactly.
+
+None of these can be diagnosed from this side, which is the point of logging the
+MessageID: it is the handle that makes the provider's side searchable.
 - `MAIL_FROM` — the sender address. **It must be on a domain you have verified with
   the provider**; an unverified sender is the most common reason mail vanishes without
   an error.
