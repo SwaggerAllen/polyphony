@@ -41,6 +41,16 @@ defmodule Polyphony.Library.Snapshot do
             # The campaign's content ceiling (§A5) at publish — records what the published
             # snapshot permitted, so a consumer/fork carries the same governance label.
             content: nil,
+            # **What the author granted** (§3.1): which perspectives a reader may adopt,
+            # and whether the story may be carried on. The grant travels with the
+            # snapshot rather than sitting on the live campaign, because the snapshot is
+            # the thing readers hold and it must not change under them.
+            publication: nil,
+            # The published scenes, oldest first: `%{id:, title:, cast:, beats:}`. Needed
+            # by the contents list, by the reading position (§3.1e), and by the
+            # unreadable-scene pre-flight (§3.1c-ii) — none of which can ask the author's
+            # live campaign, because that's the coupling publishing exists to break.
+            scenes: [],
             include_proposed: false,
             derived_from_id: nil,
             derived_from_version: nil
@@ -52,6 +62,8 @@ defmodule Polyphony.Library.Snapshot do
           bible: map() | nil,
           characters: [pinned_character()],
           arc: [map()],
+          publication: Polyphony.Publication.t() | nil,
+          scenes: [map()],
           include_proposed: boolean(),
           derived_from_id: integer() | nil,
           derived_from_version: integer() | nil
@@ -77,6 +89,8 @@ defmodule Polyphony.Library.Snapshot do
       characters: Map.get(attrs, :characters, []),
       arc: resolve_arc(Map.get(attrs, :arc, []), published_beat, include_proposed),
       content: Map.get(attrs, :content),
+      publication: Polyphony.Publication.from(Map.get(attrs, :publication)),
+      scenes: Map.get(attrs, :scenes, []),
       include_proposed: include_proposed
     }
   end

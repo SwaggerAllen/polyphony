@@ -123,6 +123,29 @@ defmodule Polyphony.Authoring.WorldBible do
   def public(list), do: for(e <- entries(list), not e.concealed, do: e.statement)
 
   @doc """
+  The bible a **stranger** may take — every concealed entry removed.
+
+  Taking a world out of somebody's published story copies the setting, not their
+  secrets: what an author kept back was never shared, and it doesn't travel. The
+  design says this on the screen rather than implying it away — *some of this world
+  isn't shown; those don't come with it*.
+
+  Concealed entries are dropped outright rather than blanked, so nothing downstream
+  can accidentally read a placeholder as a real one, and the `cover` survives because
+  it was written under instruction to give none of them away (§2.12).
+  """
+  @spec stripped(t()) :: t()
+  def stripped(%__MODULE__{} = bible) do
+    %__MODULE__{
+      bible
+      | rules: keep_public(bible.rules),
+        starting_canon: keep_public(bible.starting_canon)
+    }
+  end
+
+  defp keep_public(list), do: for(e <- entries(list), not e.concealed, do: e)
+
+  @doc """
   What one character may read: the public statements, plus the concealed ones whose
   audience includes them.
 

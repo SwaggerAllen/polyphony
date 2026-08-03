@@ -506,6 +506,58 @@ Still open and recorded: *Carry on reading* has nowhere good to go until the pub
 view (§3.1b) exists, so it falls back to the share link or browse; library-wide search stays
 §2.15, deliberately later.
 
+### Browse and the published reading view, ported (`ux/polyphony-browse.html`)
+Publishing worked and produced nothing anyone could read. This is the missing half — and the
+biggest backend ask in the rebuild, because a reading surface is not a list with prose in it.
+
+**Publication names perspectives, not surfaces** (§3.1, §3.1c). `Polyphony.Publication` asks two
+separate questions rather than one ladder: *how it's meant to be read* — which perspectives a
+reader may adopt, a content decision and the **spoiler control** — and *whether the authoring
+surface is exposed*, which is one checkbox, `forkable`, and brings sheets with it because a fork
+can't continue a story from prose alone. Enumerating surfaces instead would mean every new feature
+ships a new toggle and the defaults rot; filtering by perspective covers surfaces that don't exist
+yet. The grant travels **with the snapshot**, not on the live campaign, because the snapshot is
+what readers hold and it must not change under someone partway through.
+
+**Two new viewers, and neither loosens anything** (§3.1b). `{:readers, ids}` — *everyone the
+author shared* — is a **union over the existing character predicate**, so it inherits default-deny
+for free and cannot drift from what those characters actually knew; the union is bounded by the
+grant, so it is never omniscient. `:spectator` is genuinely a different projection (nobody in the
+fiction has it), so it's written as its own default-deny clause, with whispers denied *ahead* of
+the general speech clause — the order of those two is the whole difference between a spectator
+read and a leak. Settings a snapshot never had read as spectator-only: the least-granting answer.
+
+**The gap can be the point; it just can't be an accident** (§3.1c-ii). If spectator is off and a
+scene holds none of the published cast, nobody can open it. `Preflight` warns at publish time,
+live as the grant changes, and never blocks. Unreadable scenes still appear in the contents,
+marked — silently omitting one would make the numbering lie and the story jump. The perspective
+selector on a scene is filtered to what can show it, with the reader's current perspective kept
+**last rather than removed**, so the control never reorders under them.
+
+**Root identity** (§3.1d). Every campaign copies its world and every fork copies everything, so a
+`derived_from` parent pointer means walking the chain per row to group a list. `root_id` is
+stamped at insert and carried forward by `copy/3`, so a fork of a fork groups under the thing it
+all started from. Browse groups by it; `provenance/2` walks back to both parent and original.
+
+**The screen** is the catalogue, a story's front page, the reader, and taking something with you.
+Choosing how to read comes before reading — the first real decision, and putting it up front is
+what stops the picker feeling like a settings menu. The reader is **the play screen with a
+different bottom bar**, which is now literally true: `PolyphonyWeb.Transcript` was extracted from
+`play_live` and both render through it, because a second implementation of prose rendering is how
+the two drift and the one a reader sees is the one nobody is looking at. Two kinds of empty stay
+distinct — *Halden wasn't here* has a way out, *this one isn't shared* doesn't. An action that
+isn't available simply isn't shown: no greyed-out buttons and no "request access". Reading never
+hits a wall for a signed-out visitor; only the actions do.
+
+Taking the world out of a story is its own operation, because the bible is embedded rather than
+referenced: `WorldBible.stripped/1` drops every concealed entry, so the setting travels and the
+secrets don't. And the moderation queue, fully built and never reachable, finally has a way in —
+reports target the frozen snapshot, so a take-down leaves the author's original alone.
+
+Still open and recorded: the reading position resumes at the story rather than at the bookmarked
+scene until the front page consults it, and the library's by-campaign version grouping (the other
+half of §3.1d) isn't built.
+
 ---
 
 ## Immediate milestone — the backend the frontend design needs

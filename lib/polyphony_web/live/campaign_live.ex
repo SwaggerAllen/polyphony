@@ -24,6 +24,8 @@ defmodule PolyphonyWeb.CampaignLive do
 
   alias Polyphony.Events.SceneOpened
   alias Polyphony.Content.CampaignConfig
+  alias Polyphony.Publication
+  alias Polyphony.Publication.Preflight
   alias PolyphonyWeb.Kit
   alias PolyphonyWeb.Layouts
   alias PolyphonyWeb.Voice
@@ -57,6 +59,12 @@ defmodule PolyphonyWeb.CampaignLive do
          build_progress: nil,
          expanding_premise: false,
          generating: false,
+         # Nothing is granted until the author says so — the spoiler control has no
+         # clever default (§3.1). Spectator starts on because it's the one setting
+         # that reveals nothing, not because it's the best read.
+         pub_perspectives: [],
+         pub_spectator: true,
+         pub_forkable: false,
          qb_world: "",
          qb_seeds: [""],
          qb_suggest: true,
@@ -121,6 +129,7 @@ defmodule PolyphonyWeb.CampaignLive do
       global_models: global_models(),
       content: CampaignConfig.from_payload(payload)
     )
+    |> preflight()
   end
 
   def handle_event("toggle_quick_build", _params, socket),
@@ -293,6 +302,22 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
+  def handle_event("toggle_spectator", _params, socket),
+    do:
+      {:noreply, socket |> assign(pub_spectator: not socket.assigns.pub_spectator) |> preflight()}
+
+  def handle_event("toggle_forkable", _params, socket),
+    do: {:noreply, assign(socket, pub_forkable: not socket.assigns.pub_forkable)}
+
+  def handle_event("toggle_perspective", %{"id" => id}, socket) do
+    id = to_string(id)
+    current = socket.assigns.pub_perspectives
+
+    next = if id in current, do: List.delete(current, id), else: current ++ [id]
+
+    {:noreply, socket |> assign(pub_perspectives: next) |> preflight()}
+  end
+
   def handle_event("publish", _params, socket) do
     safe(socket, fn ->
       %{entry: entry, payload: payload, cast: cast, owner: owner} = socket.assigns
@@ -311,7 +336,11 @@ defmodule PolyphonyWeb.CampaignLive do
           bible: bible,
           characters: characters,
           arc: [],
-          content: CampaignConfig.from_payload(payload)
+          content: CampaignConfig.from_payload(payload),
+          # The grant travels **with the snapshot**, not on the live campaign: it is the
+          # thing readers hold, and it must not change under someone partway through.
+          publication: publication(socket),
+          scenes: Preflight.scenes(socket.assigns.scenes)
         },
         visibility: "public"
       )
@@ -886,6 +915,123 @@ defmodule PolyphonyWeb.CampaignLive do
     """
   end
 
+  # Publishing asks **two separate questions, not one ladder** (§3.1c): how it's meant
+  # to be read — which perspectives a reader may adopt, a content decision and the
+  # spoiler control — and whether the authoring surface is exposed, which is one
+  # checkbox. Sheets come with forkable, because a fork must be able to carry the story
+  # on and can't from prose alone.
+  defp publish_panel(assigns) do
+    ~H"""
+    <Kit.row class="px-4 py-3" style="background:var(--b2)">
+      <div class="flex items-center gap-1.5 mb-2">
+        <span class="lbl dim">How it's meant to be read</span>
+        <Kit.info label="publishing" phx-click="publish_help" />
+      </div>
+
+      <div class="flex flex-col gap-1.5 mb-3">
+        <label class="flex items-center gap-2.5 text-[13px]">
+          <Kit.chk state={if @pub_spectator, do: :on, else: :off} phx-click="toggle_spectator" />
+          <span class="flex-1">
+            As a spectator
+            <span class="dim">— everything said and done, nobody's thoughts</span>
+          </span>
+        </label>
+
+        <%!-- The spoiler control, not a reading preference: publishing a head hands
+              away everything in it, and only the author knows which are meant to be
+              read. So nothing here is ticked by default. --%>
+        <label :for={c <- @cast} class="flex items-center gap-2.5 text-[13px]">
+          <Kit.chk
+            state={if to_string(c.id) in @pub_perspectives, do: :on, else: :off}
+            phx-click="toggle_perspective"
+            phx-value-id={c.id}
+          />
+          <span class="av shrink-0" style={"background:#{Voice.of_sheet(Library.payload(c))}"}></span>
+          <span class="flex-1">As <%= char_name(c) %></span>
+        </label>
+      </div>
+
+      <div class="lbl dim mb-1.5">And whether it can be carried on</div>
+      <label class="flex items-center gap-2.5 text-[13px] mb-3">
+        <Kit.chk state={if @pub_forkable, do: :on, else: :off} phx-click="toggle_forkable" />
+        <span class="flex-1">
+          Forkable
+          <span class="dim">— world, cast, sheets and arc, so someone can continue it</span>
+        </span>
+      </label>
+
+      <%!-- The gap can be the point; it just must not happen by accident (§3.1c-ii). --%>
+      <div
+        :if={@publish_warning}
+        class="rounded-lg p-2.5 mb-3"
+        style="background:color-mix(in srgb,var(--lamp) 10%,transparent);border-left:2px solid var(--lamp)"
+      >
+        <div class="text-[12.5px] font-semibold mb-0.5"><%= unreadable_line(@publish_warning) %></div>
+        <p class="text-[12px] leading-relaxed dim">
+          <span class="ttl"><%= warned_titles(@publish_warning) %></span>
+          — nobody you've shared was in
+          <%= if length(@publish_warning.scenes) == 1, do: "it", else: "them" %>. Readers will see
+          that it happened and no more.
+        </p>
+        <p class="text-[11px] leading-relaxed dim mt-1.5">
+          Sometimes a gap is the point. Worth knowing you've made one.
+        </p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1.5">
+        <Kit.btn
+          kind={:primary}
+          size={:sm}
+          phx-click="publish"
+          data-confirm={publish_confirm(assigns)}
+          disabled={@pub_perspectives == [] and not @pub_spectator}
+        >
+          Publish
+        </Kit.btn>
+        <span :if={@pub_perspectives == [] and not @pub_spectator} class="text-[11px] dim">
+          Pick at least one way to read it.
+        </span>
+      </div>
+    </Kit.row>
+    """
+  end
+
+  defp publication(socket) do
+    %Publication{
+      perspectives: socket.assigns.pub_perspectives,
+      spectator: socket.assigns.pub_spectator,
+      forkable: socket.assigns.pub_forkable
+    }
+  end
+
+  # Recomputed whenever the grant changes, so the warning tracks what's actually ticked
+  # rather than appearing once at the end. Only the reading half matters — forkable
+  # can't make a scene unreachable.
+  defp preflight(socket) do
+    scenes = Preflight.scenes(socket.assigns.scenes)
+    assign(socket, publish_warning: Preflight.warning(publication(socket), scenes))
+  end
+
+  defp unreadable_line(%{scenes: [_]}), do: "One scene nobody will be able to read"
+  defp unreadable_line(%{scenes: s}), do: "#{length(s)} scenes nobody will be able to read"
+
+  defp warned_titles(%{scenes: scenes}),
+    do: scenes |> Enum.map(&Map.get(&1, :title)) |> Enum.join(", ")
+
+  defp publish_confirm(assigns) do
+    heads = length(assigns.pub_perspectives)
+
+    read =
+      cond do
+        heads > 1 -> "#{heads} people's heads"
+        heads == 1 -> "one person's head"
+        true -> "no interiority"
+      end
+
+    "Publish a public snapshot? Readers get #{read}." <>
+      if(assigns.pub_forkable, do: " They can also take a copy and carry it on.", else: "")
+  end
+
   # ── Cast ──────────────────────────────────────────────────────────────────────
 
   defp cast_tab(assigns) do
@@ -946,17 +1092,7 @@ defmodule PolyphonyWeb.CampaignLive do
         in the cast.
       </p>
 
-      <Kit.row class="px-4 py-3 flex items-center justify-between gap-2">
-        <span class="text-[11px] dim">Publishing exposes the omniscient story.</span>
-        <Kit.btn
-          kind={:ghost}
-          size={:sm}
-          phx-click="publish"
-          data-confirm="Publish a public snapshot? It exposes the omniscient story."
-        >
-          Publish
-        </Kit.btn>
-      </Kit.row>
+      <.publish_panel {assigns} />
     </div>
     """
   end

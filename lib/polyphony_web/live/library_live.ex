@@ -447,10 +447,10 @@ defmodule PolyphonyWeb.LibraryLive do
         </p>
 
         <div :if={c.status == :playing} class="flex flex-wrap gap-1.5 mt-2">
-          <Kit.btn kind={:primary} size={:sm} href={~p"/campaigns/#{c.id}"}>Carry on</Kit.btn>
-          <Kit.btn :if={c.pending > 0} size={:sm} href={~p"/arc/#{c.id}"}>
+          <.link navigate={~p"/campaigns/#{c.id}"} class="btn btn-pri btn-sm">Carry on</.link>
+          <.link :if={c.pending > 0} navigate={~p"/arc/#{c.id}"} class="btn btn-gh btn-sm">
             <%= c.pending %> to review
-          </Kit.btn>
+          </.link>
         </div>
 
         <%!-- Published is a fact about the frozen copy, not a lever — the campaign's
@@ -509,9 +509,9 @@ defmodule PolyphonyWeb.LibraryLive do
         </p>
 
         <div :if={r.state == :reading} class="mt-2">
-          <Kit.btn kind={:primary} size={:sm} href={reading_path(r)}>
+          <.link navigate={reading_path(r)} class="btn btn-pri btn-sm">
             Carry on reading
-          </Kit.btn>
+          </.link>
         </div>
       </Kit.row>
 
@@ -522,7 +522,7 @@ defmodule PolyphonyWeb.LibraryLive do
         People publish stories you can read from inside the head of someone in them.
         Anything you start shows up here with your place kept.
         <:action>
-          <Kit.btn size={:sm} href={~p"/browse"}>Have a look</Kit.btn>
+          <.link navigate={~p"/browse"} class="btn btn-gh btn-sm">Have a look</.link>
         </:action>
       </Kit.empty>
     </Kit.sheet>

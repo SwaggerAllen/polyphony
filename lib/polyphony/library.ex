@@ -64,6 +64,9 @@ defmodule Polyphony.Library do
       frozen: Map.get(attrs, :frozen, false),
       derived_from_id: Map.get(attrs, :derived_from_id),
       derived_from_version: Map.get(attrs, :derived_from_version),
+      # Omitted for an original — `LibraryEntry.put/2` stamps it with the row's own id,
+      # which can't be known until the insert has happened (§3.1d).
+      root_id: Map.get(attrs, :root_id),
       payload: encode(payload)
     })
   end
@@ -335,6 +338,9 @@ defmodule Polyphony.Library do
         frozen: false,
         derived_from_id: source.id,
         derived_from_version: source.version,
+        # Carry the *root*, not the parent, so a fork of a fork still groups under the
+        # thing it all started from (§3.1d) rather than under its immediate ancestor.
+        root_id: source.root_id || source.id,
         payload: payload(source)
       },
       opts
@@ -358,6 +364,44 @@ defmodule Polyphony.Library do
   @doc "How many live copies were taken from `id`."
   @spec copy_count(term(), keyword()) :: non_neg_integer()
   def copy_count(id, opts \\ []), do: id |> copies_of(opts) |> length()
+
+  @doc """
+  Every live entry descended from the same original as `entry` — including it.
+
+  What Browse groups a story's forks by and what the library groups a world's copies
+  by (§3.1d). A parent pointer alone would mean walking the chain per row, which is the
+  wrong shape for rendering a list.
+  """
+  @spec family(LibraryEntry.t() | term(), keyword()) :: [LibraryEntry.t()]
+  def family(entry_or_id, opts \\ [])
+
+  def family(%LibraryEntry{} = entry, opts),
+    do: LibraryEntry.family(repo(opts), root_of(entry), opts)
+
+  def family(id, opts) do
+    case get(id, opts) do
+      nil -> []
+      entry -> family(entry, opts)
+    end
+  end
+
+  @doc "The original an entry descends from — itself, for an original."
+  @spec root_of(LibraryEntry.t()) :: integer()
+  def root_of(%LibraryEntry{root_id: root, id: id}), do: root || id
+
+  @doc """
+  Where a copy came from: `{parent, root}` entries, either of which may be nil.
+
+  Attribution is recorded on every derived entry and has never been shown. A reader
+  should always be able to walk back to where something started (§3.1d).
+  """
+  @spec provenance(LibraryEntry.t(), keyword()) ::
+          {LibraryEntry.t() | nil, LibraryEntry.t() | nil}
+  def provenance(%LibraryEntry{} = entry, opts \\ []) do
+    parent = entry.derived_from_id && get(entry.derived_from_id, opts)
+    root = if root_of(entry) == entry.id, do: nil, else: get(root_of(entry), opts)
+    {parent, root}
+  end
 
   @doc """
   Mint a **new** share token, invalidating the old one.

@@ -469,7 +469,13 @@ with a stop condition. Needs a control path into the existing policy.
 A cluster that emerged together and only makes sense together: how a campaign gets shared,
 how one campaign builds on another, and who is allowed to know what.
 
-### 3.1 Publication is a set of viewer perspectives · **new**
+### 3.1 Publication is a set of viewer perspectives · **new** — ✅ **Shipped**
+
+`Polyphony.Publication` — `perspectives` + `spectator` + `forkable`, stored **on the snapshot**
+rather than the live campaign, because the snapshot is the thing readers hold and the grant must
+not change under someone partway through. `Publication.viewer/2` is the entire seam: publication
+decides *who you may be*, `Visibility` decides what that person sees. Settings a snapshot never
+had read as spectator-only — the least-granting answer, not the most.
 
 Rather than enumerating which authoring surfaces are published, **publication names the
 perspectives a reader may adopt**, and `visible_to?/3` (§8) does the filtering it already
@@ -596,7 +602,13 @@ work: it needs `Visibility` in the loop, not just `Groups`. That's the piece the
 `polyphony-audience-picker.html` mock depends on, and the reason its inherited-tick treatment
 (`.chk-via`) can't be built yet.
 
-### 3.1b Limited omniscient — the published reading mode · **new**
+### 3.1b Limited omniscient — the published reading mode · **new** — ✅ **Shipped**
+
+Two new viewer values on `Visibility`, and neither loosens anything: `{:readers, ids}` is a
+**union over the existing character predicate** (so it inherits default-deny and cannot drift from
+what those characters actually knew), and `:spectator` is its own default-deny clause with
+whispers denied *ahead* of the general speech clause. Both are reachable only through a published
+snapshot; nothing in play produces them.
 
 *Highest-value item in this cluster.* A reader who just wants the story shouldn't have to choose a
 character or settle for a camera. **Limited omniscient blends every published perspective** — the
@@ -613,7 +625,7 @@ union of what the shared cast knows, and nothing beyond it.
 **Spectator is a real option but not the expected read**, and publishers can opt out of it. It is
 the default only because it is the one setting that reveals nothing.
 
-### 3.1c Publication is two independent settings · **change**
+### 3.1c Publication is two independent settings · **change** — ✅ **Shipped**
 
 *Supersedes the four-rung ladder in an earlier draft, which conflated two unrelated decisions.*
 
@@ -626,7 +638,12 @@ Consequence: **characters are not publishable on their own.** They travel only i
 a character lifted out of their campaign has no history and knows nobody — which is the same reason
 cross-campaign import is out of scope (2.7). Browse lists stories and worlds, not people.
 
-### 3.1c-ii Unreadable scenes must be detectable at publish time · **new**
+### 3.1c-ii Unreadable scenes must be detectable at publish time · **new** — ✅ **Shipped**
+
+`Publication.unreadable_scenes/2` + `Publication.Preflight.warning/2`, shown live on the campaign's
+publish panel as the grant changes. It warns and never blocks — sometimes a gap is the point.
+`modes_for_scene/3` keeps the reader's current perspective **last rather than removed**, so the
+control never reorders under them.
 
 Falls out of 3.1c: if spectator is off and a scene contains none of the published cast, **no reader
 can open it**. That's a legitimate authorial choice — a gap can be the point — but it must not
@@ -640,7 +657,13 @@ happen by accident.
   the reader's current one listed last rather than removed — so the control never reorders under
   them.
 
-### 3.1d Group copies by their root · **new**
+### 3.1d Group copies by their root · **new** — ✅ **Shipped (the identity)**
+
+`root_id` on every library entry, stamped at insert (an original is its own root) and carried
+forward by `Library.copy/3` — so a fork of a fork still groups under the thing it all started
+from, which a parent pointer alone can't tell you. `Library.family/2` is one indexed read;
+`Library.provenance/2` walks back to both the parent and the original. Browse groups by it. The
+library's by-campaign version grouping is still to do.
 
 Every campaign copies its world (2.5b) and every fork copies everything, so within a year there are
 a dozen artifacts called Saltmarch. Flat lists become unusable.

@@ -51,6 +51,23 @@ defmodule Polyphony.Scene.Cast do
     }
   end
 
+  @doc """
+  Build a cast from an id→name map that is already in hand.
+
+  A published snapshot pins its cast's sheets (§B1), so a reading view already knows
+  every name and must **not** reach into the author's live library to find them —
+  which is exactly what `for_scene/1` would do. Same resolver, different source.
+  """
+  @spec from_names(%{optional(term()) => String.t()}) :: t()
+  def from_names(names) do
+    pairs = for {id, name} <- names, is_binary(name) and name != "", do: {to_string(id), name}
+
+    %__MODULE__{
+      id_to_name: Map.new(pairs),
+      name_to_id: Map.new(pairs, fn {id, name} -> {name, id} end)
+    }
+  end
+
   @doc "The display name for a character id (the id itself when unknown)."
   @spec render_name(t(), term()) :: String.t()
   def render_name(%__MODULE__{id_to_name: m}, id) do

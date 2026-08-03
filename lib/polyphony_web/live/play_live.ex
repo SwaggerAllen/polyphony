@@ -44,6 +44,7 @@ defmodule PolyphonyWeb.PlayLive do
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Scene.Cast
   alias PolyphonyWeb.Kit
+  alias PolyphonyWeb.Transcript
   alias PolyphonyWeb.Layouts
   alias PolyphonyWeb.Play.Strip
   alias PolyphonyWeb.Voice
@@ -1249,14 +1250,10 @@ defmodule PolyphonyWeb.PlayLive do
   # land with the latest action rather than at the top. A character viewer only ever gets
   # their own turn failures (§1.7), which always carry a beat, so they sort in place.
   defp transcript_items(messages, failures, current_beat) do
-    {blocks, _} =
-      messages
-      |> turn_blocks()
-      |> Enum.map_reduce(0, fn b, last ->
-        eff = b.beat || last
-        {Map.put(b, :eff_beat, eff), eff}
-      end)
-
+    # Blocking and beat rules live in `PolyphonyWeb.Transcript`, shared with the
+    # published reading view — the reading view *is* this screen with a different
+    # bottom bar, and a second implementation of prose rendering is how the two drift.
+    blocks = Transcript.blocks(messages)
     items = Enum.map(blocks, &{:block, &1}) ++ Enum.map(failures, &{:fail, &1})
 
     items
@@ -1267,9 +1264,9 @@ defmodule PolyphonyWeb.PlayLive do
     |> mark_beat_rules()
   end
 
-  # A beat rule opens a beat exactly once, so it's decided by walking the sorted
-  # items and noticing where the beat changes — not by each block guessing whether
-  # it's first, which is how the same rule ends up drawn three times.
+  # A beat rule opens a beat exactly once, so it's decided by walking the *sorted*
+  # items — which is why this stays here rather than in the shared module: play
+  # interleaves failures with turns, and a rule must open above whichever came first.
   defp mark_beat_rules(items) do
     {marked, _} =
       Enum.map_reduce(items, nil, fn
@@ -1287,38 +1284,6 @@ defmodule PolyphonyWeb.PlayLive do
       end)
 
     marked
-  end
-
-  defp turn_blocks(messages) do
-    messages
-    |> Enum.reduce([], fn m, acc ->
-      payload = m[:payload] || %{}
-      pid = payload[:packet_id]
-
-      case acc do
-        [%{type: :turn, packet_id: ^pid} = head | rest] when not is_nil(pid) ->
-          [%{head | msgs: head.msgs ++ [m]} | rest]
-
-        _ when is_nil(pid) ->
-          [
-            %{type: :event, packet_id: nil, character: nil, beat: payload[:beat], msgs: [m]}
-            | acc
-          ]
-
-        _ ->
-          [
-            %{
-              type: :turn,
-              packet_id: pid,
-              character: payload[:character_id] || payload[:speaker_id],
-              beat: payload[:beat],
-              msgs: [m]
-            }
-            | acc
-          ]
-      end
-    end)
-    |> Enum.reverse()
   end
 
   # The editable text of a turn: the whole turn — thoughts, speech, actions, and
@@ -1655,7 +1620,7 @@ defmodule PolyphonyWeb.PlayLive do
       <%!-- An event with no packet — a world beat, an entrance — is nobody's turn,
             so it carries no attribution and no editorial controls. --%>
       <div :if={@block.type == :event} class="py-1">
-        <div :for={m <- @block.msgs}><%= render_move(m, @cast, @register, @voices) %></div>
+        <div :for={m <- @block.msgs}><%= Transcript.render_move(m, @cast, @register, @voices) %></div>
       </div>
 
       <div
@@ -1675,8 +1640,8 @@ defmodule PolyphonyWeb.PlayLive do
           </Kit.pill>
         </div>
 
-        <div :for={m <- ordered_moves(@block.msgs)}>
-          <%= render_move(m, @cast, @register, @voices) %>
+        <div :for={m <- Transcript.ordered_moves(@block.msgs)}>
+          <%= Transcript.render_move(m, @cast, @register, @voices) %>
         </div>
 
         <div :if={@editable and @editing != @block.packet_id} class="turn-controls flex flex-wrap gap-0.5 mt-2 -ml-1">
@@ -1720,14 +1685,6 @@ defmodule PolyphonyWeb.PlayLive do
       </div>
     </div>
     """
-  end
-
-  # Demeanor is how they *are* through the turn, not something they do in it, so it
-  # leads — which is also the order the mock draws. Everything else keeps the order
-  # the packet declared.
-  defp ordered_moves(msgs) do
-    {demeanor, rest} = Enum.split_with(msgs, &(&1[:kind] == "DemeanorReported"))
-    demeanor ++ rest
   end
 
   defp control_label("assisted"), do: "Draft & approve"
@@ -1785,128 +1742,5 @@ defmodule PolyphonyWeb.PlayLive do
     </div>
     <div class="dbg-detail err"><%= @detail %></div>
     """
-  end
-
-  # Render a broadcaster message as a transcript line, in the viewer's register.
-  #
-  # Every payload names its character by **id** (§5.2), so each of these renders that
-  # id through the scene cast. Display only — nothing here decides who sees what;
-  # `Visibility` already did that before the message reached this view.
-  #
-  # The two registers tell move types apart the same way, structurally, but at
-  # different densities: `.stage` puts a gutter label beside each move so the author
-  # can see the machinery, `.page` lets them read as prose. Neither uses italics —
-  # the kit drops slant as a semantic outright.
-  defp render_move(%{kind: "SpeechUttered", payload: p}, cast, register, _voices) do
-    assigns = %{
-      content: p[:content],
-      whisper: to_string(p[:audibility]) == "private",
-      to: p[:addressed_to] |> List.wrap() |> Enum.map_join(", ", &Cast.render_name(cast, &1)),
-      register: register
-    }
-
-    ~H"""
-    <div class={["move speech", @whisper && "whisper"]}>
-      <div :if={@register == :stage} class="flex gap-2.5">
-        <span class="lbl dim pt-1 w-14 shrink-0"><%= if @whisper, do: "Whisper", else: "Speech" %></span>
-        <span class="text-[15px] leading-relaxed"><%= @content %></span>
-      </div>
-      <p :if={@register == :page} class="text-[17px] leading-[1.75] mt-2.5"><%= @content %></p>
-      <div :if={@whisper and @to != ""} class="lbl mt-1" style="color:var(--pencil)">
-        Whisper · only <%= @to %>
-      </div>
-    </div>
-    """
-  end
-
-  defp render_move(%{kind: "ThoughtOccurred", payload: p}, _cast, _register, voices) do
-    # An interior move is structurally invisible to everyone else, so the note is a
-    # true statement about the log rather than a warning about a setting.
-    id = p[:character_id]
-    assigns = %{content: p[:content], colour: Voice.of(voices, to_string(id))}
-
-    ~H"""
-    <Kit.thought colour={@colour} note="Thought · not shared" class="mt-2.5">
-      <%= @content %>
-    </Kit.thought>
-    """
-  end
-
-  defp render_move(%{kind: "ActionTaken", payload: p}, _cast, register, _voices) do
-    # No actor prefix: the design attributes a turn once, at the top of its block, so
-    # prepending the name here would say it twice — and the model already writes
-    # actions in the third person naming whoever is acting.
-    assigns = %{text: String.trim(to_string(p[:content])), register: register}
-
-    ~H"""
-    <div class="move action">
-      <div :if={@register == :stage} class="flex gap-2.5">
-        <span class="lbl dim pt-1 w-14 shrink-0">Action</span>
-        <span class="text-[15px] leading-relaxed"><%= @text %></span>
-      </div>
-      <p :if={@register == :page} class="text-[17px] leading-[1.75]"><%= @text %></p>
-    </div>
-    """
-  end
-
-  defp render_move(%{kind: "DemeanorReported", payload: p}, cast, register, _voices) do
-    case String.trim(to_string(p[:demeanor] || "")) do
-      "" ->
-        # Nothing to report — render nothing rather than "X seems ."
-        assigns = %{}
-        ~H||
-
-      demeanor ->
-        assigns = %{
-          demeanor: demeanor,
-          who: Cast.render_name(cast, p[:character_id]),
-          register: register
-        }
-
-        ~H"""
-        <div class="move demeanor">
-          <div :if={@register == :stage} class="flex gap-2.5">
-            <span class="lbl dim pt-1 w-14 shrink-0">Demeanor</span>
-            <span class="text-[14px] leading-relaxed dim"><%= @demeanor %></span>
-          </div>
-          <%!-- In the reading register demeanor folds into the prose rather than
-                standing apart as a field. --%>
-          <p :if={@register == :page} class="text-[17px] leading-[1.75] dim"><%= @demeanor %></p>
-        </div>
-        """
-    end
-  end
-
-  defp render_move(%{kind: "WorldEventOccurred", payload: p}, _cast, register, _voices) do
-    assigns = %{content: p[:content], register: register}
-
-    ~H"""
-    <Kit.world_move register={@register} class="my-4"><%= @content %></Kit.world_move>
-    """
-  end
-
-  defp render_move(%{kind: kind, payload: p}, cast, _register, voices)
-       when kind in ["CharacterEntered", "CharacterExited"] do
-    # An entrance reads as fiction first: a coloured dot and a plain line, not a
-    # system notice. Nobody sees the sheet behind it.
-    id = to_string(p[:character_id])
-
-    assigns = %{
-      who: Cast.render_name(cast, id),
-      colour: Voice.of(voices, id),
-      verb: if(kind == "CharacterEntered", do: "is here", else: "has gone")
-    }
-
-    ~H"""
-    <div class="flex items-center gap-2 py-1">
-      <Kit.dot colour={@colour} />
-      <span class="text-[13px] dim"><%= @who %> <%= @verb %>.</span>
-    </div>
-    """
-  end
-
-  defp render_move(_other, _cast, _register, _voices) do
-    assigns = %{}
-    ~H||
   end
 end

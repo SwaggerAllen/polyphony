@@ -151,6 +151,14 @@
   margin-bottom: 1rem;
 }
 
+.mb-5 {
+  margin-bottom: 1.25rem;
+}
+
+.ml-auto {
+  margin-left: auto;
+}
+
 .mt-0 {
   margin-top: 0px;
 }
@@ -433,6 +441,14 @@
   background-color: transparent;
 }
 
+.p-2 {
+  padding: 0.5rem;
+}
+
+.p-2\.5 {
+  padding: 0.625rem;
+}
+
 .p-3 {
   padding: 0.75rem;
 }
@@ -468,6 +484,11 @@
 .px-4 {
   padding-left: 1rem;
   padding-right: 1rem;
+}
+
+.px-5 {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
 }
 
 .py-1 {
@@ -528,6 +549,10 @@
 .py-9 {
   padding-top: 2.25rem;
   padding-bottom: 2.25rem;
+}
+
+.pb-3 {
+  padding-bottom: 0.75rem;
 }
 
 .pl-3 {
@@ -650,6 +675,10 @@
   line-height: 1.75;
 }
 
+.leading-\[1\.7\] {
+  line-height: 1.7;
+}
+
 .leading-none {
   line-height: 1;
 }
@@ -672,6 +701,10 @@
 
 .underline {
   text-decoration-line: underline;
+}
+
+.opacity-50 {
+  opacity: 0.5;
 }
 
 .blur {
