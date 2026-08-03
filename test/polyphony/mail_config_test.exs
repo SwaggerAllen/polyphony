@@ -103,6 +103,24 @@ defmodule Polyphony.MailConfigTest do
       assert config[:tls_options][:verify] == :verify_peer
     end
 
+    test "a wildcard certificate is accepted, as a browser would" do
+      config =
+        mailer_config(%{"SMTP_HOST" => "smtp.example.com", "MAIL_FROM" => "a@example.com"})
+
+      match_fun = config[:tls_options][:customize_hostname_check][:match_fun]
+
+      # Erlang's default check is strict RFC 6125 and rejects `*.example.com` for
+      # `smtp.example.com`. Providers serve wildcards, so `verify_peer` is unusable
+      # without the `:https` rule — and it fails as `:tls_failed`, which reads like a
+      # bad certificate rather than a missing option.
+      assert is_function(match_fun, 2)
+
+      assert match_fun.({:dns_id, ~c"smtp.example.com"}, {:dNSName, ~c"*.example.com"})
+
+      # Still only the leftmost label: a wildcard must not span a dot.
+      refute match_fun.({:dns_id, ~c"a.b.example.com"}, {:dNSName, ~c"*.example.com"}) == true
+    end
+
     test "a port left on the host still wins, so it is warned about" do
       # Deleting SMTP_PORT is not enough on its own: the host's own port is still
       # honoured, which is right (an explicit choice is an explicit choice) but is the

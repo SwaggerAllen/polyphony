@@ -192,7 +192,17 @@ if config_env() == :prod do
         verify: :verify_peer,
         cacerts: :public_key.cacerts_get(),
         server_name_indication: String.to_charlist(smtp_host),
-        depth: 3
+        depth: 3,
+        # Without this, `verify_peer` rejects a perfectly valid wildcard certificate.
+        # Erlang's default hostname check is strict RFC 6125 and does **not** match
+        # `*.postmarkapp.com` against `smtp.postmarkapp.com`; the `:https` match fun is
+        # the ordinary browser rule (one wildcard, leftmost label only). Providers
+        # almost always serve a wildcard, so verification is unusable without it — and
+        # the failure reads as `:tls_failed` / `hostname_check_failed`, which sounds
+        # like a bad certificate rather than a missing option.
+        customize_hostname_check: [
+          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+        ]
       ],
       retries: 2,
       # A submission relay is connected to directly. Looking up MX records for it asks
