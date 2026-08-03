@@ -186,6 +186,67 @@ defmodule Polyphony.Library do
     end
   end
 
+  @doc """
+  How long a soft-deleted entry waits before it really goes (§2.13).
+
+  The design leans on this being a **number** rather than a claim: the trash row reads
+  *gone for good in 24 days*, and the whole point of the countdown is that it's the one
+  place the recovery window isn't a promise. Which only holds if something purges on
+  schedule — `Polyphony.Jobs.PurgeTrash` is that something.
+  """
+  @spec retention_days() :: pos_integer()
+  def retention_days, do: 30
+
+  @doc """
+  Days left before an entry is purged, or nil if it isn't in the trash.
+
+  Rounded up, so "1 day" means there is still a day: rounding down would show a zero to
+  someone who can still get their work back, which is the wrong way to be wrong here.
+  """
+  @spec days_until_purge(LibraryEntry.t(), keyword()) :: non_neg_integer() | nil
+  def days_until_purge(entry, opts \\ [])
+  def days_until_purge(%LibraryEntry{deleted_at: nil}, _opts), do: nil
+
+  def days_until_purge(%LibraryEntry{deleted_at: at}, opts) do
+    elapsed = NaiveDateTime.diff(now(opts), at, :second)
+    remaining = retention_days() * 86_400 - elapsed
+
+    remaining |> Kernel./(86_400) |> Float.ceil() |> trunc() |> max(0)
+  end
+
+  @doc "Everything of `owner`'s that is in the trash, oldest deletion first."
+  @spec trash(term(), keyword()) :: [LibraryEntry.t()]
+  def trash(owner, opts \\ []) do
+    owner
+    |> list_for_owner(Keyword.put(opts, :include_deleted, true))
+    |> Enum.filter(&(&1.deleted_at != nil))
+    |> Enum.sort_by(& &1.deleted_at, NaiveDateTime)
+  end
+
+  @doc "Everything of `owner`'s that is archived — filed away, not deleted."
+  @spec archived(term(), keyword()) :: [LibraryEntry.t()]
+  def archived(owner, opts \\ []) do
+    owner
+    |> list_for_owner(Keyword.put(opts, :include_archived, true))
+    |> Enum.filter(&(&1.archived_at != nil and &1.deleted_at == nil))
+  end
+
+  @doc """
+  Purge everything whose recovery window has run out. Returns how many went.
+
+  The other half of the countdown: without this the number on the screen is a claim
+  again, which is the thing the design set out to avoid.
+  """
+  @spec purge_expired(keyword()) :: non_neg_integer()
+  def purge_expired(opts \\ []) do
+    cutoff = NaiveDateTime.add(now(opts), -retention_days() * 86_400, :second)
+
+    repo(opts)
+    |> LibraryEntry.deleted_before(cutoff)
+    |> Enum.map(&purge(&1.id, opts))
+    |> length()
+  end
+
   @doc "Restore a soft-deleted (or archived) entry within the recovery window."
   def restore(id, opts \\ []) do
     repo = repo(opts)

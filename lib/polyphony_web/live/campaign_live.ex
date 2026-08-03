@@ -18,6 +18,7 @@ defmodule PolyphonyWeb.CampaignLive do
     QuickBuild,
     Effective,
     SceneGate,
+    StubGen,
     WorldBible
   }
 
@@ -55,6 +56,7 @@ defmodule PolyphonyWeb.CampaignLive do
          building: false,
          build_progress: nil,
          expanding_premise: false,
+         generating: false,
          qb_world: "",
          qb_seeds: [""],
          qb_suggest: true,
@@ -316,6 +318,47 @@ defmodule PolyphonyWeb.CampaignLive do
 
       {:noreply, put_flash(socket, :info, "Published a public snapshot of this campaign.")}
     end)
+  end
+
+  # Fill every pending stub at once — ground each one's sheet in its world and role and
+  # finalize it, so the author doesn't open twenty walk-ons one by one. This lives on
+  # the cast rather than in the library because characters are written *inside* a
+  # campaign now (`ux/polyphony-library.html` §00): the pending ones are the campaign's
+  # pending ones, and the button belongs next to the pills that say so.
+  def handle_event("generate_pending", _params, socket) do
+    safe(socket, fn ->
+      case Enum.filter(socket.assigns.cast, &pending?/1) do
+        [] ->
+          {:noreply, socket}
+
+        stubs ->
+          user = socket.assigns.current_user
+
+          {:noreply,
+           socket
+           |> assign(generating: true)
+           |> start_async(:generate_pending, fn -> generate_stubs(stubs, user) end)}
+      end
+    end)
+  end
+
+  def handle_async(:generate_pending, {:ok, {done, failed}}, socket) do
+    detail = if failed > 0, do: " #{failed} failed — open those to retry.", else: ""
+
+    {:noreply,
+     socket
+     |> assign(generating: false, entry: Library.get(socket.assigns.entry.id))
+     |> put_flash(:info, "Generated #{done} character(s).#{detail}")
+     |> load()}
+  end
+
+  def handle_async(:generate_pending, result, socket) do
+    Logger.warning("[authoring] bulk stub generation failed: #{inspect(result)}")
+
+    {:noreply,
+     socket
+     |> assign(generating: false)
+     |> put_flash(:error, "Bulk generation failed — try again.")}
   end
 
   def handle_async(:premise, {:ok, {:ok, text}}, socket) do
@@ -857,6 +900,20 @@ defmodule PolyphonyWeb.CampaignLive do
         </div>
       </Kit.row>
 
+      <%!-- Stubs come from other people's relationships, so they arrive in batches.
+            One button fills them all rather than twenty trips through the editor. --%>
+      <Kit.row
+        :if={pending_count(@cast) > 0}
+        class="px-4 py-2.5 flex items-center justify-between gap-2"
+      >
+        <span class="text-[12px] dim">
+          <%= pending_line(pending_count(@cast)) %> — stubs from relationships, not written yet.
+        </span>
+        <Kit.btn size={:sm} type="button" phx-click="generate_pending" disabled={@generating}>
+          <%= if @generating, do: "Filling them in…", else: "Fill them in" %>
+        </Kit.btn>
+      </Kit.row>
+
       <Kit.row :for={c <- @cast} class="px-4 py-2.5 flex items-center gap-2.5">
         <span class="av shrink-0" style={"background:#{Voice.of_sheet(Library.payload(c))}"}></span>
         <div class="min-w-0 flex-1">
@@ -1124,6 +1181,23 @@ defmodule PolyphonyWeb.CampaignLive do
   defp pending?(char) do
     match?(%CharacterSheet{status: s} when s != :full, Library.payload(char))
   end
+
+  # Best-effort per stub: one that can't be filled leaves the rest alone and says so.
+  defp generate_stubs(stubs, user) do
+    uid = user && user.id
+
+    Enum.reduce(stubs, {0, 0}, fn entry, {ok, bad} ->
+      case StubGen.finalize(entry, uid) do
+        :ok -> {ok + 1, bad}
+        :error -> {ok, bad + 1}
+      end
+    end)
+  end
+
+  defp pending_count(cast), do: Enum.count(cast, &pending?/1)
+
+  defp pending_line(1), do: "1 pending character"
+  defp pending_line(n), do: "#{n} pending characters"
 
   defp bible_label(_bibles, nil), do: nil
 

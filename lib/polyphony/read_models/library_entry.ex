@@ -80,6 +80,11 @@ defmodule Polyphony.ReadModels.LibraryEntry do
 
   def get_by_share_token(_repo, _), do: nil
 
+  @doc "Entries soft-deleted before `cutoff` — whose recovery window has run out (§2.13)."
+  def deleted_before(repo, cutoff) do
+    repo.all(from(e in __MODULE__, where: not is_nil(e.deleted_at) and e.deleted_at < ^cutoff))
+  end
+
   @doc "Live entries copied from `source_id` (§2.5b provenance)."
   def copies_of(repo, source_id) do
     repo.all(

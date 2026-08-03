@@ -314,16 +314,14 @@ and whose output must not contain it. That is a prompt-level obligation the rest
 solves structurally (a character is never *told* what they can't know), so it needs its own
 care — and a test that a seeded secret doesn't survive into the cover.
 
-### 2.13 Deleted things really go, on a clock · **new**
-`Library` has `soft_delete/2`, `restore/2` and `purge/2`, but no retention window and nothing
-that calls `purge`. The library design leans on the number: *deleted things wait 30 days before
-they're really gone*, and a trashed row reads "Gone for good in 24 days" — the mock's note says
-the countdown is the whole point, *the only place the recovery window is a number rather than a
-claim*.
-
-Wanted: a defined retention window, a `deleted_at`-derived days-remaining the UI can show, and
-something that actually purges on schedule (an Oban job). Without the last one the countdown is
-a claim again, which is the thing the design set out to avoid.
+### 2.13 Deleted things really go, on a clock · **new** — ✅ **Shipped**
+`Library.retention_days/0` is 30, `days_until_purge/2` rounds **up** (so a sliver of a day left
+never reads as none) and bottoms out at zero rather than going negative, and
+`Library.purge_expired/1` hard-deletes what is past the window. `Polyphony.Jobs.PurgeTrash` runs
+it nightly off `Oban.Plugins.Cron` — that job is the whole point of the entry, because without
+something arriving at the end of it the countdown is a claim again, which is the thing the design
+set out to avoid. `trash/2` and `archived/2` are separate reads, because they're separate
+shelves, and the library screen shows them side by side.
 
 ### 2.14 Reading a sheet as of a past scene · **new** — ✅ **Shipped**
 `Effective.sheet_as_of/4` folds only the canon arc extracted at or before a given stop, and
@@ -385,12 +383,19 @@ bible. Consequences:
   campaign's current version as a new template.
 - Same logic applies to characters and groups: campaign-owned, never shared references.
 
-### 2.5c Finishing a campaign · **new**
+### 2.5c Finishing a campaign · **new** — ✅ **Shipped**
 
-Distinct from archiving. **Archived** = out of the library, reversible, no semantic meaning.
-**Finished** = deliberately concluded: closes any open scene through the normal path, marks
-the campaign as a completed whole, and is the precondition for another campaign naming it as
-a prequel (3.4). Reversible, but it's a statement rather than filing.
+`Polyphony.Campaigns` — `status/1` derives `:unstarted | :playing | :finished`, and only
+`finished_at` is stored, because "this story is over" is the one thing the data can't work out
+for itself. `finish/2` deliberately does **not** archive: a finished campaign is the one you most
+want to be able to find, to read back or to name as a prequel (§3.4). `reopen/2` because
+concluding something is a judgement and judgements change. Closing an open scene stays the
+caller's job through the normal path — a scene closing is an event, and this is a library write.
+
+Also here, because the library's rows needed them: `pending_review/2` (a campaign's cast's arc
+proposals plus its world's — the same number the scene gate blocks on, so the row doesn't
+surprise anyone) and `by_character/2`, which is free because characters don't cross campaigns
+(§2.7).
 
 ### 2.6 Character picker for introductions · **wiring**
 
@@ -647,13 +652,22 @@ a dozen artifacts called Saltmarch. Flat lists become unusable.
 - `derived_from` is already stored on every derived entry and has never been displayed. Show it: a
   reader should always be able to walk back to where something started.
 
-### 3.1e Reading position on a published campaign · **new**
+### 3.1e Reading position on a published campaign · **new** — ✅ **Shipped**
 
-A published campaign someone is reading isn't theirs, may not be forkable, and can be unpublished
-underneath them — so it can't live under their campaigns, and it needs its own shelf.
+`Polyphony.Reading` + `Reading.Bookmark` — scene, beat and **perspective** together, because
+perspective is part of where you were: coming back into a different head is coming back to a
+different story. Stored as a `"bookmark"` library entry owned by the *reader*, one per published
+campaign (`mark/4` moves the existing one rather than stacking), pointing at the **frozen
+published entry** rather than the author's live campaign.
 
-Bookmark needs **scene, beat and perspective**, since perspective is part of where you were. Keep
-the bookmark when a campaign is unpublished rather than dropping it; it may come back.
+`shelf/2` returns `:reading | :finished | :gone`, and `:gone` **keeps the row** — unpublishing is
+usually temporary and losing someone's place isn't recoverable from their side. Readability is
+default-deny: anything not positively public-or-unlisted-and-live reads as gone, so a stale row
+can never offer a link into somebody's unpublished draft.
+
+Still open: the reading destination itself. The published reading view (§3.1b) doesn't exist yet,
+so *Carry on reading* goes to the share link when there is one and to browse otherwise. It should
+resume at the bookmarked scene/beat/perspective once there's a screen that can.
 
 ### 3.2 View-as outside the play screen · **new**
 

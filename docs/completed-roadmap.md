@@ -460,6 +460,52 @@ out — try again*) which need the job's status surfaced, the in-row review at s
 the edit split between correcting the base and adding a new change (§04). Triggers stay unbuilt —
 the mock says so itself; the provenance slot is there so it needn't be retrofitted.
 
+### The library, ported (`ux/polyphony-library.html`)
+Not a create hub any more. The audit found four things the domain couldn't say, and one of them
+was a promise with nothing behind it.
+
+**A campaign says where it is** (§2.5c). `Polyphony.Campaigns` — `:unstarted | :playing |
+:finished`, derived from the scenes list except for `finished_at`, which is the one thing the data
+can't work out for itself. **Finishing is not archiving**, deliberately: archiving is filing and
+says nothing about the story, while finishing is a statement, the precondition for another
+campaign naming this one a prequel (§3.4), and reversible, because concluding something is a
+judgement. `pending_review/2` counts a campaign's cast's proposals *and* its world's — the same
+number the scene gate blocks on, so the row an author reads before opening a campaign is the
+number that will stop them.
+
+**The recovery window is a number, not a claim** (§2.13). `Library` had `soft_delete`, `restore`
+and `purge`, and nothing that ever called the last one — so *deleted things wait 30 days* had
+nothing behind it and the trash row's countdown would have counted down to a day that never came.
+Now: a defined window, a `days_until_purge` that rounds **up** (a sliver of a day left never reads
+as none) and bottoms out at zero, `purge_expired/1`, and `Jobs.PurgeTrash` on a nightly cron. The
+job is the entry; the rest is display.
+
+**A reading shelf** (§3.1e). `Polyphony.Reading` — scene, beat and **perspective** together,
+because perspective is part of where you were and coming back into a different head is coming back
+to a different story. A published campaign you're reading isn't a campaign you own: you can't play
+it, you may not be able to fork it, and it can be unpublished out from under you. Filing it under
+Campaigns would promise all three; its own shelf promises exactly one thing. Unpublishing keeps
+the row and keeps the place — `:gone` is a state, not a deletion — because unpublishing is usually
+temporary and losing someone's place isn't recoverable from their side.
+
+**The screen** has one create button; worlds and characters are made inside a campaign, so the
+three-way "what do I make first" question never gets asked, and first run says so with no taxonomy
+lesson. People group by campaign for free (§2.7) with walk-ons collapsed behind a count, because
+they're the tier you scan past. Worlds lists **templates only** — attaching copies (§2.5b), so
+without that filter the tab shows the same name three times, two of which belong to campaigns —
+and each row counts the campaigns that *started from* it, past tense. Archive and trash are two
+shelves side by side, reachable from a tab and from the campaigns footer, which is the front door
+they have never had.
+
+Two things moved rather than being dropped: bulk stub generation is now on the campaign's cast,
+where the pending characters actually live, and the library's per-entry visibility control is gone
+because changing who can see something belongs next to the thing itself — the library wears the
+badge, the editors own the control.
+
+Still open and recorded: *Carry on reading* has nowhere good to go until the published reading
+view (§3.1b) exists, so it falls back to the share link or browse; library-wide search stays
+§2.15, deliberately later.
+
 ---
 
 ## Immediate milestone — the backend the frontend design needs
