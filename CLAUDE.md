@@ -175,6 +175,12 @@ for it.
   **It is not admin-gated** (it can't be — its best use is diagnosing sign-in while
   signed out), so nothing that reaches a log may carry a live token or a whole email
   address.
+- **Mail is viewable locally.** Dev uses Swoosh's `Local` adapter with the real
+  `Transport.Email`, so `mix phx.server` then `/dev/mailbox` shows the actual sent
+  message — body, and the provider headers — rather than the link the login screen
+  prints. No supervision to add: Swoosh's own app supervises the in-memory store
+  (`config :swoosh, :local`, default true). The route is compiled in only under
+  `:dev_mailbox`, false by default, since it renders every magic link ever sent.
 - **Email is the front door.** Sign-in is magic-link only, so an unconfigured mailer
   means nobody can log in — and it fails *quietly*, because the default
   `Transport.Log` records the notification as `"sent"`. `runtime.exs` arms the real

@@ -97,6 +97,15 @@ The boot log prints what was resolved — `[boot] mail relay=host:port from=… 
 — so a misconfiguration is visible on startup rather than at the first failed send.
 `auth=MISSING` means `SMTP_USERNAME` never arrived.
 
+### Locally
+
+Dev needs no provider: it runs Swoosh's `Local` adapter behind the same
+`Transport.Email`, and `/dev/mailbox` renders what was sent. That is the only way to
+see the real message — the body, and the provider headers — since the login screen's
+on-page link bypasses mail entirely. Both the adapter and the route are dev-only, and
+the route is compiled in only when `:dev_mailbox` is set, because it displays every
+magic link the app has issued.
+
 ### When the log says `sent` and nothing arrives
 
 A `sent` line means the relay returned a 250 and took the message. It is *theirs*

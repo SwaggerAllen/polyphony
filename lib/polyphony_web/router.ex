@@ -85,6 +85,17 @@ defmodule PolyphonyWeb.Router do
     end
   end
 
+  # The sent-mail viewer (Swoosh's Local adapter). Compiled in only where
+  # `:dev_mailbox` is on — dev, and nowhere else by default — because it renders every
+  # message the app has sent, magic links included. The `false` default is the point:
+  # this route must have to be switched on, never merely fail to be switched off.
+  if Application.compile_env(:polyphony, :dev_mailbox, false) do
+    scope "/dev" do
+      pipe_through(:browser)
+      forward("/mailbox", Plug.Swoosh.MailboxPreview)
+    end
+  end
+
   # The design-kit catalogue. Compiled in only where :storybook is on — dev by
   # default, elsewhere via STORYBOOK=true — so the routes don't exist at all in a
   # plain prod boot. It renders components and reads nothing from the domain,

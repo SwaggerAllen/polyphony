@@ -171,6 +171,39 @@ defmodule Polyphony.MailConfigTest do
     end
   end
 
+  describe "local development" do
+    test "dev sends through the real transport into an in-memory mailbox" do
+      dev = Config.Reader.read!("config/dev.exs", env: :dev)
+
+      # Pointing the *transport* at Email is the part that is easy to miss: leave it on
+      # `Transport.Log` and the mailbox stays empty while the log reports success.
+      assert get_in(dev, [:polyphony, :notification_transport]) ==
+               Polyphony.Notifications.Transport.Email
+
+      assert get_in(dev, [:polyphony, Polyphony.Mailer])[:adapter] == Swoosh.Adapters.Local
+      # `Transport.Email` refuses without one, so dev needs a sender too.
+      assert get_in(dev, [:polyphony, :mail_from])
+    end
+
+    test "the mail viewer is dev-only, and off unless switched on" do
+      # It renders every message the app has sent, magic links included. Same
+      # fail-closed shape as `:expose_magic_link`: it must be switched on, never merely
+      # fail to be switched off.
+      assert get_in(Config.Reader.read!("config/dev.exs", env: :dev), [:polyphony, :dev_mailbox])
+
+      for file <- ["config/config.exs", "config/test.exs"] do
+        refute get_in(Config.Reader.read!(file, env: :prod), [:polyphony, :dev_mailbox])
+      end
+    end
+
+    test "prod is untouched by any of it" do
+      config = read_prod(%{"SMTP_HOST" => "smtp.example.com", "MAIL_FROM" => "a@e.com"})
+
+      refute get_in(config, [:polyphony, :dev_mailbox])
+      assert get_in(config, [:polyphony, Polyphony.Mailer])[:adapter] == Swoosh.Adapters.SMTP
+    end
+  end
+
   describe "arming the mailer at all" do
     test "half-configured stays on the logging transport" do
       # Deliberate: the failure should read as "no mail configured", not as a stream of

@@ -39,4 +39,16 @@ config :polyphony, :debug_drawer, true
 # being ported and every component wants looking at in isolation.
 config :polyphony, :storybook, true
 
+# Mail locally, without a provider. Swoosh's Local adapter keeps messages in memory
+# and `/dev/mailbox` renders them, which is the only way to see the *actual* email —
+# subject, body, and the provider headers — rather than the link the login screen
+# already prints. Dev only: the route and the storage process are both gated on this.
+config :polyphony, :dev_mailbox, true
+config :polyphony, Polyphony.Mailer, adapter: Swoosh.Adapters.Local
+config :polyphony, :mail_from, "polyphony@localhost"
+
+# Point the notification path at the real transport, or nothing reaches Swoosh at all
+# and the mailbox stays empty — `Transport.Log` would happily report success.
+config :polyphony, :notification_transport, Polyphony.Notifications.Transport.Email
+
 config :logger, :console, level: :info
