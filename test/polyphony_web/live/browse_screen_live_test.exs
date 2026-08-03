@@ -394,6 +394,27 @@ defmodule PolyphonyWeb.BrowseScreenLiveTest do
     end
   end
 
+  describe "an unlisted share link" do
+    test "is a grant, so it opens the reading surface rather than a card", %{conn: conn} do
+      story = publish(user_fixture(), stair(), %{perspectives: [@halden]})
+      {:ok, entry} = Library.set_visibility(story.id, "unlisted")
+
+      assert {:error, {:live_redirect, %{to: to}}} = live(conn, ~p"/s/#{entry.share_token}")
+      assert to =~ "/browse?story=#{story.id}"
+    end
+
+    test "a hidden one leads nowhere, and doesn't say which kind of nowhere", %{conn: conn} do
+      story = publish(user_fixture(), stair(), %{perspectives: [@halden]})
+      {:ok, entry} = Library.set_visibility(story.id, "unlisted")
+      {:ok, _} = Library.hide(entry.id, "suspended")
+
+      {:ok, _view, html} = live(conn, ~p"/s/#{entry.share_token}")
+
+      assert html =~ "doesn&#39;t lead anywhere any more"
+      refute html =~ "suspended"
+    end
+  end
+
   describe "signed out" do
     test "reading is open to anyone; only the actions need an account" do
       conn = Phoenix.ConnTest.build_conn()
