@@ -25,14 +25,21 @@ screens port from it — but a convention alone drifts. `mix kit.port` now *deri
 changing `ux/`, re-running the task, and committing both; there's nothing to hand-maintain
 on the app side.
 
-The transform makes exactly two changes, both documented in `Mix.Tasks.Kit.Port`: it drops
-the kit's §11 mock chrome (wall labels around the mock frames — the kit itself says to strip
-it, and its bare `body`/`h2` rules would leak into every page), and it scopes every
-component rule to a `.fr` frame root. The scope is what makes an incremental port possible:
-`.row`, `.btn`, `.dim`, `.field` and `.dot` all collide with the first-cut design system
-still serving the unported screens, so confining the kit to kit-rendered subtrees lets
-screens move one at a time with the suite green throughout. It comes out with the last
-screen.
+The transform makes exactly one change, documented in `Mix.Tasks.Kit.Port`: it drops the
+kit's §11 mock chrome (wall labels around the mock frames — the kit itself says to strip it,
+and its bare `body`/`h2` rules would leak into every page). Everything above that is copied
+byte for byte, comments included, and `KitPortTest` asserts exactly that. The app's
+stylesheet *is* the design's; a class means the same thing in both.
+
+`app.css` is an ordered manifest — Tailwind, then `legacy.css` (the first-cut design
+system), then the kit — and the order is load-bearing: every rule is a plain class selector,
+so the kit wins the names it shares (`.row`, `.btn`, `.dim`, `.field`, `.dot`) and any
+utility it overlaps with, which is the precedence the mocks have. **Unported screens are
+expected to look wrong until they're ported** — an explicit author decision, since the app
+has no users until the rebuild lands. The kit was briefly scoped to a `.fr` root so the two
+systems could coexist; that bought compatibility nobody needed at the cost of a stylesheet
+that no longer matched the design, and it's gone. `legacy.css` shrinks as screens port and
+the last one takes the file.
 
 ### The kit's markup is `PolyphonyWeb.Kit`
 The other half of the port: the kit's structural idioms as function components, lifted from
@@ -55,11 +62,11 @@ since nothing else references the catalogue) and asserts **every kit component h
 so the catalogue can't fall behind the components it documents.
 
 Assets: the storybook loads its own bundle rather than `app.css`, so
-`assets/css/storybook.css` re-imports the ported kit and deliberately leaves Tailwind's
-preflight out (a global element reset would restyle the storybook's own chrome) along with
-the first-cut design system (a component that only looks right next to legacy CSS isn't
-ported yet). Both storybook bundles are committed and covered by CI's asset-drift guard,
-like `app.{js,css}`.
+`assets/css/storybook.css` is its own manifest — utilities, then the kit. It deliberately
+leaves Tailwind's preflight out (a global element reset would restyle the storybook's own
+chrome, which ships its own `psb-`-prefixed CSS) along with the first-cut design system (a
+component that only looks right next to legacy CSS isn't ported yet). Both storybook bundles
+are committed and covered by CI's asset-drift guard, like `app.{js,css}`.
 
 ### Character identity: the mint flip (`backend-backlog.md` §5.2, phases 2b-emit + 3 + 4)
 The frontend rebuild carried this as a scoped requirement, and it landed with the id-native

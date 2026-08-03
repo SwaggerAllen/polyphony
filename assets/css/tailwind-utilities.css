@@ -1,0 +1,4 @@
+/* Utilities only — no preflight. The storybook uses this: preflight is a global
+   element reset and would restyle phoenix_storybook's own chrome, which ships its
+   own psb-prefixed CSS and isn't ours to touch. The kit needs no reset of its own. */
+@tailwind utilities;

@@ -26,18 +26,25 @@ superadmin.
 
 The redesign speced in `ux/` is being ported screen by screen. Two files carry it:
 
-- **`assets/css/kit.css`** — generated. `mix kit.port` derives it from
-  `ux/polyphony-kit.css`, and `PolyphonyWeb.KitPortTest` fails the build if the two
-  disagree, so the design file really is the single source of truth. To change the look:
-  edit `ux/polyphony-kit.css`, run `mix kit.port`, run `mix assets.build`, commit all three.
-  Never edit the generated file.
+- **`assets/css/kit.css`** — generated, and a *verbatim* copy of
+  `ux/polyphony-kit.css` but for the kit's §11 mock chrome. `mix kit.port` derives it and
+  `PolyphonyWeb.KitPortTest` fails the build if the two disagree, so the design file really
+  is the single source of truth. To change the look: edit `ux/polyphony-kit.css`, run
+  `mix kit.port`, run `mix assets.build`, commit all three. Never edit the generated file.
 - **`lib/polyphony_web/components/kit.ex`** — the kit's markup as function components. A
   ported screen calls these; it doesn't re-derive class strings, and it defines nothing
   screen-local the kit already provides.
 
-Kit rules are scoped to a `.fr` frame root, so they apply only inside `Kit.frame/1` and the
-first-cut design system below keeps serving the screens that haven't been ported yet. That
-scope comes out with the last screen.
+`app.css` is an ordered manifest — Tailwind, then `legacy.css` (the first-cut design
+system), then the kit — and the order is load-bearing: every rule is a plain class selector,
+so the kit wins the names it shares (`.row`, `.btn`, `.dim`, `.field`, `.dot`) and any
+utility it overlaps with. That's the precedence the mocks have, since they link the kit
+after the Tailwind CDN.
+
+**Screens that haven't been ported will look wrong until they are.** That's deliberate: the
+app has no users until the rebuild lands, so the shipped CSS matches the design exactly
+rather than being scoped to coexist with the styles it replaces. `legacy.css` shrinks as
+screens port, and the last one takes the file.
 
 Browse the components at **`/storybook`** (`mix phx.server`, then
 <http://localhost:4000/storybook>) — one page per component with its states. It's on in dev

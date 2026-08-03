@@ -111,11 +111,14 @@ for it.
   states from the mocks — the closer the port, the less the implementation drifts from
   the design. Define nothing screen-local that the kit already provides.
   In practice: `assets/css/kit.css` is **generated** from the design file by `mix kit.port`
-  (never hand-edit it — a test fails if it drifts), and the kit's markup lives in
-  `PolyphonyWeb.Kit` as function components. A ported screen calls those inside a
-  `Kit.frame/1`; kit CSS applies only inside that root, which is what lets screens move one
-  at a time. Review components at `/storybook`, and give any new one a story — the suite
-  requires it.
+  — a verbatim copy minus the kit's mock chrome, never hand-edited (a test fails if it
+  drifts) — and the kit's markup lives in `PolyphonyWeb.Kit` as function components. A
+  ported screen calls those inside a `Kit.frame/1`, which sets the register and theme the
+  tokens key on. `app.css` is an ordered manifest (Tailwind → first-cut system → kit) and
+  the kit is last, so it wins the class names it shares with the old styles. **Unported
+  screens are expected to look wrong in the meantime** — nobody is using the app until the
+  rebuild lands, and that's the price of the shipped CSS matching the design exactly.
+  Review components at `/storybook`, and give any new one a story — the suite requires it.
 
 ## Identity & numbering (easy to get wrong)
 

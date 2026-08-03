@@ -1,870 +1,19 @@
-/* The design kit (ux/polyphony-kit.css), ported by `mix kit.port`. Generated —
-   edit the kit in ux/ and re-run the task. Its rules are scoped to a `.fr` frame
-   root, so they apply only inside kit-rendered subtrees and the first-cut styles
-   below keep serving the screens that haven't been ported yet. Kit selectors sit
-   a class higher than both those styles and Tailwind's utilities, which is the
-   precedence the mocks have — so this import's position doesn't decide anything. */
-
-/* ============================================================================
-   GENERATED FILE — DO NOT EDIT.
-
-   Ported from ux/polyphony-kit.css by `mix kit.port`. The design kit is the
-   single source of truth: change it in ux/, re-run the task, commit both.
-   KitPortTest fails if this file and the kit disagree.
-   ============================================================================ */
-
-/* ============================================================================
-   POLYPHONY — UI KIT
-   The single source of truth for tokens and components across every mock.
-   Every screen file links this. Nothing here is defined twice anywhere else.
-
-   PORTING NOTE
-   The token block below maps onto daisyUI theme variables. Everything under
-   COMPONENTS is a Tailwind @apply candidate or a LiveView function component.
-   Class names are deliberately short and semantic so they survive the port.
-   ============================================================================ */
-
-/* ============================================================================
-   1 · TOKENS
-   Two registers × two themes. The register is the outer decision:
-
-     .stage  — working / live. Omniscient play, and every authoring screen.
-     .page   — reading. Character play, and published campaigns.
-
-   Both take .dark or .light. Usage: <div class="fr stage dark">
-
-   daisyUI mapping:
-     --b1 --b2 --b3   → base-100 / base-200 / base-300
-     --bc --bcm       → base-content / base-content at 60%
-     --rule           → border colour
-     --pri --pric     → primary / primary-content
-     --lamp           → info      · "now"
-     --pencil         → error     · "correction"
-     --ok             → success   · "done"
-     --secret         → a custom semantic; no daisyUI equivalent
-     --v1..--v8       → per-character voice colours, assigned by cast order
-   ============================================================================ */
-
-.fr {
-  --f-title: Spectral, Georgia, serif;
-  --f-ui:    Archivo, system-ui, sans-serif;
-  --f-mono:  "IBM Plex Mono", monospace;
-  font-family: var(--f-ui);
-  background: var(--b1);
-  color: var(--bc);
-}
-
-.stage.dark {
-  --b1:#15171C;
-  --b2:#1D2027;
-  --b3:#282C35;
-  --bc:#E9E5D9;
-  --bcm:#8C897E;
-  --rule:#2E323C;
-  --pri:#E9E5D9;
-  --pric:#15171C;
-  --pencil:#E0604A;
-  --lamp:#EDB25E;
-  --ok:#6FBF92;
-  --secret:#9B8FD4;
-  --v1:#7BA7D9;
-  --v2:#C08FD4;
-  --v3:#6FBF92;
-  --v4:#D9AE55;
-  --v5:#E09080;
-  --v6:#8FD4CE;
-  --v7:#B9B6E0;
-  --v8:#D9A0BE;
-}
-
-.stage.light {
-  --b1:#F6F3E9;
-  --b2:#EEEADC;
-  --b3:#E2DCCA;
-  --bc:#1A1D24;
-  --bcm:#6E6B61;
-  --rule:#D6CFBB;
-  --pri:#232833;
-  --pric:#F6F3E9;
-  --pencil:#A8302A;
-  --lamp:#8F5C10;
-  --ok:#2F6E4F;
-  --secret:#5A4E94;
-  --v1:#35618E;
-  --v2:#7A4E8C;
-  --v3:#2F6E4F;
-  --v4:#A5761B;
-  --v5:#9C4F3C;
-  --v6:#2F6E6E;
-  --v7:#5A5A94;
-  --v8:#94436A;
-}
-
-.page.dark {
-  --b1:#191419;
-  --b2:#211B22;
-  --b3:#2B232D;
-  --bc:#F0E9E0;
-  --bcm:#8B8090;
-  --rule:#302836;
-  --pri:#F0E9E0;
-  --pric:#191419;
-  --pencil:#E2604F;
-  --lamp:#F0A64C;
-  --ok:#5FBF8E;
-  --secret:#B7A8E8;
-  --v1:#8FB6E0;
-  --v2:#CE9BDE;
-  --v3:#7FCBA0;
-  --v4:#E0B96A;
-  --v5:#E8A090;
-  --v6:#9CDDD6;
-  --v7:#C4C1E8;
-  --v8:#E2AECA;
-}
-
-.page.light {
-  --b1:#FAF6EC;
-  --b2:#F3EEE0;
-  --b3:#E7DFCD;
-  --bc:#241F26;
-  --bcm:#6F6875;
-  --rule:#DED4C4;
-  --pri:#241F26;
-  --pric:#FAF6EC;
-  --pencil:#A8302A;
-  --lamp:#9A6210;
-  --ok:#2F6E4F;
-  --secret:#5A4E94;
-  --v1:#35618E;
-  --v2:#7A4E8C;
-  --v3:#2F6E4F;
-  --v4:#A5761B;
-  --v5:#9C4F3C;
-  --v6:#2F6E6E;
-  --v7:#5A5A94;
-  --v8:#94436A;
-}
-
-/* ============================================================================
-   2 · TYPE
-   Archivo for everything, including all prose in a transcript.
-   Spectral names things: screen titles, campaign and scene names, character
-   labels, and Director narration — the one place serif does body work.
-   Plex Mono for beats, ids, money.
-   Nothing uses italic as a semantic. Structure carries meaning.
-   ============================================================================ */
-
-.fr .ttl,
-.fr.ttl {
-  font-family: var(--f-title);
-}
-
-.fr .mono,
-.fr.mono {
-  font-family: var(--f-mono);
-}
-
-.fr .dim,
-.fr.dim {
-  color: var(--bcm);
-}
-
-.fr .lbl,
-.fr.lbl {
-  font-family: var(--f-mono);
-  font-size:10px;
-  letter-spacing:.13em;
-  text-transform:uppercase;
-}
-
-/* ============================================================================
-   3 · SURFACES
-   ============================================================================ */
-
-.fr .sheet,
-.fr.sheet {
-  border:1px solid var(--rule);
-  border-radius:14px;
-  background:var(--b1);
-  overflow:hidden;
-}
-
-.fr .row,
-.fr.row {
-  border-bottom:1px solid var(--rule);
-}
-
-.fr .field,
-.fr.field {
-  background:var(--b1);
-  border:1px solid var(--rule);
-  border-radius:10px;
-}
-
-.fr .scroller,
-.fr.scroller {
-  max-height:520px;
-  overflow-y:auto;
-}
-
-.fr .scroller::-webkit-scrollbar,
-.fr.scroller::-webkit-scrollbar {
-  width:6px;
-}
-
-.fr .scroller::-webkit-scrollbar-thumb,
-.fr.scroller::-webkit-scrollbar-thumb {
-  background:var(--rule);
-  border-radius:99px;
-}
-
-/* ============================================================================
-   4 · CONTROLS
-   Pencil is the editorial layer — reroll, edit, delete, branch, and every
-   error. It is never a primary action.
-   ============================================================================ */
-
-.fr .btn,
-.fr.btn {
-  display:inline-flex;
-  align-items:center;
-  gap:.35rem;
-  border-radius:8px;
-  padding:.4rem .7rem;
-  font-size:13px;
-  font-weight:600;
-  border:1px solid transparent;
-  cursor:default;
-}
-
-.fr .btn-pri,
-.fr.btn-pri {
-  background:var(--pri);
-  color:var(--pric);
-}
-
-.fr .btn-gh,
-.fr.btn-gh {
-  background:transparent;
-  color:var(--bc);
-  border-color:var(--rule);
-}
-
-.fr .btn-pen,
-.fr.btn-pen {
-  background:transparent;
-  color:var(--pencil);
-  border-color:transparent;
-  padding:.2rem .35rem;
-  font-size:12px;
-  font-weight:500;
-}
-
-.fr .btn-red,
-.fr.btn-red {
-  background:var(--pencil);
-  color:var(--b1);
-}
-
-.fr .btn-off,
-.fr.btn-off {
-  background:var(--b3);
-  color:var(--bcm);
-}
-
-/* disabled-looking */
-
-.fr .btn-sm,
-.fr.btn-sm {
-  padding:.25rem .5rem;
-  font-size:12px;
-}
-
-.fr .pill,
-.fr.pill {
-  display:inline-flex;
-  align-items:center;
-  gap:.3rem;
-  border:1px solid var(--rule);
-  border-radius:999px;
-  padding:.1rem .5rem;
-  font-size:11px;
-  line-height:1.6;
-}
-
-.fr .dot,
-.fr.dot {
-  width:7px;
-  height:7px;
-  border-radius:999px;
-  display:inline-block;
-}
-
-.fr .av,
-.fr.av {
-  width:28px;
-  height:28px;
-  border-radius:8px;
-  flex-shrink:0;
-}
-
-/* One boolean pattern, everywhere. Colour by meaning:
-   --sc:var(--lamp) for "always in mind", --sc:var(--secret) for "secret". */
-
-.fr .sw,
-.fr.sw {
-  width:34px;
-  height:19px;
-  border-radius:999px;
-  position:relative;
-  flex-shrink:0;
-  background:var(--b3);
-}
-
-.fr .sw i,
-.fr.sw i {
-  position:absolute;
-  top:2px;
-  left:2px;
-  width:15px;
-  height:15px;
-  border-radius:999px;
-  background:var(--bcm);
-}
-
-.fr .sw-on,
-.fr.sw-on {
-  background:color-mix(in srgb, var(--sc) 40%, transparent);
-}
-
-.fr .sw-on i,
-.fr.sw-on i {
-  left:auto;
-  right:2px;
-  background:var(--sc);
-}
-
-.fr .seg,
-.fr.seg {
-  display:flex;
-  border:1px solid var(--rule);
-  border-radius:8px;
-  overflow:hidden;
-}
-
-.fr .seg > *,
-.fr.seg > * {
-  flex:1;
-  text-align:center;
-  padding:.35rem .5rem;
-  font-size:12px;
-  font-weight:600;
-}
-
-.fr .seg-on,
-.fr.seg-on {
-  background:var(--b3);
-}
-
-.fr .chk,
-.fr.chk {
-  width:18px;
-  height:18px;
-  border-radius:5px;
-  border:1.5px solid var(--rule);
-  flex-shrink:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:11px;
-  font-weight:700;
-}
-
-.fr .chk-on,
-.fr.chk-on {
-  background:var(--lamp);
-  border-color:var(--lamp);
-  color:var(--b1);
-}
-
-/* Outlined tick = inherited from a group. Can't be individually removed. */
-
-.fr .chk-via,
-.fr.chk-via {
-  border-color:var(--secret);
-  color:var(--secret);
-}
-
-.fr .bar,
-.fr.bar {
-  height:5px;
-  border-radius:99px;
-  background:var(--b3);
-  overflow:hidden;
-}
-
-.fr .bar i,
-.fr.bar i {
-  display:block;
-  height:100%;
-  background:var(--lamp);
-}
-
-/* ============================================================================
-   5 · THE PERSPECTIVE CONTROL
-   The single most important idiom in the product. Identical markup, identical
-   position (top right of the header) on every surface with a viewpoint:
-   play as a character, play as omniscient, reading a published campaign,
-   its contents list, and preview on the world bible and character sheet.
-
-   <span class="viewas" style="--vc:var(--v2)"><i></i>Ilias ▾</span>
-
-   --vc is the character's voice colour; var(--bc) for omniscient,
-   var(--lamp) for limited omniscient, var(--bcm) for spectator.
-   ============================================================================ */
-
-.fr .viewas,
-.fr.viewas {
-  display:inline-flex;
-  align-items:center;
-  gap:.35rem;
-  border:1px solid var(--vc);
-  color:var(--vc);
-  border-radius:999px;
-  padding:.12rem .5rem;
-  font-size:11.5px;
-  font-weight:600;
-  line-height:1.6;
-  white-space:nowrap;
-}
-
-.fr .viewas i,
-.fr.viewas i {
-  width:7px;
-  height:7px;
-  border-radius:999px;
-  background:var(--vc);
-  display:inline-block;
-}
-
-/* ============================================================================
-   6 · THE INFO AFFORDANCE
-   Sits beside a section header, never inside a menu. One drawer per section,
-   covering the concepts in it — not one popover per setting.
-   Test for whether something needs one: does this label mean something
-   different here than a first-time reader would assume?
-   ============================================================================ */
-
-.fr .info,
-.fr.info {
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  width:15px;
-  height:15px;
-  border-radius:999px;
-  border:1px solid var(--bcm);
-  color:var(--bcm);
-  font-size:9.5px;
-  font-weight:700;
-  line-height:1;
-  flex-shrink:0;
-}
-
-/* ============================================================================
-   7 · TRANSCRIPT
-   Move types are told apart by structure, never by slant.
-   ============================================================================ */
-
-/* Director narration. Rules above and below, hanging dash, Spectral. */
-
-.fr .m-world,
-.fr.m-world {
-  border-top:1px solid var(--rule);
-  border-bottom:1px solid var(--rule);
-  padding:.7rem 0;
-}
-
-/* Interior monologue. Voice-coloured rule + a faint tint of the same hue.
-   Set --vc to the speaker's voice colour. */
-
-.fr .m-thought,
-.fr.m-thought {
-  border-left:2px solid var(--vc);
-  background:color-mix(in srgb, var(--vc) 7%, transparent);
-  border-radius:0 8px 8px 0;
-  padding:.5rem .7rem;
-}
-
-/* A generation that failed, rendered where it happened. */
-
-.fr .m-fail,
-.fr.m-fail {
-  background:color-mix(in srgb, var(--pencil) 9%, transparent);
-  border-left:2px solid var(--pencil);
-  border-radius:0 8px 8px 0;
-  padding:.7rem .8rem;
-}
-
-/* "Now" — the live turn, the current beat, an unsaved draft.
-   The only bright thing on screen, so attention has one meaning everywhere. */
-
-.fr .m-live,
-.fr.m-live {
-  background:radial-gradient(120% 160% at 6% 0%,
-             color-mix(in srgb, var(--lamp) 15%, transparent) 0%, transparent 60%);
-}
-
-/* A beat divider. Sticky within the transcript, plain by design — it records
-   that a beat opened and never changes afterwards. */
-
-.fr .beat-rule,
-.fr.beat-rule {
-  position:sticky;
-  top:0;
-  z-index:5;
-  background:var(--b1);
-  display:flex;
-  align-items:center;
-  gap:.7rem;
-  padding:.55rem 0 .5rem;
-}
-
-.fr .beat-rule::after,
-.fr.beat-rule::after {
-  content:"";
-  flex:1;
-  height:1px;
-  background:var(--rule);
-}
-
-/* ============================================================================
-   8 · STATUS STRIP
-   Above the composer in both registers: a slot per cast member, then one
-   sentence. No beat number — the transcript rule owns that. No navigation.
-   Slots are voice-coloured and flex, so names become initials around six.
-   ============================================================================ */
-
-.fr .strip,
-.fr.strip {
-  border-top:1px solid var(--rule);
-  background:var(--b2);
-  padding:.55rem .9rem;
-}
-
-.fr .slots,
-.fr.slots {
-  display:flex;
-  gap:4px;
-  align-items:center;
-}
-
-.fr .slot,
-.fr.slot {
-  height:20px;
-  min-width:20px;
-  border-radius:5px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-family:var(--f-mono);
-  font-size:9.5px;
-  font-weight:600;
-  flex:1 1 0;
-}
-
-.fr .slot-took,
-.fr.slot-took {
-  background:var(--sc);
-  color:var(--b1);
-}
-
-/* took their turn */
-
-.fr .slot-now,
-.fr.slot-now {
-  background:color-mix(in srgb, var(--lamp) 22%, transparent);
-  border:1.5px solid var(--lamp);
-  color:var(--lamp);
-}
-
-/* happening now */
-
-.fr .slot-wait,
-.fr.slot-wait {
-  border:1px solid var(--rule);
-  color:var(--bcm);
-}
-
-/* still to come */
-
-.fr .slot-pass,
-.fr.slot-pass {
-  border:1px dashed var(--rule);
-  color:var(--bcm);
-}
-
-/* passed */
-
-.fr .slot-fail,
-.fr.slot-fail {
-  border:1.5px solid var(--pencil);
-  color:var(--pencil);
-}
-
-.fr .slot-you,
-.fr.slot-you {
-  box-shadow:0 0 0 2px var(--b2), 0 0 0 3.5px var(--bc);
-}
-
-/* ============================================================================
-   9 · NAVIGATION
-   One primitive for long forms (character sheet, world bible) and one for
-   sectioned screens (campaign, library, browse, admin). Both scroll
-   horizontally and never wrap.
-   ============================================================================ */
-
-.fr .tabs,
-.fr.tabs {
-  display:flex;
-  overflow-x:auto;
-  border-bottom:1px solid var(--rule);
-  background:var(--b2);
-  width:100%;
-  min-width:0;
-}
-
-.fr .tabs::-webkit-scrollbar,
-.fr.tabs::-webkit-scrollbar {
-  display:none;
-}
-
-.fr .tabs,
-.fr.tabs {
-  scrollbar-width:none;
-}
-
-.fr .tab,
-.fr.tab {
-  padding:.6rem .8rem;
-  font-size:13px;
-  font-weight:600;
-  white-space:nowrap;
-  color:var(--bcm);
-  border-bottom:2px solid transparent;
-}
-
-.fr .tab-on,
-.fr.tab-on {
-  color:var(--bc);
-  border-bottom-color:var(--lamp);
-}
-
-/* Amber dot = unbuilt, on the campaign's first run. */
-
-.fr .tab-todo::after,
-.fr.tab-todo::after {
-  content:"";
-  display:inline-block;
-  width:5px;
-  height:5px;
-  border-radius:99px;
-  background:var(--lamp);
-  margin-left:.35rem;
-  vertical-align:middle;
-}
-
-.fr .jump,
-.fr.jump {
-  display:flex;
-  gap:.15rem;
-  overflow-x:auto;
-  padding:.5rem .9rem;
-  width:100%;
-  max-width:100%;
-  min-width:0;
-  background:var(--b2);
-  border-bottom:1px solid var(--rule);
-}
-
-.fr .jump::-webkit-scrollbar,
-.fr.jump::-webkit-scrollbar {
-  display:none;
-}
-
-.fr .jump,
-.fr.jump {
-  scrollbar-width:none;
-}
-
-.fr .jump span,
-.fr.jump span {
-  font-family:var(--f-mono);
-  font-size:10px;
-  letter-spacing:.1em;
-  text-transform:uppercase;
-  color:var(--bcm);
-  padding:.15rem .4rem;
-  white-space:nowrap;
-  border-radius:5px;
-}
-
-.fr .jump .on,
-.fr.jump .on {
-  color:var(--bc);
-  background:var(--b3);
-}
-
-/* Scene scrubber on a character sheet — one stop per closed scene. */
-
-.fr .scrub,
-.fr.scrub {
-  display:flex;
-  gap:.15rem;
-  overflow-x:auto;
-  padding:.5rem .9rem;
-  width:100%;
-  min-width:0;
-  background:var(--b2);
-  border-bottom:1px solid var(--rule);
-}
-
-.fr .scrub::-webkit-scrollbar,
-.fr.scrub::-webkit-scrollbar {
-  display:none;
-}
-
-.fr .scrub,
-.fr.scrub {
-  scrollbar-width:none;
-}
-
-.fr .scrub span,
-.fr.scrub span {
-  font-family:var(--f-mono);
-  font-size:10px;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-  color:var(--bcm);
-  padding:.15rem .45rem;
-  white-space:nowrap;
-  border-radius:5px;
-}
-
-.fr .scrub .on,
-.fr.scrub .on {
-  color:var(--bc);
-  background:var(--b3);
-}
-
-/* ============================================================================
-   10 · MARKED LIST ITEMS
-   Left-rule + tint, used wherever an item in a list carries a state.
-   Secret takes the structure because visibility has consequences;
-   "always in mind" is a chip instead, so the two compose.
-   ============================================================================ */
-
-.fr .secret,
-.fr.secret {
-  border-left:2px solid var(--secret);
-  background:color-mix(in srgb, var(--secret) 8%, transparent);
-  border-radius:0 8px 8px 0;
-  padding-left:.65rem;
-}
-
-.fr .core,
-.fr.core {
-  border-left:2px solid var(--lamp);
-  background:color-mix(in srgb, var(--lamp) 7%, transparent);
-  border-radius:0 8px 8px 0;
-  padding-left:.65rem;
-}
-
-.fr .prop,
-.fr.prop {
-  border-left:2px solid var(--lamp);
-  padding-left:.65rem;
-}
-
-/* proposed */
-
-.fr .canon,
-.fr.canon {
-  border-left:2px solid var(--ok);
-  padding-left:.65rem;
-}
-
-/* accepted */
-
-.fr .drop,
-.fr.drop {
-  border-left:2px solid var(--rule);
-  padding-left:.65rem;
-  opacity:.55;
-}
-
-.fr .bound,
-.fr.bound {
-  border-left:2px solid var(--pencil);
-  padding-left:.65rem;
-}
-
-/* won't */
-
-.fr .compel,
-.fr.compel {
-  border-left:2px solid var(--v2);
-  padding-left:.65rem;
-}
-
-/* can't stop */
-
-.fr .urgent,
-.fr.urgent {
-  border-left:2px solid var(--pencil);
-  background:color-mix(in srgb, var(--pencil) 7%, transparent);
-}
-
-.fr .arch,
-.fr.arch {
-  opacity:.6;
-}
-
-.fr .was,
-.fr.was {
-  text-decoration:line-through;
-  text-decoration-color:var(--bcm);
-  text-decoration-thickness:1px;
-}
-
-.fr .chip-core,
-.fr.chip-core {
-  display:inline-flex;
-  align-items:center;
-  gap:.3rem;
-  border:1px solid var(--lamp);
-  color:var(--lamp);
-  border-radius:999px;
-  padding:.02rem .4rem;
-  font-family:var(--f-mono);
-  font-size:9.5px;
-  letter-spacing:.1em;
-  text-transform:uppercase;
-}
-
-.fr .cover,
-.fr.cover {
-  border:1px dashed var(--rule);
-  border-radius:10px;
-}
-
-.fr .skel,
-.fr.skel {
-  height:12px;
-  border-radius:4px;
-  background:var(--b3);
-}
+/* The application stylesheet — a build manifest. Order is the whole content of this
+   file, and it is load-bearing: every rule here is a plain class selector, so where
+   two stylesheets name the same class the later one wins.
+ *
+ *   1. Tailwind      — preflight, then the utilities the templates reference.
+ *   2. legacy.css    — the first-cut design system, still serving unported screens.
+ *   3. kit.css       — the design kit, generated from ux/polyphony-kit.css.
+ *
+ * The kit is last so it wins the names it shares with the first-cut system, and so
+ * it wins a utility it overlaps with — which is the precedence the mocks have, since
+ * they link the kit after the Tailwind CDN. Rebuild with `mix assets.build` after
+ * touching any of them; `mix kit.port` regenerates kit.css from the design file. */
+
+/* Tailwind's three layers, as their own file so the build manifests can order them
+   explicitly. `@import` has to lead a stylesheet, so a file that wants something
+   *after* Tailwind can't just write these directives at the top of itself. */
 
 /* ! tailwindcss v3.4.3 | MIT License | https://tailwindcss.com */
 
@@ -1720,10 +869,15 @@ video {
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Polyphony design system — mobile-first, dark-by-default. Authored as a small
-   set of semantic component classes on top of Tailwind's base reset. Tailwind
-   utilities are available in templates; these named classes carry the app's look
-   and sit after @tailwind utilities so they win where they overlap.
+   The FIRST-CUT design system — mobile-first, dark-by-default. Everything here is
+   being replaced by the design kit (assets/css/kit.css, ported from ux/), and this
+   file shrinks as screens port: when a screen moves to the kit's components, its
+   share of these rules goes with it, and the last one takes the file.
+
+   The kit is loaded AFTER this, so where the two share a class name (.row, .btn,
+   .dim, .field, .dot) the kit wins and these rules are already dead. That restyles
+   screens that haven't been ported yet — accepted, because nobody is using the app
+   until the rebuild lands.
    ──────────────────────────────────────────────────────────────────────────── */
 
 :root {
@@ -2870,4 +2024,786 @@ pre {
 .socket-status.disconnected::before, .socket-dot.disconnected {
   background: var(--bad);
   animation: pulse 1.2s ease-in-out infinite;
+}
+
+/* ============================================================================
+   GENERATED FILE — DO NOT EDIT.
+
+   Ported from ux/polyphony-kit.css by `mix kit.port`, verbatim but for the kit's
+   §11 mock chrome. The design kit is the single source of truth: change it in
+   ux/, re-run the task, commit both. KitPortTest fails if the two disagree.
+   ============================================================================ */
+
+/* ============================================================================
+   POLYPHONY — UI KIT
+   The single source of truth for tokens and components across every mock.
+   Every screen file links this. Nothing here is defined twice anywhere else.
+
+   PORTING NOTE
+   The token block below maps onto daisyUI theme variables. Everything under
+   COMPONENTS is a Tailwind @apply candidate or a LiveView function component.
+   Class names are deliberately short and semantic so they survive the port.
+   ============================================================================ */
+
+/* ============================================================================
+   1 · TOKENS
+   Two registers × two themes. The register is the outer decision:
+
+     .stage  — working / live. Omniscient play, and every authoring screen.
+     .page   — reading. Character play, and published campaigns.
+
+   Both take .dark or .light. Usage: <div class="fr stage dark">
+
+   daisyUI mapping:
+     --b1 --b2 --b3   → base-100 / base-200 / base-300
+     --bc --bcm       → base-content / base-content at 60%
+     --rule           → border colour
+     --pri --pric     → primary / primary-content
+     --lamp           → info      · "now"
+     --pencil         → error     · "correction"
+     --ok             → success   · "done"
+     --secret         → a custom semantic; no daisyUI equivalent
+     --v1..--v8       → per-character voice colours, assigned by cast order
+   ============================================================================ */
+
+.fr {
+  --f-title: Spectral, Georgia, serif;
+  --f-ui:    Archivo, system-ui, sans-serif;
+  --f-mono:  "IBM Plex Mono", monospace;
+  font-family: var(--f-ui);
+  background: var(--b1);
+  color: var(--bc);
+}
+
+.stage.dark {
+  --b1:#15171C;
+  --b2:#1D2027;
+  --b3:#282C35;
+  --bc:#E9E5D9;
+  --bcm:#8C897E;
+  --rule:#2E323C;
+  --pri:#E9E5D9;
+  --pric:#15171C;
+  --pencil:#E0604A;
+  --lamp:#EDB25E;
+  --ok:#6FBF92;
+  --secret:#9B8FD4;
+  --v1:#7BA7D9;
+  --v2:#C08FD4;
+  --v3:#6FBF92;
+  --v4:#D9AE55;
+  --v5:#E09080;
+  --v6:#8FD4CE;
+  --v7:#B9B6E0;
+  --v8:#D9A0BE;
+}
+
+.stage.light {
+  --b1:#F6F3E9;
+  --b2:#EEEADC;
+  --b3:#E2DCCA;
+  --bc:#1A1D24;
+  --bcm:#6E6B61;
+  --rule:#D6CFBB;
+  --pri:#232833;
+  --pric:#F6F3E9;
+  --pencil:#A8302A;
+  --lamp:#8F5C10;
+  --ok:#2F6E4F;
+  --secret:#5A4E94;
+  --v1:#35618E;
+  --v2:#7A4E8C;
+  --v3:#2F6E4F;
+  --v4:#A5761B;
+  --v5:#9C4F3C;
+  --v6:#2F6E6E;
+  --v7:#5A5A94;
+  --v8:#94436A;
+}
+
+.page.dark {
+  --b1:#191419;
+  --b2:#211B22;
+  --b3:#2B232D;
+  --bc:#F0E9E0;
+  --bcm:#8B8090;
+  --rule:#302836;
+  --pri:#F0E9E0;
+  --pric:#191419;
+  --pencil:#E2604F;
+  --lamp:#F0A64C;
+  --ok:#5FBF8E;
+  --secret:#B7A8E8;
+  --v1:#8FB6E0;
+  --v2:#CE9BDE;
+  --v3:#7FCBA0;
+  --v4:#E0B96A;
+  --v5:#E8A090;
+  --v6:#9CDDD6;
+  --v7:#C4C1E8;
+  --v8:#E2AECA;
+}
+
+.page.light {
+  --b1:#FAF6EC;
+  --b2:#F3EEE0;
+  --b3:#E7DFCD;
+  --bc:#241F26;
+  --bcm:#6F6875;
+  --rule:#DED4C4;
+  --pri:#241F26;
+  --pric:#FAF6EC;
+  --pencil:#A8302A;
+  --lamp:#9A6210;
+  --ok:#2F6E4F;
+  --secret:#5A4E94;
+  --v1:#35618E;
+  --v2:#7A4E8C;
+  --v3:#2F6E4F;
+  --v4:#A5761B;
+  --v5:#9C4F3C;
+  --v6:#2F6E6E;
+  --v7:#5A5A94;
+  --v8:#94436A;
+}
+
+/* ============================================================================
+   2 · TYPE
+   Archivo for everything, including all prose in a transcript.
+   Spectral names things: screen titles, campaign and scene names, character
+   labels, and Director narration — the one place serif does body work.
+   Plex Mono for beats, ids, money.
+   Nothing uses italic as a semantic. Structure carries meaning.
+   ============================================================================ */
+
+.ttl  {
+  font-family: var(--f-title);
+}
+
+.mono {
+  font-family: var(--f-mono);
+}
+
+.dim  {
+  color: var(--bcm);
+}
+
+.lbl  {
+  font-family: var(--f-mono);
+  font-size:10px;
+  letter-spacing:.13em;
+  text-transform:uppercase;
+}
+
+/* ============================================================================
+   3 · SURFACES
+   ============================================================================ */
+
+.sheet {
+  border:1px solid var(--rule);
+  border-radius:14px;
+  background:var(--b1);
+  overflow:hidden;
+}
+
+.row   {
+  border-bottom:1px solid var(--rule);
+}
+
+.field {
+  background:var(--b1);
+  border:1px solid var(--rule);
+  border-radius:10px;
+}
+
+.scroller {
+  max-height:520px;
+  overflow-y:auto;
+}
+
+.scroller::-webkit-scrollbar {
+  width:6px;
+}
+
+.scroller::-webkit-scrollbar-thumb {
+  background:var(--rule);
+  border-radius:99px;
+}
+
+/* ============================================================================
+   4 · CONTROLS
+   Pencil is the editorial layer — reroll, edit, delete, branch, and every
+   error. It is never a primary action.
+   ============================================================================ */
+
+.btn {
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  border-radius:8px;
+  padding:.4rem .7rem;
+  font-size:13px;
+  font-weight:600;
+  border:1px solid transparent;
+  cursor:default;
+}
+
+.btn-pri  {
+  background:var(--pri);
+  color:var(--pric);
+}
+
+.btn-gh   {
+  background:transparent;
+  color:var(--bc);
+  border-color:var(--rule);
+}
+
+.btn-pen  {
+  background:transparent;
+  color:var(--pencil);
+  border-color:transparent;
+  padding:.2rem .35rem;
+  font-size:12px;
+  font-weight:500;
+}
+
+.btn-red  {
+  background:var(--pencil);
+  color:var(--b1);
+}
+
+.btn-off  {
+  background:var(--b3);
+  color:var(--bcm);
+}
+
+/* disabled-looking */
+
+.btn-sm   {
+  padding:.25rem .5rem;
+  font-size:12px;
+}
+
+.pill {
+  display:inline-flex;
+  align-items:center;
+  gap:.3rem;
+  border:1px solid var(--rule);
+  border-radius:999px;
+  padding:.1rem .5rem;
+  font-size:11px;
+  line-height:1.6;
+}
+
+.dot {
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  display:inline-block;
+}
+
+.av  {
+  width:28px;
+  height:28px;
+  border-radius:8px;
+  flex-shrink:0;
+}
+
+/* One boolean pattern, everywhere. Colour by meaning:
+   --sc:var(--lamp) for "always in mind", --sc:var(--secret) for "secret". */
+
+.sw    {
+  width:34px;
+  height:19px;
+  border-radius:999px;
+  position:relative;
+  flex-shrink:0;
+  background:var(--b3);
+}
+
+.sw i  {
+  position:absolute;
+  top:2px;
+  left:2px;
+  width:15px;
+  height:15px;
+  border-radius:999px;
+  background:var(--bcm);
+}
+
+.sw-on {
+  background:color-mix(in srgb, var(--sc) 40%, transparent);
+}
+
+.sw-on i {
+  left:auto;
+  right:2px;
+  background:var(--sc);
+}
+
+.seg   {
+  display:flex;
+  border:1px solid var(--rule);
+  border-radius:8px;
+  overflow:hidden;
+}
+
+.seg > * {
+  flex:1;
+  text-align:center;
+  padding:.35rem .5rem;
+  font-size:12px;
+  font-weight:600;
+}
+
+.seg-on  {
+  background:var(--b3);
+}
+
+.chk    {
+  width:18px;
+  height:18px;
+  border-radius:5px;
+  border:1.5px solid var(--rule);
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:11px;
+  font-weight:700;
+}
+
+.chk-on  {
+  background:var(--lamp);
+  border-color:var(--lamp);
+  color:var(--b1);
+}
+
+/* Outlined tick = inherited from a group. Can't be individually removed. */
+
+.chk-via {
+  border-color:var(--secret);
+  color:var(--secret);
+}
+
+.bar    {
+  height:5px;
+  border-radius:99px;
+  background:var(--b3);
+  overflow:hidden;
+}
+
+.bar i  {
+  display:block;
+  height:100%;
+  background:var(--lamp);
+}
+
+/* ============================================================================
+   5 · THE PERSPECTIVE CONTROL
+   The single most important idiom in the product. Identical markup, identical
+   position (top right of the header) on every surface with a viewpoint:
+   play as a character, play as omniscient, reading a published campaign,
+   its contents list, and preview on the world bible and character sheet.
+
+   <span class="viewas" style="--vc:var(--v2)"><i></i>Ilias ▾</span>
+
+   --vc is the character's voice colour; var(--bc) for omniscient,
+   var(--lamp) for limited omniscient, var(--bcm) for spectator.
+   ============================================================================ */
+
+.viewas   {
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  border:1px solid var(--vc);
+  color:var(--vc);
+  border-radius:999px;
+  padding:.12rem .5rem;
+  font-size:11.5px;
+  font-weight:600;
+  line-height:1.6;
+  white-space:nowrap;
+}
+
+.viewas i {
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  background:var(--vc);
+  display:inline-block;
+}
+
+/* ============================================================================
+   6 · THE INFO AFFORDANCE
+   Sits beside a section header, never inside a menu. One drawer per section,
+   covering the concepts in it — not one popover per setting.
+   Test for whether something needs one: does this label mean something
+   different here than a first-time reader would assume?
+   ============================================================================ */
+
+.info {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:15px;
+  height:15px;
+  border-radius:999px;
+  border:1px solid var(--bcm);
+  color:var(--bcm);
+  font-size:9.5px;
+  font-weight:700;
+  line-height:1;
+  flex-shrink:0;
+}
+
+/* ============================================================================
+   7 · TRANSCRIPT
+   Move types are told apart by structure, never by slant.
+   ============================================================================ */
+
+/* Director narration. Rules above and below, hanging dash, Spectral. */
+
+.m-world   {
+  border-top:1px solid var(--rule);
+  border-bottom:1px solid var(--rule);
+  padding:.7rem 0;
+}
+
+/* Interior monologue. Voice-coloured rule + a faint tint of the same hue.
+   Set --vc to the speaker's voice colour. */
+
+.m-thought {
+  border-left:2px solid var(--vc);
+  background:color-mix(in srgb, var(--vc) 7%, transparent);
+  border-radius:0 8px 8px 0;
+  padding:.5rem .7rem;
+}
+
+/* A generation that failed, rendered where it happened. */
+
+.m-fail    {
+  background:color-mix(in srgb, var(--pencil) 9%, transparent);
+  border-left:2px solid var(--pencil);
+  border-radius:0 8px 8px 0;
+  padding:.7rem .8rem;
+}
+
+/* "Now" — the live turn, the current beat, an unsaved draft.
+   The only bright thing on screen, so attention has one meaning everywhere. */
+
+.m-live    {
+  background:radial-gradient(120% 160% at 6% 0%,
+             color-mix(in srgb, var(--lamp) 15%, transparent) 0%, transparent 60%);
+}
+
+/* A beat divider. Sticky within the transcript, plain by design — it records
+   that a beat opened and never changes afterwards. */
+
+.beat-rule         {
+  position:sticky;
+  top:0;
+  z-index:5;
+  background:var(--b1);
+  display:flex;
+  align-items:center;
+  gap:.7rem;
+  padding:.55rem 0 .5rem;
+}
+
+.beat-rule::after  {
+  content:"";
+  flex:1;
+  height:1px;
+  background:var(--rule);
+}
+
+/* ============================================================================
+   8 · STATUS STRIP
+   Above the composer in both registers: a slot per cast member, then one
+   sentence. No beat number — the transcript rule owns that. No navigation.
+   Slots are voice-coloured and flex, so names become initials around six.
+   ============================================================================ */
+
+.strip {
+  border-top:1px solid var(--rule);
+  background:var(--b2);
+  padding:.55rem .9rem;
+}
+
+.slots {
+  display:flex;
+  gap:4px;
+  align-items:center;
+}
+
+.slot  {
+  height:20px;
+  min-width:20px;
+  border-radius:5px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:var(--f-mono);
+  font-size:9.5px;
+  font-weight:600;
+  flex:1 1 0;
+}
+
+.slot-took {
+  background:var(--sc);
+  color:var(--b1);
+}
+
+/* took their turn */
+
+.slot-now  {
+  background:color-mix(in srgb, var(--lamp) 22%, transparent);
+  border:1.5px solid var(--lamp);
+  color:var(--lamp);
+}
+
+/* happening now */
+
+.slot-wait {
+  border:1px solid var(--rule);
+  color:var(--bcm);
+}
+
+/* still to come */
+
+.slot-pass {
+  border:1px dashed var(--rule);
+  color:var(--bcm);
+}
+
+/* passed */
+
+.slot-fail {
+  border:1.5px solid var(--pencil);
+  color:var(--pencil);
+}
+
+.slot-you  {
+  box-shadow:0 0 0 2px var(--b2), 0 0 0 3.5px var(--bc);
+}
+
+/* ============================================================================
+   9 · NAVIGATION
+   One primitive for long forms (character sheet, world bible) and one for
+   sectioned screens (campaign, library, browse, admin). Both scroll
+   horizontally and never wrap.
+   ============================================================================ */
+
+.tabs {
+  display:flex;
+  overflow-x:auto;
+  border-bottom:1px solid var(--rule);
+  background:var(--b2);
+  width:100%;
+  min-width:0;
+}
+
+.tabs::-webkit-scrollbar {
+  display:none;
+}
+
+.tabs {
+  scrollbar-width:none;
+}
+
+.tab      {
+  padding:.6rem .8rem;
+  font-size:13px;
+  font-weight:600;
+  white-space:nowrap;
+  color:var(--bcm);
+  border-bottom:2px solid transparent;
+}
+
+.tab-on   {
+  color:var(--bc);
+  border-bottom-color:var(--lamp);
+}
+
+/* Amber dot = unbuilt, on the campaign's first run. */
+
+.tab-todo::after {
+  content:"";
+  display:inline-block;
+  width:5px;
+  height:5px;
+  border-radius:99px;
+  background:var(--lamp);
+  margin-left:.35rem;
+  vertical-align:middle;
+}
+
+.jump {
+  display:flex;
+  gap:.15rem;
+  overflow-x:auto;
+  padding:.5rem .9rem;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  background:var(--b2);
+  border-bottom:1px solid var(--rule);
+}
+
+.jump::-webkit-scrollbar {
+  display:none;
+}
+
+.jump {
+  scrollbar-width:none;
+}
+
+.jump span    {
+  font-family:var(--f-mono);
+  font-size:10px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--bcm);
+  padding:.15rem .4rem;
+  white-space:nowrap;
+  border-radius:5px;
+}
+
+.jump .on     {
+  color:var(--bc);
+  background:var(--b3);
+}
+
+/* Scene scrubber on a character sheet — one stop per closed scene. */
+
+.scrub {
+  display:flex;
+  gap:.15rem;
+  overflow-x:auto;
+  padding:.5rem .9rem;
+  width:100%;
+  min-width:0;
+  background:var(--b2);
+  border-bottom:1px solid var(--rule);
+}
+
+.scrub::-webkit-scrollbar {
+  display:none;
+}
+
+.scrub {
+  scrollbar-width:none;
+}
+
+.scrub span {
+  font-family:var(--f-mono);
+  font-size:10px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--bcm);
+  padding:.15rem .45rem;
+  white-space:nowrap;
+  border-radius:5px;
+}
+
+.scrub .on  {
+  color:var(--bc);
+  background:var(--b3);
+}
+
+/* ============================================================================
+   10 · MARKED LIST ITEMS
+   Left-rule + tint, used wherever an item in a list carries a state.
+   Secret takes the structure because visibility has consequences;
+   "always in mind" is a chip instead, so the two compose.
+   ============================================================================ */
+
+.secret {
+  border-left:2px solid var(--secret);
+  background:color-mix(in srgb, var(--secret) 8%, transparent);
+  border-radius:0 8px 8px 0;
+  padding-left:.65rem;
+}
+
+.core   {
+  border-left:2px solid var(--lamp);
+  background:color-mix(in srgb, var(--lamp) 7%, transparent);
+  border-radius:0 8px 8px 0;
+  padding-left:.65rem;
+}
+
+.prop   {
+  border-left:2px solid var(--lamp);
+  padding-left:.65rem;
+}
+
+/* proposed */
+
+.canon  {
+  border-left:2px solid var(--ok);
+  padding-left:.65rem;
+}
+
+/* accepted */
+
+.drop   {
+  border-left:2px solid var(--rule);
+  padding-left:.65rem;
+  opacity:.55;
+}
+
+.bound  {
+  border-left:2px solid var(--pencil);
+  padding-left:.65rem;
+}
+
+/* won't */
+
+.compel {
+  border-left:2px solid var(--v2);
+  padding-left:.65rem;
+}
+
+/* can't stop */
+
+.urgent {
+  border-left:2px solid var(--pencil);
+  background:color-mix(in srgb, var(--pencil) 7%, transparent);
+}
+
+.arch   {
+  opacity:.6;
+}
+
+.was    {
+  text-decoration:line-through;
+  text-decoration-color:var(--bcm);
+  text-decoration-thickness:1px;
+}
+
+.chip-core {
+  display:inline-flex;
+  align-items:center;
+  gap:.3rem;
+  border:1px solid var(--lamp);
+  color:var(--lamp);
+  border-radius:999px;
+  padding:.02rem .4rem;
+  font-family:var(--f-mono);
+  font-size:9.5px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.cover {
+  border:1px dashed var(--rule);
+  border-radius:10px;
+}
+
+.skel  {
+  height:12px;
+  border-radius:4px;
+  background:var(--b3);
 }

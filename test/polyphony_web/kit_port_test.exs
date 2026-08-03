@@ -8,6 +8,11 @@ defmodule PolyphonyWeb.KitPortTest do
   test fails the build the moment the two disagree — whether because the design
   moved and nobody re-ran the task, or because someone hand-edited the generated
   file.
+
+  The port is a **copy**, not an adaptation: the app's stylesheet is the design's,
+  so a class means the same thing in both. The only thing dropped is the kit's §11
+  mock chrome, which styles the wall labels *around* the mock frames. That's what
+  the assertions below pin — everything else surviving byte for byte.
   """
   use ExUnit.Case, async: true
 
@@ -19,6 +24,19 @@ defmodule PolyphonyWeb.KitPortTest do
   test "the committed stylesheet is exactly what the design kit ports to" do
     assert File.read!(@target) == @source |> File.read!() |> KitPort.port(),
            "#{@target} is stale — run `mix kit.port` and commit the result"
+  end
+
+  test "everything above the mock chrome survives byte for byte" do
+    source = File.read!(@source)
+    ported = KitPort.port(source)
+
+    # Strip the generated header and what's left must be the design file itself,
+    # truncated at the §11 banner. No rewritten selectors, no reordering, no
+    # reformatting — if this ever needs relaxing, the kit has stopped being the
+    # source of truth and something else has become one.
+    [_header, body] = String.split(ported, "============================ */\n\n", parts: 2)
+
+    assert body == mock_chrome_stripped(source)
   end
 
   test "mock chrome never reaches the app" do
@@ -33,30 +51,19 @@ defmodule PolyphonyWeb.KitPortTest do
     refute ported =~ ".wall"
   end
 
-  test "component rules are confined to a frame root, in both positions" do
+  test "component rules stay global, exactly as the mocks write them" do
     ported = @source |> File.read!() |> KitPort.port()
 
-    # A mock frame routinely carries a component class on the root element
-    # (`class="fr stage dark sheet p-4"`), so each rule needs the descendant and
-    # the self form.
-    assert ported =~ ".fr .sheet,\n.fr.sheet {"
-    assert ported =~ ".fr .btn-pri,\n.fr.btn-pri {"
+    # The kit was briefly scoped to a `.fr` root so it could coexist with the
+    # first-cut design system. It isn't any more — the kit wins those collisions
+    # outright — and a scoped selector reappearing means someone reintroduced a
+    # compatibility layer the design doesn't have.
+    refute ported =~ ".fr .sheet"
+    refute ported =~ ".fr.sheet"
 
-    # Compound and combinator selectors keep their shape.
-    assert ported =~ ".fr .sw-on i,\n.fr.sw-on i {"
-    assert ported =~ ".fr .seg > *,\n.fr.seg > * {"
-    assert ported =~ ".fr .beat-rule::after,\n.fr.beat-rule::after {"
-  end
-
-  test "register and token rules pass through unscoped" do
-    ported = @source |> File.read!() |> KitPort.port()
-
-    # These are already gated by the frame root's own classes; scoping them would
-    # break `<div class="fr stage dark">`, where all three sit on one element.
-    assert ported =~ "\n.fr {"
-    assert ported =~ "\n.stage.dark {"
-    assert ported =~ "\n.page.light {"
-    refute ported =~ ".fr .stage"
+    assert ported =~ ~r/^\.sheet\s/m
+    assert ported =~ ~r/^\.btn\s/m
+    assert ported =~ ~r/^\.row\s/m
   end
 
   test "every class the design kit defines survives the port" do
@@ -73,18 +80,14 @@ defmodule PolyphonyWeb.KitPortTest do
     assert length(kit_classes) > 50
   end
 
-  test "declaration bodies are carried across untouched" do
-    source = File.read!(@source)
-    ported = KitPort.port(source)
+  test "the kit is loaded last, so it wins the names it shares" do
+    app = File.read!("assets/css/app.css")
 
-    # The port rewrites selectors only. Bodies — including the comments that
-    # carry the design's reasoning — are the design's, verbatim.
-    assert ported =~ "--pencil:#E0604A; --lamp:#EDB25E; --ok:#6FBF92; --secret:#9B8FD4;"
-    assert ported =~ "The single most important idiom in the product"
-    assert ported =~ "box-shadow:0 0 0 2px var(--b2), 0 0 0 3.5px var(--bc);"
-
-    # No declaration is lost: the two files agree on how many there are.
-    assert count(ported, ";") == count(strip_mock_chrome(source), ";")
+    # app.css is an ordered manifest and the order is the point: Tailwind, then the
+    # first-cut system, then the kit. Reorder it and unported screens quietly take
+    # their old styling back while the ported ones lose theirs.
+    assert [_tailwind, _legacy, _kit] = imports = Regex.scan(~r/@import "\.\/(.+)\.css"/, app)
+    assert Enum.map(imports, &List.last/1) == ["tailwind-full", "legacy", "kit"]
   end
 
   defp classes(css), do: Regex.scan(~r/\.[a-z][a-z0-9-]*/, css) |> List.flatten() |> Enum.uniq()
@@ -96,9 +99,11 @@ defmodule PolyphonyWeb.KitPortTest do
     end
   end
 
-  defp strip_mock_chrome(css) do
-    css |> String.split("MOCK CHROME", parts: 2) |> hd()
-  end
+  # The design file up to (but not including) the banner comment that opens §11.
+  defp mock_chrome_stripped(source) do
+    at = :binary.match(source, "MOCK CHROME") |> elem(0)
+    {cut, _} = source |> binary_part(0, at) |> :binary.matches("/*") |> List.last()
 
-  defp count(haystack, needle), do: haystack |> :binary.matches(needle) |> length()
+    String.trim_trailing(binary_part(source, 0, cut)) <> "\n"
+  end
 end

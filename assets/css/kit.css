@@ -1,9 +1,9 @@
 /* ============================================================================
    GENERATED FILE — DO NOT EDIT.
 
-   Ported from ux/polyphony-kit.css by `mix kit.port`. The design kit is the
-   single source of truth: change it in ux/, re-run the task, commit both.
-   KitPortTest fails if this file and the kit disagree.
+   Ported from ux/polyphony-kit.css by `mix kit.port`, verbatim but for the kit's
+   §11 mock chrome. The design kit is the single source of truth: change it in
+   ux/, re-run the task, commit both. KitPortTest fails if the two disagree.
    ============================================================================ */
 
 /* ============================================================================
@@ -91,14 +91,10 @@
    Nothing uses italic as a semantic. Structure carries meaning.
    ============================================================================ */
 
-.fr .ttl,
-.fr.ttl { font-family: var(--f-title); }
-.fr .mono,
-.fr.mono { font-family: var(--f-mono); }
-.fr .dim,
-.fr.dim { color: var(--bcm); }
-.fr .lbl,
-.fr.lbl { font-family: var(--f-mono); font-size:10px; letter-spacing:.13em;
+.ttl  { font-family: var(--f-title); }
+.mono { font-family: var(--f-mono); }
+.dim  { color: var(--bcm); }
+.lbl  { font-family: var(--f-mono); font-size:10px; letter-spacing:.13em;
         text-transform:uppercase; }
 
 
@@ -106,20 +102,14 @@
    3 · SURFACES
    ============================================================================ */
 
-.fr .sheet,
-.fr.sheet { border:1px solid var(--rule); border-radius:14px;
+.sheet { border:1px solid var(--rule); border-radius:14px;
          background:var(--b1); overflow:hidden; }
-.fr .row,
-.fr.row { border-bottom:1px solid var(--rule); }
-.fr .field,
-.fr.field { background:var(--b1); border:1px solid var(--rule); border-radius:10px; }
+.row   { border-bottom:1px solid var(--rule); }
+.field { background:var(--b1); border:1px solid var(--rule); border-radius:10px; }
 
-.fr .scroller,
-.fr.scroller { max-height:520px; overflow-y:auto; }
-.fr .scroller::-webkit-scrollbar,
-.fr.scroller::-webkit-scrollbar { width:6px; }
-.fr .scroller::-webkit-scrollbar-thumb,
-.fr.scroller::-webkit-scrollbar-thumb { background:var(--rule); border-radius:99px; }
+.scroller { max-height:520px; overflow-y:auto; }
+.scroller::-webkit-scrollbar { width:6px; }
+.scroller::-webkit-scrollbar-thumb { background:var(--rule); border-radius:99px; }
 
 
 /* ============================================================================
@@ -128,68 +118,46 @@
    error. It is never a primary action.
    ============================================================================ */
 
-.fr .btn,
-.fr.btn { display:inline-flex; align-items:center; gap:.35rem; border-radius:8px;
+.btn { display:inline-flex; align-items:center; gap:.35rem; border-radius:8px;
        padding:.4rem .7rem; font-size:13px; font-weight:600;
        border:1px solid transparent; cursor:default; }
-.fr .btn-pri,
-.fr.btn-pri { background:var(--pri); color:var(--pric); }
-.fr .btn-gh,
-.fr.btn-gh { background:transparent; color:var(--bc); border-color:var(--rule); }
-.fr .btn-pen,
-.fr.btn-pen { background:transparent; color:var(--pencil); border-color:transparent;
+.btn-pri  { background:var(--pri); color:var(--pric); }
+.btn-gh   { background:transparent; color:var(--bc); border-color:var(--rule); }
+.btn-pen  { background:transparent; color:var(--pencil); border-color:transparent;
             padding:.2rem .35rem; font-size:12px; font-weight:500; }
-.fr .btn-red,
-.fr.btn-red { background:var(--pencil); color:var(--b1); }
-.fr .btn-off,
-.fr.btn-off { background:var(--b3); color:var(--bcm); }   /* disabled-looking */
-.fr .btn-sm,
-.fr.btn-sm { padding:.25rem .5rem; font-size:12px; }
+.btn-red  { background:var(--pencil); color:var(--b1); }
+.btn-off  { background:var(--b3); color:var(--bcm); }   /* disabled-looking */
+.btn-sm   { padding:.25rem .5rem; font-size:12px; }
 
-.fr .pill,
-.fr.pill { display:inline-flex; align-items:center; gap:.3rem;
+.pill { display:inline-flex; align-items:center; gap:.3rem;
         border:1px solid var(--rule); border-radius:999px;
         padding:.1rem .5rem; font-size:11px; line-height:1.6; }
 
-.fr .dot,
-.fr.dot { width:7px; height:7px; border-radius:999px; display:inline-block; }
-.fr .av,
-.fr.av { width:28px; height:28px; border-radius:8px; flex-shrink:0; }
+.dot { width:7px; height:7px; border-radius:999px; display:inline-block; }
+.av  { width:28px; height:28px; border-radius:8px; flex-shrink:0; }
 
 /* One boolean pattern, everywhere. Colour by meaning:
    --sc:var(--lamp) for "always in mind", --sc:var(--secret) for "secret". */
-.fr .sw,
-.fr.sw { width:34px; height:19px; border-radius:999px; position:relative;
+.sw    { width:34px; height:19px; border-radius:999px; position:relative;
          flex-shrink:0; background:var(--b3); }
-.fr .sw i,
-.fr.sw i { position:absolute; top:2px; left:2px; width:15px; height:15px;
+.sw i  { position:absolute; top:2px; left:2px; width:15px; height:15px;
          border-radius:999px; background:var(--bcm); }
-.fr .sw-on,
-.fr.sw-on { background:color-mix(in srgb, var(--sc) 40%, transparent); }
-.fr .sw-on i,
-.fr.sw-on i { left:auto; right:2px; background:var(--sc); }
+.sw-on { background:color-mix(in srgb, var(--sc) 40%, transparent); }
+.sw-on i { left:auto; right:2px; background:var(--sc); }
 
-.fr .seg,
-.fr.seg { display:flex; border:1px solid var(--rule); border-radius:8px; overflow:hidden; }
-.fr .seg > *,
-.fr.seg > * { flex:1; text-align:center; padding:.35rem .5rem; font-size:12px; font-weight:600; }
-.fr .seg-on,
-.fr.seg-on { background:var(--b3); }
+.seg   { display:flex; border:1px solid var(--rule); border-radius:8px; overflow:hidden; }
+.seg > * { flex:1; text-align:center; padding:.35rem .5rem; font-size:12px; font-weight:600; }
+.seg-on  { background:var(--b3); }
 
-.fr .chk,
-.fr.chk { width:18px; height:18px; border-radius:5px; border:1.5px solid var(--rule);
+.chk    { width:18px; height:18px; border-radius:5px; border:1.5px solid var(--rule);
           flex-shrink:0; display:flex; align-items:center; justify-content:center;
           font-size:11px; font-weight:700; }
-.fr .chk-on,
-.fr.chk-on { background:var(--lamp); border-color:var(--lamp); color:var(--b1); }
+.chk-on  { background:var(--lamp); border-color:var(--lamp); color:var(--b1); }
 /* Outlined tick = inherited from a group. Can't be individually removed. */
-.fr .chk-via,
-.fr.chk-via { border-color:var(--secret); color:var(--secret); }
+.chk-via { border-color:var(--secret); color:var(--secret); }
 
-.fr .bar,
-.fr.bar { height:5px; border-radius:99px; background:var(--b3); overflow:hidden; }
-.fr .bar i,
-.fr.bar i { display:block; height:100%; background:var(--lamp); }
+.bar    { height:5px; border-radius:99px; background:var(--b3); overflow:hidden; }
+.bar i  { display:block; height:100%; background:var(--lamp); }
 
 
 /* ============================================================================
@@ -205,13 +173,11 @@
    var(--lamp) for limited omniscient, var(--bcm) for spectator.
    ============================================================================ */
 
-.fr .viewas,
-.fr.viewas { display:inline-flex; align-items:center; gap:.35rem;
+.viewas   { display:inline-flex; align-items:center; gap:.35rem;
             border:1px solid var(--vc); color:var(--vc); border-radius:999px;
             padding:.12rem .5rem; font-size:11.5px; font-weight:600;
             line-height:1.6; white-space:nowrap; }
-.fr .viewas i,
-.fr.viewas i { width:7px; height:7px; border-radius:999px;
+.viewas i { width:7px; height:7px; border-radius:999px;
             background:var(--vc); display:inline-block; }
 
 
@@ -223,8 +189,7 @@
    different here than a first-time reader would assume?
    ============================================================================ */
 
-.fr .info,
-.fr.info { display:inline-flex; align-items:center; justify-content:center;
+.info { display:inline-flex; align-items:center; justify-content:center;
         width:15px; height:15px; border-radius:999px;
         border:1px solid var(--bcm); color:var(--bcm);
         font-size:9.5px; font-weight:700; line-height:1; flex-shrink:0; }
@@ -236,36 +201,30 @@
    ============================================================================ */
 
 /* Director narration. Rules above and below, hanging dash, Spectral. */
-.fr .m-world,
-.fr.m-world { border-top:1px solid var(--rule); border-bottom:1px solid var(--rule);
+.m-world   { border-top:1px solid var(--rule); border-bottom:1px solid var(--rule);
              padding:.7rem 0; }
 
 /* Interior monologue. Voice-coloured rule + a faint tint of the same hue.
    Set --vc to the speaker's voice colour. */
-.fr .m-thought,
-.fr.m-thought { border-left:2px solid var(--vc);
+.m-thought { border-left:2px solid var(--vc);
              background:color-mix(in srgb, var(--vc) 7%, transparent);
              border-radius:0 8px 8px 0; padding:.5rem .7rem; }
 
 /* A generation that failed, rendered where it happened. */
-.fr .m-fail,
-.fr.m-fail { background:color-mix(in srgb, var(--pencil) 9%, transparent);
+.m-fail    { background:color-mix(in srgb, var(--pencil) 9%, transparent);
              border-left:2px solid var(--pencil);
              border-radius:0 8px 8px 0; padding:.7rem .8rem; }
 
 /* "Now" — the live turn, the current beat, an unsaved draft.
    The only bright thing on screen, so attention has one meaning everywhere. */
-.fr .m-live,
-.fr.m-live { background:radial-gradient(120% 160% at 6% 0%,
+.m-live    { background:radial-gradient(120% 160% at 6% 0%,
              color-mix(in srgb, var(--lamp) 15%, transparent) 0%, transparent 60%); }
 
 /* A beat divider. Sticky within the transcript, plain by design — it records
    that a beat opened and never changes afterwards. */
-.fr .beat-rule,
-.fr.beat-rule { position:sticky; top:0; z-index:5; background:var(--b1);
+.beat-rule         { position:sticky; top:0; z-index:5; background:var(--b1);
                      display:flex; align-items:center; gap:.7rem; padding:.55rem 0 .5rem; }
-.fr .beat-rule::after,
-.fr.beat-rule::after { content:""; flex:1; height:1px; background:var(--rule); }
+.beat-rule::after  { content:""; flex:1; height:1px; background:var(--rule); }
 
 
 /* ============================================================================
@@ -275,28 +234,19 @@
    Slots are voice-coloured and flex, so names become initials around six.
    ============================================================================ */
 
-.fr .strip,
-.fr.strip { border-top:1px solid var(--rule); background:var(--b2); padding:.55rem .9rem; }
+.strip { border-top:1px solid var(--rule); background:var(--b2); padding:.55rem .9rem; }
 
-.fr .slots,
-.fr.slots { display:flex; gap:4px; align-items:center; }
-.fr .slot,
-.fr.slot { height:20px; min-width:20px; border-radius:5px; display:flex;
+.slots { display:flex; gap:4px; align-items:center; }
+.slot  { height:20px; min-width:20px; border-radius:5px; display:flex;
          align-items:center; justify-content:center; font-family:var(--f-mono);
          font-size:9.5px; font-weight:600; flex:1 1 0; }
-.fr .slot-took,
-.fr.slot-took { background:var(--sc); color:var(--b1); }             /* took their turn */
-.fr .slot-now,
-.fr.slot-now { background:color-mix(in srgb, var(--lamp) 22%, transparent);
+.slot-took { background:var(--sc); color:var(--b1); }             /* took their turn */
+.slot-now  { background:color-mix(in srgb, var(--lamp) 22%, transparent);
              border:1.5px solid var(--lamp); color:var(--lamp); } /* happening now */
-.fr .slot-wait,
-.fr.slot-wait { border:1px solid var(--rule); color:var(--bcm); }    /* still to come */
-.fr .slot-pass,
-.fr.slot-pass { border:1px dashed var(--rule); color:var(--bcm); }   /* passed */
-.fr .slot-fail,
-.fr.slot-fail { border:1.5px solid var(--pencil); color:var(--pencil); }
-.fr .slot-you,
-.fr.slot-you { box-shadow:0 0 0 2px var(--b2), 0 0 0 3.5px var(--bc); }
+.slot-wait { border:1px solid var(--rule); color:var(--bcm); }    /* still to come */
+.slot-pass { border:1px dashed var(--rule); color:var(--bcm); }   /* passed */
+.slot-fail { border:1.5px solid var(--pencil); color:var(--pencil); }
+.slot-you  { box-shadow:0 0 0 2px var(--b2), 0 0 0 3.5px var(--bc); }
 
 
 /* ============================================================================
@@ -306,54 +256,38 @@
    horizontally and never wrap.
    ============================================================================ */
 
-.fr .tabs,
-.fr.tabs { display:flex; overflow-x:auto; border-bottom:1px solid var(--rule);
+.tabs { display:flex; overflow-x:auto; border-bottom:1px solid var(--rule);
         background:var(--b2); width:100%; min-width:0; }
-.fr .tabs::-webkit-scrollbar,
-.fr.tabs::-webkit-scrollbar { display:none; }
-.fr .tabs,
-.fr.tabs { scrollbar-width:none; }
-.fr .tab,
-.fr.tab { padding:.6rem .8rem; font-size:13px; font-weight:600; white-space:nowrap;
+.tabs::-webkit-scrollbar { display:none; }
+.tabs { scrollbar-width:none; }
+.tab      { padding:.6rem .8rem; font-size:13px; font-weight:600; white-space:nowrap;
             color:var(--bcm); border-bottom:2px solid transparent; }
-.fr .tab-on,
-.fr.tab-on { color:var(--bc); border-bottom-color:var(--lamp); }
+.tab-on   { color:var(--bc); border-bottom-color:var(--lamp); }
 /* Amber dot = unbuilt, on the campaign's first run. */
-.fr .tab-todo::after,
-.fr.tab-todo::after { content:""; display:inline-block; width:5px; height:5px;
+.tab-todo::after { content:""; display:inline-block; width:5px; height:5px;
                    border-radius:99px; background:var(--lamp);
                    margin-left:.35rem; vertical-align:middle; }
 
-.fr .jump,
-.fr.jump { display:flex; gap:.15rem; overflow-x:auto; padding:.5rem .9rem;
+.jump { display:flex; gap:.15rem; overflow-x:auto; padding:.5rem .9rem;
         width:100%; max-width:100%; min-width:0;
         background:var(--b2); border-bottom:1px solid var(--rule); }
-.fr .jump::-webkit-scrollbar,
-.fr.jump::-webkit-scrollbar { display:none; }
-.fr .jump,
-.fr.jump { scrollbar-width:none; }
-.fr .jump span,
-.fr.jump span { font-family:var(--f-mono); font-size:10px; letter-spacing:.1em;
+.jump::-webkit-scrollbar { display:none; }
+.jump { scrollbar-width:none; }
+.jump span    { font-family:var(--f-mono); font-size:10px; letter-spacing:.1em;
                 text-transform:uppercase; color:var(--bcm); padding:.15rem .4rem;
                 white-space:nowrap; border-radius:5px; }
-.fr .jump .on,
-.fr.jump .on { color:var(--bc); background:var(--b3); }
+.jump .on     { color:var(--bc); background:var(--b3); }
 
 /* Scene scrubber on a character sheet — one stop per closed scene. */
-.fr .scrub,
-.fr.scrub { display:flex; gap:.15rem; overflow-x:auto; padding:.5rem .9rem;
+.scrub { display:flex; gap:.15rem; overflow-x:auto; padding:.5rem .9rem;
          width:100%; min-width:0; background:var(--b2);
          border-bottom:1px solid var(--rule); }
-.fr .scrub::-webkit-scrollbar,
-.fr.scrub::-webkit-scrollbar { display:none; }
-.fr .scrub,
-.fr.scrub { scrollbar-width:none; }
-.fr .scrub span,
-.fr.scrub span { font-family:var(--f-mono); font-size:10px; letter-spacing:.08em;
+.scrub::-webkit-scrollbar { display:none; }
+.scrub { scrollbar-width:none; }
+.scrub span { font-family:var(--f-mono); font-size:10px; letter-spacing:.08em;
               text-transform:uppercase; color:var(--bcm); padding:.15rem .45rem;
               white-space:nowrap; border-radius:5px; }
-.fr .scrub .on,
-.fr.scrub .on { color:var(--bc); background:var(--b3); }
+.scrub .on  { color:var(--bc); background:var(--b3); }
 
 
 /* ============================================================================
@@ -363,40 +297,27 @@
    "always in mind" is a chip instead, so the two compose.
    ============================================================================ */
 
-.fr .secret,
-.fr.secret { border-left:2px solid var(--secret);
+.secret { border-left:2px solid var(--secret);
           background:color-mix(in srgb, var(--secret) 8%, transparent);
           border-radius:0 8px 8px 0; padding-left:.65rem; }
-.fr .core,
-.fr.core { border-left:2px solid var(--lamp);
+.core   { border-left:2px solid var(--lamp);
           background:color-mix(in srgb, var(--lamp) 7%, transparent);
           border-radius:0 8px 8px 0; padding-left:.65rem; }
-.fr .prop,
-.fr.prop { border-left:2px solid var(--lamp);  padding-left:.65rem; }  /* proposed */
-.fr .canon,
-.fr.canon { border-left:2px solid var(--ok);    padding-left:.65rem; }  /* accepted */
-.fr .drop,
-.fr.drop { border-left:2px solid var(--rule);  padding-left:.65rem; opacity:.55; }
-.fr .bound,
-.fr.bound { border-left:2px solid var(--pencil);padding-left:.65rem; }  /* won't */
-.fr .compel,
-.fr.compel { border-left:2px solid var(--v2);    padding-left:.65rem; }  /* can't stop */
-.fr .urgent,
-.fr.urgent { border-left:2px solid var(--pencil);
+.prop   { border-left:2px solid var(--lamp);  padding-left:.65rem; }  /* proposed */
+.canon  { border-left:2px solid var(--ok);    padding-left:.65rem; }  /* accepted */
+.drop   { border-left:2px solid var(--rule);  padding-left:.65rem; opacity:.55; }
+.bound  { border-left:2px solid var(--pencil);padding-left:.65rem; }  /* won't */
+.compel { border-left:2px solid var(--v2);    padding-left:.65rem; }  /* can't stop */
+.urgent { border-left:2px solid var(--pencil);
           background:color-mix(in srgb, var(--pencil) 7%, transparent); }
-.fr .arch,
-.fr.arch { opacity:.6; }
-.fr .was,
-.fr.was { text-decoration:line-through; text-decoration-color:var(--bcm);
+.arch   { opacity:.6; }
+.was    { text-decoration:line-through; text-decoration-color:var(--bcm);
           text-decoration-thickness:1px; }
 
-.fr .chip-core,
-.fr.chip-core { display:inline-flex; align-items:center; gap:.3rem;
+.chip-core { display:inline-flex; align-items:center; gap:.3rem;
              border:1px solid var(--lamp); color:var(--lamp); border-radius:999px;
              padding:.02rem .4rem; font-family:var(--f-mono); font-size:9.5px;
              letter-spacing:.1em; text-transform:uppercase; }
 
-.fr .cover,
-.fr.cover { border:1px dashed var(--rule); border-radius:10px; }
-.fr .skel,
-.fr.skel { height:12px; border-radius:4px; background:var(--b3); }
+.cover { border:1px dashed var(--rule); border-radius:10px; }
+.skel  { height:12px; border-radius:4px; background:var(--b3); }
