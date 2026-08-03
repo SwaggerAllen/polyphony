@@ -91,7 +91,9 @@ defmodule Polyphony.Accounts.User do
   end
 
   defp normalize_email(changeset) do
-    update_change(changeset, :email, fn email -> email |> to_string() |> String.downcase() end)
+    # Through `Accounts.normalize_email/1` so what is stored and what is looked up can
+    # never diverge — they had, on whitespace.
+    update_change(changeset, :email, &Polyphony.Accounts.normalize_email/1)
   end
 
   defp validate_username(changeset) do

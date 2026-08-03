@@ -35,7 +35,17 @@ defmodule Polyphony.Accounts do
   def get(id, opts \\ []), do: repo(opts).get(User, id)
 
   def get_by_email(email, opts \\ []),
-    do: repo(opts).get_by(User, email: email |> to_string() |> String.downcase())
+    do: repo(opts).get_by(User, email: normalize_email(email))
+
+  @doc """
+  The canonical form of an address: trimmed and lower-cased.
+
+  **Trimmed** matters as much as the case: a phone keyboard readily leaves a trailing
+  space on an autocompleted address, and sign-in is a silent lookup — no match simply
+  produces no email, with a screen that says one was sent either way.
+  """
+  @spec normalize_email(term()) :: String.t()
+  def normalize_email(email), do: email |> to_string() |> String.trim() |> String.downcase()
 
   def get_by_username(username, opts \\ []),
     do: repo(opts).get_by(User, username: to_string(username))
