@@ -32,18 +32,28 @@ defmodule Polyphony.Authoring.WorldBible do
   read as public entries without a migration.
   """
 
+  alias Polyphony.Authoring.Audience
+
   defmodule Entry do
     @moduledoc """
     One authored world statement — a rule, or something already true.
 
     `concealed` is the same flag a character's `Fact` carries and means the same
-    thing: nobody starts out knowing it. It is *not* a scope — a `:local` world-arc
+    thing: this is narrower than everyone. It is *not* a scope — a `:local` world-arc
     fact is about **where** it reached, this is about **who** knows.
+
+    `audience` is who that narrower set is (`Polyphony.Authoring.Audience`), and it is
+    the same component on the same question here as on a character's fact. Nobody, by
+    default.
     """
     @derive Jason.Encoder
-    defstruct [:statement, concealed: false]
+    defstruct [:statement, :audience, concealed: false]
 
-    @type t :: %__MODULE__{statement: String.t(), concealed: boolean()}
+    @type t :: %__MODULE__{
+            statement: String.t(),
+            concealed: boolean(),
+            audience: Polyphony.Authoring.Audience.t() | nil
+          }
 
     @doc """
     Coerce a stored value into an entry.
@@ -60,7 +70,8 @@ defmodule Polyphony.Authoring.WorldBible do
     def from(%{} = m) do
       %__MODULE__{
         statement: to_string(m["statement"] || m[:statement] || ""),
-        concealed: truthy?(m["concealed"] || m[:concealed])
+        concealed: truthy?(m["concealed"] || m[:concealed]),
+        audience: Polyphony.Authoring.Audience.from(m["audience"] || m[:audience])
       }
     end
 
@@ -104,11 +115,32 @@ defmodule Polyphony.Authoring.WorldBible do
   @doc """
   Only the statements nobody is being kept from — the **character-facing** read.
 
-  Every path that builds a character's context goes through this rather than
-  through `statements/1`. A new caller that reaches for the raw list is the bug.
+  Every path that builds a character's context goes through this or `known_to/3`
+  rather than through `statements/1`. A new caller that reaches for the raw list is
+  the bug.
   """
   @spec public([Entry.t() | String.t() | map()]) :: [String.t()]
   def public(list), do: for(e <- entries(list), not e.concealed, do: e.statement)
+
+  @doc """
+  What one character may read: the public statements, plus the concealed ones whose
+  audience includes them.
+
+  Resolution is live (`Audience.resolve/2` expands groups when asked), so a character
+  written into the Tidewatch in scene 9 gets the Tidewatch's secrets from the moment
+  they turn up — which is the whole reason a group is stored as a group.
+
+  A nil `character_id` is a stranger: `public/1`, and nothing else.
+  """
+  @spec known_to([Entry.t() | String.t() | map()], term() | nil, keyword()) :: [String.t()]
+  def known_to(list, character_id, opts \\ [])
+  def known_to(list, nil, _opts), do: public(list)
+
+  def known_to(list, character_id, opts) do
+    for e <- entries(list),
+        not e.concealed or Audience.knows?(e.audience, character_id, opts),
+        do: e.statement
+  end
 
   @doc "The concealed statements — what a cover must be checked against (§2.12)."
   @spec secrets(t()) :: [String.t()]
@@ -121,18 +153,31 @@ defmodule Polyphony.Authoring.WorldBible do
       )
 
   @doc """
-  The bible as a character may see it: concealed rules and canon removed.
+  The bible as one character may see it: concealed rules and canon removed unless
+  their audience includes that character.
 
   Used for the character-facing context and for the read-only *preview as* on the
   editor (§3.2) — the same filter, so what an author previews is what a character
-  actually gets.
+  actually gets. With no character (a stranger, or the un-assigned viewer §3.2 calls
+  a real state) it is default-deny: every secret is gone.
   """
-  @spec for_character(t()) :: t()
-  def for_character(%__MODULE__{} = bible) do
+  @spec for_character(t(), term() | nil, keyword()) :: t()
+  def for_character(bible, character_id \\ nil, opts \\ [])
+
+  def for_character(%__MODULE__{} = bible, character_id, opts) do
     %__MODULE__{
       bible
-      | rules: Enum.reject(entries(bible.rules), & &1.concealed),
-        starting_canon: Enum.reject(entries(bible.starting_canon), & &1.concealed)
+      | rules: visible(bible.rules, character_id, opts),
+        starting_canon: visible(bible.starting_canon, character_id, opts)
     }
+  end
+
+  defp visible(list, nil, _opts), do: Enum.reject(entries(list), & &1.concealed)
+
+  defp visible(list, character_id, opts) do
+    Enum.filter(
+      entries(list),
+      &(not &1.concealed or Audience.knows?(&1.audience, character_id, opts))
+    )
   end
 end

@@ -381,6 +381,44 @@ saved (§03), the share link appearing the moment unlisted is picked rather than
 nobody, `New link` breaking the old one, and the write-it-from-a-line card leading an empty world
 and folding away once there's something there — the same argument as the campaign's Quick Build.
 
+### The audience picker (`ux/polyphony-audience-picker.html`, `backend-backlog.md` §3.3)
+Not a screen — a component, on two surfaces already ported. Which made the audit's question
+sharper than usual: §3.3 was deliberately scheduled *later*, so was this the screen where the
+honest answer is "not yet"?
+
+It wasn't, and the reason is the thing that had changed underneath it. Groups exist. Secrets now
+exist in three places. And §3.3's own argument is that unscoped audiences — *everyone* and a named
+set — make **secret shorthand for an audience narrower than everyone**, one mechanism rather than
+two. Everything the ask says is hard is the *scoped* half (locations, "whoever was there"), and
+none of it blocks the rest.
+
+**The shape avoids the matrix.** Authored from the secret's side, so it scales with the number of
+secrets rather than secrets × cast. "Everyone" is deliberately not a stored value — it is the
+item's `concealed: false` state, because two representations of one idea is how they drift apart,
+which is the exact failure this component exists to prevent. Additive only: an inherited tick
+can't be individually removed, and the picker says so rather than hiding it.
+
+**Groups are named, not expanded** — the load-bearing decision. Resolution reads current
+membership at the moment the question is asked, so a walk-on written into the Tidewatch in scene 9
+arrives already knowing and nobody assigns anything. The picker's footer says who that means
+*right now* for the same reason: a count frozen at authoring time quietly becomes a lie.
+
+**And it reaches the prompt.** That's the only thing that made it worth building now rather than
+later, and it's the rule this project already set for itself when presence filtering came up —
+handle it in the interface *and* in context generation at the same time, not partially.
+`Context.materialize` takes the campaign's cast and tells a character the secrets their audience
+puts them in on, rendered into the same "You know:" block §6.1 already describes, so the prompt
+shape doesn't change. `WorldBible.known_to/3` does the same for world entries. Absent a cast it is
+default-deny — a caller that doesn't supply one makes a character know too little, never too much.
+
+The character-side read-back (§04) is a **derived projection**, not a second store: you see it from
+a sheet, you edit it from the secret, and each line says how they came by it so an inherited one is
+obvious. One fact, one home.
+
+Still open and recorded: *whoever was there* (it needs a source scene, and nothing carrying an
+audience has one yet), audiences on arc entries, and location audiences — which the design checked
+against the component and which need no change to it.
+
 ---
 
 ## Immediate milestone — the backend the frontend design needs

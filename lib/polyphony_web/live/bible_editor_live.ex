@@ -44,10 +44,10 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   import PolyphonyWeb.BlockField
 
-  alias Polyphony.{Library, Owner}
-  alias Polyphony.Authoring.{Autofill, Cover, WorldBible}
+  alias Polyphony.{Characters, Groups, Library, Owner}
+  alias Polyphony.Authoring.{Audience, Autofill, Cover, WorldBible}
   alias Polyphony.Authoring.WorldBible.Entry
-  alias PolyphonyWeb.{Kit, Layouts}
+  alias PolyphonyWeb.{AudiencePicker, Kit, Layouts}
 
   # Prose, edited as paragraph blocks.
   @prose_specs [{"setting", "Setting"}, {"tone", "Tone"}]
@@ -99,9 +99,12 @@ defmodule PolyphonyWeb.BibleEditorLive do
          drawer: nil,
          panel: nil,
          preview: false,
-         brief_open: false
+         brief_open: false,
+         # {field, index} of the item whose audience is open, or nil.
+         audience_at: nil
        )
-       |> assign_lineage()}
+       |> assign_lineage()
+       |> assign_audience_sources()}
     else
       {:ok, socket |> put_flash(:error, "World bible not found.") |> redirect(to: ~p"/library")}
     end
@@ -329,6 +332,34 @@ defmodule PolyphonyWeb.BibleEditorLive do
     end)
   end
 
+  # ── Audience (§3.3) ─────────────────────────────────────────────────────────
+
+  # Only reachable on a secret: nothing appears until an item is marked, and the
+  # audience line is then part of the item so the count is readable without opening
+  # anything (`ux/polyphony-audience-picker.html` §01).
+  def handle_event("open_audience", %{"field" => f, "index" => i}, socket)
+      when f in @list_fields do
+    {:noreply, assign(socket, audience_at: {f, String.to_integer(i)}, panel: nil)}
+  end
+
+  def handle_event("close_audience", _params, socket),
+    do: {:noreply, assign(socket, audience_at: nil)}
+
+  def handle_event("toggle_audience", %{"kind" => kind, "id" => id}, socket) do
+    case socket.assigns.audience_at do
+      {field, index} ->
+        {:noreply,
+         update_items(socket, field, fn items ->
+           List.update_at(items, index, fn item ->
+             %Entry{item | audience: toggle(item.audience, kind, id)}
+           end)
+         end)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
   # ── Chrome ──────────────────────────────────────────────────────────────────
 
   def handle_event("drawer", %{"section" => section}, socket) do
@@ -467,6 +498,49 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   defp put_blocks(socket, field, blocks),
     do: assign(socket, :blocks, Map.put(socket.assigns.blocks, field, ensure_one(blocks)))
+
+  defp toggle(audience, "group", id), do: Audience.toggle_group(Audience.from(audience), id)
+
+  defp toggle(audience, _character, id),
+    do: Audience.toggle_character(Audience.from(audience), id)
+
+  # The campaign cast and groups the picker offers. A world is authored against an
+  # owner's library rather than one campaign, so this is everything they've written —
+  # which is also what the design's "41 characters" case looks like.
+  defp assign_audience_sources(socket) do
+    owner = Owner.of(socket.assigns.current_user)
+    characters = Characters.list(owner)
+    groups = Groups.list(owner)
+
+    assign(socket,
+      picker_groups:
+        for g <- groups do
+          {to_string(g.id), entry_name(g, "Untitled group"), group_note(g)}
+        end,
+      picker_people:
+        for c <- characters do
+          sheet = Library.payload(c)
+
+          {to_string(c.id), entry_name(c, "Unnamed"), Characters.tier_of(c),
+           AudiencePicker.colour(sheet)}
+        end,
+      picker_labels: Map.new(groups ++ characters, &{to_string(&1.id), entry_name(&1, "Unnamed")})
+    )
+  end
+
+  defp group_note(entry) do
+    case length(Groups.member_ids(entry.id)) do
+      0 -> {:empty, 0}
+      n -> {:count, n}
+    end
+  end
+
+  defp entry_name(entry, fallback) do
+    case Library.payload(entry) do
+      %{name: n} when is_binary(n) and n != "" -> n
+      _ -> fallback
+    end
+  end
 
   defp update_items(socket, field, fun) do
     socket
@@ -735,6 +809,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
                 add_label={add}
                 items={@items[f]}
                 generating={@generating}
+                labels={@picker_labels}
                 last={f == "starting_canon"}
               />
             </Kit.sheet>
@@ -780,6 +855,18 @@ defmodule PolyphonyWeb.BibleEditorLive do
               is the audience picker, which isn't built yet.
             </:part>
           </.drawer>
+
+          <%!-- Outside the form, like every other panel: it isn't part of the sheet's
+                own submission, and a form inside a form isn't a thing. --%>
+          <AudiencePicker.picker
+            :if={open_item(assigns)}
+            statement={open_item(assigns).statement}
+            context_label={world_title(@name)}
+            audience={open_item(assigns).audience}
+            groups={@picker_groups}
+            people={@picker_people}
+            resolved={Audience.resolve(open_item(assigns).audience)}
+          />
 
           <.add_panel
             :if={@panel in list_fields()}
@@ -877,6 +964,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
   attr(:items, :list, required: true)
   attr(:generating, :any, required: true)
   attr(:last, :boolean, default: false)
+  attr(:labels, :map, default: %{})
 
   defp item_list(assigns) do
     ~H"""
@@ -905,10 +993,14 @@ defmodule PolyphonyWeb.BibleEditorLive do
           class="min-w-0 flex-1"
         >
           <span class="text-[13.5px] leading-relaxed"><%= item.statement %></span>
-          <div :if={item.concealed} class="flex items-center gap-1.5 mt-1">
-            <Kit.dot colour="var(--secret)" />
-            <span class="lbl" style="color:var(--secret)">Secret</span>
-          </div>
+          <%!-- The audience is part of the item, not behind the picker, so the count
+                is readable without opening anything (§01). --%>
+          <AudiencePicker.line
+            :if={item.concealed}
+            audience={item.audience}
+            labels={@labels}
+            class="mt-1"
+          />
         </Kit.marked>
 
         <details class="relative shrink-0">
@@ -932,6 +1024,19 @@ defmodule PolyphonyWeb.BibleEditorLive do
                 <span class="block text-[11px] dim">Kept out of every character's head</span>
               </span>
               <Kit.sw on={item.concealed} colour="var(--secret)" />
+            </button>
+            <%!-- Secret first, audience second: there is nothing to point at until
+                  the item is marked. --%>
+            <button
+              :if={item.concealed}
+              type="button"
+              class="row w-full px-4 py-2.5 flex items-center justify-between gap-2 text-[13px] text-left"
+              phx-click="open_audience"
+              phx-value-field={@field}
+              phx-value-index={i}
+            >
+              <span>Who knows this</span>
+              <span class="dim"><%= knows_count(item.audience) %></span>
             </button>
             <button
               type="button"
@@ -1175,6 +1280,19 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   defp panel_placeholder("rules"), do: "No magic. What looks like it is a bribe."
   defp panel_placeholder(_), do: "Nobody in Saltmarch has seen a customs inspector in nine years."
+
+  # The entry whose audience is open, if any.
+  defp open_item(%{audience_at: {field, index}} = assigns),
+    do: Enum.at(assigns.items[field] || [], index)
+
+  defp open_item(_assigns), do: nil
+
+  defp knows_count(audience) do
+    case length(Audience.resolve(audience)) do
+      0 -> "nobody"
+      n -> to_string(n)
+    end
+  end
 
   defp paragraphs(text), do: text |> to_string() |> to_blocks()
 

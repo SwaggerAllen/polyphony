@@ -24,7 +24,7 @@ defmodule Polyphony.Context do
       the live events, so the cached portion cannot drift turn to turn.
   """
 
-  alias Polyphony.Authoring.{WorldBible, CharacterSheet, BoundaryGate}
+  alias Polyphony.Authoring.{Audience, WorldBible, CharacterSheet, BoundaryGate}
   alias Polyphony.Authoring.CharacterSheet.Boundary
   alias Polyphony.Content
   alias Polyphony.Content.CampaignConfig
@@ -49,9 +49,11 @@ defmodule Polyphony.Context do
   Materialize the frozen prefix for `character_id` in a scene.
 
   Required keys: `:scene_id`, `:character_id`, `:sheet` (the **effective** sheet),
-  `:premise`. Optional: `:world_bible`, `:distant_summaries` (the character's own
-  summaries, `[%{scene_id:, text:}]`), `:recent_scenes` (`[%{scene_id:, events:}]`
-  as raw events — filtered here), `:retriever`, `:fact_limit`, `:summary_limit`,
+  `:premise`. Optional: `:world_bible`, `:cast` (the rest of the campaign's cast as
+  `[{character_id, sheet}]` — the source of other people's secrets this character is
+  in on, §3.3), `:distant_summaries` (the character's own summaries,
+  `[%{scene_id:, text:}]`), `:recent_scenes` (`[%{scene_id:, events:}]` as raw events
+  — filtered here), `:retriever`, `:repo`, `:fact_limit`, `:summary_limit`,
   `:scene_token_budget`.
   """
   @spec materialize(keyword() | map()) :: SceneContext.t()
@@ -65,6 +67,20 @@ defmodule Polyphony.Context do
 
     retriever = Map.get(opts, :retriever, StaticRetriever)
     bible = Map.get(opts, :world_bible)
+
+    # Audience resolution reads live group membership, so it needs the repo the caller
+    # is using — and it is asked *here*, at scene open, which is what makes a walk-on
+    # written into a group mid-campaign arrive already knowing (§3.3).
+    audience_opts = opts |> Map.take([:repo]) |> Map.to_list()
+
+    # What this character starts out knowing that belongs to somebody else: another
+    # character's concealed fact whose audience names them. Absent `:cast` there is
+    # nothing, which is the default-deny reading — a caller that doesn't supply the
+    # cast makes a character know too little, never too much.
+    shared_secrets =
+      opts
+      |> Map.get(:cast, [])
+      |> shared_secrets_for(character_id, audience_opts)
 
     # Content register (§A5): the effective governance register, floor ∩ campaign,
     # computed here so it both frames the prefix and caps the boundary layer below.
@@ -117,8 +133,9 @@ defmodule Polyphony.Context do
 
     prefix =
       [
-        render_bible(bible),
+        render_bible(bible, character_id, audience_opts),
         render_sheet(sheet),
+        render_shared_secrets(shared_secrets),
         Content.render_register(register),
         render_boundaries(resolved_boundaries),
         render_facts("Always-resident facts", core_facts),
@@ -243,17 +260,17 @@ defmodule Polyphony.Context do
     end)
   end
 
-  defp render_bible(nil), do: nil
+  defp render_bible(nil, _character_id, _opts), do: nil
 
-  # **The character-facing read, and the only one that may be.** `public/1` drops
-  # concealed rules and canon; `statements/1` would hand a character the world's
-  # secrets in their own prefix, which is the world-level version of the leak
-  # `Polyphony.Visibility` exists to prevent — and it would leak into a *prompt*,
-  # where nobody can see it happen. The Director reads the unfiltered list, in
-  # `Director.SceneBrief`, because the Director is omniscient.
-  defp render_bible(%WorldBible{} = b) do
-    rules = WorldBible.public(b.rules)
-    canon = WorldBible.public(b.starting_canon)
+  # **The character-facing read, and the only one that may be.** `known_to/3` gives
+  # the public statements plus the concealed ones this character's audience puts them
+  # in on; `statements/1` would hand them the world's secrets wholesale, which is the
+  # world-level version of the leak `Polyphony.Visibility` exists to prevent — and it
+  # would leak into a *prompt*, where nobody can see it happen. The Director reads the
+  # unfiltered list, in `Director.SceneBrief`, because the Director is omniscient.
+  defp render_bible(%WorldBible{} = b, character_id, opts) do
+    rules = WorldBible.known_to(b.rules, character_id, opts)
+    canon = WorldBible.known_to(b.starting_canon, character_id, opts)
 
     [
       b.name && "World: #{b.name}",
@@ -280,6 +297,38 @@ defmodule Polyphony.Context do
       render_relationships(s.relationships)
     ]
     |> compact_join()
+  end
+
+  # Secrets that belong to somebody else and that this character is in on (§3.3).
+  #
+  # Rendered into the same "You know:" shape `initial_knowledge` uses, because that is
+  # exactly what §6.1 says that block is for — *characters must start knowing different
+  # things, and that has to be authored.* The audience picker is the authoring; this is
+  # the same idea reaching the prompt, so the prompt shape doesn't change.
+  #
+  # Each line names whose secret it is. A character who starts out knowing that Wren
+  # signs for the Kestrel knows it *about Wren*, and a bare statement would read as
+  # something true of themselves.
+  defp render_shared_secrets([]), do: nil
+
+  defp render_shared_secrets(lines),
+    do: "You also know, and are not supposed to:\n" <> bullets(lines)
+
+  # Walk the rest of the cast for concealed facts whose audience names this character.
+  # Their *own* facts are not here — those reach them through their sheet, which is
+  # where a character's own secrets have always come from.
+  defp shared_secrets_for(cast, character_id, opts) do
+    me = to_string(character_id)
+
+    for {owner_id, %CharacterSheet{} = sheet} <- cast,
+        to_string(owner_id) != me,
+        %CharacterSheet.Fact{concealed: true} = fact <- sheet.facts || [],
+        Audience.knows?(fact.audience, me, Keyword.put(opts, :owner, owner_id)) do
+      case sheet.name do
+        n when is_binary(n) and n != "" -> "#{n}: #{fact.statement}"
+        _ -> fact.statement
+      end
+    end
   end
 
   defp render_relationships([]), do: nil

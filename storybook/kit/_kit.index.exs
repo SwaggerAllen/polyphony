@@ -31,6 +31,7 @@ defmodule Storybook.Kit do
   def entry("strip"), do: [name: "Status strip"]
   def entry("marked"), do: [name: "Marked list items"]
   def entry("chip_core"), do: [name: "Always-in-mind chip"]
+  def entry("audience"), do: [name: "Audience picker"]
   def entry("toast"), do: [name: "Toasts"]
   def entry("empty"), do: [name: "Empty state"]
   def entry("skel"), do: [name: "Skeleton"]

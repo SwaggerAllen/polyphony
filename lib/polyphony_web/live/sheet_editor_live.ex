@@ -54,10 +54,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
   import PolyphonyWeb.BlockField
 
   alias Polyphony.{Characters, Groups, Library, Owner, Repo}
-  alias Polyphony.Authoring.{Autofill, CharacterSheet, Cover, Stub, WorldBible}
+  alias Polyphony.Authoring.{Audience, Autofill, CharacterSheet, Cover, Stub, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.{Boundary, Fact, Relationship}
   alias Polyphony.ReadModels.Membership
-  alias PolyphonyWeb.{Kit, Layouts, Voice}
+  alias PolyphonyWeb.{AudiencePicker, Kit, Layouts, Voice}
 
   # Prose fields are edited as blocks; name stays a single-line scalar.
   @field_specs [
@@ -113,6 +113,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
          dirty: false,
          drawer: nil,
          panel: nil,
+         # Index of the fact whose audience is open, or nil.
+         audience_at: nil,
          world_entries: worlds,
          worlds: world_options(worlds),
          world_id: world_id,
@@ -126,6 +128,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
          groups: Groups.for_character(Owner.of(socket.assigns.current_user), entry.id),
          all_groups: Groups.list(Owner.of(socket.assigns.current_user))
        )
+       |> assign_audience_sources()
+       |> assign_knows()
        |> assign_characters(other_characters(socket.assigns.current_user, entry.id))}
     else
       {:ok, socket |> put_flash(:error, "Character not found.") |> redirect(to: ~p"/library")}
@@ -408,6 +412,31 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end)
   end
 
+  # ── Audience (§3.3) ─────────────────────────────────────────────────────────
+
+  # Reachable only from a secret, and the same component the world bible opens — one
+  # implementation, two headers, so the two can't drift.
+  def handle_event("open_audience", %{"index" => i}, socket),
+    do: {:noreply, assign(socket, audience_at: String.to_integer(i), panel: nil)}
+
+  def handle_event("close_audience", _params, socket),
+    do: {:noreply, assign(socket, audience_at: nil)}
+
+  def handle_event("toggle_audience", %{"kind" => kind, "id" => id}, socket) do
+    case socket.assigns.audience_at do
+      index when is_integer(index) ->
+        facts =
+          List.update_at(socket.assigns.facts, index, fn fact ->
+            %Fact{fact | audience: toggle(fact.audience, kind, id)}
+          end)
+
+        {:noreply, socket |> assign(facts: facts) |> touch()}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
   # ── Cover (§2.12) ───────────────────────────────────────────────────────────
 
   # Written from the whole sheet, secrets included, under instruction to give none of
@@ -672,6 +701,78 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def handle_async(:reciprocals, result, socket) do
     Logger.warning("[authoring] reciprocal generation skipped: #{inspect(result)}")
     {:noreply, socket}
+  end
+
+  defp toggle(audience, "group", id), do: Audience.toggle_group(Audience.from(audience), id)
+
+  defp toggle(audience, _character, id),
+    do: Audience.toggle_character(Audience.from(audience), id)
+
+  # Everyone this author has written, for the picker. The character the sheet is about
+  # is excluded from the list and passed as the owner instead — they always know their
+  # own secrets, so it is never a choice.
+  defp assign_audience_sources(socket) do
+    owner = Owner.of(socket.assigns.current_user)
+    self_id = to_string(socket.assigns.entry.id)
+    characters = Enum.reject(Characters.list(owner), &(to_string(&1.id) == self_id))
+    groups = Groups.list(owner)
+
+    people =
+      Enum.map(characters, fn c ->
+        {to_string(c.id), char_name(c) || "Unnamed", Characters.tier_of(c),
+         AudiencePicker.colour(Library.payload(c))}
+      end)
+
+    assign(socket,
+      picker_groups: Enum.map(groups, &{to_string(&1.id), group_name(&1), group_note(&1)}),
+      picker_people: people,
+      picker_labels:
+        Map.new(
+          Enum.map(groups, &{to_string(&1.id), group_name(&1)}) ++
+            Enum.map(characters, &{to_string(&1.id), char_name(&1) || "Unnamed"})
+        )
+    )
+  end
+
+  defp group_note(entry) do
+    case length(Groups.member_ids(entry.id)) do
+      0 -> {:empty, 0}
+      n -> {:count, n}
+    end
+  end
+
+  # The other direction (§04): what *this* character starts out knowing, gathered from
+  # everyone else's secrets and every world they're written against.
+  #
+  # A **read-only projection**, derived on each load rather than stored — one fact, one
+  # home, so the two directions cannot drift. To change who knows something you change
+  # it where the secret lives, which is why each line offers a way there.
+  defp assign_knows(socket) do
+    owner = Owner.of(socket.assigns.current_user)
+    me = to_string(socket.assigns.entry.id)
+
+    sources =
+      for entry <- Library.list_for_owner(owner),
+          entry.kind in ["character", "world_bible"],
+          to_string(entry.id) != me,
+          source = knowledge_source(entry),
+          do: source
+
+    assign(socket, knows: Audience.known_by(me, sources))
+  end
+
+  defp knowledge_source(entry) do
+    case Library.payload(entry) do
+      %CharacterSheet{name: name, facts: facts} ->
+        {name || "Someone", entry.id, facts || []}
+
+      %WorldBible{name: name} = bible ->
+        {name || "A world", nil,
+         WorldBible.entries(bible.rules) ++ WorldBible.entries(bible.starting_canon)}
+
+      _ ->
+        nil
+    end
   end
 
   # ── Assign / block helpers ────────────────────────────────────────────────────
@@ -1137,7 +1238,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
               Nothing yet. Facts are the flat statements they'd never contradict.
             </p>
 
-            <.fact_row :for={{f, i} <- Enum.with_index(@facts)} fact={f} index={i} />
+            <.fact_row
+              :for={{f, i} <- Enum.with_index(@facts)}
+              fact={f}
+              index={i}
+              labels={@picker_labels}
+            />
 
             <.add_row label="Add something that's true…" panel="fact" />
           </div>
@@ -1158,6 +1264,22 @@ defmodule PolyphonyWeb.SheetEditorLive do
               think about.
             </:part>
           </.drawer>
+
+          <%!-- ── What they start out knowing (§04) ───────────────────────── --%>
+          <%!-- The other direction, and read-only on purpose: one fact, one home, so
+                nothing can drift out of sync. Each line says where it came from, so
+                an inherited one is obvious, and offers the way to where it's edited. --%>
+          <div :if={@knows != []} class="row px-4 py-3" id="knows-secrets">
+            <div class="lbl dim mb-2">What they start out knowing</div>
+            <div :for={k <- @knows} class="py-2">
+              <p class="text-[13px] leading-relaxed"><%= k.statement %></p>
+              <div class="lbl dim mt-1"><%= knows_provenance(k) %></div>
+            </div>
+            <p class="text-[11px] leading-relaxed dim mt-1.5">
+              To change who knows something, change it where the secret lives. There's
+              only ever one copy.
+            </p>
+          </div>
 
           <%!-- ── Relationships ───────────────────────────────────────────── --%>
           <div class="row px-4 py-3" id="knows">
@@ -1331,6 +1453,19 @@ defmodule PolyphonyWeb.SheetEditorLive do
         </Kit.sheet>
         </form>
 
+        <%!-- The shared picker, outside the sheet's form like every other panel. --%>
+        <AudiencePicker.picker
+          :if={open_fact(assigns)}
+          statement={open_fact(assigns).statement}
+          context_label={header_title(@name)}
+          audience={open_fact(assigns).audience}
+          groups={@picker_groups}
+          people={@picker_people}
+          owner={to_string(@entry.id)}
+          owner_label={header_title(@name)}
+          resolved={Audience.resolve(open_fact(assigns).audience, owner: @entry.id)}
+        />
+
         <.fact_panel :if={@panel == "fact"} />
         <.relationship_panel :if={@panel == "relationship"} names={@char_names} />
         <.pressure_panel :if={@panel == "pressure"} />
@@ -1474,6 +1609,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # a live connection and closes on Escape for free.
   attr(:fact, :map, required: true)
   attr(:index, :integer, required: true)
+  attr(:labels, :map, default: %{})
 
   defp fact_row(assigns) do
     ~H"""
@@ -1486,10 +1622,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
           :if={@fact.concealed or @fact.core}
           class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1"
         >
-          <span :if={@fact.concealed} class="flex items-center gap-1.5">
-            <Kit.dot colour="var(--secret)" />
-            <span class="lbl" style="color:var(--secret)">Secret</span>
-          </span>
+          <%!-- The audience is part of the item, so the count reads without opening
+                anything (§01). --%>
+          <AudiencePicker.line :if={@fact.concealed} audience={@fact.audience} labels={@labels} />
           <Kit.chip_core :if={@fact.core} />
         </div>
       </Kit.marked>
@@ -1527,6 +1662,17 @@ defmodule PolyphonyWeb.SheetEditorLive do
               <span class="block text-[11px] dim">Nobody else starts out knowing</span>
             </span>
             <Kit.sw on={!!@fact.concealed} colour="var(--secret)" />
+          </button>
+          <%!-- Secret first, audience second: nothing to point at until it's marked. --%>
+          <button
+            :if={@fact.concealed}
+            type="button"
+            class="row w-full px-4 py-2.5 flex items-center justify-between gap-2 text-[13px] text-left"
+            phx-click="open_audience"
+            phx-value-index={@index}
+          >
+            <span>Who else knows this</span>
+            <span class="dim"><%= knows_count(@fact.audience) %></span>
           </button>
           <button
             type="button"
@@ -1868,6 +2014,25 @@ defmodule PolyphonyWeb.SheetEditorLive do
   end
 
   # ── Render helpers ────────────────────────────────────────────────────────────
+
+  # The fact whose audience is open, if any.
+  defp open_fact(%{audience_at: index} = assigns) when is_integer(index),
+    do: Enum.at(assigns.facts, index)
+
+  defp open_fact(_assigns), do: nil
+
+  # The owner is always in it, so the count never reads as nobody on a fact that is
+  # at minimum known to the person it's about.
+  defp knows_count(audience) do
+    case length(Audience.named(Audience.from(audience))) +
+           length(Audience.from(audience).group_ids) do
+      0 -> "nobody else"
+      n -> to_string(n)
+    end
+  end
+
+  defp knows_provenance(%{from: from, why: :group}), do: "From #{from} · they're in a group"
+  defp knows_provenance(%{from: from, why: _named}), do: "From #{from} · you named them"
 
   defp header_title(name) when name in [nil, ""], do: "Someone new"
   defp header_title(name), do: name

@@ -45,6 +45,9 @@ defmodule Polyphony.Context.Rebuild do
           location: opened.location_id,
           world_bible:
             Effective.world_bible(world_bible(scene_id), opened.campaign_id, opened.location_id),
+          # Other people's secrets this character is let in on (§3.3). Resolved here
+          # rather than stored, so a group's membership moving moves the audience.
+          cast: cast(scene_id),
           # Re-apply the campaign content ceiling (§A5) so a rebuilt context caps the
           # same boundaries as the original seed — a cache wipe must not re-open them.
           content_config: content_config(scene_id),
@@ -90,6 +93,32 @@ defmodule Polyphony.Context.Rebuild do
       |> Enum.map(&(&1 |> normalize_id() |> get_entry()))
       |> Enum.map(&entry_payload/1)
       |> Enum.filter(&match?(%CharacterSheet{}, &1))
+    else
+      _ -> []
+    end
+  rescue
+    _ -> []
+  end
+
+  @doc """
+  The campaign's cast as `[{character_id, sheet}]` — what a context needs to work out
+  whose secrets this character starts out in on (§3.3).
+
+  Keyed by the same library id everything else routes by, and **authored** sheets
+  rather than effective ones: an audience is authored, arc never adds one, and the
+  alternative is a canon-arc read per cast member on every scene open.
+  """
+  @spec cast(term()) :: [{String.t(), CharacterSheet.t()}]
+  def cast(scene_id) do
+    with %SceneOpened{campaign_id: cid} when not is_nil(cid) <- opened(scene_id),
+         campaign when not is_nil(campaign) <- Library.get(cid),
+         %{} = payload <- Library.payload(campaign) do
+      for raw <- payload[:character_ids] || payload["character_ids"] || [],
+          id = normalize_id(raw),
+          entry = get_entry(id),
+          %CharacterSheet{} = sheet <- [entry_payload(entry)] do
+        {to_string(entry.id), sheet}
+      end
     else
       _ -> []
     end

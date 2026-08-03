@@ -664,7 +664,36 @@ whatever the published reading view turns out to be.
   projection from both omniscient and any character, and it may be what a published campaign
   wants when the author grants nobody's interiority. Worth deciding before 3.1 ships.
 
-### 3.3 Selective starting knowledge · **new**
+### 3.3 Selective starting knowledge · **new** — ✅ **Shipped (unscoped audiences)**
+`Polyphony.Authoring.Audience` — group ids + character ids, unioned, resolved **live**.
+It hangs off `CharacterSheet.Fact` and `WorldBible.Entry`, which is the design's *one control,
+three places*, and `PolyphonyWeb.AudiencePicker` is the single implementation both editors call
+with a different header.
+
+The shape avoids the matrix the ask warns about, exactly as specified: authored **from the
+secret's side**, so it scales with the number of secrets rather than secrets × cast. "Everyone"
+is deliberately not a stored value — it is the item's `concealed: false` state, because two
+representations of one idea is how they drift apart. Additive only: an inherited tick can't be
+individually removed, and the picker says so.
+
+**Groups are named, not expanded.** Resolution reads current membership at the moment the question
+is asked, which is what makes a walk-on written into the Tidewatch in scene 9 arrive already
+knowing, with nobody assigning anything.
+
+**And it reaches the prompt**, which is the only reason it was worth building: `Context.materialize`
+takes the campaign `:cast` and tells a character the secrets their audience puts them in on —
+rendered into the same "You know:" block §6.1 already describes, so the prompt shape is unchanged
+— and `WorldBible.known_to/3` does the same for world entries. Absent a cast it is default-deny.
+`AudienceTest` pins the path end to end; the character-side read-back (§04) is a derived
+projection, so one fact keeps one home.
+
+**Still open:** *whoever was there* (needs a source scene, which nothing carrying an audience has
+yet — it goes in with audiences on arc), audiences on **arc entries**, and **location** audiences.
+The design checked the last one against the component and it needs no change to it. Original ask
+below.
+
+
+
 
 `initial_knowledge` (§4) is t=0 dramatic irony, per character. What's missing is the ability
 to say **which other characters are in on a given secret** — not everyone starts equally in

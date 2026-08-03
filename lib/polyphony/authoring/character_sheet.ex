@@ -17,15 +17,26 @@ defmodule Polyphony.Authoring.CharacterSheet do
   """
 
   defmodule Fact do
-    @moduledoc "An atomic true statement about the character (§6.1)."
+    @moduledoc """
+    An atomic true statement about the character (§6.1).
+
+    `concealed` and `core` are orthogonal and are not collapsed: *always in mind* is
+    whether **she** carries it every turn, *secret* is who **else** has it. A woman
+    can have a secret she never thinks about.
+
+    `audience` says who else starts out knowing a concealed one
+    (`Polyphony.Authoring.Audience`). Nobody, by default — and the character it is
+    about always knows it, which is why they are never a choice in the picker.
+    """
     @derive Jason.Encoder
-    defstruct [:statement, tags: [], concealed: false, core: false]
+    defstruct [:statement, :audience, tags: [], concealed: false, core: false]
 
     @type t :: %__MODULE__{
             statement: String.t(),
             tags: [String.t()],
             concealed: boolean(),
-            core: boolean()
+            core: boolean(),
+            audience: Polyphony.Authoring.Audience.t() | nil
           }
   end
 

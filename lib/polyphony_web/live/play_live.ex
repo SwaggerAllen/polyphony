@@ -421,6 +421,10 @@ defmodule PolyphonyWeb.PlayLive do
         sheet: Effective.sheet(sheet, character_id),
         premise: premise,
         world_bible: Effective.world_bible(bible, campaign_id, location),
+        # The rest of the cast, so a secret whose audience names this character
+        # actually reaches them (§3.3). Live group membership is read here, at scene
+        # open, which is what lets a newly-written group member already know.
+        cast: Rebuild.cast(scene_id),
         # Retrieve this character's own distant-scene summaries from pgvector
         # (no-ops to [] without egress / when the embed fails).
         retriever: PgvectorRetriever

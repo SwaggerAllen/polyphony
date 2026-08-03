@@ -503,6 +503,10 @@
   padding-left: 0.75rem;
 }
 
+.pl-3\.5 {
+  padding-left: 0.875rem;
+}
+
 .pl-6 {
   padding-left: 1.5rem;
 }
@@ -629,6 +633,10 @@
 
 .tracking-\[\.06em\] {
   letter-spacing: .06em;
+}
+
+.text-\[var\(--lamp\)\] {
+  color: var(--lamp);
 }
 
 .underline {
