@@ -22,7 +22,8 @@ defmodule Polyphony.MailConfigTest do
     "PHX_HOST" => "example.com"
   }
 
-  @mail_vars ~w(SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_SSL MAIL_FROM MAIL_FROM_NAME)
+  @mail_vars ~w(SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_SSL MAIL_FROM
+               MAIL_FROM_NAME POSTMARK_MESSAGE_STREAM)
 
   # Reads the real file with a **clean** mail environment each time: the vars are
   # process-global, so anything left behind by a previous case would arm a mailer the
@@ -144,6 +145,29 @@ defmodule Polyphony.MailConfigTest do
       # Asking who accepts mail *for* the relay's domain is a different question, and
       # for a host that does publish MX records it would send the mail elsewhere.
       assert config[:no_mx_lookups] == true
+    end
+  end
+
+  describe "the Postmark message stream" do
+    defp headers(extra), do: read_prod(extra) |> get_in([:polyphony, :mail_headers])
+
+    test "defaults to the transactional stream for a Postmark relay" do
+      assert headers(%{"SMTP_HOST" => "smtp.postmarkapp.com", "MAIL_FROM" => "a@e.com"}) ==
+               %{"X-PM-Message-Stream" => "outbound"}
+    end
+
+    test "is not imposed on other providers" do
+      # A vendor header defaulted for everyone would be noise at best, and this
+      # transport is deliberately SMTP-generic.
+      refute headers(%{"SMTP_HOST" => "smtp.sendgrid.net", "MAIL_FROM" => "a@e.com"})
+    end
+
+    test "can be pointed at another stream" do
+      assert headers(%{
+               "SMTP_HOST" => "smtp.postmarkapp.com",
+               "MAIL_FROM" => "a@e.com",
+               "POSTMARK_MESSAGE_STREAM" => "broadcast"
+             }) == %{"X-PM-Message-Stream" => "broadcast"}
     end
   end
 

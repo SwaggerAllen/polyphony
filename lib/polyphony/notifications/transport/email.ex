@@ -31,8 +31,22 @@ defmodule Polyphony.Notifications.Transport.Email do
         |> from(from)
         |> subject(subject)
         |> text_body(body)
+        |> extra_headers()
         |> Mailer.deliver()
     end
+  end
+
+  # Provider headers, from config rather than hard-coded, because this transport is
+  # SMTP-generic and shouldn't name a vendor. Postmark's `X-PM-Message-Stream` is the
+  # concrete case: it routes the message to a stream, and a server whose default isn't
+  # the one you meant will accept the mail and deliver it somewhere you aren't looking.
+  # Unknown `X-` headers are ignored by every other relay, so this is safe to carry.
+  defp extra_headers(email) do
+    :polyphony
+    |> Application.get_env(:mail_headers, %{})
+    |> Enum.reduce(email, fn {name, value}, acc ->
+      header(acc, to_string(name), to_string(value))
+    end)
   end
 
   # `{name, address}` when a display name is configured — a sign-in mail from

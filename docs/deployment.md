@@ -118,6 +118,11 @@ MessageID: it is the handle that makes the provider's side searchable.
   the provider**; an unverified sender is the most common reason mail vanishes without
   an error.
 - `MAIL_FROM_NAME` — display name, defaults to `Polyphony`.
+- `POSTMARK_MESSAGE_STREAM` — the stream to send on. Postmark routes by stream and
+  the `X-PM-Message-Stream` header names it; a message without one goes to the
+  server's default, which may not be the stream you are watching. Defaulted to
+  `outbound` when the relay is a `postmarkapp.com` host, so it needs setting only for
+  a non-default stream. Not sent to other providers — it is a vendor header.
 
 SMTP rather than a provider HTTP API is a deliberate choice: Resend, Postmark,
 SendGrid, Mailgun and SES all speak it, so the provider is a credential rather than a
