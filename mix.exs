@@ -32,8 +32,14 @@ defmodule Polyphony.MixProject do
   #     which fights the looser hand-written specs that are easier to read.
   defp dialyzer do
     [
-      plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
-      plt_add_apps: [:mix, :ex_unit],
+      # Per-env PLT. `elixirc_paths` adds `test/support` under MIX_ENV=test, so the two
+      # envs analyse different code and must not share a cache file — CI runs this in
+      # test, and a dev-built PLT would silently skip the support modules.
+      plt_file: {:no_warn, "priv/plts/dialyzer-#{Mix.env()}.plt"},
+      # Wallaby is `runtime: false`, so it isn't in the application tree the PLT is
+      # built from, and every call into it reads as a call to a function that doesn't
+      # exist. Added only where it exists.
+      plt_add_apps: [:mix, :ex_unit] ++ if(Mix.env() == :test, do: [:wallaby], else: []),
       flags: [:extra_return, :missing_return]
     ]
   end
