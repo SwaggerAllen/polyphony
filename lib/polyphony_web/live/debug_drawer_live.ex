@@ -59,6 +59,12 @@ defmodule PolyphonyWeb.DebugDrawerLive do
     {:noreply, assign(socket, :trace, DebugFlags.toggle(:trace))}
   end
 
+  # The mail trail is what the drawer is most often opened for — picked out of the
+  # stream rather than left to be scrolled for. `Notifications` and `Auth` both tag
+  # their lines `[mail]`.
+  defp mail?(%{message: msg}) when is_binary(msg), do: String.contains?(msg, "[mail]")
+  defp mail?(_), do: false
+
   @impl true
   def render(assigns) do
     #
@@ -78,7 +84,7 @@ defmodule PolyphonyWeb.DebugDrawerLive do
           <div class="spacer"></div>
           <button
             type="button"
-            class={"btn sm #{if @heavy, do: "", else: "ghost"}"}
+            class={"btn btn-sm #{if @heavy, do: "btn-pri", else: "btn-gh"}"}
             phx-click="toggle_heavy"
             title="Route every generation to the heavy model"
           >
@@ -86,7 +92,7 @@ defmodule PolyphonyWeb.DebugDrawerLive do
           </button>
           <button
             type="button"
-            class={"btn sm #{if @events, do: "", else: "ghost"}"}
+            class={"btn btn-sm #{if @events, do: "btn-pri", else: "btn-gh"}"}
             phx-click="toggle_events"
             title="Show the raw event / beat-boundary stream in the scene pane"
           >
@@ -94,22 +100,22 @@ defmodule PolyphonyWeb.DebugDrawerLive do
           </button>
           <button
             type="button"
-            class={"btn sm #{if @trace, do: "", else: "ghost"}"}
+            class={"btn btn-sm #{if @trace, do: "btn-pri", else: "btn-gh"}"}
             phx-click="toggle_trace"
             title="Capture actual LLM requests/responses into the scene pane"
           >
             Trace: <%= if @trace, do: "on", else: "off" %>
           </button>
-          <button type="button" class="btn sm ghost" id="debug-copy">Copy</button>
-          <button type="button" class="btn sm ghost" phx-click="clear">Clear</button>
-          <button type="button" class="btn sm ghost" id="debug-drawer-close">✕</button>
+          <button type="button" class="btn btn-sm btn-gh" id="debug-copy">Copy</button>
+          <button type="button" class="btn btn-sm btn-gh" phx-click="clear">Clear</button>
+          <button type="button" class="btn btn-sm btn-gh" id="debug-drawer-close">✕</button>
         </div>
         <div class="debug-empty" :if={@count == 0}>No log lines captured yet.</div>
         <div id="debug-log-list" class="debug-log-list" phx-hook="Autoscroll" phx-update="stream">
           <div
             :for={{id, e} <- @streams.logs}
             id={id}
-            class={"debug-line lvl-#{e.level}"}
+            class={["debug-line", "lvl-#{e.level}", mail?(e) && "mail"]}
           >
             <span class="debug-time"><%= e.time %></span>
             <span class="debug-lvl"><%= e.level %></span>

@@ -61,16 +61,30 @@ defmodule Polyphony.Notifications do
 
   # ── Internals ─────────────────────────────────────────────────────────────────
 
+  # Every delivery is logged, which means it reaches the debug drawer — the whole
+  # point being that "no email arrived" is answerable from a phone. The **transport is
+  # named** because the single most useful fact is which one ran: `Transport.Log`
+  # reports success without sending anything, so a log line saying `via Transport.Log`
+  # is the answer to "why is my inbox empty" on its own.
   defp dispatch(recipient_id, email, type, subject, body, opts) do
-    case transport(opts).deliver_email(email, subject, body) do
+    transport = transport(opts)
+
+    case transport.deliver_email(email, subject, body) do
       {:ok, _} ->
+        Logger.info("[mail] #{type} → #{redact(email)} sent via #{inspect(transport)}")
         {:ok, record(recipient_id, email, type, subject, body, "sent", opts)}
 
       {:error, reason} ->
+        Logger.error(
+          "[mail] #{type} → #{redact(email)} FAILED via #{inspect(transport)}: #{inspect(reason)}"
+        )
+
         record(recipient_id, email, type, subject, body, "failed", opts)
         {:error, reason}
     end
   end
+
+  defp redact(email), do: Transport.redact(email)
 
   defp record(recipient_id, email, type, subject, body, status, opts) do
     Notification.put(repo(opts), %{

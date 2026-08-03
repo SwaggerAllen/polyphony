@@ -167,6 +167,14 @@ for it.
   legacy 1.14-era pins are gone (`ecto_sql ~> 3.14`, `postgrex ~> 0.22`); the DeepInfra
   adapter still uses Erlang `:httpc` rather than Req, which remains optional cleanup.
   See the README "Toolchain notes".
+- **The debug drawer is the mobile console.** `DEBUG_DRAWER=true` turns on a floating
+  log viewer (`PolyphonyWeb.DebugDrawerLive`) — the only way to see server logs from a
+  phone. Its styles are `assets/css/debug.css`, the one layer after the kit in
+  `app.css`, allowed because the drawer is a diagnostic tool with no kit component; a
+  test keeps it inside the `debug-`/`socket-` namespace. Mail lines are tagged
+  `[mail]` and picked out. **It is not admin-gated** (it can't be — its best use is
+  diagnosing sign-in while signed out), so nothing that reaches a log may carry a live
+  token or a whole email address.
 - **Email is the front door.** Sign-in is magic-link only, so an unconfigured mailer
   means nobody can log in — and it fails *quietly*, because the default
   `Transport.Log` records the notification as `"sent"`. `runtime.exs` arms the real

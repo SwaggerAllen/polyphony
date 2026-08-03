@@ -80,15 +80,38 @@ defmodule PolyphonyWeb.KitPortTest do
     assert length(kit_classes) > 50
   end
 
-  test "the kit is loaded last, and is the only design system left" do
+  test "the kit is the only design system left, and outranks Tailwind" do
     app = File.read!("assets/css/app.css")
     imports = app |> then(&Regex.scan(~r/@import "\.\/(.+)\.css"/, &1)) |> Enum.map(&List.last/1)
 
     # app.css is an ordered manifest and the order is the point: Tailwind, then the
-    # kit, so the kit outranks a utility it overlaps with. A third entry means a
-    # second design system came back.
-    assert imports == ["tailwind-full", "kit"]
+    # kit, so the kit outranks a utility it overlaps with.
+    assert Enum.take(imports, 2) == ["tailwind-full", "kit"]
+
+    # Anything after the kit is a second design system unless it is on this list, and
+    # the list is short on purpose. `debug.css` earns its place by being the opposite
+    # of product surface: the debug drawer is a diagnostic tool, appears in none of the
+    # ux/ mocks, and so has no kit component to be ported from. It may not style
+    # anything the product renders — hence the `debug-`/`socket-` prefix check below.
+    assert imports -- ["tailwind-full", "kit", "debug"] == [],
+           "a new stylesheet after the kit means a second design system came back"
+
     refute File.exists?("assets/css/legacy.css")
+  end
+
+  test "the debug layer stays inside its own namespace" do
+    # The guarantee that keeps the exception above honest: if debug.css could name a
+    # product class it would be a design system by another name, and it loads after
+    # the kit so it would silently win.
+    "assets/css/debug.css"
+    |> File.read!()
+    |> then(&Regex.scan(~r/^\.([a-z][a-z0-9-]*)/m, &1))
+    |> Enum.map(&List.last/1)
+    |> Enum.uniq()
+    |> Enum.each(fn class ->
+      assert String.starts_with?(class, "debug-") or String.starts_with?(class, "socket-"),
+             ".#{class} in debug.css is outside the debug- / socket- namespace"
+    end)
   end
 
   defp classes(css), do: Regex.scan(~r/\.[a-z][a-z0-9-]*/, css) |> List.flatten() |> Enum.uniq()
