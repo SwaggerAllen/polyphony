@@ -164,10 +164,10 @@ defmodule PolyphonyWeb.PlayLive do
     # every reload so a rename shows up without a page load.
     roster = BeatOps.members_now(scene_id, max(next_beat - 1, 1))
     cast = Cast.for_scene(scene_id)
-    # Voice colours are assigned by cast order and must be stable across the
-    # transcript, the strip and the perspective control — so they're derived once
-    # here, from the roster, and every part of the page reads the same map.
-    voices = Voice.assign(Enum.map(roster, &to_string/1))
+    # Voice colours come from the hue stored on each sheet, so they're stable across
+    # the transcript, the strip and the perspective control — and stable across a
+    # cast change, which is what deriving them from order could never be.
+    voices = Map.new(cast.id_to_hue, fn {id, hue} -> {id, Voice.colour(hue)} end)
 
     traces = if socket.assigns.debug_trace, do: DebugTap.recent(scene_id), else: []
     failures = open_failures(socket)

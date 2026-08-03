@@ -296,38 +296,27 @@ defmodule PolyphonyWeb.KitTest do
   end
 
   describe "voice colours" do
-    test "are assigned by cast order and stay put" do
-      voices = Voice.assign(["wren", "ilias", "corrigan"])
-
-      assert voices["wren"] == "var(--v1)"
-      assert voices["ilias"] == "var(--v2)"
-      assert voices["corrigan"] == "var(--v3)"
-    end
-
-    test "re-entry doesn't reshuffle the cast" do
-      assert Voice.assign(["wren", "ilias", "wren"]) == Voice.assign(["wren", "ilias"])
+    test "come from the hue stored on the sheet" do
+      assert Voice.of_sheet(%{hue: 1}) == "var(--v1)"
+      assert Voice.of_sheet(%{hue: 3}) == "var(--v3)"
     end
 
     test "wrap past eight rather than leaving a character unstyled" do
-      ids = Enum.map(1..10, &"c#{&1}")
-      voices = Voice.assign(ids)
-
-      assert voices["c9"] == "var(--v1)"
-      assert voices["c10"] == "var(--v2)"
-      assert map_size(voices) == 10
+      assert Voice.colour(Voice.count() + 1) == "var(--v1)"
+      assert Voice.colour(Voice.count() + 2) == "var(--v2)"
     end
 
-    test "anything without a voice takes the register's plain foreground" do
-      voices = Voice.assign(["wren"])
-
-      assert Voice.of(voices, nil) == "var(--bc)"
-      assert Voice.of(voices, "the-director") == "var(--bc)"
-      refute Voice.of(voices, "the-director") in Map.values(voices)
+    test "a character without one takes the register's plain foreground" do
+      # Not somebody else's colour: "no voice" has to read as distinct from every
+      # voice, or the Director looks like a cast member.
+      assert Voice.of_sheet(%{hue: nil}) == "var(--bc)"
+      assert Voice.of_sheet(nil) == "var(--bc)"
+      assert Voice.of(%{}, nil) == "var(--bc)"
     end
 
     test "resolve against the register, never a fixed hex" do
-      for colour <- Map.values(Voice.assign(Enum.map(1..8, &"c#{&1}"))) do
-        assert colour =~ ~r/^var\(--v[1-8]\)$/
+      for hue <- 1..Voice.count() do
+        assert Voice.colour(hue) =~ ~r/^var\(--v[1-8]\)$/
       end
     end
   end

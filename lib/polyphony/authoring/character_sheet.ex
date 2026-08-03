@@ -131,6 +131,14 @@ defmodule Polyphony.Authoring.CharacterSheet do
             # before it becomes `:full` (mirrors locations' `origin: :discovered`).
             status: :full,
             role: nil,
+            # The character's **voice colour**, as a slot in the design kit's palette
+            # (`--v1`…`--v8`) — distinct from `voice` above, which is prose about how
+            # they speak. Assigned once, at creation (`Library.put/2`), and stored so
+            # it is stable: derived-by-cast-order colours reshuffle every time somebody
+            # is added or removed, and the kit's rule is that a character is the same
+            # hue in the transcript, the strip, the cast list, the picker and their own
+            # sheet. Stored also means an author can choose it later.
+            hue: nil,
             # Optional authoring link to a `world_bible` Library entry (§15): when set,
             # it seeds character auto-generation (`Authoring.Autofill`) so backstory and
             # voice fit the setting. Purely an authoring aid — nil for a world-less sheet.
@@ -138,6 +146,16 @@ defmodule Polyphony.Authoring.CharacterSheet do
 
   @type status :: :stub | :proposed | :full
   @type t :: %__MODULE__{}
+
+  # How many voice colours the design kit defines (`--v1`…`--v8`). It lives here
+  # rather than in the web layer because assigning a hue is a property of creating a
+  # character, and the domain shouldn't reach up into `PolyphonyWeb` to find out how
+  # many there are. `PolyphonyWeb.Voice` reads this back.
+  @hue_count 8
+
+  @doc "How many distinct voice colours exist before the palette wraps."
+  @spec hue_count() :: pos_integer()
+  def hue_count, do: @hue_count
 
   @doc "The facts flagged always-resident (§6.1)."
   @spec core_facts(t()) :: [Fact.t()]

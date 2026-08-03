@@ -51,9 +51,19 @@ transcript moves, marked list items, the info affordance, the nav primitives, an
 controls they sit in. Its one-class utilities (`.ttl`, `.mono`, `.dim`, `.lbl`) deliberately
 stay as classes in markup, exactly as the mocks write them.
 
-`PolyphonyWeb.Voice` holds the rule that makes voice colours useful: assigned by cast order,
-never chosen, wrapping past eight, and emitted as `var(--vN)` so they resolve against
-whichever register and theme the frame is in.
+`PolyphonyWeb.Voice` holds the rule that makes voice colours useful: the same character is
+the same hue in the transcript, the status strip, the cast list, the picker and their own
+sheet, wrapping past eight, and emitted as `var(--vN)` so it resolves against whichever
+register and theme the frame is in.
+
+The hue is a **stored field on the character sheet**, minted once at `Library.put/2` — the
+single door every character comes through — as next-in-rotation for that owner, so a fresh
+cast spreads across the palette. It was first derived from position in a cast, which
+satisfies the rule only until somebody is removed: then everyone after them changes colour,
+including in transcripts they already appear in, which is the one place a colour is meant to
+be a stable identity cue. Storing it also leaves room for an author to pick their own, and
+an explicitly-set hue is never overwritten. `Scene.Cast` carries hues alongside names, from
+the same sheet read, so a rename or a cast change can't move one.
 
 ### The catalogue: `phoenix_storybook` at `/storybook`
 One page per component, with its states and the design's reasoning. Gated by the
@@ -161,9 +171,9 @@ Two bugs came out of the port:
   when its own fields are present (detected on a number input, since an unchecked checkbox
   submits nothing). Pinned by a test that edits the two on different tabs.
 - **The cast was ordered by the library query**, not by the campaign's own
-  `character_ids`. Voice colours are assigned by cast order and have to be stable — the same
-  character is the same hue on this screen, in the transcript and in the status strip — so
-  creating an unrelated character could have reshuffled everyone's colour.
+  `character_ids`, so the order shown depended on when characters were created. (This first
+  surfaced as a voice-colour problem — colours were still order-derived then — which is what
+  prompted moving the hue onto the sheet; the ordering fix stands on its own.)
 
 ### The play screen, ported (`ux/polyphony-play.html`)
 The first screen rebuilt on the kit, and the one the design's two registers exist for.

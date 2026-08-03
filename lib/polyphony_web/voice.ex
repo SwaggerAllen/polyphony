@@ -1,45 +1,51 @@
 defmodule PolyphonyWeb.Voice do
   @moduledoc """
-  Voice colours — the per-character hue the design kit assigns by cast order.
+  Voice colours — the per-character hue the design kit gives each character.
 
   The kit defines eight (`--v1`…`--v8`) and states the rule that makes them
   useful: *the same character is the same hue in the transcript, the status
   strip, the cast list, the picker and their sheet* (`ux/README.md`, porting
-  notes). So the colour is never chosen by an author and never derived from the
-  character's name — it's a position in a cast list, which is why this module
-  takes an ordered list of ids and hands back an assignment every surface can
-  share.
+  notes).
 
-  Past eight it wraps: the kit says so explicitly, and a wrapped hue is a much
-  smaller problem than an unstyled character.
+  The hue is **stored on the character sheet**, assigned once at creation
+  (`Polyphony.Library.put/2`). It was briefly derived from position in a cast
+  instead, which satisfies the rule only until somebody is removed — then everyone
+  after them changes colour, including in transcripts they already appear in.
+  Storing it also leaves room for an author to choose their own later.
+
+  So this module doesn't assign anything. It turns a stored hue into the CSS the
+  kit expects, and wraps past eight because the kit says to — a wrapped hue is a
+  much smaller problem than an unstyled character.
 
   Colours are emitted as `var(--vN)` so they resolve against whichever register
   and theme the surrounding `.fr` frame is in — the kit redefines all eight per
   register/theme, and this module must not pin a hex value.
   """
 
-  @count 8
+  @count Polyphony.Authoring.CharacterSheet.hue_count()
 
   @typedoc "Ordered cast → voice-colour assignment. Keys are character ids."
   @type t :: %{optional(String.t()) => String.t()}
 
   @doc """
-  Assign voice colours to an ordered cast.
+  The CSS colour for a stored hue.
 
-  The order is the cast order, and it is the caller's job to keep it stable —
-  for a scene that's entry order, for a campaign the campaign's own list.
-  Duplicates keep their first position, so re-entry doesn't reshuffle the cast.
+  Nil — a sheet written before hues existed, or none at all — takes the register's
+  plain foreground rather than borrowing somebody's colour.
 
-      iex> PolyphonyWeb.Voice.assign(["wren", "ilias"])
-      %{"wren" => "var(--v1)", "ilias" => "var(--v2)"}
+      iex> PolyphonyWeb.Voice.colour(1)
+      "var(--v1)"
   """
-  @spec assign([String.t()]) :: t()
-  def assign(ids) when is_list(ids) do
-    ids
-    |> Enum.uniq()
-    |> Enum.with_index()
-    |> Map.new(fn {id, i} -> {id, nth(i)} end)
-  end
+  @spec colour(integer() | nil) :: String.t()
+  def colour(nil), do: neutral()
+
+  def colour(hue) when is_integer(hue),
+    do: "var(--v#{rem(max(hue, 1) - 1, @count) + 1})"
+
+  @doc "The colour for a character sheet, from the hue stored on it."
+  @spec of_sheet(term()) :: String.t()
+  def of_sheet(%{hue: hue}), do: colour(hue)
+  def of_sheet(_), do: neutral()
 
   @doc """
   The colour for `id`, or the neutral base colour when it has no voice.
@@ -72,6 +78,4 @@ defmodule PolyphonyWeb.Voice do
   @doc "How many distinct voices the kit defines before wrapping."
   @spec count() :: pos_integer()
   def count, do: @count
-
-  defp nth(i), do: "var(--v#{rem(i, @count) + 1})"
 end

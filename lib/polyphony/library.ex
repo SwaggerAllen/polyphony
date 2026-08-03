@@ -29,6 +29,7 @@ defmodule Polyphony.Library do
 
   alias Polyphony.Repo
   alias Polyphony.Owner
+  alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.ReadModels.LibraryEntry
   alias Polyphony.Library.Snapshot
 
@@ -51,6 +52,7 @@ defmodule Polyphony.Library do
     attrs = Map.new(attrs)
     visibility = to_string(Map.get(attrs, :visibility, "private"))
     owner = Owner.coerce(Map.get(attrs, :owner) || Map.fetch!(attrs, :owner_id))
+    payload = assign_hue(Map.fetch!(attrs, :payload), owner, opts)
 
     LibraryEntry.put(repo, %{
       owner_type: Owner.type_string(owner),
@@ -62,9 +64,32 @@ defmodule Polyphony.Library do
       frozen: Map.get(attrs, :frozen, false),
       derived_from_id: Map.get(attrs, :derived_from_id),
       derived_from_version: Map.get(attrs, :derived_from_version),
-      payload: encode(Map.fetch!(attrs, :payload))
+      payload: encode(payload)
     })
   end
+
+  # A character's voice colour is assigned **once, here** — the single door every
+  # character in the system comes through — and then stored on the sheet.
+  #
+  # The alternative, deriving it from position in a cast, is brittle in a way that
+  # shows: remove one character and everyone after them changes colour, in the
+  # transcript they already appear in as much as in the cast list. The kit's rule is
+  # that a character is the same hue everywhere, and "everywhere" includes across
+  # edits. Storing it also means an author can pick their own later without anything
+  # else changing.
+  #
+  # Next in rotation for this owner, so a fresh cast spreads across the palette
+  # rather than clustering. Deterministic — no randomness, which replay depends on.
+  defp assign_hue(%CharacterSheet{hue: nil} = sheet, owner, opts) do
+    taken =
+      repo(opts)
+      |> LibraryEntry.list_for_owner(Owner.type_string(owner), Owner.id(owner), [])
+      |> Enum.count(&(&1.kind == "character"))
+
+    %CharacterSheet{sheet | hue: rem(taken, CharacterSheet.hue_count()) + 1}
+  end
+
+  defp assign_hue(payload, _owner, _opts), do: payload
 
   @doc "Fetch a row (payload still encoded — use `payload/1`), or nil."
   def get(id, opts \\ []), do: LibraryEntry.get(repo(opts), id)

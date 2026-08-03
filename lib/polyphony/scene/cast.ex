@@ -23,25 +23,31 @@ defmodule Polyphony.Scene.Cast do
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.Move
 
-  defstruct id_to_name: %{}, name_to_id: %{}
+  defstruct id_to_name: %{}, name_to_id: %{}, id_to_hue: %{}
 
   @type t :: %__MODULE__{
           id_to_name: %{String.t() => String.t()},
-          name_to_id: %{String.t() => String.t()}
+          name_to_id: %{String.t() => String.t()},
+          id_to_hue: %{String.t() => pos_integer()}
         }
 
   @doc "Build the id↔name map for a scene from the characters that have entered it."
   @spec for_scene(term()) :: t()
   def for_scene(scene_id) do
-    pairs =
+    sheets =
       for id <- entered_ids(scene_id),
-          %CharacterSheet{name: n} <- [Rebuild.sheet_for(scene_id, id)],
+          %CharacterSheet{name: n} = sheet <- [Rebuild.sheet_for(scene_id, id)],
           is_binary(n) and n != "",
-          do: {to_string(id), n}
+          do: {to_string(id), sheet}
+
+    pairs = for {id, sheet} <- sheets, do: {id, sheet.name}
 
     %__MODULE__{
       id_to_name: Map.new(pairs),
-      name_to_id: Map.new(pairs, fn {id, name} -> {name, id} end)
+      name_to_id: Map.new(pairs, fn {id, name} -> {name, id} end),
+      # The voice colour is stored on the sheet, so it comes along with the name —
+      # same read, and a rename or a cast change can't move it.
+      id_to_hue: Map.new(sheets, fn {id, sheet} -> {id, sheet.hue} end)
     }
   end
 

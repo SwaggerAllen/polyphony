@@ -16,6 +16,7 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Content.CampaignConfig
   alias PolyphonyWeb.Kit
   alias PolyphonyWeb.Layouts
+  alias PolyphonyWeb.Voice
 
   # The campaign's sections, in the design's order. Premise sits after Cast because
   # the pitch is written *from* the cast (`ux/README.md`), and Quick Build is
@@ -842,8 +843,8 @@ defmodule PolyphonyWeb.CampaignLive do
         </div>
       </Kit.row>
 
-      <Kit.row :for={{c, i} <- Enum.with_index(@cast)} class="px-4 py-2.5 flex items-center gap-2.5">
-        <span class="av shrink-0" style={"background:#{cast_colour(i)}"}></span>
+      <Kit.row :for={c <- @cast} class="px-4 py-2.5 flex items-center gap-2.5">
+        <span class="av shrink-0" style={"background:#{Voice.of_sheet(Library.payload(c))}"}></span>
         <div class="min-w-0 flex-1">
           <div class="text-[13.5px] font-semibold"><%= char_name(c) %></div>
           <div class="text-[11px] dim truncate"><%= char_blurb(c) %></div>
@@ -1011,10 +1012,6 @@ defmodule PolyphonyWeb.CampaignLive do
       {"graphic_violence", "Graphic violence"},
       {"other", "Other mature themes"}
     ]
-
-  # Cast avatars take voice colours in cast order, the same rule play uses — so a
-  # character is the same hue here as in the transcript they appear in.
-  defp cast_colour(index), do: "var(--v#{rem(index, PolyphonyWeb.Voice.count()) + 1})"
 
   defp char_blurb(entry) do
     case Library.payload(entry) do
