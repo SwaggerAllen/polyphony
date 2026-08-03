@@ -141,11 +141,14 @@ defmodule Polyphony.Campaigns do
     repo = Keyword.get(opts, :repo, Repo)
     payload = Library.payload(entry) || %{}
 
+    # Counted off one flat list rather than summing per-character lengths: `Enum.sum/1`
+    # is spec'd `:: number()` upstream, so a count of proposals reads as possibly-float,
+    # while `length/1` is provably a non-negative integer.
     cast_count =
       (Map.get(payload, :character_ids) || [])
       |> Enum.uniq()
-      |> Enum.map(&length(ArcEntry.list_proposed(repo, &1)))
-      |> Enum.sum()
+      |> Enum.flat_map(&ArcEntry.list_proposed(repo, &1))
+      |> length()
 
     cast_count + length(ArcEntry.list_proposed_world(repo, entry.id))
   end

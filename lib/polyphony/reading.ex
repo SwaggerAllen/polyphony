@@ -112,8 +112,17 @@ defmodule Polyphony.Reading do
   @spec forget(term(), term(), keyword()) :: :ok
   def forget(reader, published_id, opts \\ []) do
     case entry_for(reader, published_id, opts) do
-      nil -> :ok
-      entry -> with {:ok, _} <- Library.soft_delete(entry.id, opts), do: :ok
+      nil ->
+        :ok
+
+      entry ->
+        # Deliberately discarded. Taking something off your own shelf is idempotent —
+        # the `nil` branch above already calls "it isn't there" success — so a row that
+        # vanished between the lookup and the delete is the outcome asked for, not a
+        # failure to report. The `with` this replaces leaked `{:error, :not_found}`
+        # past a spec and a docstring that both promise `:ok`.
+        _ = Library.soft_delete(entry.id, opts)
+        :ok
     end
   end
 

@@ -181,6 +181,42 @@ jobs:
             priv/static/assets/app.css priv/static/assets/app.js \
             priv/static/assets/storybook.css priv/static/assets/storybook.js
 
+  types:
+    name: dialyzer
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-lint-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-lint-
+
+      # The PLT is built from OTP plus every dependency and takes ~2 minutes, so it is
+      # cached separately and keyed on mix.lock — the only thing that invalidates it.
+      # `restore-keys` matters more than the exact hit: an almost-current PLT is
+      # incrementally updated in seconds, while no PLT at all pays the full build.
+      - uses: actions/cache@v4
+        with:
+          path: priv/plts
+          key: ${{ runner.os }}-plt-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-plt-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-
+
+      - run: mix deps.get
+      # Split from the run so a PLT build failure reads as a PLT build failure, and so
+      # the cache is written even when the analysis below finds something.
+      - run: mix dialyzer --plt
+
+      - run: mix dialyzer --format short
+
   audit:
     name: security audit
     runs-on: ubuntu-latest

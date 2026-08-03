@@ -16,6 +16,8 @@ defmodule Polyphony.Moderation.Report do
   @reasons ~w(csam real_person_sexual other_illegal harassment nonconsensual_content other)a
   @absolute_lines ~w(csam real_person_sexual)a
   @statuses ~w(open actioned dismissed)
+  @typedoc "A row of this table. `Ecto.Schema` generates no `t/0`, so it is declared here."
+  @type t :: %__MODULE__{}
 
   schema "reports" do
     field(:reporter_id, :id)

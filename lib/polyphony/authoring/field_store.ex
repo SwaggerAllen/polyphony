@@ -13,6 +13,8 @@ defmodule Polyphony.Authoring.FieldStore do
   import Ecto.Query
 
   @statuses ~w(draft accepted locked)
+  @typedoc "A row of this table. `Ecto.Schema` generates no `t/0`, so it is declared here."
+  @type t :: %__MODULE__{}
 
   schema "authoring_fields" do
     field(:subject_id, :string)

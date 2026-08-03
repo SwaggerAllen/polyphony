@@ -41,6 +41,15 @@ defmodule Polyphony.TurnPacket do
     """
     @derive Jason.Encoder
     defstruct [:mood_felt, :demeanor, :intention, :attending_to, :position, :posture]
+
+    @type t :: %__MODULE__{
+            mood_felt: String.t() | nil,
+            demeanor: String.t() | nil,
+            intention: String.t() | nil,
+            attending_to: String.t() | nil,
+            position: String.t() | nil,
+            posture: String.t() | nil
+          }
   end
 
   @derive Jason.Encoder

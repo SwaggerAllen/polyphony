@@ -41,6 +41,7 @@ mix compile --warnings-as-errors       # must stay clean
 mix run -e "…"               # exercise the loop offline against LLM.Mock
 mix assets.build             # rebuild priv/static/assets/{app,storybook}.{js,css} after assets/
 mix kit.port                 # regenerate assets/css/kit.css from ux/polyphony-kit.css
+mix dialyzer                 # type analysis; first run builds the PLT (~2 min, cached)
 mix deps.audit               # dependency advisories (CI: blocking)
 mix sobelow --exit low --skip  # Phoenix static analysis (CI: blocking)
 mix deps.unlock --check-unused # stale mix.lock entries (CI: blocking)
@@ -107,6 +108,20 @@ for it.
   tested hardest. Pure logic is tested as pure functions; end-to-end slices dispatch
   real commands through `Polyphony.App`.
 - `mix format` clean and `--warnings-as-errors` clean before every commit.
+- **Dialyzer stays at zero.** CI blocks on it. Only `:extra_return` /
+  `:missing_return` are enabled — a spec that disagrees with what the function can
+  actually return — because on this codebase every one of those was a real defect,
+  while `:unmatched_returns` was 66 findings of idiomatic noise. Two consequences
+  worth knowing before you fight it: a module referenced as `Mod.t()` must *declare*
+  `@type t` (`Ecto.Schema` does not generate one, and an unknown **remote** type
+  compiles fine and only fails here), and Dialyzer infers a function's success typing
+  from its body alone, ignoring the spec's parameter types — so an integer sum reached
+  through `Enum.sum/1` (spec'd `:: number()`) widens to `number()` and needs a guard
+  or a `length/1` to stay provable.
+- **Spec what crosses a boundary**, not everything. A context's public functions,
+  anything returning a tagged tuple or a nilable, and any id-shaped string worth
+  naming (`scene_id`, `character_id`, `beat`). Commanded `execute/2` and `apply/2`
+  clauses and LiveView callbacks are *not* worth specs — the shapes are the structs.
 - Prefer **reuse over new abstraction** — check what the existing generation /
   supersession / fork primitives already give you before adding machinery. Re-rolls,
   edits, and forks all share the supersede-and-recommit primitive for this reason.

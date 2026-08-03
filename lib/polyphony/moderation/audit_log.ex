@@ -7,6 +7,8 @@ defmodule Polyphony.Moderation.AuditLog do
   """
   use Ecto.Schema
   import Ecto.Query
+  @typedoc "A row of this table. `Ecto.Schema` generates no `t/0`, so it is declared here."
+  @type t :: %__MODULE__{}
 
   schema "admin_audit_logs" do
     field(:actor_id, :id)

@@ -7,6 +7,8 @@ defmodule Polyphony.Accounts.Invite do
   """
   use Ecto.Schema
   import Ecto.Changeset
+  @typedoc "A row of this table. `Ecto.Schema` generates no `t/0`, so it is declared here."
+  @type t :: %__MODULE__{}
 
   schema "invites" do
     field(:token, :string)

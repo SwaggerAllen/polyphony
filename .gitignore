@@ -20,3 +20,7 @@ erl_crash.dump
 /priv/static/**/*-[0-9a-f]*.*
 /priv/static/**/*.gz
 /priv/static/cache_manifest.json
+
+# Dialyzer's PLT — a ~7 MB build artifact derived from OTP + deps. CI caches it on
+# mix.lock rather than tracking it.
+/priv/plts/

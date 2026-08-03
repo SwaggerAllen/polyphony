@@ -130,10 +130,19 @@ defmodule Polyphony.Authoring.GroupArc do
       group_id
       |> Groups.member_ids(Keyword.take(opts, [:repo]))
       |> Enum.map(&ArcEntryRepo.accept_all(repo, &1, "character"))
-      |> Enum.sum()
+      |> total(0)
 
     ArcEntryRepo.accept_all(repo, group_id, subject_type()) + member_count
   end
+
+  # `Enum.sum/1` is spec'd `:: number()` upstream, so a count of promoted proposals
+  # reads as possibly-float; spelled out so the returned count is provably an integer.
+  # The guard is load-bearing, not decoration: Dialyzer infers a success typing from
+  # the body alone, ignoring the spec's parameter types, so without it `acc + n` is
+  # `any() + any()` and widens straight back to `number()`.
+  @spec total([non_neg_integer()], non_neg_integer()) :: non_neg_integer()
+  defp total([], acc), do: acc
+  defp total([n | rest], acc) when is_integer(n) and is_integer(acc), do: total(rest, acc + n)
 
   defp put(repo, %ArcEntry{} = entry, subject_id, subject_type) do
     row = ArcEntryRepo.put(repo, entry, subject_id)

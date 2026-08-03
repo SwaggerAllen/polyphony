@@ -16,6 +16,8 @@ defmodule Polyphony.ReadModels.ArcEntry do
 
   alias Polyphony.Authoring.ArcEntry, as: Domain
   alias Polyphony.Authoring.WorldArcEntry
+  @typedoc "A row of this table. `Ecto.Schema` generates no `t/0`, so it is declared here."
+  @type t :: %__MODULE__{}
 
   schema "arc_entries" do
     field(:subject_id, :string)
@@ -135,6 +137,7 @@ defmodule Polyphony.ReadModels.ArcEntry do
   already as cheap as an escape hatch gets, which is why there isn't a second one.
   Returns how many were promoted.
   """
+  @spec accept_all(Ecto.Repo.t(), term(), String.t()) :: non_neg_integer()
   def accept_all(repo, subject_id, subject_type \\ "character") do
     sid = to_string(subject_id)
 

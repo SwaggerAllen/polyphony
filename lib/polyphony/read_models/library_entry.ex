@@ -17,6 +17,16 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   use Ecto.Schema
   import Ecto.Query
 
+  @typedoc """
+  A row of this table.
+
+  Declared explicitly: `Ecto.Schema` does **not** generate a `t/0`, and several specs
+  in `Polyphony.Library` and `Polyphony.Moderation` already referred to
+  `LibraryEntry.t()` — which compiles either way, because an unknown *remote* type is
+  only an error to Dialyzer.
+  """
+  @type t :: %__MODULE__{}
+
   schema "library_entries" do
     # Owner indirection (§P2/§P8): `owner_type` + `owner_id` together identify the
     # owner; today always a user, shaped so it can become an org without a migration.
@@ -49,6 +59,7 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   # An entry with no root of its own **is** the root — written back after the insert
   # because it can't be known before the id exists. Explicit rather than left null so
   # no query ever has to case on it (§3.1d).
+  @spec put(Ecto.Repo.t(), map()) :: t()
   def put(repo, attrs) do
     row = repo.insert!(struct(__MODULE__, attrs))
 
@@ -58,8 +69,10 @@ defmodule Polyphony.ReadModels.LibraryEntry do
       else: row
   end
 
+  @spec get(Ecto.Repo.t(), term()) :: t() | nil
   def get(repo, id), do: repo.get(__MODULE__, id)
 
+  @spec update(Ecto.Repo.t(), t(), Enumerable.t()) :: t()
   def update(repo, %__MODULE__{} = row, changes),
     do: row |> Ecto.Changeset.change(changes) |> repo.update!()
 
@@ -68,6 +81,7 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   and archived entries by default (§B9); `include_archived: true` / `include_deleted:
   true` opt in.
   """
+  @spec list_for_owner(Ecto.Repo.t(), term(), term(), keyword()) :: [t()]
   def list_for_owner(repo, owner_type, owner_id, opts \\ []) do
     ot = to_string(owner_type)
     oid = to_string(owner_id)
@@ -87,6 +101,7 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   because "browse must not show a taken-down thing" is exactly the guarantee that must
   not depend on every call site remembering.
   """
+  @spec list_public(Ecto.Repo.t(), term()) :: [t()]
   def list_public(repo, kind) do
     k = to_string(kind)
 
@@ -99,6 +114,7 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   end
 
   @doc "Everything currently hidden by moderation, oldest first — the review lane."
+  @spec list_hidden(Ecto.Repo.t()) :: [t()]
   def list_hidden(repo) do
     repo.all(
       from(e in __MODULE__,
@@ -109,6 +125,7 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   end
 
   @doc "Everything `{owner_type, owner_id}` has shared — public *and* unlisted."
+  @spec list_shared_for_owner(Ecto.Repo.t(), term(), term()) :: [t()]
   def list_shared_for_owner(repo, owner_type, owner_id) do
     ot = to_string(owner_type)
     oid = to_string(owner_id)
@@ -129,6 +146,7 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   unlisted things at all: otherwise a suspended person makes a new account, opens their
   own share link, and forks their way back in.
   """
+  @spec get_by_share_token(Ecto.Repo.t(), term()) :: t() | nil
   def get_by_share_token(repo, token) when is_binary(token) do
     repo.one(
       from(e in __MODULE__,
@@ -140,11 +158,13 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   def get_by_share_token(_repo, _), do: nil
 
   @doc "Entries soft-deleted before `cutoff` — whose recovery window has run out (§2.13)."
+  @spec deleted_before(Ecto.Repo.t(), NaiveDateTime.t()) :: [t()]
   def deleted_before(repo, cutoff) do
     repo.all(from(e in __MODULE__, where: not is_nil(e.deleted_at) and e.deleted_at < ^cutoff))
   end
 
   @doc "Live entries copied from `source_id` (§2.5b provenance)."
+  @spec copies_of(Ecto.Repo.t(), integer()) :: [t()]
   def copies_of(repo, source_id) do
     repo.all(
       from(e in __MODULE__,
@@ -161,6 +181,7 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   title until somebody renames one, and a flat list of near-identical names is
   unusable (§3.1d).
   """
+  @spec family(Ecto.Repo.t(), integer(), keyword()) :: [t()]
   def family(repo, root_id, opts \\ []) do
     from(e in __MODULE__, where: e.root_id == ^root_id, order_by: [asc: e.inserted_at])
     |> visible(opts)
@@ -168,6 +189,7 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   end
 
   @doc "Public entries of a `kind`, grouped by root — for Browse's by-author grouping."
+  @spec list_public_by_root(Ecto.Repo.t(), term()) :: %{optional(integer()) => [t()]}
   def list_public_by_root(repo, kind) do
     repo
     |> list_public(kind)

@@ -124,12 +124,26 @@ defmodule Polyphony.Events do
     """
     @derive Jason.Encoder
     defstruct [:scene_id, :beat, :content]
+
+    @type t :: %__MODULE__{
+            scene_id: String.t() | nil,
+            beat: integer() | nil,
+            content: String.t() | nil
+          }
   end
 
   defmodule SceneOpened do
     @moduledoc "Scene lifecycle. Visibility of the event itself is default-deny."
     @derive Jason.Encoder
     defstruct [:scene_id, :campaign_id, :location_id, :premise, :opened_beat]
+
+    @type t :: %__MODULE__{
+            scene_id: String.t() | nil,
+            campaign_id: term(),
+            location_id: String.t() | nil,
+            premise: String.t() | nil,
+            opened_beat: integer() | nil
+          }
   end
 
   defmodule SceneClosed do

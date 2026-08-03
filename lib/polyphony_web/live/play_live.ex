@@ -434,8 +434,6 @@ defmodule PolyphonyWeb.PlayLive do
     Store.put(scene_id, character_id, ctx)
   end
 
-  defp seed_context(_scene_id, _character_id, _other, _premise, _bible), do: :ok
-
   # The scene's world bible payload (a `%WorldBible{}`), or nil — for framing both
   # the admitted character's context and the Director's omniscient brief.
   defp campaign_world_bible(socket) do

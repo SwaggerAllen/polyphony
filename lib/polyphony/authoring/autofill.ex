@@ -811,8 +811,6 @@ defmodule Polyphony.Authoring.Autofill do
   defp context_block(%{} = ctx),
     do: role_block(ctx[:role]) <> world_block(ctx[:world]) <> relations_block(ctx[:relations])
 
-  defp context_block(_), do: ""
-
   # A character stubbed from another's relationships carries a one-line `role` (how
   # that source character described them, e.g. "estranged mentor"). Feed it into
   # generation so the seed the author already committed to survives — the generated

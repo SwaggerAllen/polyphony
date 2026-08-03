@@ -149,7 +149,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
          assign(socket,
            entry: entry,
            bible: bible,
-           name: bible.name || "",
+           name: bible.name,
            name_error: nil,
            blocks: blocks_from_bible(bible),
            items: items_from_bible(bible),

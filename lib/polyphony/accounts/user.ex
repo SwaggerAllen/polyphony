@@ -14,6 +14,9 @@ defmodule Polyphony.Accounts.User do
 
   @roles ~w(user admin superadmin)
 
+  @typedoc "A user row. `Ecto.Schema` generates no `t/0`, so it is declared here."
+  @type t :: %__MODULE__{}
+
   schema "users" do
     field(:email, :string)
     field(:username, :string)

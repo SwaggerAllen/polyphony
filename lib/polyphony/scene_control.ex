@@ -23,8 +23,10 @@ defmodule Polyphony.SceneControl do
   `status: :stub` for an unpromoted character) with `{:error, :stub_needs_promotion}`
   so the UI can promote first (§B8).
   """
+  # `{:ok, _}` is in the range because `Commanded.Application.dispatch/2` returns the
+  # aggregate state (or the emitted events) under some dispatch options, not only `:ok`.
   @spec add_character(term(), term(), integer(), keyword()) ::
-          :ok | {:error, term()}
+          :ok | {:ok, term()} | {:error, term()}
   def add_character(scene_id, character_id, beat, opts \\ []) do
     case Keyword.get(opts, :status, :full) do
       :full ->
@@ -40,7 +42,8 @@ defmodule Polyphony.SceneControl do
   end
 
   @doc "Remove `character_id` from `scene_id`, effective at `beat` (the boundary)."
-  @spec remove_character(term(), term(), integer(), keyword()) :: :ok | {:error, term()}
+  @spec remove_character(term(), term(), integer(), keyword()) ::
+          :ok | {:ok, term()} | {:error, term()}
   def remove_character(scene_id, character_id, beat, _opts \\ []) do
     App.dispatch(%ExitCharacter{scene_id: scene_id, character_id: character_id, beat: beat})
   end
