@@ -22,28 +22,18 @@ defmodule PolyphonyWeb.LoginLive do
     {:ok, assign(socket, page_title: "Sign in", sent_to: nil, dev_link: nil)}
   end
 
-  def handle_event("send", %{"email" => email}, socket) do
-    safe(socket, fn ->
-      user = Accounts.get_by_email(email)
-      log_attempt(email, user)
+  def handle_event("send", %{"email" => email}, socket),
+    do: safe(socket, fn -> {:noreply, deliver(socket, email)} end)
 
-      link = user && dev_link(Auth.deliver_magic_link(user))
-
-      {:noreply, assign(socket, sent_to: String.trim(to_string(email)), dev_link: link)}
-    end)
-  end
+  # A second, separate field rather than one that takes either: keeping `type="email"`
+  # on the address means the browser's own validation still catches a typo'd domain
+  # before it becomes a silent no-match, and that is the common case by far.
+  def handle_event("send_username", %{"username" => username}, socket),
+    do: safe(socket, fn -> {:noreply, deliver(socket, username)} end)
 
   def handle_event("again", _params, socket) do
     safe(socket, fn ->
-      email = socket.assigns.sent_to
-      user = Accounts.get_by_email(email)
-      log_attempt(email, user)
-
-      socket =
-        if user,
-          do: assign(socket, dev_link: dev_link(Auth.deliver_magic_link(user))),
-          else: socket
-
+      socket = deliver(socket, socket.assigns.sent_to)
       {:noreply, put_flash(socket, :info, "Sent again.")}
     end)
   end
@@ -59,9 +49,28 @@ defmodule PolyphonyWeb.LoginLive do
   # It does mean an address can be tested for existence by anyone who can read the
   # drawer, which is why `DEBUG_DRAWER` belongs off once you are in. The screen itself
   # still reveals nothing.
-  defp log_attempt(email, user) do
-    outcome = if user, do: "match", else: "no account"
-    Logger.info("[mail] sign-in requested for #{Transport.redact(email)} — #{outcome}")
+  # One path for both fields and the resend, so a link can never be sent by one route
+  # and not another.
+  defp deliver(socket, identifier) do
+    user = Accounts.get_by_login(identifier)
+    log_attempt(identifier, user)
+
+    socket
+    |> assign(sent_to: String.trim(to_string(identifier)))
+    |> assign(dev_link: user && dev_link(Auth.deliver_magic_link(user)))
+  end
+
+  defp log_attempt(identifier, user) do
+    outcome = if user, do: "matched @#{user.username}", else: "no account"
+    Logger.info("[mail] sign-in requested for #{shown(identifier)} — #{outcome}")
+  end
+
+  # An address is masked; a handle is not. The username is the *public* identity by
+  # design (§B2) — the email is the one that is auth-only, and the drawer these lines
+  # reach is readable by anyone while `DEBUG_DRAWER` is on.
+  defp shown(identifier) do
+    identifier = to_string(identifier)
+    if String.contains?(identifier, "@"), do: Transport.redact(identifier), else: identifier
   end
 
   # Outside prod the link is surfaced so the flow works with no mailer; in prod it only
@@ -116,6 +125,32 @@ defmodule PolyphonyWeb.LoginLive do
       <p class="text-[12px] leading-relaxed dim text-center">
         No password to remember. We'll email you a link that signs you in.
       </p>
+    </div>
+
+    <%!-- Its own field and its own submit, so the address above keeps `type="email"`
+          and the browser's validation with it. Secondary by placement, because an
+          address is what almost everyone will reach for. --%>
+    <div class="px-5 py-4 row" style="background:var(--b2)">
+      <form id="login-username-form" phx-submit="send_username">
+        <label for="username" class="lbl dim mb-1.5 block">Or your username</label>
+        <div class="flex gap-1.5">
+          <input
+            type="text"
+            name="username"
+            id="username"
+            required
+            placeholder="yourhandle"
+            autocapitalize="none"
+            autocorrect="off"
+            spellcheck="false"
+            class="field px-3 py-2.5 text-[14px] flex-1 mono"
+          />
+          <Kit.btn kind={:ghost} type="submit">Send</Kit.btn>
+        </div>
+        <p class="text-[11.5px] leading-relaxed dim mt-2">
+          The link still goes to the email on that account.
+        </p>
+      </form>
     </div>
 
     <div class="px-5 py-3 row" style="background:var(--b2)">

@@ -47,8 +47,49 @@ defmodule Polyphony.Accounts do
   @spec normalize_email(term()) :: String.t()
   def normalize_email(email), do: email |> to_string() |> String.trim() |> String.downcase()
 
-  def get_by_username(username, opts \\ []),
-    do: repo(opts).get_by(User, username: to_string(username))
+  @doc """
+  Find an account by its public handle, or nil.
+
+  Trimmed, then matched exactly. If that misses, a case-insensitive match is tried and
+  **only answered when it is unambiguous** — usernames are stored case-sensitively (the
+  unique index is on the raw value), so `Allen` and `allen` can both exist and picking
+  one would be picking at random.
+
+  The fallback exists for phones: a keyboard autocapitalises the first letter of a text
+  field by default, which is enough to make your own handle not find you.
+  """
+  @spec get_by_username(term(), keyword()) :: User.t() | nil
+  def get_by_username(username, opts \\ []) do
+    repo = repo(opts)
+    name = username |> to_string() |> String.trim()
+
+    repo.get_by(User, username: name) || unique_by_case(repo, name)
+  end
+
+  defp unique_by_case(_repo, ""), do: nil
+
+  defp unique_by_case(repo, name) do
+    lowered = String.downcase(name)
+
+    query =
+      from(u in User, where: fragment("lower(?)", u.username) == ^lowered, limit: 2)
+
+    case repo.all(query) do
+      [user] -> user
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Find an account by **either** identifier — the sign-in lookup.
+
+  Email first, then handle. Sign-in moved to email-only, which locks out anyone whose
+  account predates that and who remembers a handle instead; the magic link still goes
+  to the account's email either way, so accepting both costs nothing.
+  """
+  @spec get_by_login(term(), keyword()) :: User.t() | nil
+  def get_by_login(identifier, opts \\ []),
+    do: get_by_email(identifier, opts) || get_by_username(identifier, opts)
 
   def count(opts \\ []), do: repo(opts).aggregate(User, :count, :id)
 
