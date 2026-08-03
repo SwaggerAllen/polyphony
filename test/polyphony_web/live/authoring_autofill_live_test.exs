@@ -19,6 +19,13 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
     :ok
   end
 
+  # Adding to a list opens a panel below the sheet — the mock's own treatment (§04),
+  # and what keeps the lists inside the sheet's one form without nesting a second.
+  defp open_panel(view, panel) do
+    view |> element("button[phx-click=panel][phx-value-panel=#{panel}]") |> render_click()
+    view
+  end
+
   defp character(user, sheet) do
     Library.put(%{owner: Owner.of(user), kind: "character", payload: sheet})
   end
@@ -126,15 +133,17 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
     end
   end
 
-  describe "boundaries (§A3)" do
-    test "adding a boundary and saving persists the full structure", %{conn: conn, user: user} do
+  describe "pressures (§A3)" do
+    test "adding one and saving persists the full structure", %{conn: conn, user: user} do
       entry = character(user, %CharacterSheet{name: "Rell", status: :full})
       {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
 
       html =
         view
+        |> open_panel("pressure")
         |> form("form[phx-submit=add_boundary]", %{
           topic: "physical intimacy",
+          direction: "refusal",
           stance: "conditional",
           condition: "she trusts them",
           on_pressure: "she withdraws",
@@ -143,7 +152,8 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
         |> render_submit()
 
       assert html =~ "physical intimacy"
-      assert html =~ "held until earned"
+      # A conditional refusal reads as one the story can still turn.
+      assert html =~ "Not yet"
 
       view |> form("form[phx-submit=save]", %{name: "Rell"}) |> render_submit()
 
@@ -155,7 +165,7 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       assert b.category == :sexual
     end
 
-    test "a stored boundary renders and can be removed before saving", %{conn: conn, user: user} do
+    test "a stored one renders and can be removed before saving", %{conn: conn, user: user} do
       sheet = %CharacterSheet{
         name: "Rell",
         status: :full,
@@ -165,7 +175,7 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       entry = character(user, sheet)
       {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
       assert html =~ "killing"
-      assert html =~ "a hard line"
+      assert html =~ "Never"
 
       view
       |> element("button[phx-click=remove_boundary][phx-value-index='0']")
@@ -181,6 +191,7 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
 
       html =
         view
+        |> open_panel("pressure")
         |> form("form[phx-submit=add_boundary]", %{topic: "  ", stance: "closed"})
         |> render_submit()
 
@@ -197,20 +208,36 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       view |> element("button[phx-click=suggest_boundaries]") |> render_click()
       html = render_async(view)
 
-      # A suggested boundary landed (the Mock returns a conditional one held-until-earned).
-      assert html =~ "held until earned"
+      # The Mock returns one of each direction, both conditional — so both lists fill,
+      # which is the point of asking for both.
+      assert html =~ "Not yet"
+      assert html =~ "Until"
 
       view |> form("form[phx-submit=save]", %{name: "Rell"}) |> render_submit()
       assert Library.payload(Library.get(entry.id)).boundaries != []
     end
 
-    test "Boundaries renders before Relationships", %{conn: conn, user: user} do
-      entry = character(user, %CharacterSheet{name: "Rell", status: :full})
+    test "the two directions are separate lists, refusals first", %{conn: conn, user: user} do
+      sheet = %CharacterSheet{
+        name: "Rell",
+        status: :full,
+        boundaries: [
+          %Boundary{topic: "Sign for the Kestrel", direction: :compulsion, stance: :closed},
+          %Boundary{topic: "Name her father", direction: :refusal, stance: :closed}
+        ]
+      }
+
+      entry = character(user, sheet)
       {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
 
-      bnd = :binary.match(html, "Boundaries") |> elem(0)
-      rel = :binary.match(html, "Relationships") |> elem(0)
-      assert bnd < rel
+      # Grouping is what carries the direction, so an item can never be read backwards —
+      # and the refusal list leads even when the compulsion was authored first.
+      # Apostrophes come back HTML-escaped, so match on the unambiguous half.
+      wont = :binary.match(html, "t do</span>") |> elem(0)
+      cant = :binary.match(html, "t stop doing</span>") |> elem(0)
+      assert wont < cant
+      assert :binary.match(html, "Name her father") |> elem(0) < cant
+      assert :binary.match(html, "Sign for the Kestrel") |> elem(0) > cant
     end
   end
 
@@ -220,9 +247,9 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       entry = character(user, %CharacterSheet{name: "", status: :full})
       {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
 
-      # Both cards start empty.
-      assert html =~ "No relationships yet."
-      assert html =~ "No boundaries yet."
+      # Both lists start empty.
+      assert html =~ "Nobody yet."
+      assert html =~ "Nothing gives."
 
       view
       |> form("form[phx-submit=generate_all]", %{brief: "a wary harbor smuggler"})

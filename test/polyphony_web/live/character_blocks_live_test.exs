@@ -21,14 +21,25 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
   defp character(user, sheet),
     do: Library.put(%{owner: Owner.of(user), kind: "character", payload: sheet})
 
-  test "each prose field is a collapsible section", %{conn: conn, user: user} do
+  # Adding to a list opens a panel below the sheet — the mock's own treatment, and
+  # what keeps the lists inside the sheet's one form without nesting a second.
+  defp open_panel(view, panel) do
+    view |> element("button[phx-click=panel][phx-value-panel=#{panel}]") |> render_click()
+    view
+  end
+
+  test "the sheet runs top to bottom, with a jump bar rather than accordions",
+       %{conn: conn, user: user} do
     entry = character(user, %CharacterSheet{name: "Mira", status: :full})
     {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
 
-    # Block fields render inside open <details> with a summary heading, so a long sheet
-    # can be collapsed section-by-section.
-    assert html =~ ~s(<details class="field-block")
-    assert html =~ ~s(<span class="field-title">Backstory</span>)
+    # No tabs and no accordions: you come back to a sheet to remember who someone is,
+    # which means reading it. Length is handled by a jump bar, which gives position
+    # without hiding anything.
+    refute html =~ ~s(<details class="field-block")
+    assert html =~ ~s(class="jump)
+    assert html =~ ~s(href="#backstory")
+    assert html =~ ~s(name="b_backstory[]")
   end
 
   test "a multi-paragraph field loads as separate blocks", %{conn: conn, user: user} do
@@ -75,7 +86,7 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
     {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
 
     # The pending stub exposes an editable role, pre-filled with the inherited one.
-    assert html =~ "pending"
+    assert html =~ "Pending"
     assert html =~ ~s(name="role")
 
     # Correct the role, then save.
@@ -151,6 +162,7 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
     {:ok, view, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
 
     view
+    |> open_panel("relationship")
     |> form("form[phx-submit=add_relationship]", %{target: "Bram", descriptor: "old friend"})
     |> render_submit()
 
@@ -164,7 +176,7 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
     {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
 
     # It reads as pending, with no promote/accept machinery on screen.
-    assert html =~ "pending"
+    assert html =~ "Pending"
     refute html =~ "phx-click=\"promote\""
     refute html =~ "phx-click=\"accept\""
 
@@ -172,7 +184,7 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
     view |> form("form[phx-submit=save]", %{name: "Ghost"}) |> render_submit()
 
     assert Library.payload(Library.get(entry.id)).status == :full
-    refute render(view) =~ "pending"
+    refute render(view) =~ "Pending"
   end
 
   test "navigation is unguarded until there are unsaved edits", %{conn: conn, user: user} do

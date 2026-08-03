@@ -70,70 +70,78 @@ defmodule PolyphonyWeb.BlockField do
   @doc "Is `key` currently generating? (`generating` is a MapSet of in-flight keys.)"
   def busy?(generating, key), do: MapSet.member?(generating, key)
 
+  @doc """
+  One prose field, as the character sheet and world bible draw it.
+
+  Ported from `ux/polyphony-character.html` §01: a mono label on the left, **✦
+  Rewrite** and **+ Expand** on the right, the prose below. Each paragraph is a
+  `.field` textarea at the mock's own prose size — the kit's treatment for an
+  editable prose value everywhere it appears (§02, §05) — so the field reads
+  continuously rather than as a stack of form controls. That's the section's rule:
+  *prose first, structure after. The five written fields run continuously like a
+  page.*
+  """
   attr(:field, :string, required: true)
   attr(:label, :string, required: true)
-  attr(:hint, :string, default: nil)
   attr(:unit, :string, default: "paragraph")
   attr(:blocks, :list, required: true)
   attr(:generating, :any, required: true)
+  attr(:id, :string, default: nil)
 
   def block_field(assigns) do
     ~H"""
-    <details class="field-block" open>
-      <summary class="field-summary">
-        <span class="field-title"><%= @label %></span>
-        <span :if={@hint} class="faint"><%= @hint %></span>
-      </summary>
-
-      <div class="row gen-label field-actions">
-        <span class="spacer"></span>
-        <button
-          type="button"
-          class="btn sm ghost"
-          phx-click="generate_field"
-          phx-value-field={@field}
-          disabled={busy?(@generating, @field)}
-          title={"Rewrite #{@label} from scratch"}
-        >
-          <%= if busy?(@generating, @field), do: "✨ …", else: "✨ Generate" %>
-        </button>
-        <button
-          type="button"
-          class="btn sm ghost"
-          phx-click="expand_field"
-          phx-value-field={@field}
-          disabled={busy?(@generating, "#{@field}:expand")}
-          title={"Add another #{@unit} to #{@label}"}
-        >
-          <%= if busy?(@generating, "#{@field}:expand"), do: "➕ …", else: "➕ Expand" %>
-        </button>
+    <div class="row px-4 py-3" id={@id || "field-#{@field}"}>
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <span class="lbl dim"><%= @label %></span>
+        <div class="flex gap-1.5 shrink-0">
+          <button
+            type="button"
+            class="btn btn-gh btn-sm"
+            phx-click="generate_field"
+            phx-value-field={@field}
+            disabled={busy?(@generating, @field)}
+            title={"Rewrite #{@label} from scratch"}
+          >
+            <%= if busy?(@generating, @field), do: "✦ …", else: "✦ Rewrite" %>
+          </button>
+          <button
+            type="button"
+            class="btn btn-gh btn-sm"
+            phx-click="expand_field"
+            phx-value-field={@field}
+            disabled={busy?(@generating, "#{@field}:expand")}
+            title={"Add another #{@unit} to #{@label}"}
+          >
+            <%= if busy?(@generating, "#{@field}:expand"), do: "+ …", else: "+ Expand" %>
+          </button>
+        </div>
       </div>
 
-      <div :for={{b, i} <- Enum.with_index(@blocks)} class="para" id={"para-#{@field}-#{i}"}>
+      <div :for={{b, i} <- Enum.with_index(@blocks)} class="flex items-start gap-1.5 mb-1.5">
         <textarea
           id={"ta-#{@field}-#{i}"}
           name={"b_#{@field}[]"}
-          class="para-input"
-          rows="1"
+          class="field px-3 py-2.5 text-[14px] leading-relaxed w-full"
+          rows="2"
           phx-hook="AutoGrow"
           phx-debounce="600"
           placeholder={"New #{@unit}…"}
         ><%= b %></textarea>
-        <div class="para-controls">
+        <div class="flex flex-col gap-1 shrink-0">
           <button
             type="button"
-            class="btn xs ghost"
+            class="btn btn-gh btn-sm"
             phx-click="generate_block"
             phx-value-field={@field}
             phx-value-index={i}
             disabled={busy?(@generating, "#{@field}:#{i}")}
             title={"Rewrite this #{@unit}, richer"}
           >
-            <%= if busy?(@generating, "#{@field}:#{i}"), do: "…", else: "✨" %>
+            <%= if busy?(@generating, "#{@field}:#{i}"), do: "…", else: "✦" %>
           </button>
           <button
             type="button"
-            class="btn xs ghost"
+            class="btn btn-pen btn-sm"
             phx-click="remove_block"
             phx-value-field={@field}
             phx-value-index={i}
@@ -144,10 +152,15 @@ defmodule PolyphonyWeb.BlockField do
         </div>
       </div>
 
-      <button type="button" class="btn xs ghost add-para" phx-click="add_block" phx-value-field={@field}>
+      <button
+        type="button"
+        class="btn btn-gh btn-sm"
+        phx-click="add_block"
+        phx-value-field={@field}
+      >
         + <%= @unit %>
       </button>
-    </details>
+    </div>
     """
   end
 end

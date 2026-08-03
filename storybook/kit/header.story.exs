@@ -46,6 +46,19 @@ defmodule Storybook.Kit.Header do
         description:
           "The back chevron is how you leave a screen you drilled into — there is no standing navigation to fall back on.",
         attributes: %{title: "Kettleworth", back: "/library"}
+      },
+      %Variation{
+        id: :unsaved,
+        description:
+          "On an editing screen the chevron is also the way out of unsaved work, so it asks first. Passed only when there is something to lose — a clean screen never prompts.",
+        attributes: %{
+          title: "Wren Ashgrove",
+          back: "/library",
+          back_confirm: "You have unsaved changes. Leave without saving?"
+        },
+        slots: [
+          ~s|<:actions><span class="pill" style="border-color:var(--lamp);color:var(--lamp)">Unsaved</span></:actions>|
+        ]
       }
     ]
   end

@@ -25,6 +25,13 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
 
   defp find(user, name), do: Enum.find(characters(user), &(Library.payload(&1).name == name))
 
+  # Adding to a list opens a panel below the sheet — the mock's own treatment (§04),
+  # and what keeps the lists inside the sheet's one form without nesting a second.
+  defp open_panel(view, panel) do
+    view |> element("button[phx-click=panel][phx-value-panel=#{panel}]") |> render_click()
+    view
+  end
+
   test "a relationship to an existing character links without stubbing", %{conn: conn, user: user} do
     character(user, %CharacterSheet{name: "Bram", status: :full})
     mira = character(user, %CharacterSheet{name: "Mira", status: :full})
@@ -32,6 +39,7 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     {:ok, view, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
 
     view
+    |> open_panel("relationship")
     |> form("form[phx-submit=add_relationship]", %{target: "Bram", descriptor: "old friend"})
     |> render_submit()
 
@@ -50,6 +58,7 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     {:ok, view, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
 
     view
+    |> open_panel("relationship")
     |> form("form[phx-submit=add_relationship]", %{
       target: "Ghost",
       descriptor: "estranged mentor"
@@ -89,10 +98,12 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
 
     # An existing character resolves to its id; a new name stubs and links to the stub.
     view
+    |> open_panel("relationship")
     |> form("form[phx-submit=add_relationship]", %{target: "Bram", descriptor: "mentor"})
     |> render_submit()
 
     view
+    |> open_panel("relationship")
     |> form("form[phx-submit=add_relationship]", %{target: "Ghost", descriptor: "haunts her"})
     |> render_submit()
 
@@ -112,6 +123,7 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     {:ok, view, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
 
     view
+    |> open_panel("relationship")
     |> form("form[phx-submit=add_relationship]", %{target: "Bram", descriptor: "mentor"})
     |> render_submit()
 
@@ -138,6 +150,7 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
 
     # The editor loads with Mira's world already selected.
     view
+    |> open_panel("relationship")
     |> form("form[phx-submit=add_relationship]", %{target: "Ghost", descriptor: "haunts her"})
     |> render_submit()
 
@@ -154,6 +167,7 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     {:ok, view, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
 
     view
+    |> open_panel("relationship")
     |> form("form[phx-submit=add_relationship]", %{target: "Ghost", descriptor: "x"})
     |> render_submit()
 
@@ -170,6 +184,7 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     {:ok, view, _html} = live(conn, ~p"/authoring/character/#{mira.id}")
 
     view
+    |> open_panel("relationship")
     |> form("form[phx-submit=add_relationship]", %{target: "Ghost", descriptor: "x"})
     |> render_submit()
 

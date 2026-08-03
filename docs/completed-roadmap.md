@@ -292,6 +292,53 @@ showing more than was asked for is a spoiler and showing less is merely stale.
 — distinct scenes in first-entry order. Distinct because re-entry opens a second interval, and
 someone who steps out and comes back is in one scene: the header must not count the door twice.
 
+### The gap the four didn't catch: two directions of pressure (§2.16)
+Reading the mock **section by section against the domain**, rather than against the backlog,
+turned up a fifth. §05 asks for two lists — *what she won't do* and *what she can't stop doing* —
+and `Boundary` modelled only the first. The lesson from groups again, one level finer: a backlog is
+a summary of one reading of the mocks, so re-read the mock before porting the screen, not the
+backlog.
+
+The fix is `direction` on `Boundary` plus `after_release` (the mock's *and then* / *and now*,
+written at authoring time but withheld from the character until the gate releases). What made it
+worth doing before the port rather than after is what it exposed in `Polyphony.Content`: capping
+meant forcing `stance: :closed`, which for a compulsion means *she always does it*, so the content
+ceiling would have compelled the content it exists to forbid. The cap now flips direction too — the
+design's own rule is that the ceiling always pushes toward refusal, *because that's the correct
+direction to fail in*.
+
+### The character sheet, ported (`ux/polyphony-character.html`)
+The longest form in the product, and the one whose layout argument is the strongest: **a sheet is
+read, not just filled in.** No tabs and no accordions — you come back to it to remember who someone
+is, which means reading top to bottom — so a sticky `Kit.jump` handles the length instead, giving
+position without hiding anything. Prose first, structure after. Nothing on screen says *core* or
+*status*: the model's vocabulary isn't the author's, and *Always in mind* actually explains the
+behaviour it controls.
+
+Everything is edited in place. There is no read mode and edit mode, because they'd be the same
+screen twice.
+
+**Facts got the treatment the design argued hardest for.** `core` and `concealed` are orthogonal
+and are not collapsed: always-in-mind is whether *she* carries it, secret is who *else* has it, and
+a woman can have a secret she never thinks about. Only one can own the left border, so secret takes
+the structure and always-in-mind is a chip — which is exactly what lets a fact be both. State shows
+in the row; the two switches live behind the row's `⋯`, because the list is read far more often
+than it's edited.
+
+**One structural decision the port forced.** The sheet is one form — cover, five prose fields, name
+and pronouns — and a form inside a form isn't a thing, so the lists can't carry inline add-forms.
+The mock had already solved it: adding someone is its own sheet (§04). So each list's *Add …* row
+opens a panel below the sheet, outside the form. The constraint and the design agreed, which is
+usually the sign the design was right.
+
+`Kit.header` gained one attribute, `back_confirm`: the chevron is the way out of a drill-down, so on
+an editing screen it's also the way out of unsaved work. Nil unless there's something to lose, so a
+clean screen never prompts.
+
+Also landed with the screen: `Autofill.suggest_facts/2` (the mock's ✦ Suggest on facts, with the
+drawer's *a few is right* nudge written into the prompt), and the Mock returning all four flag
+combinations so the offline path exercises the composition the list is built around.
+
 ---
 
 ## Immediate milestone — the backend the frontend design needs

@@ -84,6 +84,12 @@ defmodule PolyphonyWeb.Kit do
   attr(:subtitle, :string, default: nil, doc: "the meta line under the title — counts, status")
   attr(:back, :string, default: nil, doc: "where the ‹ chevron goes; omitted without one")
   attr(:back_label, :string, default: "Back")
+
+  attr(:back_confirm, :string,
+    default: nil,
+    doc: "what to ask before leaving — nil on a screen with nothing to lose"
+  )
+
   attr(:class, :string, default: nil)
   slot(:actions, doc: "controls on the right — perspective control first, overflow last")
 
@@ -94,7 +100,16 @@ defmodule PolyphonyWeb.Kit do
       style="background:var(--b2)"
     >
       <div class="flex items-center gap-2 min-w-0">
-        <.link :if={@back} navigate={@back} class="dim text-[15px] leading-none" aria-label={@back_label}>
+        <%!-- The chevron is the way out of a drill-down, so on an editing screen it is
+              also the way out of unsaved work. `back_confirm` is nil unless there is
+              something to lose, so a clean screen never prompts. --%>
+        <.link
+          :if={@back}
+          navigate={@back}
+          class="dim text-[15px] leading-none"
+          aria-label={@back_label}
+          data-confirm={@back_confirm}
+        >
           ‹
         </.link>
         <div class="min-w-0">

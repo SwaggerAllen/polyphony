@@ -1,22 +1,51 @@
 defmodule PolyphonyWeb.SheetEditorLive do
   @moduledoc """
-  V4 (sheet editor): edit a character's authored sheet and build rich fields with AI
-  assistance. A stub (§B8) reads as *pending* and is finalized to `:full` silently on
-  save — there is no separate promote/accept step.
+  The character sheet, ported from `ux/polyphony-character.html`.
 
-  Prose fields are edited as **blocks** (paragraphs): each block is an always-live,
-  auto-growing textarea styled to read like prose until focused — long content stays
-  readable instead of trapped in a scroll box. Every block can be regenerated;
-  fields can be **Generated** fresh (from a brief), **Expanded** (append a paragraph
-  that deepens them), or built a paragraph at a time. Generation is grounded in the
-  linked world bible, the character's relationships, and (for a former stub) its
-  inherited `role`. Blocks are joined with blank lines into the plain-string field on
-  save, so the domain is unchanged.
+  ## A sheet is read, not just filled in
 
-  Relationships link existing characters or **stub** new ones on save; the author can
-  also ask for AI **suggestions**. When a stub is seeded, its regard back toward the
-  generating character is generated asynchronously (`Autofill.reciprocal_roles`) so
-  the two directions can be asymmetrical rather than a copied descriptor.
+  The mock's §00 is the whole layout argument, and the port follows it literally.
+  **No tabs, no accordions** — you come back to a sheet to remember who someone is,
+  which means reading top to bottom; a sticky `Kit.jump` bar handles the length
+  instead, giving position without hiding anything. **Prose first, structure after**
+  — the five written fields run continuously like a page, and the lists sit below
+  them. **Nothing says "core" or "status"**: the model's vocabulary isn't the
+  author's, so *Always in mind* replaces `core: true` and actually explains the
+  behaviour it controls.
+
+  Everything editable is edited **in place**. There is no read mode and edit mode,
+  because the two would be the same screen twice.
+
+  ## Facts, and the two flags that compose
+
+  `core` and `concealed` are orthogonal and are not collapsed: *always in mind* is
+  whether **she** carries it, *secret* is who **else** has it — a woman can have a
+  secret she never thinks about. Only one of them can own the left border, so secret
+  takes the structure (`Kit.marked mark={:secret}`) and always-in-mind is a chip.
+
+  ## Two directions of pressure
+
+  `Boundary.direction` splits the list in two — *what she won't do* and *what she
+  can't stop doing*. The grouping is the point: an item in its own list can never be
+  read backwards, which is what went wrong when everything was one list of "lines".
+
+  ## Generation
+
+  Prose fields are edited as **blocks** (paragraphs) — `PolyphonyWeb.BlockField` — so
+  a long field stays readable and a single paragraph can be rewritten without
+  touching the rest. Fields can be rewritten whole, expanded by a paragraph, or
+  written from a brief; facts, relationships and pressures each have ✦ Suggest.
+  Generation is grounded in the linked world bible, the character's relationships,
+  and (for a former stub) its inherited `role`. Blocks join with blank lines into the
+  plain-string field on save, so the domain struct is unchanged.
+
+  A stub (§B8) reads as *pending* and is finalized to `:full` silently on save —
+  there is no separate promote step; editing and saving **is** the review.
+
+  Relationships link existing characters or **stub** new ones on save. When a stub is
+  seeded, its regard back toward the generating character is generated asynchronously
+  (`Autofill.reciprocal_roles`) so the two directions can be asymmetrical rather than
+  a copied descriptor.
   """
   use PolyphonyWeb, :live_view
 
@@ -24,9 +53,11 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   import PolyphonyWeb.BlockField
 
-  alias Polyphony.{Library, Owner}
-  alias Polyphony.Authoring.{Autofill, CharacterSheet, Stub, WorldBible}
-  alias Polyphony.Authoring.CharacterSheet.{Relationship, Boundary}
+  alias Polyphony.{Characters, Groups, Library, Owner, Repo}
+  alias Polyphony.Authoring.{Autofill, CharacterSheet, Cover, Stub, WorldBible}
+  alias Polyphony.Authoring.CharacterSheet.{Boundary, Fact, Relationship}
+  alias Polyphony.ReadModels.Membership
+  alias PolyphonyWeb.{Kit, Layouts, Voice}
 
   # Prose fields are edited as blocks; name stays a single-line scalar.
   @field_specs [
@@ -38,7 +69,23 @@ defmodule PolyphonyWeb.SheetEditorLive do
   ]
   @block_fields Enum.map(@field_specs, &elem(&1, 0))
 
+  # The jump bar's stops, in the order the sheet runs. Cover leads because it is
+  # what a stranger reads first, which is the only ordering argument it has.
+  @stops [
+    {"cover", "Cover"},
+    {"premise", "Premise"},
+    {"appearance", "Appearance"},
+    {"voice", "Voice"},
+    {"temperament", "Temperament"},
+    {"backstory", "Backstory"},
+    {"facts", "Facts"},
+    {"knows", "Who they know"},
+    {"pushed", "Pushed"},
+    {"groups", "Groups"}
+  ]
+
   defp field_specs, do: @field_specs
+  defp stops, do: @stops
 
   def mount(%{"id" => id}, _session, socket) do
     entry = Library.get(id)
@@ -52,16 +99,20 @@ defmodule PolyphonyWeb.SheetEditorLive do
       {:ok,
        socket
        |> assign(
-         page_title: "Edit character",
+         page_title: sheet.name || "Character",
          entry: entry,
          sheet: sheet,
          name: sheet.name || "",
          pronouns: sheet.pronouns || "",
          role: sheet.role || "",
+         tier: sheet.tier || :main,
+         cover: sheet.cover,
          blocks: blocks_from_sheet(sheet),
          generating: MapSet.new(),
          saved: false,
          dirty: false,
+         drawer: nil,
+         panel: nil,
          world_entries: worlds,
          worlds: world_options(worlds),
          world_id: world_id,
@@ -69,12 +120,25 @@ defmodule PolyphonyWeb.SheetEditorLive do
          relationships: sheet.relationships || [],
          relations_context:
            relations_context(sheet.relationships || [], socket.assigns.current_user, entry.id),
-         boundaries: sheet.boundaries || []
+         boundaries: sheet.boundaries || [],
+         facts: sheet.facts || [],
+         scene_count: scene_count(entry.id),
+         groups: Groups.for_character(Owner.of(socket.assigns.current_user), entry.id),
+         all_groups: Groups.list(Owner.of(socket.assigns.current_user))
        )
        |> assign_characters(other_characters(socket.assigns.current_user, entry.id))}
     else
       {:ok, socket |> put_flash(:error, "Character not found.") |> redirect(to: ~p"/library")}
     end
+  end
+
+  # The read model is only populated by the projectors, which are off in tests and
+  # empty before anyone has played — "In 0 scenes" is the honest answer either way,
+  # and a missing table must not take the sheet down with it.
+  defp scene_count(id) do
+    Membership.scene_count(Repo, id)
+  rescue
+    _ -> 0
   end
 
   # ── Editing the sheet form ──────────────────────────────────────────────────
@@ -110,6 +174,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
         | name: name,
           pronouns: blank_to_nil(socket.assigns.pronouns),
           role: blank_to_nil(socket.assigns.role),
+          cover: blank_to_nil(socket.assigns.cover),
+          tier: socket.assigns.tier,
           premise: join_blocks(blocks["premise"]),
           appearance: join_blocks(blocks["appearance"]),
           voice: join_blocks(blocks["voice"]),
@@ -118,6 +184,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
           world_bible_id: world_id_int(socket.assigns.world_id),
           relationships: rels,
           boundaries: socket.assigns.boundaries,
+          facts: socket.assigns.facts,
           # Saving finalizes a pending stub — the author has reviewed it by editing
           # and saving, so it silently becomes a usable (:full) character.
           status: :full
@@ -242,6 +309,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
           {:noreply,
            socket
            |> assign_relationships(socket.assigns.relationships ++ [rel])
+           |> assign(panel: nil)
            |> touch()}
       end
     end)
@@ -267,7 +335,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
         _topic ->
           {:noreply,
            socket
-           |> assign(boundaries: socket.assigns.boundaries ++ [Boundary.from_map(params)])
+           |> assign(
+             boundaries: socket.assigns.boundaries ++ [Boundary.from_map(params)],
+             panel: nil
+           )
            |> touch()}
       end
     end)
@@ -288,6 +359,138 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   def handle_event("suggest_boundaries", _params, socket) do
     safe(socket, fn -> {:noreply, suggest_boundaries(socket)} end)
+  end
+
+  # ── Facts (§6.1) ────────────────────────────────────────────────────────────
+
+  def handle_event("add_fact", params, socket) do
+    safe(socket, fn ->
+      case String.trim(params["statement"] || "") do
+        "" ->
+          {:noreply, put_flash(socket, :error, "Write the fact first.")}
+
+        statement ->
+          fact = %Fact{statement: statement}
+
+          {:noreply,
+           socket |> assign(facts: socket.assigns.facts ++ [fact], panel: nil) |> touch()}
+      end
+    end)
+  end
+
+  def handle_event("remove_fact", %{"index" => i}, socket) do
+    idx = String.to_integer(i)
+    {:noreply, socket |> assign(facts: List.delete_at(socket.assigns.facts, idx)) |> touch()}
+  end
+
+  # The two flags are independently toggleable because they're independent: always-in-
+  # mind is whether she carries it, secret is who else has it.
+  def handle_event("toggle_fact", %{"index" => i, "flag" => flag}, socket)
+      when flag in ["core", "concealed"] do
+    idx = String.to_integer(i)
+    key = String.to_existing_atom(flag)
+
+    facts =
+      List.update_at(socket.assigns.facts, idx, fn f -> Map.put(f, key, !Map.get(f, key)) end)
+
+    {:noreply, socket |> assign(facts: facts) |> touch()}
+  end
+
+  def handle_event("suggest_facts", _params, socket) do
+    safe(socket, fn ->
+      current = current_values(socket)
+      opts = [existing: socket.assigns.facts] ++ gen_opts(socket)
+
+      {:noreply,
+       socket
+       |> mark("facts", true)
+       |> start_async(:suggest_facts, fn -> Autofill.suggest_facts(current, opts) end)}
+    end)
+  end
+
+  # ── Cover (§2.12) ───────────────────────────────────────────────────────────
+
+  # Written from the whole sheet, secrets included, under instruction to give none of
+  # them away — and `Cover` refuses a draft that quotes one rather than handing back a
+  # blurb that spoils. That refusal is surfaced as an error, not silently retried
+  # again: the author should know the model kept reaching for the secret.
+  def handle_event("generate_cover", _params, socket) do
+    safe(socket, fn ->
+      sheet = draft_sheet(socket)
+      opts = gen_opts(socket)
+
+      {:noreply,
+       socket
+       |> mark("cover", true)
+       |> start_async(:cover, fn -> Cover.generate(sheet, opts) end)}
+    end)
+  end
+
+  # ── Tier (§2.5) ─────────────────────────────────────────────────────────────
+
+  # Saved immediately rather than with the form. Tier is a property of the campaign's
+  # shape rather than of the prose, the control is a set of pills with no obvious
+  # "apply", and a half-saved cast list is worse than an eagerly-saved one.
+  def handle_event("set_tier", %{"tier" => tier}, socket) do
+    safe(socket, fn ->
+      tier = String.to_existing_atom(tier)
+
+      case Characters.set_tier(socket.assigns.entry.id, tier) do
+        {:ok, entry} ->
+          {:noreply, assign(socket, tier: tier, entry: entry)}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "That isn't a cast tier.")}
+      end
+    end)
+  end
+
+  # ── Groups ──────────────────────────────────────────────────────────────────
+
+  def handle_event("join_group", %{"group_id" => ""}, socket), do: {:noreply, socket}
+
+  def handle_event("join_group", %{"group_id" => group_id}, socket) do
+    safe(socket, fn ->
+      {:ok, _} = Groups.add_member(group_id, socket.assigns.entry.id)
+      {:noreply, socket |> reload_groups() |> assign(panel: nil)}
+    end)
+  end
+
+  def handle_event("leave_group", %{"group_id" => group_id}, socket) do
+    safe(socket, fn ->
+      {:ok, _} = Groups.remove_member(group_id, socket.assigns.entry.id)
+      {:noreply, reload_groups(socket)}
+    end)
+  end
+
+  # ── Info drawers ────────────────────────────────────────────────────────────
+
+  # One drawer per section, never one popover per setting: the concepts in a section
+  # only make sense together (`ux/polyphony-character.html` §06b). Toggling the open
+  # one shut is what the × does, so both use this event.
+  def handle_event("drawer", %{"section" => section}, socket) do
+    {:noreply,
+     assign(socket, drawer: if(socket.assigns.drawer == section, do: nil, else: section))}
+  end
+
+  # ── Add panels ──────────────────────────────────────────────────────────────
+
+  # Adding to a list opens a panel below the sheet rather than an inline form. Two
+  # reasons, and they agree: the mock does it that way (§04 "Adding someone who
+  # doesn't exist" is its own sheet), and it keeps the lists inside the sheet's one
+  # form without nesting a second one inside it.
+  def handle_event("panel", %{"panel" => panel}, socket) do
+    {:noreply,
+     assign(socket, panel: if(panel == "" or socket.assigns.panel == panel, do: nil, else: panel))}
+  end
+
+  defp reload_groups(socket) do
+    owner = Owner.of(socket.assigns.current_user)
+
+    assign(socket,
+      groups: Groups.for_character(owner, socket.assigns.entry.id),
+      all_groups: Groups.list(owner)
+    )
   end
 
   defp suggest_relationships(socket) do
@@ -412,6 +615,49 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def handle_async(:suggest_rel, result, socket),
     do: {:noreply, gen_failed(socket, "relationships", result)}
 
+  def handle_async(:suggest_facts, {:ok, {:ok, suggestions}}, socket) do
+    socket = mark(socket, "facts", false)
+
+    case suggestions do
+      [] ->
+        {:noreply, put_flash(socket, :info, "No new facts suggested.")}
+
+      list ->
+        facts =
+          Enum.map(list, fn f ->
+            %Fact{statement: f["statement"], core: f["core"], concealed: f["concealed"]}
+          end)
+
+        {:noreply,
+         socket
+         |> assign(facts: socket.assigns.facts ++ facts)
+         |> touch()
+         |> put_flash(:info, "Added #{length(facts)} suggested fact(s). Review and Save.")}
+    end
+  end
+
+  def handle_async(:suggest_facts, result, socket),
+    do: {:noreply, gen_failed(socket, "facts", result)}
+
+  def handle_async(:cover, {:ok, {:ok, cover}}, socket) do
+    {:noreply, socket |> assign(cover: cover) |> mark("cover", false) |> touch()}
+  end
+
+  # The leak refusal gets its own message. "Generation failed: :leaked" would read as
+  # a broken feature; what actually happened is that the cover kept quoting a secret
+  # and was thrown away on purpose.
+  def handle_async(:cover, {:ok, {:error, :leaked}}, socket) do
+    {:noreply,
+     socket
+     |> mark("cover", false)
+     |> put_flash(
+       :error,
+       "The cover kept giving away a secret, so it wasn't kept. Try again, or write it yourself."
+     )}
+  end
+
+  def handle_async(:cover, result, socket), do: {:noreply, gen_failed(socket, "cover", result)}
+
   # Reciprocal generation is best-effort background enrichment of the just-created
   # stubs — never surfaced as an error. On success, patch each stub's regard toward
   # this character; on failure, the placeholder descriptor stands.
@@ -437,13 +683,14 @@ defmodule PolyphonyWeb.SheetEditorLive do
   defp assign_form(socket, params) do
     name = params["name"] || socket.assigns.name
     pronouns = params["pronouns"] || socket.assigns.pronouns
+    cover = params["cover"] || socket.assigns.cover
 
     blocks =
       Map.new(@block_fields, fn f ->
         {f, param_blocks(params["b_#{f}"], socket.assigns.blocks[f])}
       end)
 
-    assign(socket, name: name, pronouns: pronouns, blocks: blocks)
+    assign(socket, name: name, pronouns: pronouns, cover: cover, blocks: blocks)
   end
 
   defp update_blocks(socket, field, fun),
@@ -461,6 +708,24 @@ defmodule PolyphonyWeb.SheetEditorLive do
       %{"name" => socket.assigns.name},
       Map.new(@block_fields, fn f -> {f, join_blocks(socket.assigns.blocks[f])} end)
     )
+  end
+
+  # The sheet as it stands in the form, unsaved edits included. The cover has to be
+  # written from what the author is looking at, not from what was last persisted.
+  defp draft_sheet(socket) do
+    %{blocks: blocks} = socket.assigns
+
+    %CharacterSheet{
+      socket.assigns.sheet
+      | name: socket.assigns.name,
+        pronouns: blank_to_nil(socket.assigns.pronouns),
+        premise: join_blocks(blocks["premise"]),
+        appearance: join_blocks(blocks["appearance"]),
+        voice: join_blocks(blocks["voice"]),
+        temperament: join_blocks(blocks["temperament"]),
+        backstory: join_blocks(blocks["backstory"]),
+        facts: socket.assigns.facts
+    }
   end
 
   defp paragraph_opts(socket, field, index) do
@@ -662,7 +927,26 @@ defmodule PolyphonyWeb.SheetEditorLive do
   end
 
   defp assign_characters(socket, entries),
-    do: assign(socket, char_names: char_names(entries), char_links: char_links(entries))
+    do:
+      assign(socket,
+        char_names: char_names(entries),
+        char_links: char_links(entries),
+        char_hues: char_hues(entries)
+      )
+
+  # Voice colours for the relationship list, keyed both ways — by stable id for a
+  # linked relationship, by lowercased name for one that hasn't been resolved yet.
+  # The kit's rule is that a character is the same hue everywhere they appear.
+  defp char_hues(entries) do
+    Enum.reduce(entries, %{}, fn entry, acc ->
+      colour = Voice.of_sheet(Library.payload(entry))
+
+      case char_name(entry) do
+        nil -> Map.put(acc, entry.id, colour)
+        name -> acc |> Map.put(entry.id, colour) |> Map.put(String.downcase(name), colour)
+      end
+    end)
+  end
 
   defp char_names(entries), do: entries |> Enum.map(&char_name/1) |> Enum.reject(&is_nil/1)
 
@@ -717,9 +1001,937 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end
   end
 
-  # ── Render ────────────────────────────────────────────────────────────────────
+  def render(assigns) do
+    ~H"""
+    <Kit.frame class="flex flex-col min-h-[100dvh]">
+      <Kit.header
+        title={header_title(@name)}
+        eyebrow={@world_context && @world_context["name"]}
+        back={~p"/library"}
+        back_label="Back to library"
+        back_confirm={leave_confirm(@dirty)}
+      >
+        <:actions>
+          <Kit.pill :if={@sheet.status != :full} colour="var(--lamp)">Pending</Kit.pill>
+          <Layouts.nav_menu current_user={@current_user} />
+        </:actions>
+      </Kit.header>
 
-  # A relationship's target: a link to that character's editor when it's an existing
+      <%!-- The identity line: who they are at a glance, in the order a reader needs
+            it. Tier carries an info affordance because "Main cast" is the mock's own
+            example of a label that means something a first-time reader wouldn't
+            assume — it secretly means context residency. --%>
+      <Kit.row class="px-4 py-3 flex items-start gap-3" style="background:var(--b2)">
+        <span class="w-11 h-11 rounded-xl shrink-0" style={"background:#{Voice.of_sheet(@sheet)}"}></span>
+        <div class="min-w-0 flex-1">
+          <div class="ttl text-[18px] truncate font-semibold"><%= header_title(@name) %></div>
+          <div class="flex flex-wrap items-center gap-1.5 mt-1">
+            <Kit.pill>
+              <%= CharacterSheet.tier_label(@tier) %>
+              <Kit.info label="cast tiers" phx-click="drawer" phx-value-section="tier" />
+            </Kit.pill>
+            <Kit.pill :if={@pronouns != ""}><%= @pronouns %></Kit.pill>
+            <Kit.pill :if={@world_context}><%= @world_context["name"] %></Kit.pill>
+            <Kit.pill><%= scene_line(@scene_count) %></Kit.pill>
+          </div>
+        </div>
+      </Kit.row>
+
+      <Kit.jump class="shrink-0">
+        <:stop :for={{id, label} <- stops()}>
+          <a href={"##{id}"}><%= label %></a>
+        </:stop>
+      </Kit.jump>
+
+      <div class="flex-1 min-h-0 overflow-y-auto">
+        <.drawer :if={@drawer == "tier"} section="tier" title="About cast tiers">
+          <:part colour="var(--lamp)" name="Main cast">
+            Always in context. The people the story is about.
+          </:part>
+          <:part colour="var(--v2)" name="Recurring">
+            Also always in context — a side character who should remember and be remembered.
+          </:part>
+          <:part colour="var(--bcm)" name="Walk-ons">
+            Loaded only for the scenes they appear in. A walk-on who turns out to matter
+            gets promoted; one who has served their purpose gets demoted rather than deleted.
+          </:part>
+        </.drawer>
+
+        <%!-- One form owns everything the sheet stores: the cover, the five prose
+              fields, and the name and pronouns in its footer. The list sections below
+              it are read-and-toggle only — adding to one opens a panel *outside* this
+              form, because a form inside a form isn't a thing, and because the mock
+              puts adding in its own sheet anyway (§02, §04). --%>
+        <form id="sheet-form" phx-submit="save" phx-change="sync">
+        <Kit.sheet class="m-4">
+          <%!-- ── Cover ───────────────────────────────────────────────────── --%>
+          <div class="row px-4 py-3" id="cover">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <span class="flex items-center gap-1.5">
+                <span class="lbl dim">Cover</span>
+                <Kit.info label="the cover" phx-click="drawer" phx-value-section="cover" />
+              </span>
+              <Kit.btn
+                size={:sm}
+                type="button"
+                phx-click="generate_cover"
+                disabled={busy?(@generating, "cover")}
+              >
+                <%= if busy?(@generating, "cover"), do: "✦ …", else: "✦ Rewrite" %>
+              </Kit.btn>
+            </div>
+            <label for="cover-text" class="sr-only">Cover</label>
+            <textarea
+              id="cover-text"
+              name="cover"
+              rows="3"
+              phx-debounce="600"
+              class="field px-3 py-2.5 text-[13px] leading-relaxed w-full"
+              placeholder="The only part strangers see."
+            ><%= @cover %></textarea>
+            <p class="text-[11px] dim mt-1.5">The only part strangers see.</p>
+          </div>
+
+          <.drawer :if={@drawer == "cover"} section="cover" title="About the cover">
+            <:intro>
+              A short blurb someone reads before they decide to take this character on.
+              It's written from everything below it — the secrets included — under
+              instruction to give none of them away.
+            </:intro>
+            <:part colour="var(--secret)" name="It knows the secrets">
+              That's what stops it reading like a stranger wrote it. If a draft quotes one,
+              it's thrown away rather than shown to you.
+            </:part>
+          </.drawer>
+
+          <%!-- ── The five written fields ─────────────────────────────────── --%>
+          <.block_field
+            :for={{f, label} <- field_specs()}
+            id={f}
+            field={f}
+            label={label}
+            blocks={@blocks[f]}
+            generating={@generating}
+          />
+
+          <%!-- ── Facts ───────────────────────────────────────────────────── --%>
+          <div class="row px-4 py-3" id="facts">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <span class="flex items-center gap-1.5">
+                <span class="lbl dim">What's true about them</span>
+                <Kit.info label="facts" phx-click="drawer" phx-value-section="facts" />
+              </span>
+              <Kit.btn
+                size={:sm}
+                type="button"
+                phx-click="suggest_facts"
+                disabled={busy?(@generating, "facts")}
+              >
+                <%= if busy?(@generating, "facts"), do: "✦ …", else: "✦ Suggest" %>
+              </Kit.btn>
+            </div>
+
+            <p :if={@facts == []} class="text-[13px] dim">
+              Nothing yet. Facts are the flat statements they'd never contradict.
+            </p>
+
+            <.fact_row :for={{f, i} <- Enum.with_index(@facts)} fact={f} index={i} />
+
+            <.add_row label="Add something that's true…" panel="fact" />
+          </div>
+
+          <.drawer :if={@drawer == "facts"} section="facts" title="About facts">
+            <:intro>
+              Short, flat statements that are true about them. They're what they'd never
+              contradict, so keep them to things you'd defend rather than things you'd like.
+            </:intro>
+            <:part colour="var(--lamp)" name="Always in mind">
+              In front of them for every turn, in every scene. Everything else is remembered
+              when it's relevant — they still know it, it's just fetched rather than carried.
+              A few is right.
+            </:part>
+            <:part colour="var(--secret)" name="Secret">
+              Nobody starts out knowing it. Everyone else finds out in play, if they ever do —
+              and the two settings are independent, so they can have a secret they rarely
+              think about.
+            </:part>
+          </.drawer>
+
+          <%!-- ── Relationships ───────────────────────────────────────────── --%>
+          <div class="row px-4 py-3" id="knows">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <span class="flex items-center gap-1.5">
+                <span class="lbl dim">Who they know</span>
+                <Kit.info label="relationships" phx-click="drawer" phx-value-section="knows" />
+              </span>
+              <Kit.btn
+                size={:sm}
+                type="button"
+                phx-click="suggest_relationships"
+                disabled={busy?(@generating, "relationships")}
+              >
+                <%= if busy?(@generating, "relationships"), do: "✦ …", else: "✦ Suggest" %>
+              </Kit.btn>
+            </div>
+
+            <p :if={@relationships == []} class="text-[13px] dim">
+              Nobody yet. A name that doesn't exist becomes a walk-on when you save.
+            </p>
+
+            <div :for={{r, i, colour} <- rel_rows(@relationships, @char_hues)} class="py-2.5">
+              <div class="flex items-center gap-2.5 mb-1">
+                <span class="av" style={"background:#{colour}"}></span>
+                <span class="text-[13.5px] font-semibold flex-1 min-w-0 truncate">
+                  <.rel_target
+                    target={r.target}
+                    target_id={r.target_id}
+                    links={@char_links}
+                    confirm={leave_confirm(@dirty)}
+                  />
+                </span>
+                <Kit.btn
+                  size={:sm}
+                  kind={:pen}
+                  type="button"
+                  phx-click="remove_relationship"
+                  phx-value-index={i}
+                >
+                  Remove
+                </Kit.btn>
+              </div>
+              <p :if={present_string?(r.descriptor)} class="text-[13px] leading-relaxed">
+                <%= r.descriptor %>
+              </p>
+              <%!-- Both directions are shown because the interesting cases are the
+                    lopsided ones: asymmetry should look deliberate, not forgotten. --%>
+              <div
+                :if={present_string?(r.reciprocal)}
+                class="flex items-start gap-2 mt-2 pt-2"
+                style="border-top:1px solid var(--rule)"
+              >
+                <span class="lbl dim shrink-0 pt-0.5">Back →</span>
+                <p class="text-[12.5px] leading-relaxed dim"><%= r.reciprocal %></p>
+              </div>
+            </div>
+
+            <.add_row label="Add someone they know…" panel="relationship" />
+          </div>
+
+          <.drawer :if={@drawer == "knows"} section="knows" title="About who they know">
+            <:intro>
+              How <em>they</em> regard someone else — directional, and often lopsided. The
+              interesting cases are where the two directions don't match.
+            </:intro>
+            <:part colour="var(--bcm)" name="A name nobody has yet">
+              Joins the campaign as a walk-on and stays unwritten until someone needs them.
+              That's what stops the whole cast writing itself sideways from one button.
+            </:part>
+          </.drawer>
+
+          <%!-- ── Pressures: two lists, never one ─────────────────────────── --%>
+          <div id="pushed">
+            <.pressure_list
+              :for={direction <- Boundary.directions()}
+              direction={direction}
+              boundaries={@boundaries}
+              generating={@generating}
+            />
+
+            <div class="row px-4 py-3">
+              <.add_row label="Add something…" panel="pressure" />
+            </div>
+          </div>
+
+          <.drawer :if={@drawer == "pushed"} section="pushed" title="About being pushed">
+            <:intro>
+              These are played, not filtered. A line they hold is a scene beat — something
+              the story has to work against, and something that can give at the right moment.
+            </:intro>
+            <:part colour="var(--pencil)" name="Won't, and can't stop">
+              Two directions. What they refuse, and what they do whether or not they mean to.
+              Both can be absolute or can turn once.
+            </:part>
+            <:part colour="var(--lamp)" name="Until, and then">
+              What has to happen before it turns, and what they're like afterwards. They
+              aren't told the second one until it's true of them.
+            </:part>
+            <:part colour="var(--bcm)" name="Flagging mature content">
+              Only if the item is about it. A flagged one stays closed in campaigns that
+              don't allow that content — and for something they can't stop, closed means
+              they don't do it. The ceiling always pushes toward refusal.
+            </:part>
+          </.drawer>
+
+          <%!-- ── Groups ──────────────────────────────────────────────────── --%>
+          <div class="px-4 py-3" id="groups">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <span class="flex items-center gap-1.5">
+                <span class="lbl dim">They belong to</span>
+                <Kit.info label="groups" phx-click="drawer" phx-value-section="groups" />
+              </span>
+            </div>
+
+            <p :if={@groups == []} class="text-[13px] dim">Nobody has a claim on them yet.</p>
+
+            <div :for={g <- @groups} class="flex items-center gap-2.5 py-2">
+              <span class="av" style={"background:#{group_hue(g)}"}></span>
+              <div class="min-w-0 flex-1">
+                <div class="text-[13px] font-semibold"><%= group_name(g) %></div>
+                <div class="text-[11px] dim">Member</div>
+              </div>
+              <Kit.btn
+                size={:sm}
+                kind={:pen}
+                type="button"
+                phx-click="leave_group"
+                phx-value-group_id={g.id}
+              >
+                Remove
+              </Kit.btn>
+            </div>
+
+            <.add_row
+              :if={joinable(@all_groups, @groups) != []}
+              label="Add a group…"
+              panel="group"
+            />
+          </div>
+
+          <%!-- ── Name, pronouns, save ────────────────────────────────────── --%>
+          <div class="px-4 py-3 flex items-center gap-2 flex-wrap" style="background:var(--b2)">
+            <label for="sheet-name" class="sr-only">Name</label>
+            <input
+              id="sheet-name"
+              type="text"
+              name="name"
+              value={@name}
+              phx-debounce="600"
+              placeholder="Their name"
+              class="field px-3 py-2 text-[13px] flex-1 min-w-0"
+            />
+            <%!-- Free text, never a menu: the set isn't closed, and a fixed list would
+                  be a decision about people rather than about data. --%>
+            <label for="sheet-pronouns" class="sr-only">Pronouns</label>
+            <input
+              id="sheet-pronouns"
+              type="text"
+              name="pronouns"
+              value={@pronouns}
+              phx-debounce="600"
+              placeholder="she / her"
+              class="field px-3 py-2 text-[13px] w-28 shrink-0"
+            />
+            <Kit.btn kind={:primary} type="submit">Save</Kit.btn>
+            <span :if={@saved} class="text-[12px] shrink-0" style="color:var(--ok)" role="status">
+              ✓ Saved
+            </span>
+          </div>
+        </Kit.sheet>
+        </form>
+
+        <.fact_panel :if={@panel == "fact"} />
+        <.relationship_panel :if={@panel == "relationship"} names={@char_names} />
+        <.pressure_panel :if={@panel == "pressure"} />
+        <.group_panel :if={@panel == "group"} groups={joinable(@all_groups, @groups)} />
+
+        <.drawer :if={@drawer == "groups"} section="groups" title="About groups">
+          <:intro>
+            A group is written like a character and used as a starting point for others.
+            Joining one and being written from one are different things.
+          </:intro>
+          <:part colour="var(--secret)" name="Belonging is live">
+            It's what a secret addressed to the group resolves against, right now. It works
+            for people who were never written from the group at all.
+          </:part>
+          <:part colour="var(--bcm)" name="Seeding was a copy">
+            Whatever they took from the group when they were written is theirs. Editing the
+            group later doesn't reach back into them, and joining now doesn't backfill what
+            it knows — they'd learn that in a scene.
+          </:part>
+        </.drawer>
+
+        <%!-- ── Where the sheet is written from, and saved ───────────────── --%>
+        <Kit.sheet class="m-4">
+          <Kit.row class="px-4 py-3" style="background:var(--b2)">
+            <span class="lbl dim">Writing this sheet</span>
+          </Kit.row>
+
+          <Kit.row :if={@sheet.status != :full} class="px-4 py-3">
+            <p class="text-[13px] leading-relaxed dim mb-2">
+              They came out of someone else's relationships and haven't been written yet. Set
+              how they fit, fill the fields in — or write them — and save.
+            </p>
+            <form id="stub-role-form" phx-change="set_role">
+              <label for="stub-role" class="lbl dim">How they fit</label>
+              <input
+                id="stub-role"
+                type="text"
+                name="role"
+                value={@role}
+                autocomplete="off"
+                phx-debounce="blur"
+                placeholder="e.g. estranged mentor, harbour smuggler"
+                class="field px-3 py-2 text-[13px] w-full mt-1.5"
+              />
+            </form>
+          </Kit.row>
+
+          <Kit.row class="px-4 py-3">
+            <form id="world-select-form" phx-change="select_world">
+              <label for="world-select" class="lbl dim">World</label>
+              <select
+                id="world-select"
+                name="world_id"
+                class="field px-3 py-2.5 text-[14px] w-full mt-1.5"
+              >
+                <option value="">— none —</option>
+                <option :for={{id, name} <- @worlds} value={id} selected={@world_id == id}>
+                  <%= name %>
+                </option>
+              </select>
+              <p class="text-[11px] leading-relaxed dim mt-1.5">
+                Grounds everything generated here in a setting.
+              </p>
+            </form>
+          </Kit.row>
+
+          <Kit.row class="px-4 py-3">
+            <form id="sheet-generate-all" phx-submit="generate_all">
+              <label for="brief" class="lbl dim">Write the whole sheet from a line</label>
+              <textarea
+                id="brief"
+                name="brief"
+                rows="2"
+                placeholder="e.g. A jaded harbour-town detective who used to be a priest and still prays out of habit."
+                class="field px-3 py-2.5 text-[13px] leading-relaxed w-full mt-1.5 mb-2"
+              ></textarea>
+              <Kit.btn kind={:primary} type="submit" disabled={busy?(@generating, "all")}>
+                <%= if busy?(@generating, "all"), do: "✦ Writing…", else: "✦ Write every field" %>
+              </Kit.btn>
+              <p class="text-[11px] leading-relaxed dim mt-2">
+                Builds on anything already written rather than replacing it.
+              </p>
+            </form>
+          </Kit.row>
+
+          <%!-- Tier saves on tap rather than with the form: it's a property of the
+                campaign's shape rather than of the prose, and a set of pills has no
+                obvious "apply". --%>
+          <Kit.row class="px-4 py-3">
+            <span class="lbl dim">They're</span>
+            <div class="flex flex-wrap gap-1.5 mt-1.5">
+              <button
+                :for={t <- CharacterSheet.tiers()}
+                type="button"
+                class={["pill", t != @tier && "dim"]}
+                style={t == @tier && "background:var(--b3)"}
+                aria-pressed={to_string(t == @tier)}
+                phx-click="set_tier"
+                phx-value-tier={t}
+              >
+                <%= CharacterSheet.tier_label(t) %>
+              </button>
+            </div>
+          </Kit.row>
+
+        </Kit.sheet>
+      </div>
+    </Kit.frame>
+    """
+  end
+
+  # ── Section components ────────────────────────────────────────────────────────
+
+  # The "Add …" affordance the mock draws at the foot of every list: a field-shaped
+  # row rather than a button, because what follows is a form and this reads as its
+  # first line. Tapping it opens the panel below the sheet — the mock's own treatment
+  # (§04 "Adding someone who doesn't exist"), and the reason the lists themselves can
+  # sit inside the sheet's one form without nesting a second.
+  attr(:label, :string, required: true)
+  attr(:panel, :string, required: true)
+
+  defp add_row(assigns) do
+    ~H"""
+    <button
+      type="button"
+      class="field px-3 py-2 text-[13px] dim w-full text-left mt-2"
+      phx-click="panel"
+      phx-value-panel={@panel}
+    >
+      <%= @label %>
+    </button>
+    """
+  end
+
+  # One fact: its statement, its state, and a menu holding its two switches.
+  #
+  # State and controls are separated because the list is read far more often than it
+  # is edited — the flags show as a rule and a chip, and the switches live behind the
+  # row's `⋯` (`ux/polyphony-character.html` §03, "item menu · one switch pattern").
+  # Same geometry as `Kit.menu`, and `<details>` for the same reason: it opens without
+  # a live connection and closes on Escape for free.
+  attr(:fact, :map, required: true)
+  attr(:index, :integer, required: true)
+
+  defp fact_row(assigns) do
+    ~H"""
+    <div class="flex items-start gap-2 py-2.5" id={"fact-#{@index}"}>
+      <%!-- Secret owns the left border and always-in-mind is a chip, because only one
+            of them can own the structure and a fact can be both. --%>
+      <Kit.marked mark={if(@fact.concealed, do: :secret, else: :plain)} class="min-w-0 flex-1">
+        <p class="text-[13.5px] leading-relaxed"><%= @fact.statement %></p>
+        <div
+          :if={@fact.concealed or @fact.core}
+          class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1"
+        >
+          <span :if={@fact.concealed} class="flex items-center gap-1.5">
+            <Kit.dot colour="var(--secret)" />
+            <span class="lbl" style="color:var(--secret)">Secret</span>
+          </span>
+          <Kit.chip_core :if={@fact.core} />
+        </div>
+      </Kit.marked>
+
+      <details class="relative shrink-0">
+        <summary class="pill list-none cursor-pointer" aria-label="Change this fact">⋯</summary>
+        <nav
+          class="sheet absolute right-0 top-full mt-1 z-20 min-w-[15rem] overflow-hidden"
+          style="background:var(--b2)"
+        >
+          <button
+            type="button"
+            class="row w-full px-4 py-2.5 flex items-center justify-between gap-3 text-left"
+            phx-click="toggle_fact"
+            phx-value-index={@index}
+            phx-value-flag="core"
+            aria-pressed={to_string(!!@fact.core)}
+          >
+            <span>
+              <span class="block text-[13px] font-semibold">Always in mind</span>
+              <span class="block text-[11px] dim">In front of them every turn</span>
+            </span>
+            <Kit.sw on={!!@fact.core} colour="var(--lamp)" />
+          </button>
+          <button
+            type="button"
+            class="row w-full px-4 py-2.5 flex items-center justify-between gap-3 text-left"
+            phx-click="toggle_fact"
+            phx-value-index={@index}
+            phx-value-flag="concealed"
+            aria-pressed={to_string(!!@fact.concealed)}
+          >
+            <span>
+              <span class="block text-[13px] font-semibold">Secret</span>
+              <span class="block text-[11px] dim">Nobody else starts out knowing</span>
+            </span>
+            <Kit.sw on={!!@fact.concealed} colour="var(--secret)" />
+          </button>
+          <button
+            type="button"
+            class="w-full px-4 py-2.5 text-[13px] text-left"
+            style="color:var(--pencil)"
+            phx-click="remove_fact"
+            phx-value-index={@index}
+          >
+            Delete
+          </button>
+        </nav>
+      </details>
+    </div>
+    """
+  end
+
+  # A panel is a sheet with a header, a form, and a way out. Every one of them is the
+  # same shape, so the shape lives here and each panel is only its fields.
+  attr(:title, :string, required: true)
+  attr(:form_id, :string, required: true)
+  attr(:submit, :string, required: true)
+  attr(:action, :string, default: "Add")
+  slot(:inner_block, required: true)
+  slot(:note)
+
+  defp panel(assigns) do
+    ~H"""
+    <Kit.sheet class="mx-4 mb-4">
+      <Kit.row class="px-4 py-3 flex items-center justify-between" style="background:var(--b2)">
+        <span class="ttl text-[15px] font-semibold"><%= @title %></span>
+        <button
+          type="button"
+          class="dim text-[17px] leading-none"
+          phx-click="panel"
+          phx-value-panel=""
+          aria-label={"Close #{@title}"}
+        >
+          ×
+        </button>
+      </Kit.row>
+      <div class="px-4 py-3">
+        <form id={@form_id} phx-submit={@submit}>
+          <%= render_slot(@inner_block) %>
+          <Kit.btn kind={:primary} type="submit" class="mt-1.5"><%= @action %></Kit.btn>
+        </form>
+        <p :if={@note != []} class="text-[11px] leading-relaxed dim mt-2">
+          <%= render_slot(@note) %>
+        </p>
+      </div>
+    </Kit.sheet>
+    """
+  end
+
+  defp fact_panel(assigns) do
+    ~H"""
+    <.panel title="Something that's true" form_id="fact-form" submit="add_fact">
+      <label for="fact-statement" class="lbl dim">The fact</label>
+      <input
+        id="fact-statement"
+        type="text"
+        name="statement"
+        autocomplete="off"
+        placeholder="She has signed the harbour register every day since she was fourteen."
+        class="field px-3 py-2.5 text-[13px] w-full mt-1.5"
+      />
+      <:note>
+        Flat and defensible — something they'd never contradict. You can make it always
+        in mind, or a secret, once it's on the list.
+      </:note>
+    </.panel>
+    """
+  end
+
+  attr(:names, :list, required: true)
+
+  defp relationship_panel(assigns) do
+    ~H"""
+    <.panel title="Who do they know?" form_id="rel-form" submit="add_relationship">
+      <label for="rel-target" class="lbl dim">Their name</label>
+      <input
+        id="rel-target"
+        type="text"
+        name="target"
+        list="char-names"
+        autocomplete="off"
+        placeholder="Aldous Ashgrove"
+        class="field px-3 py-2.5 text-[13px] w-full mt-1.5 mb-3"
+      />
+      <datalist id="char-names">
+        <option :for={n <- @names} value={n}></option>
+      </datalist>
+      <label for="rel-descriptor" class="lbl dim">How do they regard them?</label>
+      <input
+        id="rel-descriptor"
+        type="text"
+        name="descriptor"
+        placeholder="The only person on the quay she'd trust with a key."
+        class="field px-3 py-2.5 text-[13px] w-full mt-1.5"
+      />
+      <:note>
+        A name nobody has yet joins the campaign as a walk-on and stays unwritten until
+        someone needs them.
+      </:note>
+    </.panel>
+    """
+  end
+
+  defp pressure_panel(assigns) do
+    ~H"""
+    <.panel title="Where can they be pushed?" form_id="boundary-form" submit="add_boundary">
+      <label for="boundary-topic" class="lbl dim">What</label>
+      <input
+        id="boundary-topic"
+        type="text"
+        name="topic"
+        autocomplete="off"
+        placeholder="Name her father"
+        class="field px-3 py-2.5 text-[13px] w-full mt-1.5 mb-3"
+      />
+
+      <label for="boundary-direction" class="lbl dim">Which way it runs</label>
+      <select
+        id="boundary-direction"
+        name="direction"
+        class="field px-3 py-2.5 text-[13px] w-full mt-1.5 mb-3"
+      >
+        <option value="refusal">Something they won't do</option>
+        <option value="compulsion">Something they can't stop doing</option>
+      </select>
+
+      <label for="boundary-stance" class="lbl dim">Does anything change that?</label>
+      <select
+        id="boundary-stance"
+        name="stance"
+        class="field px-3 py-2.5 text-[13px] w-full mt-1.5 mb-3"
+      >
+        <option value="closed">Never — whatever happens</option>
+        <option value="conditional">Not until…</option>
+        <option value="open">No gate at all</option>
+      </select>
+
+      <label for="boundary-condition" class="lbl dim">Until</label>
+      <input
+        id="boundary-condition"
+        type="text"
+        name="condition"
+        placeholder="Someone she loves is going to be hurt by the silence."
+        class="field px-3 py-2.5 text-[13px] w-full mt-1.5 mb-3"
+      />
+
+      <label for="boundary-after" class="lbl dim">And then</label>
+      <input
+        id="boundary-after"
+        type="text"
+        name="after_release"
+        placeholder="She says it flatly, in public, and doesn't soften it."
+        class="field px-3 py-2.5 text-[13px] w-full mt-1.5 mb-3"
+      />
+
+      <label for="boundary-pressure" class="lbl dim">If they're pushed before then</label>
+      <input
+        id="boundary-pressure"
+        type="text"
+        name="on_pressure"
+        placeholder="She gets very polite, and very boring, and leaves."
+        class="field px-3 py-2.5 text-[13px] w-full mt-1.5 mb-3"
+      />
+
+      <label for="boundary-category" class="lbl dim">Anything to flag?</label>
+      <select
+        id="boundary-category"
+        name="category"
+        class="field px-3 py-2.5 text-[13px] w-full mt-1.5"
+      >
+        <option value="">Nothing — most aren't</option>
+        <option value="sexual">Sex</option>
+        <option value="graphic_violence">Violence</option>
+        <option value="other">Other</option>
+      </select>
+
+      <:note>
+        <em>And then</em> is written for you, and they aren't told it until it happens.
+        Flag mature content only if the item is about it — a campaign that doesn't allow
+        it holds this closed either way.
+      </:note>
+    </.panel>
+    """
+  end
+
+  attr(:groups, :list, required: true)
+
+  defp group_panel(assigns) do
+    ~H"""
+    <.panel title="Which group?" form_id="group-form" submit="join_group">
+      <label for="group-select" class="lbl dim">The group</label>
+      <select
+        id="group-select"
+        name="group_id"
+        class="field px-3 py-2.5 text-[13px] w-full mt-1.5"
+      >
+        <option :for={g <- @groups} value={g.id}><%= group_name(g) %></option>
+      </select>
+      <:note>
+        Joining is membership and nothing else — they don't quietly gain what the group
+        knows. They'd learn that in a scene.
+      </:note>
+    </.panel>
+    """
+  end
+
+  # One direction's pressure list. Two lists rather than one is the design's whole
+  # argument for this section: direction lives in the grouping, not the wording, so
+  # an item can never be read backwards.
+  attr(:direction, :atom, required: true)
+  attr(:boundaries, :list, required: true)
+  attr(:generating, :any, required: true)
+
+  defp pressure_list(assigns) do
+    items =
+      for {b, i} <- Enum.with_index(assigns.boundaries),
+          (b.direction || :refusal) == assigns.direction,
+          do: {b, i}
+
+    assigns = assign(assigns, :items, items)
+
+    ~H"""
+    <div class="row px-4 py-3">
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <span class="flex items-center gap-1.5">
+          <span class="lbl dim"><%= Boundary.direction_label(@direction) %></span>
+          <Kit.info
+            :if={@direction == :refusal}
+            label="being pushed"
+            phx-click="drawer"
+            phx-value-section="pushed"
+          />
+        </span>
+        <Kit.btn
+          :if={@direction == :refusal}
+          size={:sm}
+          type="button"
+          phx-click="suggest_boundaries"
+          disabled={busy?(@generating, "boundaries")}
+        >
+          <%= if busy?(@generating, "boundaries"), do: "✦ …", else: "✦ Suggest" %>
+        </Kit.btn>
+      </div>
+
+      <p :if={@items == []} class="text-[13px] dim"><%= empty_pressure(@direction) %></p>
+
+      <div :for={{b, i} <- @items} class="py-2">
+        <Kit.marked mark={if(@direction == :compulsion, do: :compel, else: :bound)}>
+          <div class="flex items-center justify-between gap-2 mb-1.5">
+            <span class="text-[14px] font-semibold"><%= b.topic %></span>
+            <Kit.pill colour={stance_colour(b.stance)} class="shrink-0">
+              <%= stance_label(b.stance, @direction) %>
+            </Kit.pill>
+          </div>
+          <div :if={present_string?(b.condition)} class="flex gap-2.5 mb-1">
+            <span class="lbl dim shrink-0 pt-0.5 w-14">until</span>
+            <span class="text-[13px] leading-relaxed flex-1"><%= b.condition %></span>
+          </div>
+          <%!-- Shown to the author, never to the character until it's true of them —
+                that withholding is `Polyphony.Context`'s job, not this screen's. --%>
+          <div :if={present_string?(b.after_release)} class="flex gap-2.5 mb-1">
+            <span class="lbl dim shrink-0 pt-0.5 w-14"><%= after_label(@direction) %></span>
+            <span class="text-[13px] leading-relaxed flex-1 dim"><%= b.after_release %></span>
+          </div>
+          <div :if={present_string?(b.on_pressure)} class="flex gap-2.5">
+            <span class="lbl dim shrink-0 pt-0.5 w-14"><%= pressure_label(@direction) %></span>
+            <span class="text-[13px] leading-relaxed flex-1 dim"><%= b.on_pressure %></span>
+          </div>
+          <div :if={b.category} class="flex items-center gap-1.5 mt-2">
+            <Kit.dot colour="var(--pencil)" />
+            <span class="text-[12px] dim">
+              Flagged as <%= category_label(b.category) %> — a campaign that doesn't allow it
+              holds this closed, whatever the story does.
+            </span>
+          </div>
+        </Kit.marked>
+        <Kit.btn
+          size={:sm}
+          kind={:pen}
+          type="button"
+          class="mt-1.5"
+          phx-click="remove_boundary"
+          phx-value-index={i}
+        >
+          Remove
+        </Kit.btn>
+      </div>
+    </div>
+    """
+  end
+
+  # The one info drawer, used by every section (`ux/polyphony-character.html` §06b):
+  # title, prose, then a subsection per concept with its own status dot. It is the
+  # kit's sheet-and-rows applied to explanation rather than a new component — and
+  # there is one per *section*, not one per setting, because the concepts in a
+  # section only make sense together.
+  attr(:title, :string, required: true)
+  attr(:section, :string, required: true)
+  slot(:intro)
+
+  slot :part do
+    attr(:colour, :string)
+    attr(:name, :string)
+  end
+
+  defp drawer(assigns) do
+    ~H"""
+    <Kit.sheet class="mx-4 mt-4">
+      <Kit.row class="px-4 py-3 flex items-center justify-between" style="background:var(--b2)">
+        <span class="ttl text-[15px] font-semibold"><%= @title %></span>
+        <button
+          type="button"
+          class="dim text-[17px] leading-none"
+          phx-click="drawer"
+          phx-value-section={@section}
+          aria-label={"Close #{@title}"}
+        >
+          ×
+        </button>
+      </Kit.row>
+      <Kit.row :if={@intro != []} class="px-4 py-3">
+        <p class="text-[13px] leading-relaxed"><%= render_slot(@intro) %></p>
+      </Kit.row>
+      <div :for={{p, i} <- Enum.with_index(@part)} class={i < length(@part) - 1 && "row"}>
+        <div class="px-4 py-3">
+          <div class="flex items-center gap-1.5 mb-1">
+            <Kit.dot colour={p[:colour] || "var(--bcm)"} />
+            <span class="text-[13px] font-semibold"><%= p[:name] %></span>
+          </div>
+          <p class="text-[13px] leading-relaxed"><%= render_slot(p) %></p>
+        </div>
+      </div>
+    </Kit.sheet>
+    """
+  end
+
+  # ── Render helpers ────────────────────────────────────────────────────────────
+
+  defp header_title(name) when name in [nil, ""], do: "Someone new"
+  defp header_title(name), do: name
+
+  defp scene_line(1), do: "In 1 scene"
+  defp scene_line(n), do: "In #{n} scenes"
+
+  defp empty_pressure(:compulsion), do: "Nothing drives them."
+  defp empty_pressure(_), do: "Nothing gives."
+
+  defp after_label(:compulsion), do: "and now"
+  defp after_label(_), do: "and then"
+
+  defp pressure_label(:compulsion), do: "if resisted"
+  defp pressure_label(_), do: "if pushed"
+
+  # A gate that will never move is the pencil (an editorial fact about the sheet);
+  # one the story can still turn is the lamp; one with no gate at all is done.
+  defp stance_colour(:closed), do: "var(--pencil)"
+  defp stance_colour(:conditional), do: "var(--lamp)"
+  defp stance_colour(_), do: "var(--ok)"
+
+  defp stance_label(:closed, :compulsion), do: "Always"
+  defp stance_label(:closed, _), do: "Never"
+  defp stance_label(:conditional, :compulsion), do: "Until"
+  defp stance_label(:conditional, _), do: "Not yet"
+  defp stance_label(:open, :compulsion), do: "Freely"
+  defp stance_label(_, _), do: "Open"
+
+  defp category_label(:sexual), do: "sex"
+  defp category_label(:graphic_violence), do: "graphic violence"
+  defp category_label(cat), do: to_string(cat)
+
+  defp group_name(entry) do
+    case Library.payload(entry) do
+      %{name: n} when is_binary(n) and n != "" -> n
+      _ -> "Untitled group (##{entry.id})"
+    end
+  end
+
+  defp group_hue(entry) do
+    case Library.payload(entry) do
+      %{hue: hue} -> Voice.colour(hue)
+      _ -> Voice.neutral()
+    end
+  end
+
+  defp joinable(all, joined) do
+    held = MapSet.new(joined, & &1.id)
+    Enum.reject(all, &MapSet.member?(held, &1.id))
+  end
+
+  # Each relationship with its index and its target's voice colour, resolved before
+  # the template rather than inside it — the same person is the same hue here as in
+  # the transcript. Someone who doesn't exist yet has no hue and gets the neutral one.
+  defp rel_rows(relationships, hues) do
+    for {%Relationship{target_id: id, target: name} = r, i} <- Enum.with_index(relationships) do
+      colour =
+        Map.get(hues, id) || Map.get(hues, String.downcase(to_string(name || ""))) ||
+          Voice.neutral()
+
+      {r, i, colour}
+    end
+  end
+
+  # A relationship's target: a link to that character's sheet when it's an existing
   # (or already-saved-stub) character, otherwise plain text.
   attr(:target, :string, required: true)
   attr(:target_id, :integer, default: nil)
@@ -732,10 +1944,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
     assigns = assign(assigns, :id, id)
 
     ~H"""
-    <a :if={@id} href={~p"/authoring/character/#{@id}"} data-confirm={@confirm}>
-      <strong><%= @target %></strong>
-    </a>
-    <strong :if={is_nil(@id)}><%= @target %></strong>
+    <.link :if={@id} navigate={~p"/authoring/character/#{@id}"} data-confirm={@confirm}>
+      <%= @target %>
+    </.link>
+    <span :if={is_nil(@id)}><%= @target %></span>
     """
   end
 
@@ -743,216 +1955,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # renders no data-confirm attribute, so a clean page never prompts).
   defp leave_confirm(true), do: "You have unsaved changes. Leave without saving?"
   defp leave_confirm(false), do: nil
-
-  def render(assigns) do
-    ~H"""
-    <div class="row">
-      <h1>Edit character</h1>
-      <div class="spacer"></div>
-      <span :if={@sheet.status != :full} class="badge stub">pending</span>
-    </div>
-
-    <div :if={@sheet.status != :full} class="card">
-      <p class="dim">
-        This character is <strong>pending</strong> — it came from another character's
-        relationships. Set their role, fill in the fields below (write them yourself or
-        use ✨ Generate), and Save to finish it.
-      </p>
-      <form id="stub-role-form" phx-change="set_role">
-        <label>Role <span class="faint">(one line — how they fit; seeds ✨ Generate)</span></label>
-        <input
-          type="text"
-          name="role"
-          value={@role}
-          placeholder="e.g. estranged mentor, harbor smuggler"
-          autocomplete="off"
-          phx-debounce="blur"
-        />
-      </form>
-    </div>
-
-    <div class="card gen-brief">
-      <form id="world-select-form" phx-change="select_world">
-        <label>World <span class="faint">(grounds generated backstory &amp; voice in a setting)</span></label>
-        <select name="world_id">
-          <option value="">— none —</option>
-          <option :for={{id, name} <- @worlds} value={id} selected={@world_id == id}><%= name %></option>
-        </select>
-        <p :if={@worlds == []} class="faint">
-          No world bibles yet — create one in the <a href={~p"/library"} data-confirm={leave_confirm(@dirty)}>Library</a> to ground generation.
-        </p>
-      </form>
-
-      <form id="sheet-generate-all" phx-submit="generate_all">
-        <label>Describe the character — we'll fill in every field <span class="faint">(builds on anything you've already written)</span></label>
-        <textarea
-          name="brief"
-          rows="2"
-          placeholder="e.g. A jaded harbor-town detective who used to be a priest and still prays out of habit."
-        ></textarea>
-        <button class="btn" type="submit" disabled={busy?(@generating, "all")}>
-          <%= if busy?(@generating, "all"), do: "✨ Generating…", else: "✨ Generate all fields" %>
-        </button>
-      </form>
-    </div>
-
-    <div class="card">
-      <form id="sheet-form" phx-submit="save" phx-change="sync">
-        <label class="gen-label"><span>Name</span></label>
-        <input type="text" name="name" value={@name} phx-debounce="600" />
-        <label for="sheet-pronouns">Pronouns</label>
-        <%!-- Free text, never a menu: the set isn't closed, and a fixed list would be
-              a decision about people rather than about data. --%>
-        <input
-          id="sheet-pronouns"
-          type="text"
-          name="pronouns"
-          value={@pronouns}
-          placeholder="she / her"
-          phx-debounce="600"
-        />
-
-        <.block_field
-          :for={{f, label} <- field_specs()}
-          field={f}
-          label={label}
-          blocks={@blocks[f]}
-          generating={@generating}
-        />
-
-        <div class="row save-row">
-          <button class="btn" type="submit">Save</button>
-          <span :if={@saved} class="saved-note" role="status">✓ Saved</span>
-          <span class="spacer"></span>
-          <a class="btn ghost" href={~p"/library"} data-confirm={leave_confirm(@dirty)}>Back to library</a>
-        </div>
-      </form>
-    </div>
-
-    <details class="card" open>
-      <summary class="card-summary">Boundaries</summary>
-      <div class="row" style="margin-top:.4rem;">
-        <div class="spacer"></div>
-        <button
-          type="button"
-          class="btn sm ghost"
-          phx-click="suggest_boundaries"
-          disabled={busy?(@generating, "boundaries")}
-        >
-          <%= if busy?(@generating, "boundaries"), do: "✨ …", else: "✨ Suggest" %>
-        </button>
-      </div>
-      <p class="dim">
-        Lines this character holds. A refusal is played as a scene beat, never a filter (§A3).
-        A <strong>conditional</strong> boundary holds until its condition is earned in the story
-        (slow burn); an optional <strong>category</strong> lets a campaign's content ceiling cap it.
-        <strong>✨ Suggest</strong> proposes boundaries true to who they are.
-      </p>
-
-      <div :if={@boundaries == []} class="faint">No boundaries yet.</div>
-      <ul class="rel-list">
-        <li :for={{b, i} <- Enum.with_index(@boundaries)} class="row rel-item boundary-item">
-          <div class="boundary-parts">
-            <div class="boundary-topic"><strong><%= b.topic %></strong> — <%= stance_label(b.stance) %></div>
-            <div :if={condition_bit(b)} class="faint"><%= condition_bit(b) %></div>
-            <div :if={pressure_bit(b)} class="faint"><%= pressure_bit(b) %></div>
-            <div :if={category_bit(b)} class="faint"><%= category_bit(b) %></div>
-          </div>
-          <span class="spacer"></span>
-          <button type="button" class="btn danger sm" phx-click="remove_boundary" phx-value-index={i}>Remove</button>
-        </li>
-      </ul>
-
-      <form id="boundary-form" phx-submit="add_boundary" style="margin-top:.5rem;">
-        <label>Topic
-          <input type="text" name="topic" placeholder="e.g. physical intimacy, killing" autocomplete="off" />
-        </label>
-        <label>Stance
-          <select name="stance">
-            <option value="closed">Hard line — will not</option>
-            <option value="conditional">Conditional — until…</option>
-            <option value="open">Open to it</option>
-          </select>
-        </label>
-        <label>Category <span class="faint">(optional — a campaign's ceiling can cap it)</span>
-          <select name="category">
-            <option value="">No category</option>
-            <option value="sexual">Sexual</option>
-            <option value="graphic_violence">Graphic violence</option>
-            <option value="other">Other</option>
-          </select>
-        </label>
-        <label>Condition <span class="faint">(conditional only — until what happens?)</span>
-          <input type="text" name="condition" placeholder="e.g. once trust is earned" />
-        </label>
-        <label>When pushed <span class="faint">(optional — how they react under pressure)</span>
-          <input type="text" name="on_pressure" placeholder="e.g. deflects with a joke" />
-        </label>
-        <button class="btn" type="submit" style="margin-top:.6rem;">Add boundary</button>
-      </form>
-    </details>
-
-    <details class="card" open>
-      <summary class="card-summary">Relationships</summary>
-      <div class="row" style="margin-top:.4rem;">
-        <div class="spacer"></div>
-        <button
-          type="button"
-          class="btn sm ghost"
-          phx-click="suggest_relationships"
-          disabled={busy?(@generating, "relationships")}
-        >
-          <%= if busy?(@generating, "relationships"), do: "✨ …", else: "✨ Suggest" %>
-        </button>
-      </div>
-      <p class="dim">
-        How this character regards others. Pick an existing character or type a new name —
-        a new name becomes a <strong>stub</strong> character, created when you Save.
-        <strong>✨ Suggest</strong> adds AI-proposed relationships straight to the list.
-      </p>
-
-      <div :if={@relationships == []} class="faint">No relationships yet.</div>
-      <ul class="rel-list">
-        <li :for={{r, i} <- Enum.with_index(@relationships)} class="row rel-item">
-          <span>→ <.rel_target target={r.target} target_id={r.target_id} links={@char_links} confirm={leave_confirm(@dirty)} /><span :if={r.descriptor not in [nil, ""]}> — <%= r.descriptor %></span></span>
-          <span class="spacer"></span>
-          <button type="button" class="btn danger sm" phx-click="remove_relationship" phx-value-index={i}>Remove</button>
-        </li>
-      </ul>
-
-      <form id="rel-form" phx-submit="add_relationship" class="rel-add">
-        <label>Character <span class="faint">(existing name, or a new one to stub)</span>
-          <input type="text" name="target" list="char-names" placeholder="Character name…" autocomplete="off" />
-        </label>
-        <label>How they regard them
-          <input type="text" name="descriptor" placeholder="e.g. estranged mentor" />
-        </label>
-        <button class="btn" type="submit" style="margin-top:.4rem;">Add relationship</button>
-      </form>
-      <datalist id="char-names">
-        <option :for={n <- @char_names} value={n}></option>
-      </datalist>
-    </details>
-    """
-  end
-
-  defp stance_label(:open), do: "open to it"
-  defp stance_label(:conditional), do: "held until earned"
-  defp stance_label(:closed), do: "a hard line"
-  defp stance_label(_), do: "holds back"
-
-  defp condition_bit(%Boundary{stance: :conditional, condition: c}) when is_binary(c) and c != "",
-    do: "until #{c}"
-
-  defp condition_bit(_), do: nil
-
-  defp pressure_bit(%Boundary{on_pressure: p}) when is_binary(p) and p != "",
-    do: "when pushed: #{p}"
-
-  defp pressure_bit(_), do: nil
-
-  defp category_bit(%Boundary{category: nil}), do: nil
-  defp category_bit(%Boundary{category: cat}), do: "capped by #{cat}"
 
   defp blank_to_nil(value) do
     case String.trim(to_string(value || "")) do

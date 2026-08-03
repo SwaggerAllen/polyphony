@@ -196,6 +196,85 @@ defmodule Polyphony.Authoring.Autofill do
   end
 
   @doc """
+  Propose **facts** — short, flat statements that are true about the character.
+
+  `ux/polyphony-character.html` §03 defines them and what they're for: *what she'd
+  never contradict, so keep them to things you'd defend rather than things you'd
+  like.* Returns `{:ok, [%{"statement","core","concealed"}]}`; `:existing` statements
+  are shown as "don't repeat" and filtered out.
+
+  The model may flag a fact **core** (always resident) or **concealed** (a secret),
+  and is told to be sparing with the first: the drawer's own nudge is that *a few is
+  right*, because always-in-mind is context every turn of every scene and twenty of
+  them is a quality problem.
+  """
+  @spec suggest_facts(map(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  def suggest_facts(current, opts \\ []) do
+    current = stringify(current)
+
+    existing =
+      opts[:existing] |> List.wrap() |> Enum.map(&fact_statement/1) |> Enum.reject(&(&1 == ""))
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author populate the facts on a role-play character sheet. A " <>
+            "fact is a SHORT, FLAT statement that is simply true about them — the kind of " <>
+            "thing they would never contradict. Concrete and defensible, not aspirational " <>
+            "and not a mood. Propose 4–6. For each, two independent flags: \"core\" (true " <>
+            "if it is something they would never stop being aware of — be sparing, a few " <>
+            "at most) and \"concealed\" (true if nobody else starts out knowing it). The " <>
+            "two are orthogonal: someone can have a secret they rarely think about. Return " <>
+            "ONLY a JSON array of objects with keys \"statement\", \"core\" and " <>
+            "\"concealed\". Do NOT repeat anything already listed."
+      },
+      %{
+        role: "user",
+        content:
+          context_block(context(opts)) <>
+            character_block(current) <> existing_facts_block(existing)
+      }
+    ]
+
+    with {:ok, text} <- Polyphony.LLM.call(messages, [response: :facts] ++ meter_opts(opts)),
+         {:ok, list} <- decode_array(text) do
+      excluded = existing |> Enum.map(&normalize_name/1) |> MapSet.new()
+
+      facts =
+        list
+        |> Enum.filter(&is_map/1)
+        |> Enum.map(fn item ->
+          %{
+            "statement" => String.trim(to_string(item["statement"] || "")),
+            "core" => truthy?(item["core"]),
+            "concealed" => truthy?(item["concealed"])
+          }
+        end)
+        |> Enum.reject(
+          &(&1["statement"] == "" or MapSet.member?(excluded, normalize_name(&1["statement"])))
+        )
+        |> Enum.uniq_by(&normalize_name(&1["statement"]))
+
+      {:ok, facts}
+    end
+  end
+
+  defp fact_statement(%{statement: s}), do: to_string(s || "")
+  defp fact_statement(%{"statement" => s}), do: to_string(s || "")
+  defp fact_statement(_), do: ""
+
+  defp existing_facts_block([]), do: ""
+
+  defp existing_facts_block(statements),
+    do:
+      "\n\nAlready true of them (do not repeat):\n" <> Enum.map_join(statements, "\n", &"- #{&1}")
+
+  defp truthy?(true), do: true
+  defp truthy?("true"), do: true
+  defp truthy?(_), do: false
+
+  @doc """
   Propose **pressures** (§A3 — played as scene beats, never filters) from the
   character's fields + context. Returns
   `{:ok, [%{"topic","stance","direction","condition","on_pressure","after_release","category"}]}`;

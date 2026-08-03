@@ -31,6 +31,7 @@ defmodule Polyphony.LLM.Mock do
       :autofill -> {:ok, autofill_json(messages, opts)}
       :relationships -> {:ok, relationships_json(messages)}
       :boundaries -> {:ok, boundaries_json(messages)}
+      :facts -> {:ok, facts_json(messages)}
       :reciprocals -> {:ok, reciprocals_json(messages, opts)}
       :regards -> {:ok, regards_json(messages, opts)}
       :mentions -> {:ok, mentions_json(messages)}
@@ -128,25 +129,47 @@ defmodule Polyphony.LLM.Mock do
     )
   end
 
-  # A couple of lorem boundaries (Authoring.suggest_boundaries): both conditional with a
-  # condition (the generation contract — §A3 slow burns), one categorized.
+  # A couple of lorem pressures (Authoring.suggest_boundaries): both conditional with a
+  # condition (the generation contract — §A3 slow burns), one of each direction so the
+  # offline path exercises both lists, one categorized.
   defp boundaries_json(messages) do
     seed = :erlang.phash2(messages)
 
     Jason.encode!([
       %{
         topic: lorem(seed, 2),
+        direction: "refusal",
         condition: capitalize(lorem(seed + 1, 4)) <> ".",
         on_pressure: lorem(seed + 2, 3),
+        after_release: capitalize(lorem(seed + 5, 4)) <> ".",
         category: ""
       },
       %{
         topic: lorem(seed + 3, 2),
+        direction: "compulsion",
         condition: capitalize(lorem(seed + 4, 4)) <> ".",
         on_pressure: "",
+        after_release: "",
         category: "other"
       }
     ])
+  end
+
+  # Lorem facts (Authoring.suggest_facts) covering all four flag combinations, so the
+  # offline path exercises the composition the sheet's fact list is built around.
+  defp facts_json(messages) do
+    seed = :erlang.phash2(messages)
+
+    Jason.encode!(
+      for {core, concealed} <- [{false, false}, {true, false}, {false, true}, {true, true}],
+          i = :erlang.phash2({core, concealed}) do
+        %{
+          statement: capitalize(lorem(seed + i, 6)) <> ".",
+          core: core,
+          concealed: concealed
+        }
+      end
+    )
   end
 
   # `count` lorem reciprocal descriptors, in order (Authoring.reciprocal_roles). The
