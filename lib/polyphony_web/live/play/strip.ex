@@ -8,12 +8,21 @@ defmodule PolyphonyWeb.Play.Strip do
   derived, never stored: the beat aggregate already records who took their turn,
   who passed and who failed, and the declared turn order says who is still to come.
 
-  **It is filtered exactly like the transcript.** A character viewer gets slots
-  only for people they know are there — co-members at that beat — because the
-  strip would otherwise leak the cast list to someone who hasn't met them. That's
-  the same default-deny reasoning as `Polyphony.Visibility`, applied to a summary
-  rather than to events: this module never widens what a viewer can see, and when
-  it can't tell, it shows less.
+  **Every member of the beat gets a slot, for every viewer.** Presence is currently
+  binary and symmetric — `Membership` is a half-open interval and `visible_to?/3`
+  judges membership at the beat — so there is no such thing as being in a scene but
+  unknown to the people in it. Filtering the strip per viewer would model a
+  distinction the domain doesn't have, and it would cost a player the thing the
+  strip is *for*: seeing that the beat is moving rather than hung.
+
+  Concealed presence is a real feature and it is specced — `backend-backlog.md`
+  §2.1 (per-observer presence) and §2.2 (turn-order visibility). When it lands, the
+  treatment here is a **greyed placeholder** rather than an omission, with runs of
+  consecutive concealed slots collapsed into one, so the tracker still accounts for
+  the time the beat spends on them. It has to land with the **context-generation**
+  half at the same time: a concealed character leaking into a prompt is the version
+  of this that actually matters, and a half-built version that only filters the UI
+  would hide the problem rather than solve it.
 
   The sentence is the one place the strip speaks. It follows the copy rule that a
   line says what is happening rather than what the rule is — "Wren is writing.
@@ -44,7 +53,7 @@ defmodule PolyphonyWeb.Play.Strip do
 
     * `:beat_events` — the beat aggregate's own stream (`BeatOps.beat_events/2`)
     * `:order` — the declared turn order for the beat, or nil
-    * `:members` — who is in the scene at this beat (the filter)
+    * `:members` — who is in the scene, used when no beat has opened yet
     * `:viewer` — `:omniscient` or `{:character, id}`
     * `:generating` — the character id currently being generated, if any
     * `:voices` / `:names` — display maps, both keyed by character id
@@ -58,7 +67,7 @@ defmodule PolyphonyWeb.Play.Strip do
     generating = Keyword.get(opts, :generating)
 
     state = fold(beat_events)
-    cast = cast_for(opts, state, viewer)
+    cast = cast_for(opts, state)
     slots = Enum.map(cast, &slot(&1, state, generating, viewer, names, voices))
 
     %{slots: slots, sentence: sentence(slots, viewer, names), tone: tone(slots, viewer)}
@@ -67,29 +76,14 @@ defmodule PolyphonyWeb.Play.Strip do
   # ── Cast ──────────────────────────────────────────────────────────────────────
 
   # Turn order is authoritative when declared (a GM reorder is honoured, §A1);
-  # otherwise the beat's opening cast, otherwise the room. Filtered to what the
-  # viewer can know either way.
-  defp cast_for(opts, state, viewer) do
-    members = opts |> Keyword.get(:members, []) |> Enum.map(&to_string/1)
-
-    (Keyword.get(opts, :order) || state.cast || [])
-    |> Enum.map(&to_string/1)
-    |> Enum.uniq()
-    |> case do
-      [] -> members
+  # otherwise the beat's opening cast; otherwise the room, which is what a scene
+  # shows before its first beat opens. The same list for every viewer — see the
+  # moduledoc on why this isn't filtered.
+  defp cast_for(opts, state) do
+    case Enum.uniq(Enum.map(Keyword.get(opts, :order) || state.cast || [], &to_string/1)) do
+      [] -> opts |> Keyword.get(:members, []) |> Enum.map(&to_string/1) |> Enum.uniq()
       declared -> declared
     end
-    |> visible_to(viewer, members)
-  end
-
-  # Omniscient sees the whole cast. A character sees who they're in the room with —
-  # and if membership can't say (an empty list, e.g. a scene with no read model
-  # behind it), they see themselves rather than everyone.
-  defp visible_to(cast, :omniscient, _members), do: cast
-
-  defp visible_to(cast, {:character, id}, members) do
-    known = MapSet.new([to_string(id) | members])
-    Enum.filter(cast, &MapSet.member?(known, &1))
   end
 
   # ── Slots ─────────────────────────────────────────────────────────────────────

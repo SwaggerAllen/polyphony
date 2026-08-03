@@ -1,15 +1,18 @@
 defmodule PolyphonyWeb.Play.StripTest do
   @moduledoc """
-  The status strip says what's happening, and never more than the viewer knows.
+  The status strip says what's happening in the beat.
 
-  Two things are being pinned. The ordinary one is that each beat state maps to the
-  slot the kit assigns it, and that the sentence reads from the viewer's position.
+  Two things are pinned: each beat outcome maps to the slot state the kit assigns
+  it, and the sentence reads from the viewer's position.
 
-  The one that matters is the filter. The strip is a *summary* of the cast, which
-  makes it a place dramatic irony can leak without any event leaking: a character
-  who hasn't met someone must not learn they exist from a row of slots. So it is
-  filtered like the transcript, and when membership can't answer it shows less
-  rather than more — the same default-deny reasoning as `Polyphony.Visibility`.
+  The third — that **every member of the beat gets a slot, for every viewer** — is
+  pinned deliberately, because the obvious instinct is to filter it. Presence is
+  currently binary and symmetric, so there is no character who is in a scene but
+  unknown to the people in it; filtering would model a distinction the domain
+  doesn't have, and would cost a player the thing the strip is for, which is seeing
+  that the beat is moving rather than hung. Concealed presence is specced
+  (`backend-backlog.md` §2.1/§2.2) and gets a greyed placeholder here rather than an
+  omission, landing together with the context-generation half.
   """
   use ExUnit.Case, async: true
 
@@ -90,32 +93,24 @@ defmodule PolyphonyWeb.Play.StripTest do
     end
   end
 
-  describe "the filter" do
-    test "a character sees only the cast they're in the room with" do
-      # Sable is in the beat's cast but not a member the viewer shares the scene
-      # with — so she must not appear, or the strip has told Ilias she exists.
-      strip =
-        build(opened(["1", "2", "4"]),
-          viewer: {:character, "2"},
-          members: ["1", "2"]
-        )
+  describe "who gets a slot" do
+    test "everyone in the beat, whoever is looking" do
+      # Not filtered per viewer: nothing in the domain can be present-but-unknown,
+      # so a filter would invent a distinction — and blank slots are how a player
+      # tells a moving beat from a hung one.
+      for viewer <- [:omniscient, {:character, "2"}] do
+        strip = build(opened(["1", "2", "4"]), viewer: viewer, members: ["1", "2"])
 
-      assert Enum.map(strip.slots, & &1.id) == ["1", "2"]
-      refute strip.sentence =~ "Sable"
+        assert Enum.map(strip.slots, & &1.id) == ["1", "2", "4"]
+      end
     end
 
-    test "omniscient sees everyone" do
-      strip = build(opened(["1", "2", "4"]), viewer: :omniscient, members: ["1", "2"])
+    test "before a beat opens, the room is the cast" do
+      # A scene that has been set up but not run should still show who is in it,
+      # rather than an empty tracker.
+      strip = build([], viewer: {:character, "2"}, members: ["1", "2", "3"])
 
-      assert Enum.map(strip.slots, & &1.id) == ["1", "2", "4"]
-    end
-
-    test "when membership can't answer, a character sees only themselves" do
-      # Failing open here would hand a viewer the whole cast list on a scene whose
-      # membership hasn't resolved. Failing closed costs them a slot row.
-      strip = build(opened(["1", "2", "4"]), viewer: {:character, "2"}, members: [])
-
-      assert Enum.map(strip.slots, & &1.id) == ["2"]
+      assert Enum.map(strip.slots, & &1.id) == ["1", "2", "3"]
     end
   end
 

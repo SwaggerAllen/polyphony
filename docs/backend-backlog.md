@@ -101,9 +101,22 @@ This is a real feature, not a UI concern, and it's the prerequisite for 2.2.
 `TurnOrderDeclared` is user-and-system visibility (§1). Any per-character surface that shows
 who is due to act leaks the room — including anyone concealed under 2.1.
 
-Deferred for now by decision: the current design shows the beat as a plain rule with no
-roster, and the transcript tail names only the character whose turn is live. Revisit
-together with 2.1.
+**Where the leak actually matters (author):** the **prompt** side, not the player side. A
+concealed character bleeding into another character's context is the version of this that
+breaks the guarantee; a player reading a name off a tracker is a lesser problem, and while
+there's no multiplayer it's barely a problem at all. So when 2.1 lands, **context generation
+and the tracker are done together** — a version that filters only the UI hides the leak
+rather than closing it.
+
+**The tracker treatment, when it exists:** a **greyed placeholder**, not an omission, with
+runs of consecutive concealed slots collapsed into a single slot. Removing the slot outright
+makes the beat look hung while the loop is in fact spending time on someone the viewer can't
+see; a placeholder keeps the tracker honest about where the time goes without naming anyone.
+
+**Status now:** the status strip (`PolyphonyWeb.Play.Strip`) shows **every member of the
+beat to every viewer**, by decision. Presence is binary and symmetric today — nothing can be
+in a scene but unknown — so a per-viewer filter would model a distinction the domain doesn't
+have. (One was briefly built during the play port and removed for exactly that reason.)
 
 ### 2.3 Scene premise and location as authored fields · **new** — ✅ **Shipped (backend)**
 Location now feeds Director + character context (volatile suffix, `"Location: …"`); new

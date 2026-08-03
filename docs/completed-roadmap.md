@@ -127,10 +127,16 @@ fiction rather than as a note to the author.
 
 **The status strip** (`PolyphonyWeb.Play.Strip`) is derived, never stored — the beat
 aggregate already records who took their turn, passed or failed, and the declared turn order
-says who is still to come. It is *filtered like the transcript*: a summary of the cast is
-somewhere dramatic irony could leak with no event leaking, so a character sees slots only
-for people they're in the room with, and when membership can't answer it shows less rather
-than more. Its sentence answers "when do I act" without making anyone count.
+says who is still to come. Its sentence answers "when do I act" without making anyone count.
+
+It shows **every member of the beat to every viewer**. A per-viewer filter was built first,
+reasoning by analogy with the transcript, and removed: presence is binary and symmetric
+today (`Membership` is an interval, `visible_to?/3` judges it at the beat), so nothing can be
+in a scene but unknown, and filtering would model a distinction the domain doesn't have —
+while costing a player the thing the strip is for, which is telling a moving beat from a hung
+one. That was a partial build of `backend-backlog.md` §2.2, which was already deferred
+pending §2.1. Both are now specced to land together with the **context-generation** half,
+since a concealed character reaching a prompt is the version of the leak that matters.
 
 Two smaller corrections fell out of the port. A turn is now attributed **once**, at the head
 of its block, so a move no longer repeats the actor's name — which retires the old
