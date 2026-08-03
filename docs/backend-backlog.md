@@ -543,7 +543,17 @@ which a writing tool should do regardless of any model reason.
 Depends entirely on 5.1 — scene-close fan-out has no caller today, so there is nothing to gate on
 and this cannot be built until that's wired.
 
-### 3.0b Group arc, and how it reaches members · **new** — *groups themselves now exist*
+### 3.0b Group arc, and how it reaches members · **new** — ✅ **Shipped**
+`Polyphony.Authoring.GroupArc`: `fan_out/3` writes one proposal against the group (filed under its
+own `subject_type: "group"`, so a pending group change doesn't block a scene the group isn't in)
+and one per current member, through the same review gate as anything else. `pending/2` and
+`counts/2` back the collapsed card; `accept_all/2` is its one fast path. Nothing propagates
+silently, which is what makes dissent free — refuse one member's and you have written the person
+who didn't go along with it. Off-screen members are included, and so is someone who joined by hand
+and was never seeded from the group. `ArcReviewTest` pins each claim. Original ask below.
+
+
+
 
 **Prerequisite shipped.** Groups existed only in the design until the frontend rebuild reached
 the campaign screen and found the Groups tab had nothing behind it — the backend-asks pass had

@@ -419,6 +419,47 @@ Still open and recorded: *whoever was there* (it needs a source scene, and nothi
 audience has one yet), audiences on arc entries, and location audiences — which the design checked
 against the component and which need no change to it.
 
+### Arc review, ported (`ux/polyphony-arc.html`)
+The audit found four things the domain couldn't say, and the screen needed all four.
+
+**Every proposal says why.** `reason` on both arc kinds, asked for by both extractors. The design's
+argument is that the *Because* line is what makes accepting quick — you can check the reasoning
+without going back and rereading — so a proposal that can't say why is one you have to earn twice.
+A model that skips it still produces a usable proposal; dropping an entry over a missing
+justification would be the worse trade.
+
+**A line gave is its own kind.** `BoundaryGate` already resolves a conditional boundary
+scene-locally from canon; a canon `:release` names the topic and opens it permanently. That is
+exactly the distinction the design draws — the gate resolved it in play, review is where it stops
+being scene-local — and it's why that card offers *Not yet* rather than *No*: the fiction isn't
+being rejected, the line just hasn't given.
+
+**World arc says who knows.** A character's arc is theirs; a world's is everyone's. Two answers
+cover almost everything: *everyone* (common knowledge, and what fixes the off-screen problem — the
+fact is simply present the next time they turn up) and *whoever was there*. The second is why the
+`Audience` scene case could land here and couldn't on authored canon: arc is the one thing with a
+source scene. It's expanded at fold time, unlike a group, and the difference is the point — a
+scene's cast is finished history and can't change, so resolving it once is safe.
+
+**Group arc fans out** (§3.0b): one proposal against the template, one per current member, each its
+own yes or no. Nothing propagates silently — six members is six things to say yes or no to, not one
+switch that rewrites six sheets. Which is what makes dissent free: refuse one member's and you've
+written the person who didn't go along with it, a story beat you'd otherwise author by hand.
+Off-screen members are included, and so is someone who joined by hand and was never seeded, because
+membership is what matters. The screen collapses it to one card with one fast path, expandable when
+it matters.
+
+**The screen** is a tab per subject — reviewing is per-person work, and a flat list makes you
+re-orient on every card. A tab with nothing pending still shows, at zero, so its absence never
+reads as *not extracted yet*. A revision shows what it replaces, struck through, because a
+replacement you can't compare is one you have to take on trust. Accept-all is per subject, which is
+the scope the gate cares about.
+
+Still open and recorded: the async extraction states (*still working it out*, *couldn't be worked
+out — try again*) which need the job's status surfaced, the in-row review at scene setup (§04c), and
+the edit split between correcting the base and adding a new change (§04). Triggers stay unbuilt —
+the mock says so itself; the provenance slot is there so it needn't be retrofitted.
+
 ---
 
 ## Immediate milestone — the backend the frontend design needs
