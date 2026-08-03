@@ -29,7 +29,7 @@ defmodule PolyphonyWeb.PlayDebugLiveTest do
     DebugFlags.set(:events, true)
 
     html = render(view)
-    assert html =~ "raw event stream"
+    assert html =~ "Debug timeline"
     assert html =~ "SceneOpened"
     assert html =~ "CharacterEntered"
   end

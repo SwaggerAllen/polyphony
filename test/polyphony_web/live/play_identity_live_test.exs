@@ -116,9 +116,11 @@ defmodule PolyphonyWeb.PlayIdentityLiveTest do
 
       {:ok, _author, html} = live(conn, ~p"/play/#{scene}")
 
-      assert html =~ "Wren:"
+      # The design attributes a turn once, at the top of its block, rather than
+      # prefixing every line — so the name appears as the block's heading.
+      assert html =~ ~r{ttl[^>]*>\s*Wren\s*<}
       # The reader never sees the routing key.
-      refute html =~ "#{cast["Wren"]}:"
+      refute html =~ ~r{ttl[^>]*>\s*#{cast["Wren"]}\s*<}
     end
 
     test "an unknown whisper target passes through rather than raising", %{
@@ -181,7 +183,7 @@ defmodule PolyphonyWeb.PlayIdentityLiveTest do
 
       # Rendered fresh from the sheet on every load, including for turns committed
       # before the rename — the log stored an id, so there's no stale copy of the name.
-      assert html =~ "Wren Ashgrove:"
+      assert html =~ ~r{ttl[^>]*>\s*Wren Ashgrove\s*<}
       assert html =~ ">Wren Ashgrove</option>"
     end
 
@@ -200,7 +202,7 @@ defmodule PolyphonyWeb.PlayIdentityLiveTest do
         |> render_submit()
 
       assert html =~ "Still here."
-      assert html =~ "Speak as Wren Ashgrove"
+      assert html =~ "What does Wren Ashgrove do?"
     end
   end
 

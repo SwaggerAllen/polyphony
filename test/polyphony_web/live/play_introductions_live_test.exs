@@ -38,14 +38,17 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
   test "the introduction queue is author-only (omniscient)", %{conn: conn} do
     scene = scene_with_proposal("Bram", "he's owed a debt")
 
-    {:ok, _author, author_html} = live(conn, ~p"/play/#{scene}")
-    assert author_html =~ "New characters to bring on"
+    {:ok, author, _html} = live(conn, ~p"/play/#{scene}")
+    author_html = author |> element("button[phx-click=toggle_intros]") |> render_click()
+    assert author_html =~ "The Director suggests"
     assert author_html =~ "Bram"
     assert author_html =~ "he&#39;s owed a debt"
 
-    # A character viewer must never see the pending introduction (irony guarantee).
+    # A character viewer must never see the pending introduction (irony guarantee) —
+    # and has no GM bar to open it from either.
     {:ok, _mira, mira_html} = live(conn, ~p"/play/#{scene}?as=mira")
-    refute mira_html =~ "New characters to bring on"
+    refute mira_html =~ "toggle_intros"
+    refute mira_html =~ "The Director suggests"
     refute mira_html =~ "he&#39;s owed a debt"
   end
 
@@ -54,15 +57,17 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
     bram = character(user, "Bram")
     scene = scene_with_proposal("Bram")
 
-    {:ok, view, html} = live(conn, ~p"/play/#{scene}")
+    {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+    html = view |> element("button[phx-click=toggle_intros]") |> render_click()
     # Existing full character → one-click Admit.
     assert html =~ "Admit"
 
     view |> element("button[phx-click=intro_admit][phx-value-name=Bram]") |> render_click()
 
     html = render(view)
-    # Proposal gone — matched by *name* even though he entered by id (§5.2).
-    refute html =~ "New characters to bring on"
+    # Proposal gone — matched by *name* even though he entered by id (§5.2). With
+    # nothing left to suggest, the drawer's button goes too.
+    refute html =~ "toggle_intros"
     # Bram is a scene member: offered in the viewing-as roster keyed by his library
     # id, labelled with his name. The value is what routes; the label is what reads.
     assert html =~ ~s(<option value="#{bram.id}")
@@ -73,8 +78,9 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
        %{conn: conn, user: user} do
     scene = scene_with_proposal("Ghost")
 
-    {:ok, view, html} = live(conn, ~p"/play/#{scene}")
-    assert html =~ "Generate &amp; admit"
+    {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+    html = view |> element("button[phx-click=toggle_intros]") |> render_click()
+    assert html =~ "Write &amp; admit"
 
     view |> element("button[phx-click=intro_generate][phx-value-name=Ghost]") |> render_click()
     render_async(view)
@@ -93,10 +99,12 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
     scene = scene_with_proposal("Bram")
 
     {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+    view |> element("button[phx-click=toggle_intros]") |> render_click()
     view |> element("button[phx-click=intro_dismiss][phx-value-name=Bram]") |> render_click()
 
     html = render(view)
-    refute html =~ "New characters to bring on"
+    # Nothing left to suggest, so the drawer's own button goes with the proposal.
+    refute html =~ "toggle_intros"
     refute html =~ ~s(<option value="Bram")
   end
 end

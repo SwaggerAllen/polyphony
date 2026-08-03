@@ -14,6 +14,18 @@
    element reset and would restyle phoenix_storybook's own chrome, which ships its
    own psb-prefixed CSS and isn't ours to touch. The kit needs no reset of its own. */
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 .visible {
   visibility: visible;
 }
@@ -34,12 +46,30 @@
   position: sticky;
 }
 
+.my-3 {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.my-4 {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.-ml-1 {
+  margin-left: -0.25rem;
+}
+
 .mb-1 {
   margin-bottom: 0.25rem;
 }
 
 .mb-1\.5 {
   margin-bottom: 0.375rem;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem;
 }
 
 .mb-3 {
@@ -70,6 +100,10 @@
   margin-top: 0.5rem;
 }
 
+.mt-2\.5 {
+  margin-top: 0.625rem;
+}
+
 .mt-3 {
   margin-top: 0.75rem;
 }
@@ -98,8 +132,24 @@
   display: none;
 }
 
+.min-h-0 {
+  min-height: 0px;
+}
+
+.w-14 {
+  width: 3.5rem;
+}
+
+.w-full {
+  width: 100%;
+}
+
 .min-w-0 {
   min-width: 0px;
+}
+
+.flex-1 {
+  flex: 1 1 0%;
 }
 
 .shrink-0 {
@@ -110,12 +160,38 @@
   flex-grow: 1;
 }
 
+.appearance-none {
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
 .items-center {
   align-items: center;
 }
 
+.justify-end {
+  justify-content: flex-end;
+}
+
 .justify-between {
   justify-content: space-between;
+}
+
+.gap-0 {
+  gap: 0px;
+}
+
+.gap-0\.5 {
+  gap: 0.125rem;
 }
 
 .gap-1 {
@@ -130,12 +206,20 @@
   gap: 0.5rem;
 }
 
+.gap-2\.5 {
+  gap: 0.625rem;
+}
+
 .gap-3 {
   gap: 0.75rem;
 }
 
 .gap-4 {
   gap: 1rem;
+}
+
+.overflow-y-auto {
+  overflow-y: auto;
 }
 
 .truncate {
@@ -151,6 +235,10 @@
 
 .border {
   border-width: 1px;
+}
+
+.bg-transparent {
+  background-color: transparent;
 }
 
 .p-4 {
@@ -172,9 +260,24 @@
   padding-right: 0.75rem;
 }
 
+.px-3\.5 {
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+}
+
 .px-4 {
   padding-left: 1rem;
   padding-right: 1rem;
+}
+
+.py-1 {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.py-1\.5 {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
 }
 
 .py-2 {
@@ -202,8 +305,16 @@
   padding-bottom: 2rem;
 }
 
+.pl-3 {
+  padding-left: 0.75rem;
+}
+
 .pl-6 {
   padding-left: 1.5rem;
+}
+
+.pt-1 {
+  padding-top: 0.25rem;
 }
 
 .text-center {
@@ -214,8 +325,16 @@
   font-size: 11.5px;
 }
 
+.text-\[11px\] {
+  font-size: 11px;
+}
+
 .text-\[12\.5px\] {
   font-size: 12.5px;
+}
+
+.text-\[12px\] {
+  font-size: 12px;
 }
 
 .text-\[13\.5px\] {
@@ -238,6 +357,10 @@
   font-size: 16px;
 }
 
+.text-\[17px\] {
+  font-size: 17px;
+}
+
 .text-\[18px\] {
   font-size: 18px;
 }
@@ -250,12 +373,12 @@
   font-weight: 600;
 }
 
-.italic {
-  font-style: italic;
-}
-
 .leading-\[1\.55\] {
   line-height: 1.55;
+}
+
+.leading-\[1\.75\] {
+  line-height: 1.75;
 }
 
 .leading-none {
@@ -264,6 +387,10 @@
 
 .leading-relaxed {
   line-height: 1.625;
+}
+
+.tracking-\[\.06em\] {
+  letter-spacing: .06em;
 }
 
 .underline {
@@ -1059,4 +1186,12 @@
   height:12px;
   border-radius:4px;
   background:var(--b3);
+}
+
+.phx-error .\[\.phx-error_\&\]\:flex {
+  display: flex;
+}
+
+.phx-loading .\[\.phx-loading_\&\]\:flex {
+  display: flex;
 }

@@ -43,6 +43,7 @@ defmodule PolyphonyWeb.PlayMentionsLiveTest do
     before = Enum.count(Library.list_for_owner(Owner.of(user)), &(&1.kind == "character"))
 
     {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+    view |> element("button[phx-click=toggle_cast]") |> render_click()
     view |> element("button[phx-click=find_mentions]") |> render_click()
     render_async(view)
 

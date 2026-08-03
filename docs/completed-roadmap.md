@@ -109,6 +109,40 @@ library** — characters, worlds and campaigns are authored work.
 Phase 5 (open `name` and other non-boundary scalars to editing and arc override, now that
 identity is stable) stays open in the backlog.
 
+### The play screen, ported (`ux/polyphony-play.html`)
+The first screen rebuilt on the kit, and the one the design's two registers exist for.
+
+**The register follows the viewer.** A character viewer gets `.page` — reading: wide
+measure, 17px prose, the attribution as small caps in their voice colour, demeanor folded
+into the prose, machinery at the edges. The omniscient author gets `.stage` — working: a
+voice-coloured left inset per turn, gutter labels (Demeanor / Action / Speech / Whisper),
+the control-mode pill, and the pencil-coloured editorial row (Reroll / Edit / Delete). Same
+components, same tokens, different density.
+
+**The author has no composer.** To write a character you become them, which is what the
+perspective control is for; the GM's bar directs instead — Narrate, Cast, Introductions,
+Continue. **Narrate is newly wired**: it dispatches `RecordWorldEvent`, the same event the
+Director emits, so a human-authored world beat is visible to every member and reads as
+fiction rather than as a note to the author.
+
+**The status strip** (`PolyphonyWeb.Play.Strip`) is derived, never stored — the beat
+aggregate already records who took their turn, passed or failed, and the declared turn order
+says who is still to come. It is *filtered like the transcript*: a summary of the cast is
+somewhere dramatic irony could leak with no event leaking, so a character sees slots only
+for people they're in the room with, and when membership can't answer it shows less rather
+than more. Its sentence answers "when do I act" without making anyone count.
+
+Two smaller corrections fell out of the port. A turn is now attributed **once**, at the head
+of its block, so a move no longer repeats the actor's name — which retires the old
+does-it-already-start-with-the-name guess that existed to prevent "Todd Todd". And the beat
+rule is computed in one pass over the sorted transcript rather than each block guessing
+whether it came first, which was drawing the same rule several times.
+
+Connection state is rendered from the classes LiveView already puts on the container
+(`phx-loading` / `phx-error`), so it needs no server state — and because reconnecting
+replays the canonical scene, the copy can promise recovery. Silent when healthy: a permanent
+"everything is fine" light is noise.
+
 ---
 
 ## Immediate milestone — the backend the frontend design needs

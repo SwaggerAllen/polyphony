@@ -337,9 +337,17 @@ The current LiveView is the first-cut UI; the redesign is speced in `ux/` (mocks
   design system has been **deleted**, so **unported screens render unstyled until they're
   rebuilt** — an accepted cost, since the app has no users until the rebuild lands. Their
   LiveViews and tests stay until each replacement lands: they're the record of how a screen
-  drives the domain, and the behaviour the new one must still satisfy. Screens left to
-  rebuild: play, campaign, sheet editor, world bible, arc review, library, browse, settings,
-  admin. The backend prerequisites are the `backend-backlog.md` immediate milestone.
+  drives the domain, and the behaviour the new one must still satisfy. **Play is ported**
+  (detail in `completed-roadmap.md`). Screens left to rebuild: campaign, sheet editor, world
+  bible, arc review, library, browse, settings, admin — plus the app shell (header/nav),
+  which every one of them sits inside. The backend prerequisites are the
+  `backend-backlog.md` immediate milestone.
+
+  Deferred out of the play port, each needing its own design surface or backend wiring:
+  the **audience picker** (`ux/polyphony-audience-picker.html` — an explicit "say it to"
+  control; the `(whisper to NAME: …)` syntax carries it meanwhile), **Pass / draft cards**
+  (the A1 interactive-turn wiring the FE/BE parity audit already tracks as deferred), the
+  redesigned **Introductions panel + character picker**, and the **Set the scene** screen.
 - **Build the play view id-native (finishes the identity migration).** ✅ **Done.** The
   character-identity mint-flip (`backend-backlog.md §5.2`, phases 2b-emit + 3 + 4) landed
   here rather than overhaul-then-discard the current LiveView: characters enter by library

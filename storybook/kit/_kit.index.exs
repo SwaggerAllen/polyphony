@@ -16,6 +16,7 @@ defmodule Storybook.Kit do
   def entry("chk"), do: [name: "Checks"]
   def entry("seg"), do: [name: "Segmented control"]
   def entry("bar"), do: [name: "Progress bar"]
+  def entry("waiting_line"), do: [name: "Waiting line"]
   def entry("info"), do: [name: "Info affordance"]
   def entry("sheet"), do: [name: "Sheets"]
   def entry("row"), do: [name: "Rows"]

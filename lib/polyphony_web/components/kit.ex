@@ -416,11 +416,12 @@ defmodule PolyphonyWeb.Kit do
   attr(:title, :string, required: true)
   attr(:detail, :string, default: nil)
   attr(:class, :string, default: nil)
+  attr(:rest, :global)
   slot(:inner_block)
 
   def fail_move(assigns) do
     ~H"""
-    <div class={["m-fail", @class]}>
+    <div class={["m-fail", @class]} {@rest}>
       <div class="text-[14px] font-semibold mb-1"><%= @title %></div>
       <p :if={@detail} class="text-[13px] leading-relaxed dim"><%= @detail %></p>
       <%= render_slot(@inner_block) %>
@@ -524,6 +525,25 @@ defmodule PolyphonyWeb.Kit do
     <span class="chip-core">
       <span class="dot" style="background:var(--lamp);width:5px;height:5px"></span><%= @label %>
     </span>
+    """
+  end
+
+  @doc """
+  A line saying something is happening right now.
+
+  Lamp, because the kit reserves that colour for *now* — the live turn, the current
+  beat, an unsaved draft. Deliberately a sentence and a dot rather than a spinner:
+  the copy can say *what* is being waited on, which a spinner can't.
+  """
+  attr(:label, :string, required: true)
+  attr(:class, :string, default: nil)
+
+  def waiting_line(assigns) do
+    ~H"""
+    <div class={["flex items-center gap-2 py-1.5", @class]} role="status">
+      <span class="dot" style="background:var(--lamp)"></span>
+      <span class="text-[13px]" style="color:var(--lamp)"><%= @label %></span>
+    </div>
     """
   end
 
