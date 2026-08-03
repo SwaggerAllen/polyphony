@@ -109,6 +109,34 @@ library** — characters, worlds and campaigns are authored work.
 Phase 5 (open `name` and other non-boundary scalars to editing and arc override, now that
 identity is stable) stays open in the backlog.
 
+### The app shell
+Ported before the remaining screens, since every one of them sits inside it — and since the
+play view was already fighting it (a viewport-height layout under a sticky top bar).
+
+The design has **no persistent global chrome**, which is the finding that shaped this: every
+mock is a full-bleed frame with its own header, and the only navigation drawn is a back
+chevron for a drill-down and a `⋯` overflow on the right. So the sticky top bar with its
+brand, links and hamburger is gone with the first-cut system it belonged to, and three kit
+components replace it:
+
+- **`Kit.header/1`** — the kit's own "standard header" spec (`polyphony-kit.html` §05):
+  context small, title, controls top right, overflow last. Every screen with a title uses
+  this markup, which is what makes moving between them feel like one product.
+- **`Kit.menu/1`** — the overflow. Built on `<details>` so it opens without JavaScript and
+  closes on Escape; a menu holding the sign-out link shouldn't need a live connection. The
+  kit draws the closed pill but not the open panel, so that's its own sheet-and-rows rather
+  than a new idea. Contents come from `Layouts.nav_menu/1`, so the set of destinations is
+  defined once.
+- **`Kit.toast/1`** — the flash, as the kit draws it: a dot in one of the three semantics and
+  the action that produced it, with an undo slot for anything reversible. Flashes float over
+  the screen in a pointer-events-none region, because a screen that owns the viewport can't
+  have a banner pushing its bottom bar off.
+
+`<body>` carries the register (`fr stage dark`). That's what gives the document a backdrop
+and working tokens outside any screen's frame — without it the kit's colours resolve to
+nothing and every page renders on browser-default white — and a screen still nests its own
+frame to change register, as play does for a character viewer.
+
 ### The play screen, ported (`ux/polyphony-play.html`)
 The first screen rebuilt on the kit, and the one the design's two registers exist for.
 

@@ -47,6 +47,15 @@ stylesheet to be anything other than the design file. The screens themselves and
 tests **are** kept, as the record of how each one drives the domain; each goes when its
 replacement lands.
 
+**The shell is thin, by design.** There is no persistent global chrome: a screen fills the
+viewport and carries its own header (`Kit.header/1` — context small, title, controls top
+right, overflow last), and going elsewhere is that header's back chevron or its overflow
+menu (`Kit.menu/1`, filled by `Layouts.nav_menu/1`). A standing nav bar would cost a row of
+vertical space on every screen of a product whose main surface is a transcript. `<body>`
+carries the register (`fr stage dark`), which is what gives the document a backdrop and
+makes the kit's tokens resolve outside a screen's own frame; a screen nests its own frame
+when it needs a different register, as play does for a character viewer.
+
 Browse the components at **`/storybook`** (`mix phx.server`, then
 <http://localhost:4000/storybook>) — one page per component with its states. It's on in dev
 and test, and elsewhere only with `STORYBOOK=true`. `PolyphonyWeb.StorybookTest` renders

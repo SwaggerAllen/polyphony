@@ -1,6 +1,32 @@
 defmodule PolyphonyWeb.Layouts do
-  @moduledoc "Root + app layouts. Templates are inline (HEEx) to avoid a template dir."
+  @moduledoc """
+  Root + app layouts. Templates are inline (HEEx) to avoid a template dir.
+
+  ## The shell is deliberately thin
+
+  The design has **no persistent global chrome** (`ux/`): a screen fills the
+  viewport and carries its own header, and going elsewhere is that header's back
+  chevron or its overflow menu (`Kit.header/1`, `Kit.menu/1`). A standing nav bar
+  would cost a row of vertical space on every screen of a product whose main
+  surface is a transcript — and on the play screen it would sit above a layout
+  that already accounts for the full viewport.
+
+  So the app layout is a flash region and the screen. What used to be here — a
+  sticky top bar with a brand, links and a hamburger — is gone with the first-cut
+  design system it belonged to.
+
+  ## `<body>` is the frame root
+
+  The kit's tokens are defined by the register classes (`.fr stage dark`), so
+  anything outside a frame has no colours at all. Putting the register on `<body>`
+  gives the document a backdrop, the right type, and working tokens everywhere,
+  and lets a screen nest its own frame to change register — which is exactly what
+  play does when the viewer is a character (`.page`, reading) rather than the
+  author (`.stage`, working).
+  """
   use PolyphonyWeb, :html
+
+  alias PolyphonyWeb.Kit
 
   def render("root.html", assigns) do
     ~H"""
@@ -27,7 +53,9 @@ defmodule PolyphonyWeb.Layouts do
         <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
         </script>
       </head>
-      <body>
+      <%!-- The register on the body is the document's backdrop and token source; a
+            screen nests its own frame when it needs a different one. --%>
+      <body class="fr stage dark min-h-[100dvh]">
         <%= @inner_content %>
         <%= if debug_drawer?() && assigns[:conn] do %>
           <%= live_render(@conn, PolyphonyWeb.DebugDrawerLive, id: "debug-drawer", sticky: true) %>
@@ -41,31 +69,34 @@ defmodule PolyphonyWeb.Layouts do
     assigns = assign_new(assigns, :current_user, fn -> nil end)
 
     ~H"""
-    <header class="topbar">
-      <a class="brand" href={~p"/"}>Polyphony</a>
-      <div class="spacer"></div>
-      <nav class="topnav">
-        <input type="checkbox" id="nav-toggle" class="nav-toggle-cb" />
-        <label for="nav-toggle" class="nav-toggle" aria-label="Menu" title="Menu">☰</label>
-        <div class="nav-links">
-          <%= if @current_user do %>
-            <a href={~p"/library"}>Library</a>
-            <a href={~p"/settings"}>Settings</a>
-            <%= if @current_user.role in ["admin", "superadmin"] do %>
-              <a href={~p"/admin"}>Admin</a>
-            <% end %>
-            <a href={~p"/logout"}>@<%= @current_user.username %> · out</a>
-          <% else %>
-            <a href={~p"/login"}>Sign in</a>
-          <% end %>
-        </div>
-      </nav>
-    </header>
+    <%!-- Flashes float over the screen rather than displacing it: a screen that owns
+          the viewport can't have a banner pushing its bottom bar off. --%>
+    <div id="flash" class="fixed inset-x-0 top-0 z-50 p-3 flex flex-col gap-2 pointer-events-none">
+      <.flash kind={:info} flash={@flash} />
+      <.flash kind={:error} flash={@flash} />
+    </div>
 
-    <main class="wrap">
-      <.flash_group flash={@flash} />
-      <%= @inner_content %>
-    </main>
+    <main><%= @inner_content %></main>
+    """
+  end
+
+  @doc """
+  The overflow menu's contents — everywhere that isn't this screen.
+
+  Lives here rather than in each screen so the set of destinations is defined once;
+  a screen decides *whether* to show a menu, not what's in it.
+  """
+  attr(:current_user, :map, default: nil)
+
+  def nav_menu(assigns) do
+    ~H"""
+    <Kit.menu :if={@current_user}>
+      <:item navigate={~p"/library"}>Your stuff</:item>
+      <:item navigate={~p"/browse"}>Browse published</:item>
+      <:item navigate={~p"/settings"}>Settings</:item>
+      <:item :if={@current_user.role in ["admin", "superadmin"]} navigate={~p"/admin"}>Admin</:item>
+      <:item href={~p"/logout"}>Sign out, @<%= @current_user.username %></:item>
+    </Kit.menu>
     """
   end
 

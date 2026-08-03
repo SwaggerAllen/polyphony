@@ -8,6 +8,8 @@ defmodule Storybook.Kit do
   # the idiom the product is built around, then controls, then the surfaces that
   # compose them.
   def entry("frame"), do: [name: "Frame & registers"]
+  def entry("header"), do: [name: "Screen header"]
+  def entry("menu"), do: [name: "Overflow menu"]
   def entry("viewas"), do: [name: "Perspective control"]
   def entry("btn"), do: [name: "Buttons"]
   def entry("pill"), do: [name: "Pills"]
@@ -29,6 +31,7 @@ defmodule Storybook.Kit do
   def entry("strip"), do: [name: "Status strip"]
   def entry("marked"), do: [name: "Marked list items"]
   def entry("chip_core"), do: [name: "Always-in-mind chip"]
+  def entry("toast"), do: [name: "Toasts"]
   def entry("empty"), do: [name: "Empty state"]
   def entry("skel"), do: [name: "Skeleton"]
 end

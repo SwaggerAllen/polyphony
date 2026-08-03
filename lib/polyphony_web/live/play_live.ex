@@ -44,6 +44,7 @@ defmodule PolyphonyWeb.PlayLive do
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Scene.Cast
   alias PolyphonyWeb.Kit
+  alias PolyphonyWeb.Layouts
   alias PolyphonyWeb.Play.Strip
   alias PolyphonyWeb.Voice
   alias Polyphony.Authoring.Effective
@@ -1368,12 +1369,10 @@ defmodule PolyphonyWeb.PlayLive do
       class="flex flex-col min-h-0"
       style="height:100dvh"
     >
-      <div class="row shrink-0 flex items-center justify-between gap-3 px-4 py-3">
-        <div class="min-w-0">
-          <div class="lbl dim"><%= @campaign_name %></div>
-          <div class="ttl text-[16px] mt-0.5 truncate font-semibold"><%= @scene_title %></div>
-        </div>
-        <div class="flex items-center gap-1.5 shrink-0">
+      <%!-- The kit's standard header: context small, the scene's location as the
+            title, perspective control top right, overflow last. --%>
+      <Kit.header title={@scene_title} eyebrow={@campaign_name}>
+        <:actions>
           <form id="viewer-form" phx-change="view_as">
             <label for="viewer-select" class="sr-only">Viewing as</label>
             <select
@@ -1386,8 +1385,9 @@ defmodule PolyphonyWeb.PlayLive do
               <option :for={c <- @roster} value={c} selected={@viewer == {:character, c}}><%= name_of(@cast, c) %></option>
             </select>
           </form>
-        </div>
-      </div>
+          <Layouts.nav_menu current_user={@current_user} />
+        </:actions>
+      </Kit.header>
 
       <%!-- Connection. Silent when healthy: a permanent "everything is fine" light is
             noise and trains people to stop reading the one place that matters. These

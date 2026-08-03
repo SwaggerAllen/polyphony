@@ -64,6 +64,124 @@ defmodule PolyphonyWeb.Kit do
     """
   end
 
+  @doc """
+  The standard screen header.
+
+  The kit draws this once and says how it reads: *campaign name small, scene
+  location as the title, perspective control top right, overflow last*. Every
+  screen with a title uses this markup — play, the published reading screen, the
+  library, the campaign editor, admin — which is what makes moving between them
+  feel like one product rather than several.
+
+  There is deliberately **no persistent global navigation** in this design. A
+  screen fills the viewport and carries its own header; going elsewhere is the
+  `back` chevron for a drill-down, or the overflow `menu/1` on the right. A
+  standing nav bar would cost a row of vertical space on every screen, on a
+  product whose main surface is a transcript.
+  """
+  attr(:title, :string, required: true)
+  attr(:eyebrow, :string, default: nil, doc: "the context above the title — a campaign name")
+  attr(:back, :string, default: nil, doc: "where the ‹ chevron goes; omitted without one")
+  attr(:back_label, :string, default: "Back")
+  attr(:class, :string, default: nil)
+  slot(:actions, doc: "controls on the right — perspective control first, overflow last")
+
+  def header(assigns) do
+    ~H"""
+    <div
+      class={["row shrink-0 flex items-center justify-between gap-2 px-4 py-3", @class]}
+      style="background:var(--b2)"
+    >
+      <div class="flex items-center gap-2 min-w-0">
+        <.link :if={@back} navigate={@back} class="dim text-[15px] leading-none" aria-label={@back_label}>
+          ‹
+        </.link>
+        <div class="min-w-0">
+          <div :if={@eyebrow} class="lbl dim"><%= @eyebrow %></div>
+          <div class={["ttl truncate font-semibold", if(@eyebrow, do: "text-[15px] mt-0.5", else: "text-[17px]")]}>
+            <%= @title %>
+          </div>
+        </div>
+      </div>
+      <div :if={@actions != []} class="flex items-center gap-1.5 shrink-0">
+        <%= render_slot(@actions) %>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  The overflow menu — the `⋯` at the end of a header.
+
+  Where everything that isn't this screen lives, since the design has no standing
+  navigation. Built on `<details>` so it opens without JavaScript and closes with
+  Escape for free; a menu that needs a live connection to open would be the wrong
+  thing to put a sign-out link in.
+
+  The kit draws the closed affordance (a `.pill`) but not the open state, so the
+  panel below is the kit's own sheet-and-rows applied to it rather than a new idea.
+  """
+  attr(:label, :string, default: "More")
+  attr(:class, :string, default: nil)
+
+  slot :item, doc: "one destination" do
+    attr(:navigate, :string)
+    attr(:href, :string)
+    attr(:method, :string)
+  end
+
+  def menu(assigns) do
+    ~H"""
+    <details class={["relative", @class]}>
+      <summary class="pill list-none cursor-pointer" aria-label={@label}>⋯</summary>
+      <nav
+        class="sheet absolute right-0 top-full mt-1 z-20 min-w-[11rem] overflow-hidden"
+        style="background:var(--b2)"
+      >
+        <.link
+          :for={i <- @item}
+          navigate={i[:navigate]}
+          href={i[:href]}
+          method={i[:method]}
+          class="row block px-4 py-2.5 text-[13px]"
+        >
+          <%= render_slot(i) %>
+        </.link>
+      </nav>
+    </details>
+    """
+  end
+
+  @doc """
+  A toast: something just happened, named by the action that produced it.
+
+  The kit's rule is that a toast names the action ("Published", "Moved to
+  walk-ons") rather than announcing success in the abstract, and that anything
+  reversible carries its undo. `kind` picks the dot: `:ok` done, `:working` now,
+  `:error` a correction — the same three semantics the rest of the kit uses.
+  """
+  attr(:kind, :atom, default: :ok, values: [:ok, :working, :error])
+  attr(:class, :string, default: nil)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+  slot(:action, doc: "an undo, or whatever reverses it")
+
+  def toast(assigns) do
+    ~H"""
+    <div class={["sheet p-3 flex items-center justify-between gap-2", @class]} role="status" {@rest}>
+      <span class="flex items-center gap-2 min-w-0">
+        <span class="dot" style={"background:#{toast_colour(@kind)}"}></span>
+        <span class="text-[13px]"><%= render_slot(@inner_block) %></span>
+      </span>
+      <%= render_slot(@action) %>
+    </div>
+    """
+  end
+
+  defp toast_colour(:working), do: "var(--lamp)"
+  defp toast_colour(:error), do: "var(--pencil)"
+  defp toast_colour(:ok), do: "var(--ok)"
+
   # ── The perspective control ────────────────────────────────────────────────
 
   @doc """

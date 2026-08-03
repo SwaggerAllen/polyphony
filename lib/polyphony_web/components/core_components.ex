@@ -1,19 +1,23 @@
 defmodule PolyphonyWeb.CoreComponents do
-  @moduledoc "A lean set of shared function components (hand-written, no generators)."
+  @moduledoc """
+  A lean set of shared function components (hand-written, no generators).
+
+  Anything with a visual identity belongs in `PolyphonyWeb.Kit`, ported from the
+  design. What's left here is the glue between Phoenix's conventions and those
+  components — the flash, which has to read `Phoenix.Flash` before it can be a
+  toast.
+  """
   use Phoenix.Component
 
-  @doc "Render the info/error flash messages."
-  attr(:flash, :map, default: %{})
+  alias PolyphonyWeb.Kit
 
-  def flash_group(assigns) do
-    ~H"""
-    <div id="flash">
-      <.flash kind={:info} flash={@flash} />
-      <.flash kind={:error} flash={@flash} />
-    </div>
-    """
-  end
+  @doc """
+  A flash message, as the kit's toast.
 
+  Dismissible by tapping it, which is also why it's `pointer-events-auto` inside
+  the layout's pass-through overlay: the region ignores clicks so it can't block
+  the screen underneath, and only the toast itself takes them back.
+  """
   attr(:kind, :atom, required: true)
   attr(:flash, :map, required: true)
 
@@ -21,30 +25,25 @@ defmodule PolyphonyWeb.CoreComponents do
     assigns = assign(assigns, :msg, Phoenix.Flash.get(assigns.flash, assigns.kind))
 
     ~H"""
-    <div :if={@msg} class={"flash #{@kind}"} role="alert" phx-click={"lv:clear-flash"} phx-value-key={@kind}>
+    <Kit.toast
+      :if={@msg}
+      kind={if @kind == :error, do: :error, else: :ok}
+      class="pointer-events-auto cursor-pointer mx-auto w-full max-w-md"
+      role="alert"
+      phx-click="lv:clear-flash"
+      phx-value-key={@kind}
+    >
       <%= @msg %>
-    </div>
+    </Kit.toast>
     """
   end
 
-  @doc "A visibility badge for a library entry."
+  @doc "A visibility badge for a library entry. Unported — see `Kit.pill/1`."
   attr(:visibility, :string, required: true)
 
   def visibility_badge(assigns) do
     ~H"""
     <span class={"badge #{@visibility}"}><%= @visibility %></span>
-    """
-  end
-
-  @doc "One of the three distinct scene waiting states (FS principle)."
-  attr(:state, :string, required: true)
-  attr(:label, :string, required: true)
-
-  def waiting(assigns) do
-    ~H"""
-    <div class={"waiting #{@state}"}>
-      <span class="dot"></span><span><%= @label %></span>
-    </div>
     """
   end
 end

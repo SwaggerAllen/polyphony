@@ -339,8 +339,9 @@ The current LiveView is the first-cut UI; the redesign is speced in `ux/` (mocks
   LiveViews and tests stay until each replacement lands: they're the record of how a screen
   drives the domain, and the behaviour the new one must still satisfy. **Play is ported**
   (detail in `completed-roadmap.md`). Screens left to rebuild: campaign, sheet editor, world
-  bible, arc review, library, browse, settings, admin — plus the app shell (header/nav),
-  which every one of them sits inside. The backend prerequisites are the
+  bible, arc review, library, browse, settings, admin. The **app shell is ported** — there is
+  no global nav bar; a screen owns the viewport and carries `Kit.header/1` with the overflow
+  menu. The backend prerequisites are the
   `backend-backlog.md` immediate milestone.
 
   Deferred out of the play port, each needing its own design surface or backend wiring:
