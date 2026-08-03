@@ -39,6 +39,10 @@ defmodule PolyphonyWeb.Router do
     plug(:put_dashboard_nonce)
   end
 
+  pipeline :mailbox do
+    plug(:allow_mailbox)
+  end
+
   pipeline :browser do
     plug(:accepts, ["html"])
     plug(:fetch_session)
@@ -113,15 +117,17 @@ defmodule PolyphonyWeb.Router do
     )
   end
 
-  # The sent-mail viewer (Swoosh's Local adapter). Compiled in only where
-  # `:dev_mailbox` is on — dev, and nowhere else by default — because it renders every
-  # message the app has sent, magic links included. The `false` default is the point:
-  # this route must have to be switched on, never merely fail to be switched off.
-  if Application.compile_env(:polyphony, :dev_mailbox, false) do
-    scope "/dev" do
-      pipe_through(:browser)
-      forward("/mailbox", Plug.Swoosh.MailboxPreview)
-    end
+  # The sent-mail viewer (Swoosh's Local adapter). It renders every message the app has
+  # sent, **magic links included**, so `:mailbox` below decides per request whether it
+  # exists at all: open in dev, HTTP Basic auth in prod, and 404 when neither is
+  # configured.
+  #
+  # Gated at runtime rather than compiled out, because a release has to be able to
+  # serve it when `MAILBOX_PASSWORD` is set — and a compile-time flag is fixed at image
+  # build, long before anyone decides to turn it on.
+  scope "/dev" do
+    pipe_through([:browser, :mailbox])
+    forward("/mailbox", Plug.Swoosh.MailboxPreview)
   end
 
   # The design-kit catalogue. Compiled in only where :storybook is on — dev by
@@ -136,6 +142,23 @@ defmodule PolyphonyWeb.Router do
     scope "/", PolyphonyWeb do
       pipe_through(:browser)
       live_storybook("/storybook", backend_module: PolyphonyWeb.Storybook)
+    end
+  end
+
+  # Basic auth rather than `require_admin`, deliberately: the moment you need to read a
+  # sign-in link is the moment you are not signed in, so an admin gate would lock the
+  # door with the key inside. Unconfigured is a 404 — not a 401 — so an unarmed
+  # deployment doesn't advertise that the viewer exists.
+  defp allow_mailbox(conn, _opts) do
+    cond do
+      Application.get_env(:polyphony, :dev_mailbox, false) ->
+        conn
+
+      credentials = Application.get_env(:polyphony, :mailbox_auth) ->
+        Plug.BasicAuth.basic_auth(conn, credentials)
+
+      true ->
+        conn |> Plug.Conn.send_resp(404, "Not found") |> Plug.Conn.halt()
     end
   end
 

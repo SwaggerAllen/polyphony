@@ -106,6 +106,25 @@ on-page link bypasses mail entirely. Both the adapter and the route are dev-only
 the route is compiled in only when `:dev_mailbox` is set, because it displays every
 magic link the app has issued.
 
+### Running without a provider
+
+For a deployment that is still just you, mail can be captured in memory instead of
+sent. Set `MAILBOX_PASSWORD` (and optionally `MAILBOX_USER`, default `polyphony`) and
+leave `SMTP_HOST` unset: the Local adapter takes the mail and `/dev/mailbox` renders
+it, behind HTTP Basic auth.
+
+Basic auth rather than the admin role, deliberately — the moment you need to read a
+sign-in link is the moment you are *not* signed in, so an admin gate would lock the
+door with the key inside. Unset, the route returns 404 rather than 401, so an unarmed
+deployment doesn't advertise that the viewer exists. A configured `SMTP_HOST` always
+wins, so a leftover `MAILBOX_PASSWORD` can't quietly divert real mail into a buffer.
+
+> ⚠ **Anyone with these credentials can read every magic link this node has sent** —
+> which is every account. It is a single-operator bring-up affordance, not a feature.
+> Two other things to know: the store is unbounded and in memory, so it grows until
+> restart and is empty after one; and it is per-node, so with more than one instance
+> you see whichever answered. Move to a provider before anyone else has an account.
+
 ### When the log says `sent` and nothing arrives
 
 A `sent` line means the relay returned a 250 and took the message. It is *theirs*

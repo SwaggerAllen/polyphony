@@ -23,7 +23,7 @@ defmodule Polyphony.MailConfigTest do
   }
 
   @mail_vars ~w(SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_SSL MAIL_FROM
-               MAIL_FROM_NAME POSTMARK_MESSAGE_STREAM)
+               MAIL_FROM_NAME POSTMARK_MESSAGE_STREAM MAILBOX_USER MAILBOX_PASSWORD)
 
   # Reads the real file with a **clean** mail environment each time: the vars are
   # process-global, so anything left behind by a previous case would arm a mailer the
@@ -183,6 +183,44 @@ defmodule Polyphony.MailConfigTest do
       assert get_in(dev, [:polyphony, Polyphony.Mailer])[:adapter] == Swoosh.Adapters.Local
       # `Transport.Email` refuses without one, so dev needs a sender too.
       assert get_in(dev, [:polyphony, :mail_from])
+    end
+
+    test "no provider plus a mailbox password captures mail in memory instead" do
+      config =
+        read_prod(%{"MAILBOX_PASSWORD" => "hunter2", "MAILBOX_USER" => "allen"})
+
+      # The point of this mode: mail is *captured* rather than dropped. Without it the
+      # transport stays on `Transport.Log`, which reports success and sends nothing.
+      assert get_in(config, [:polyphony, Polyphony.Mailer])[:adapter] == Swoosh.Adapters.Local
+
+      assert get_in(config, [:polyphony, :notification_transport]) ==
+               Polyphony.Notifications.Transport.Email
+
+      assert get_in(config, [:polyphony, :mailbox_auth]) == [
+               username: "allen",
+               password: "hunter2"
+             ]
+    end
+
+    test "a real provider wins over the in-memory mailbox" do
+      config =
+        read_prod(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "MAIL_FROM" => "a@e.com",
+          "MAILBOX_PASSWORD" => "hunter2"
+        })
+
+      # Otherwise a leftover MAILBOX_PASSWORD would silently divert real mail into a
+      # buffer nobody reads.
+      assert get_in(config, [:polyphony, Polyphony.Mailer])[:adapter] == Swoosh.Adapters.SMTP
+      refute get_in(config, [:polyphony, :mailbox_auth])
+    end
+
+    test "without a password there is no mailbox and no capture" do
+      config = read_prod(%{})
+
+      refute get_in(config, [:polyphony, :mailbox_auth])
+      refute get_in(config, [:polyphony, :notification_transport])
     end
 
     test "the mail viewer is dev-only, and off unless switched on" do

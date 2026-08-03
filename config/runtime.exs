@@ -175,6 +175,30 @@ if config_env() == :prod do
 
   mail_from = System.get_env("MAIL_FROM")
 
+  # No provider? Capture mail in memory and let it be read at `/dev/mailbox`, behind
+  # HTTP Basic auth from `MAILBOX_USER` / `MAILBOX_PASSWORD`.
+  #
+  # Basic auth rather than `require_admin`, and that is the whole design: the moment
+  # you need to read a sign-in link is the moment you are *not* signed in, so an
+  # admin gate would lock the door with the key inside. Unset means the route 404s.
+  #
+  # ⚠ Anyone with these credentials can read every magic link this node has sent, which
+  # is every account. It is a single-operator bring-up affordance, not a feature — set
+  # a real password, and prefer a provider once anyone else has an account.
+  mailbox_password = System.get_env("MAILBOX_PASSWORD")
+
+  if smtp_host in [nil, ""] and mailbox_password not in [nil, ""] do
+    config :polyphony, Polyphony.Mailer, adapter: Swoosh.Adapters.Local
+    config :polyphony, :mail_from, mail_from || "polyphony@localhost"
+    config :polyphony, :notification_transport, Polyphony.Notifications.Transport.Email
+
+    config :polyphony, :mailbox_auth,
+      username: System.get_env("MAILBOX_USER") || "polyphony",
+      password: mailbox_password
+
+    IO.puts("[boot] mail captured in memory; readable at /dev/mailbox (basic auth)")
+  end
+
   if smtp_host not in [nil, ""] and mail_from not in [nil, ""] do
     config :polyphony, Polyphony.Mailer,
       adapter: Swoosh.Adapters.SMTP,
