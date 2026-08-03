@@ -211,6 +211,18 @@ if config_env() == :prod do
       # publish MX records, would send the mail somewhere else entirely.
       no_mx_lookups: true
 
+    # Postmark routes by **message stream**, and the header naming it is the difference
+    # between a message landing on the transactional stream and landing somewhere you
+    # aren't watching. Defaulted for a Postmark relay rather than for everyone, since
+    # it is a vendor header; `POSTMARK_MESSAGE_STREAM` overrides for a custom stream.
+    message_stream =
+      System.get_env("POSTMARK_MESSAGE_STREAM") ||
+        if String.ends_with?(smtp_host, "postmarkapp.com"), do: "outbound"
+
+    if message_stream do
+      config :polyphony, :mail_headers, %{"X-PM-Message-Stream" => message_stream}
+    end
+
     config :polyphony, :mail_from, mail_from
     config :polyphony, :mail_from_name, System.get_env("MAIL_FROM_NAME") || "Polyphony"
     config :polyphony, :notification_transport, Polyphony.Notifications.Transport.Email

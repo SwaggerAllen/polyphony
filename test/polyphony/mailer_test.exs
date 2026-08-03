@@ -15,7 +15,9 @@ defmodule Polyphony.MailerTest do
   set, so the guard failed open. The prod-config assertion below is the regression
   test for that, and it reads the real config file rather than trusting a comment.
   """
-  use ExUnit.Case, async: true
+  # Not async: these set application env (`:mail_from`, `:mail_headers`), which is
+  # global — a concurrent module would see a vendor header it never configured.
+  use ExUnit.Case, async: false
 
   import Swoosh.TestAssertions
 
@@ -53,6 +55,32 @@ defmodule Polyphony.MailerTest do
 
       assert_email_sent(fn email ->
         assert email.from == {"Polyphony", "hello@polyphony.test"}
+      end)
+    end
+
+    test "configured provider headers are carried on the message" do
+      Application.put_env(:polyphony, :mail_headers, %{"X-PM-Message-Stream" => "outbound"})
+      on_exit(fn -> Application.delete_env(:polyphony, :mail_headers) end)
+
+      assert {:ok, _} = Transport.Email.deliver_email("r@example.com", "Subject", "Body")
+
+      # Postmark routes by stream. Without this the message is accepted and delivered
+      # on whatever the server's default is, which may not be the one being watched.
+      assert_email_sent(fn email ->
+        assert email.headers["X-PM-Message-Stream"] == "outbound"
+      end)
+    end
+
+    test "no configured headers means none added" do
+      Application.delete_env(:polyphony, :mail_headers)
+
+      assert {:ok, _} = Transport.Email.deliver_email("r@example.com", "Subject", "Body")
+
+      # The transport is SMTP-generic: it must not name a vendor unless told to.
+      # Asserted rather than refuted: `assert_email_sent/1` requires its function to
+      # return something truthy, and a passing `refute` returns nil.
+      assert_email_sent(fn email ->
+        assert Map.get(email.headers, "X-PM-Message-Stream") == nil
       end)
     end
 
