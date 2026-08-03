@@ -47,10 +47,10 @@ defmodule PolyphonyWeb.CampaignSceneGateLiveTest do
     {camp, mira_id} = campaign_with_ready_cast(user)
     propose_arc(mira_id)
 
-    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
 
     assert {:error, {:redirect, %{to: path}}} =
-             view |> element("button", "Start a scene") |> render_click()
+             view |> element("button[phx-click=start_scene]") |> render_click()
 
     assert path == "/arc/#{camp.id}"
 
@@ -61,10 +61,10 @@ defmodule PolyphonyWeb.CampaignSceneGateLiveTest do
   test "with no pending arc, starting a scene opens play", %{conn: conn, user: user} do
     {camp, _mira_id} = campaign_with_ready_cast(user)
 
-    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
 
     assert {:error, {:redirect, %{to: path}}} =
-             view |> element("button", "Start a scene") |> render_click()
+             view |> element("button[phx-click=start_scene]") |> render_click()
 
     assert path =~ "/play/"
     assert [<<"sc-", _::binary>>] = Library.payload(Library.get(camp.id))[:scenes]
@@ -76,10 +76,10 @@ defmodule PolyphonyWeb.CampaignSceneGateLiveTest do
 
     ArcRM.accept(Repo, row.id)
 
-    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
 
     assert {:error, {:redirect, %{to: path}}} =
-             view |> element("button", "Start a scene") |> render_click()
+             view |> element("button[phx-click=start_scene]") |> render_click()
 
     assert path =~ "/play/"
   end

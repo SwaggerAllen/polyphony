@@ -81,6 +81,7 @@ defmodule PolyphonyWeb.Kit do
   """
   attr(:title, :string, required: true)
   attr(:eyebrow, :string, default: nil, doc: "the context above the title — a campaign name")
+  attr(:subtitle, :string, default: nil, doc: "the meta line under the title — counts, status")
   attr(:back, :string, default: nil, doc: "where the ‹ chevron goes; omitted without one")
   attr(:back_label, :string, default: "Back")
   attr(:class, :string, default: nil)
@@ -101,6 +102,7 @@ defmodule PolyphonyWeb.Kit do
           <div class={["ttl truncate font-semibold", if(@eyebrow, do: "text-[15px] mt-0.5", else: "text-[17px]")]}>
             <%= @title %>
           </div>
+          <div :if={@subtitle} class="lbl dim mt-0.5"><%= @subtitle %></div>
         </div>
       </div>
       <div :if={@actions != []} class="flex items-center gap-1.5 shrink-0">

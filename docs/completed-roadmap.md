@@ -137,6 +137,34 @@ and working tokens outside any screen's frame — without it the kit's colours r
 nothing and every page renders on browser-default white — and a screen still nests its own
 frame to change register, as play does for a character viewer.
 
+### The campaign screen, ported (`ux/polyphony-campaign.html`)
+The hub, and the screen the design pass changed most: one long scroll of every setting
+became **tabs** — Settings · World · Cast · Premise · Scenes — because almost none of it is
+needed at once. The tab lives in the URL, so a section is linkable and back works between
+them.
+
+Two of the mock's decisions are load-bearing and both are argued in `ux/README.md`. **Quick
+Build isn't a tab**: it's a one-shot that would be dead weight from a campaign's second day,
+so it's a first-run card that folds away. And **Premise comes after Cast**, because the
+pitch is written *from* the cast — which is also what its Expand reads.
+
+**Groups is not built.** The mock has the tab; the backend has no group feature (§3.0b is
+still a backlog item), and a tab that leads nowhere is worse than an absent one. It goes in
+with groups.
+
+Two bugs came out of the port:
+
+- **Partial saves wiped fields.** `update_details` wrote `params["name"] || ""` and
+  `params["premise"] || ""` on every change. With one form that was survivable; with a form
+  per tab it would have blanked the campaign name every time the premise changed. It now
+  merges only the keys a form actually submitted, and the tuning block is only rewritten
+  when its own fields are present (detected on a number input, since an unchecked checkbox
+  submits nothing). Pinned by a test that edits the two on different tabs.
+- **The cast was ordered by the library query**, not by the campaign's own
+  `character_ids`. Voice colours are assigned by cast order and have to be stable — the same
+  character is the same hue on this screen, in the transcript and in the status strip — so
+  creating an unrelated character could have reshuffled everyone's colour.
+
 ### The play screen, ported (`ux/polyphony-play.html`)
 The first screen rebuilt on the kit, and the one the design's two registers exist for.
 

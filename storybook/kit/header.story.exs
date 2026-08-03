@@ -35,6 +35,13 @@ defmodule Storybook.Kit.Header do
         slots: [~s|<:actions><button class="btn btn-pri btn-sm">New campaign</button></:actions>|]
       },
       %Variation{
+        id: :with_meta,
+        description:
+          "A meta line under the title instead — what the campaign screen needs, where the counts are the context rather than a parent.",
+        attributes: %{title: "The Salt Line", subtitle: "Saltmarch · 5 cast · 3 scenes"},
+        slots: [~s|<:actions><span class="pill dim">Private</span></:actions>|]
+      },
+      %Variation{
         id: :drill_down,
         description:
           "The back chevron is how you leave a screen you drilled into — there is no standing navigation to fall back on.",

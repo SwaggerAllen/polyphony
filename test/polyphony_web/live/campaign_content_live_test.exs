@@ -64,7 +64,7 @@ defmodule PolyphonyWeb.CampaignContentLiveTest do
   end
 
   defp start_scene_id(conn, camp) do
-    {:ok, view, _} = live(conn, ~p"/campaigns/#{camp.id}")
+    {:ok, view, _} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
 
     {:error, {:redirect, %{to: path}}} =
       view |> element("button[phx-click=start_scene]") |> render_click()

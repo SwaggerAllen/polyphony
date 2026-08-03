@@ -30,9 +30,11 @@ defmodule PolyphonyWeb.CampaignWorldLiveTest do
 
     camp = campaign(user)
 
-    {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}")
+    {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=world")
     assert html =~ "Neon Bay"
-    assert html =~ "no world attached"
+    # Nothing attached: the selector sits on "— none —" and there is no edit link.
+    assert html =~ ~r{<option value=""[^>]*>— none —}
+    refute html =~ "Edit world"
 
     view
     |> form("form[phx-change=select_world]", %{bible_id: to_string(wb.id)})
@@ -51,7 +53,7 @@ defmodule PolyphonyWeb.CampaignWorldLiveTest do
 
     camp = campaign(user, %{bible_id: wb.id})
 
-    {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}")
+    {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=world")
     assert html =~ ~r/<option value="#{wb.id}"[^>]*selected/
 
     view |> form("form[phx-change=select_world]", %{bible_id: ""}) |> render_change()

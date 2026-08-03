@@ -339,7 +339,9 @@ The current LiveView is the first-cut UI; the redesign is speced in `ux/` (mocks
   LiveViews and tests stay until each replacement lands: they're the record of how a screen
   drives the domain, and the behaviour the new one must still satisfy. **Play is ported**
   (detail in `completed-roadmap.md`). Screens left to rebuild: campaign, sheet editor, world
-  bible, arc review, library, browse, settings, admin. The **app shell is ported** — there is
+  bible, arc review, library, browse, settings, admin — in `ux/README.md`'s own order. Play,
+  the app shell and the campaign hub are done. The campaign's **Groups tab is deliberately
+  absent** until groups exist in the backend (§3.0b). The **app shell is ported** — there is
   no global nav bar; a screen owns the viewport and carries `Kit.header/1` with the overflow
   menu. The backend prerequisites are the
   `backend-backlog.md` immediate milestone.

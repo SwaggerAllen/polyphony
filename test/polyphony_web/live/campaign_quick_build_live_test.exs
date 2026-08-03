@@ -28,10 +28,16 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     Library.put(%{owner: Owner.of(user), kind: "campaign", payload: payload})
   end
 
+  # Quick Build is a first-run card rather than a tab: a one-shot that would be dead
+  # weight from a campaign's second day. It opens on request.
+  defp open_quick_build(view),
+    do: view |> element("button[phx-click=toggle_quick_build]") |> render_click()
+
   test "quick build scaffolds a world, cast, and premise onto the campaign",
        %{conn: conn, user: user} do
     camp = campaign(user)
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+    open_quick_build(view)
 
     # Add a second character row (starts with one), then submit both.
     view |> element("button[phx-click=add_seed]") |> render_click()
@@ -43,7 +49,9 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     })
     |> render_submit()
 
-    html = render_async(view)
+    # Quick Build is a multi-phase generation (world, then each character, then the
+    # premise), so it wants more than the default 100ms even against the Mock.
+    _html = render_async(view, 5_000)
 
     payload = Library.payload(Library.get(camp.id))
     # A world and two characters are attached, and a premise was drafted.
@@ -63,12 +71,15 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
 
     # The cast now renders with edit links into the character editor.
     [cid | _] = payload[:character_ids]
-    assert html =~ ~s(href="/authoring/character/#{cid}")
+    # The built cast shows on its own tab now, each row linking into its sheet.
+    {:ok, _cast_view, cast_html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+    assert cast_html =~ ~s(href="/authoring/character/#{cid}")
   end
 
   test "character rows can be added and removed", %{conn: conn, user: user} do
     camp = campaign(user)
-    {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}")
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+    html = open_quick_build(view)
 
     # Starts with a single row.
     assert length(Regex.scan(~r/name="char_seed\[\]"/, html)) == 1
@@ -91,13 +102,15 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
 
     camp = campaign(user, %{bible_id: bible.id})
 
-    {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}")
+    {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=world")
     assert html =~ ~s(href="/authoring/bible/#{bible.id}")
   end
 
   test "expand deepens the campaign premise", %{conn: conn, user: user} do
     camp = campaign(user, %{premise: "A heist."})
-    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+    # Premise is its own tab now, and sits after Cast — the pitch is written from
+    # the cast, so ordering it earlier invites writing it twice.
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=premise")
 
     view |> element("button[phx-click=expand_premise]") |> render_click()
     render_async(view)

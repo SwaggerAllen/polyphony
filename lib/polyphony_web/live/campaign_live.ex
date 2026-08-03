@@ -14,6 +14,22 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Authoring.{Autofill, CharacterSheet, QuickBuild, Effective, SceneGate}
   alias Polyphony.Events.SceneOpened
   alias Polyphony.Content.CampaignConfig
+  alias PolyphonyWeb.Kit
+  alias PolyphonyWeb.Layouts
+
+  # The campaign's sections, in the design's order. Premise sits after Cast because
+  # the pitch is written *from* the cast (`ux/README.md`), and Quick Build is
+  # deliberately absent — it's a one-shot card, not a section.
+  @tabs [
+    {"settings", "Settings"},
+    {"world", "World"},
+    {"cast", "Cast"},
+    {"premise", "Premise"},
+    {"scenes", "Scenes"}
+  ]
+
+  @doc false
+  def tabs, do: @tabs
   alias Polyphony.Director.SceneBrief
   alias Polyphony.LLM.Settings
 
@@ -31,12 +47,24 @@ defmodule PolyphonyWeb.CampaignLive do
          expanding_premise: false,
          qb_world: "",
          qb_seeds: [""],
-         qb_suggest: true
+         qb_suggest: true,
+         quick_build_open: false,
+         tab: "settings"
        )
        |> load()}
     else
       {:ok, socket |> put_flash(:error, "Campaign not found.") |> redirect(to: ~p"/library")}
     end
+  end
+
+  # The tab lives in the URL, so it's linkable, survives a reload, and back works
+  # between sections of a screen that used to be one long scroll.
+  def handle_params(params, _uri, socket) do
+    {:noreply, assign(socket, tab: tab_param(params["tab"]))}
+  end
+
+  defp tab_param(tab) do
+    if Enum.any?(@tabs, fn {slug, _} -> slug == tab end), do: tab, else: "settings"
   end
 
   defp load(socket) do
@@ -52,8 +80,13 @@ defmodule PolyphonyWeb.CampaignLive do
 
     # The cast references characters by their stable library id — never by name, so a
     # rename can't drop anyone. Names are resolved for display only.
+    # Ordered by the campaign's own list, not the library's. Voice colours are
+    # assigned by cast order and have to be stable — the same character is the same
+    # hue here, in the transcript, and in the status strip — so the order can't come
+    # from a query whose result shifts when an unrelated character is created.
     cast_ids = cast_ids(payload)
-    cast = Enum.filter(owned_chars, &(&1.id in cast_ids))
+    by_id = Map.new(owned_chars, &{&1.id, &1})
+    cast = Enum.flat_map(cast_ids, fn id -> List.wrap(by_id[id]) end)
 
     # Characters that can still be added: owned, not already cast, and — when a world
     # is attached — belonging to that world (or unassigned), so the world scopes the
@@ -77,6 +110,9 @@ defmodule PolyphonyWeb.CampaignLive do
       content: CampaignConfig.from_payload(payload)
     )
   end
+
+  def handle_event("toggle_quick_build", _params, socket),
+    do: {:noreply, assign(socket, quick_build_open: not socket.assigns.quick_build_open)}
 
   def handle_event("select_world", %{"bible_id" => id}, socket) do
     safe(socket, fn ->
@@ -111,26 +147,15 @@ defmodule PolyphonyWeb.CampaignLive do
 
   def handle_event("update_details", params, socket) do
     safe(socket, fn ->
-      defaults = Settings.defaults()
-
-      llm = %{
-        director_thinking: params["director_thinking"] == "true",
-        director_max_tokens:
-          parse_int(params["director_max_tokens"], defaults.director_max_tokens),
-        character_max_tokens:
-          parse_int(params["character_max_tokens"], defaults.character_max_tokens),
-        # Blank ⇒ nil ⇒ the deployment's global default model (DEEPINFRA_MODEL / heavy).
-        model: blank_to_nil(params["model"]),
-        heavy_model: blank_to_nil(params["heavy_model"]),
-        # DeepInfra scheduling tier; Settings coerces an unknown value back to nil.
-        service_tier: blank_to_nil(params["service_tier"])
-      }
-
+      # The screen is tabbed now, so each form carries only its own fields — and a
+      # key that isn't in the params must be left alone rather than blanked. The old
+      # unconditional `params["name"] || ""` would have wiped the name every time the
+      # premise changed.
       payload =
         socket.assigns.payload
-        |> Map.put(:name, params["name"] || "")
-        |> Map.put(:premise, params["premise"] || "")
-        |> Map.put(:llm, llm)
+        |> put_present(:name, params["name"])
+        |> put_present(:premise, params["premise"])
+        |> put_tuning(params)
 
       {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
       {:noreply, socket |> assign(entry: entry) |> load()}
@@ -520,216 +545,485 @@ defmodule PolyphonyWeb.CampaignLive do
   defp seeds_param(str, _fallback) when is_binary(str), do: [str]
   defp seeds_param(_, fallback), do: fallback
 
+  defp put_present(payload, _key, nil), do: payload
+  defp put_present(payload, key, value), do: Map.put(payload, key, value)
+
+  # Model tuning lives on one form; presence is detected on a field that always
+  # submits (a checkbox sends nothing when unchecked, so `director_thinking` can't
+  # be the signal).
+  defp put_tuning(payload, params) do
+    if Map.has_key?(params, "director_max_tokens") do
+      defaults = Settings.defaults()
+
+      Map.put(payload, :llm, %{
+        director_thinking: params["director_thinking"] == "true",
+        director_max_tokens:
+          parse_int(params["director_max_tokens"], defaults.director_max_tokens),
+        character_max_tokens:
+          parse_int(params["character_max_tokens"], defaults.character_max_tokens),
+        # Blank ⇒ nil ⇒ the deployment's global default model (DEEPINFRA_MODEL / heavy).
+        model: blank_to_nil(params["model"]),
+        heavy_model: blank_to_nil(params["heavy_model"]),
+        # DeepInfra scheduling tier; Settings coerces an unknown value back to nil.
+        service_tier: blank_to_nil(params["service_tier"])
+      })
+    else
+      payload
+    end
+  end
+
+  # ── Render ─────────────────────────────────────────────────────────────────────
+  #
+  # Ported from `ux/polyphony-campaign.html`. The screen became **tabbed**: one long
+  # scroll of every setting was the thing the design pass changed most here, because
+  # the campaign is the hub and almost none of it is needed at once.
+  #
+  # Two of the mock's decisions are load-bearing. **Quick Build isn't a tab** — it's
+  # a one-shot that's dead weight from day two, so it appears as a first-run card and
+  # otherwise stays folded away. And **Premise comes after Cast**, because the pitch
+  # is written *from* the cast; ordering it earlier invites writing it twice.
+
   def render(assigns) do
     ~H"""
-    <h1><%= if @payload[:name] in [nil, ""], do: "Untitled campaign", else: @payload[:name] %></h1>
+    <Kit.frame class="flex flex-col min-h-[100dvh]">
+      <Kit.header title={campaign_title(@payload)} subtitle={campaign_meta(assigns)}>
+        <:actions>
+          <Kit.pill><%= String.capitalize(to_string(@entry.visibility)) %></Kit.pill>
+          <Layouts.nav_menu current_user={@current_user} />
+        </:actions>
+      </Kit.header>
 
-    <div class="card">
+      <Kit.tabs>
+        <:tab
+          :for={{slug, label} <- tabs()}
+          patch={~p"/campaigns/#{@entry.id}?#{[tab: slug]}"}
+          on={@tab == slug}
+          todo={unbuilt?(assigns, slug)}
+        >
+          <%= label %>
+        </:tab>
+      </Kit.tabs>
+
+      <div class="flex-1 min-h-0 overflow-y-auto">
+        <.settings_tab :if={@tab == "settings"} {assigns} />
+        <.world_tab :if={@tab == "world"} {assigns} />
+        <.cast_tab :if={@tab == "cast"} {assigns} />
+        <.premise_tab :if={@tab == "premise"} {assigns} />
+        <.scenes_tab :if={@tab == "scenes"} {assigns} />
+      </div>
+    </Kit.frame>
+    """
+  end
+
+  # ── Settings ──────────────────────────────────────────────────────────────────
+
+  defp settings_tab(assigns) do
+    ~H"""
+    <div class="px-4 py-4 space-y-4">
+      <%!-- First run only. The design's own argument for Quick Build being a card and
+            not a tab: it's a one-shot, and a tab for it would be dead weight from the
+            second day of a campaign's life. --%>
+      <div
+        :if={first_run?(assigns)}
+        class="rounded-xl p-4"
+        style="background:color-mix(in srgb,var(--lamp) 10%,transparent);border:1px solid var(--lamp)"
+      >
+        <div class="ttl text-[16px] mb-1 font-semibold">Build the whole thing at once</div>
+        <p class="text-[13px] leading-relaxed dim mb-3">
+          Say as much or as little as you like about the story and get a world, a cast who
+          already know each other, and a pitch. You can change any of it after.
+        </p>
+        <Kit.btn kind={:primary} type="button" phx-click="toggle_quick_build">
+          <%= if @quick_build_open, do: "Not now", else: "Try Quick Build" %>
+        </Kit.btn>
+      </div>
+
+      <.quick_build :if={@quick_build_open} {assigns} />
+
       <form id="campaign-details" phx-change="update_details">
-        <label class="gen-label"><span>Name</span></label>
-        <input type="text" name="name" value={@payload[:name]} placeholder="Name this campaign…" phx-debounce="blur" />
-        <div class="row gen-label">
-          <label>Premise <span class="faint">(what the story is about)</span></label>
-          <span class="spacer"></span>
-          <button
-            type="button"
-            class="btn sm ghost"
-            phx-click="expand_premise"
-            disabled={@expanding_premise}
-            title="Deepen the premise with AI, grounded in the world and cast"
-          >
-            <%= if @expanding_premise, do: "✨ …", else: "✨ Expand" %>
-          </button>
-        </div>
-        <textarea name="premise" phx-debounce="blur"><%= @payload[:premise] %></textarea>
+        <label for="campaign-name" class="lbl dim">Campaign name</label>
+        <input
+          id="campaign-name"
+          type="text"
+          name="name"
+          value={@payload[:name]}
+          placeholder="Name this campaign…"
+          phx-debounce="blur"
+          class="field px-3 py-2.5 text-[14px] w-full mt-1.5"
+        />
+      </form>
 
-        <details style="margin-top:.6rem;">
-          <summary class="faint" style="cursor:pointer;">Model tuning <span class="faint">(advanced — Director &amp; character generation)</span></summary>
-          <label class="row" style="gap:.4rem; margin-top:.4rem;">
-            <input type="checkbox" name="director_thinking" value="true" checked={@llm.director_thinking} style="width:auto;" />
-            <span>Director reasoning (“thinking”) — off keeps the whole budget for the decision JSON</span>
+      <form id="campaign-content" phx-change="update_content">
+        <div class="lbl dim mb-2">What this campaign can contain</div>
+        <Kit.sheet class="px-3.5 py-3">
+          <label class="flex items-center justify-between gap-3 cursor-pointer">
+            <span>
+              <span class="text-[14px] font-semibold block">Adult content</span>
+              <span class="text-[11px] dim">Off by default, even though you can turn it on</span>
+            </span>
+            <input type="checkbox" name="adult_content" value="true" checked={@content.adult_content} class="sr-only peer" />
+            <Kit.sw on={@content.adult_content} />
           </label>
-          <div class="row" style="gap:1rem; margin-top:.4rem; flex-wrap:wrap;">
-            <label>Director max tokens
-              <input type="number" name="director_max_tokens" value={@llm.director_max_tokens} min="256" step="128" phx-debounce="blur" style="width:8rem;" />
-            </label>
-            <label>Character max tokens
-              <input type="number" name="character_max_tokens" value={@llm.character_max_tokens} min="256" step="128" phx-debounce="blur" style="width:8rem;" />
-            </label>
-          </div>
-          <div class="row" style="gap:1rem; margin-top:.4rem; flex-wrap:wrap;">
-            <label style="flex:1; min-width:16rem;">Model <span class="faint">(Director + cast; blank = deployment default)</span>
-              <input type="text" name="model" value={@llm.model} placeholder={@global_models.workhorse || "DEEPINFRA_MODEL"} phx-debounce="blur" style="width:100%;" />
-            </label>
-            <label style="flex:1; min-width:16rem;">Heavy fallback model <span class="faint">(refusal / empty retries)</span>
-              <input type="text" name="heavy_model" value={@llm.heavy_model} placeholder={@global_models.heavy || "DEEPINFRA_MODEL_HEAVY"} phx-debounce="blur" style="width:100%;" />
+
+          <div :if={@content.adult_content} class="space-y-2.5 pt-3 mt-3" style="border-top:1px solid var(--rule)">
+            <label :for={{field, label} <- content_categories()} class="flex items-center justify-between cursor-pointer">
+              <span class="text-[13px]"><%= label %></span>
+              <input type="checkbox" name={field} value="true" checked={Map.get(@content, String.to_existing_atom(field))} class="sr-only" />
+              <Kit.sw on={Map.get(@content, String.to_existing_atom(field))} />
             </label>
           </div>
-          <div class="row" style="gap:1rem; margin-top:.4rem; flex-wrap:wrap;">
-            <label>Service tier <span class="faint">(DeepInfra scheduling)</span>
-              <select name="service_tier" style="width:12rem;">
-                <option value="" selected={@llm.service_tier in [nil, ""]}>Standard (default, 1×)</option>
-                <option value="priority" selected={@llm.service_tier == "priority"}>Priority (jump the queue, 1.5×)</option>
-                <option value="flex" selected={@llm.service_tier == "flex"}>Flex (cheaper, slower, 0.8×)</option>
+
+          <%!-- The ceiling stated in the author's vocabulary, not the config's — the
+                copy rule that the model's words aren't the author's. --%>
+          <div class="rounded-lg px-3 py-2 mt-3" style="background:var(--b3)">
+            <div class="lbl dim mb-0.5">This campaign plays as</div>
+            <div class="text-[13.5px] font-semibold leading-snug"><%= CampaignConfig.label(@content) %></div>
+          </div>
+          <p class="text-[11px] leading-relaxed dim mt-2">
+            A ceiling, not a target. A character's own limits still hold underneath it, and a
+            boundary in a disabled category is forced closed in play (§A5).
+          </p>
+        </Kit.sheet>
+      </form>
+
+      <details>
+        <summary class="lbl dim cursor-pointer">Model tuning</summary>
+        <form id="campaign-tuning" phx-change="update_details" class="mt-2">
+          <Kit.sheet class="px-3.5 py-3 space-y-3">
+            <label class="flex items-center justify-between gap-3 cursor-pointer">
+              <span class="text-[13px]">Director reasoning (“thinking”)</span>
+              <input type="checkbox" name="director_thinking" value="true" checked={@llm.director_thinking} class="sr-only" />
+              <Kit.sw on={@llm.director_thinking} />
+            </label>
+            <div class="flex flex-wrap gap-3">
+              <label class="flex-1 min-w-[8rem]">
+                <span class="lbl dim">Director max tokens</span>
+                <input type="number" name="director_max_tokens" value={@llm.director_max_tokens} min="256" step="128" phx-debounce="blur" class="field px-3 py-2 text-[13px] w-full mt-1" />
+              </label>
+              <label class="flex-1 min-w-[8rem]">
+                <span class="lbl dim">Character max tokens</span>
+                <input type="number" name="character_max_tokens" value={@llm.character_max_tokens} min="256" step="128" phx-debounce="blur" class="field px-3 py-2 text-[13px] w-full mt-1" />
+              </label>
+            </div>
+            <label class="block">
+              <span class="lbl dim">Model</span>
+              <input type="text" name="model" value={@llm.model} placeholder={@global_models.workhorse || "DEEPINFRA_MODEL"} phx-debounce="blur" class="field px-3 py-2 text-[13px] w-full mt-1" />
+            </label>
+            <label class="block">
+              <span class="lbl dim">Heavy fallback model</span>
+              <input type="text" name="heavy_model" value={@llm.heavy_model} placeholder={@global_models.heavy || "DEEPINFRA_MODEL_HEAVY"} phx-debounce="blur" class="field px-3 py-2 text-[13px] w-full mt-1" />
+            </label>
+            <label class="block">
+              <span class="lbl dim">Service tier</span>
+              <select name="service_tier" class="field px-3 py-2 text-[13px] w-full mt-1">
+                <option value="" selected={@llm.service_tier in [nil, ""]}>Standard</option>
+                <option value="priority" selected={@llm.service_tier == "priority"}>Priority — jump the queue</option>
+                <option value="flex" selected={@llm.service_tier == "flex"}>Flex — cheaper, slower</option>
               </select>
             </label>
-          </div>
-          <p class="faint" style="margin-top:.3rem;">
-            Point a campaign at a better-provisioned DeepInfra model, or set <strong>Priority</strong> to schedule ahead of standard traffic, when the default is overloaded (429 <code>engine_overloaded</code>). Takes effect on the next beat.
-          </p>
-        </details>
-      </form>
-
-      <form id="campaign-content" phx-change="update_content" style="margin-top:.8rem;">
-        <label class="row" style="gap:.4rem;">
-          <input type="checkbox" name="adult_content" value="true" checked={@content.adult_content} style="width:auto;" />
-          <span><strong>Allow adult content</strong> <span class="faint">(18+ — the campaign ceiling; off keeps every scene all-ages)</span></span>
-        </label>
-        <div :if={@content.adult_content} class="row" style="gap:1.2rem; margin-top:.4rem; margin-left:1.4rem; flex-wrap:wrap;">
-          <label class="row" style="gap:.35rem;">
-            <input type="checkbox" name="sexual" value="true" checked={@content.sexual} style="width:auto;" />
-            <span>Sexual</span>
-          </label>
-          <label class="row" style="gap:.35rem;">
-            <input type="checkbox" name="graphic_violence" value="true" checked={@content.graphic_violence} style="width:auto;" />
-            <span>Graphic violence</span>
-          </label>
-          <label class="row" style="gap:.35rem;">
-            <input type="checkbox" name="other" value="true" checked={@content.other} style="width:auto;" />
-            <span>Other mature themes</span>
-          </label>
-        </div>
-        <p class="faint" style="margin-top:.3rem;">
-          A character boundary tagged with a category is <strong>forced closed</strong> in play unless that category is enabled here — the campaign ceiling caps characterization, never the reverse (§A5). Currently: <strong><%= CampaignConfig.label(@content) %></strong>. Takes effect on the next scene.
-        </p>
-      </form>
+            <p class="text-[11px] leading-relaxed dim">
+              Point a campaign at a better-provisioned model, or set Priority, when the default
+              is overloaded. Takes effect on the next beat.
+            </p>
+          </Kit.sheet>
+        </form>
+      </details>
     </div>
+    """
+  end
 
-    <details class="card" open={@cast == [] and @bible_id == nil}>
-      <summary class="card-summary">Quick build <span class="faint">(scaffold a world, cast &amp; premise)</span></summary>
-      <p class="dim" style="margin-top:.4rem;">
-        Seed a world and one character per line; we'll generate each — like ✨ Generate-all on
-        every editor — cross-link the cast's relationships, and draft a premise. Everything lands
-        in your Library, ready to open and flesh out.
-      </p>
+  defp quick_build(assigns) do
+    ~H"""
+    <Kit.sheet class="px-3.5 py-3">
       <form id="quick-build" phx-submit="quick_build" phx-change="sync_quick_build">
-        <label>World seed <span class="faint">(setting, tone, a hook)</span></label>
+        <label for="qb-world" class="lbl dim">World seed</label>
         <textarea
+          id="qb-world"
           name="world_seed"
           rows="2"
           phx-debounce="blur"
-          placeholder="e.g. A rain-drowned harbor city where debts are paid in memories."
+          class="field px-3 py-2.5 text-[13px] w-full mt-1.5"
+          placeholder="A rain-drowned harbour city where debts are paid in memories."
         ><%= @qb_world %></textarea>
 
-        <label style="margin-top:.5rem;">Characters <span class="faint">(one concept each)</span></label>
-        <div :for={{seed, i} <- Enum.with_index(@qb_seeds)} class="row rel-add" style="margin-top:.35rem;">
+        <div class="lbl dim mt-3 mb-1.5">Characters — one concept each</div>
+        <div :for={{seed, i} <- Enum.with_index(@qb_seeds)} class="flex gap-1.5 mb-1.5">
           <input
             type="text"
             name="char_seed[]"
             value={seed}
             phx-debounce="blur"
-            placeholder="e.g. a disgraced harbor-master who sold her own past"
-            style="flex:1;"
+            placeholder="a disgraced harbour-master who sold her own past"
+            class="field px-3 py-2 text-[13px] flex-1"
           />
-          <button
-            type="button"
-            class="btn danger sm"
-            phx-click="remove_seed"
-            phx-value-index={i}
-            disabled={length(@qb_seeds) <= 1}
-            title="Remove this character"
-          >
+          <Kit.btn kind={:pen} type="button" phx-click="remove_seed" phx-value-index={i} disabled={length(@qb_seeds) <= 1}>
             ✕
-          </button>
+          </Kit.btn>
         </div>
-        <button type="button" class="btn xs ghost" phx-click="add_seed" style="margin-top:.35rem;">
-          + character
-        </button>
+        <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="add_seed">+ character</Kit.btn>
 
-        <label class="row" style="gap:.4rem; margin-top:.6rem;">
-          <input type="checkbox" name="suggest_offscreen" value="true" checked={@qb_suggest} style="width:auto;" />
-          <span>Also suggest off-screen relationships <span class="faint">(stubs mentors, rivals &amp; family for each character)</span></span>
+        <label class="flex items-center justify-between gap-3 mt-3 cursor-pointer">
+          <span class="text-[13px]">
+            Also suggest off-screen relationships
+            <span class="text-[11px] dim block">Stubs mentors, rivals and family for each character</span>
+          </span>
+          <input type="checkbox" name="suggest_offscreen" value="true" checked={@qb_suggest} class="sr-only" />
+          <Kit.sw on={@qb_suggest} />
         </label>
 
-        <div class="row" style="margin-top:.7rem;">
-          <button class="btn" type="submit" disabled={@building}>
-            <%= if @building, do: "✨ Building…", else: "✨ Quick build" %>
-          </button>
+        <div class="mt-3">
+          <Kit.btn kind={:primary} type="submit" disabled={@building}>
+            <%= if @building, do: "✦ Building…", else: "✦ Quick build" %>
+          </Kit.btn>
         </div>
 
-        <div :if={@building and @build_progress} class="qb-progress" style="margin-top:.6rem;">
-          <div class="qb-track">
-            <div class="qb-fill" style={"width:#{qb_pct(@build_progress)}%"}></div>
-          </div>
-          <span class="faint">
+        <div :if={@building and @build_progress} class="mt-3">
+          <Kit.bar fraction={qb_pct(@build_progress) / 100} />
+          <div class="text-[11px] dim mt-1.5">
             <%= @build_progress.label %>…
-            <span class="qb-count">(<%= min(@build_progress.done + 1, @build_progress.total) %>/<%= @build_progress.total %>)</span>
-          </span>
+            <span class="mono">(<%= min(@build_progress.done + 1, @build_progress.total) %>/<%= @build_progress.total %>)</span>
+          </div>
         </div>
       </form>
-    </details>
+    </Kit.sheet>
+    """
+  end
 
-    <div class="card">
-      <div class="row">
-        <h3>Cast</h3>
-        <div class="spacer"></div>
-        <button class="btn" phx-click="start_scene" disabled={@cast == []}>Start a scene</button>
-        <button class="btn ghost" phx-click="publish" data-confirm="Publish a public snapshot? It exposes the omniscient story.">Publish</button>
+  # ── World ─────────────────────────────────────────────────────────────────────
+
+  defp world_tab(assigns) do
+    ~H"""
+    <div>
+      <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
+        <span class="lbl dim">The world</span>
+        <.link :if={@bible_id} navigate={~p"/authoring/bible/#{@bible_id}"} class="btn btn-gh btn-sm">
+          Edit world
+        </.link>
+      </Kit.row>
+
+      <div class="px-4 py-3.5">
+        <p class="text-[13px] leading-relaxed dim mb-3">
+          The world bible grounds the setting for this campaign's scenes and its published
+          snapshot. Attaching one copies it — a campaign accumulates its own world arc, so two
+          campaigns can't share a bible.
+        </p>
+        <form id="campaign-world" phx-change="select_world">
+          <label for="bible-select" class="sr-only">World</label>
+          <select id="bible-select" name="bible_id" class="field px-3 py-2.5 text-[14px] w-full">
+            <option value="">— none —</option>
+            <option :for={b <- @bibles} value={b.id} selected={@bible_id == b.id}>
+              <%= bible_label_of(b) %>
+            </option>
+          </select>
+        </form>
       </div>
-      <div :if={@cast == []} class="faint">No cast yet — add characters below.</div>
-      <ul class="rel-list">
-        <li :for={c <- @cast} class="row rel-item">
-          <span><%= char_name(c) %></span>
-          <span :if={pending?(c)} class="badge stub">pending</span>
-          <span class="spacer"></span>
-          <a class="btn ghost sm" href={~p"/authoring/character/#{c.id}"}>Edit</a>
-          <button class="btn danger sm" phx-click="remove_character" phx-value-id={c.id}>Remove</button>
-        </li>
-      </ul>
 
-      <form :if={@addable != []} id="add-character" phx-submit="add_character" class="row rel-add">
-        <select name="id" style="flex:1;">
-          <option :for={c <- @addable} value={c.id}><%= char_name(c) %><%= if pending?(c), do: " (pending)", else: "" %></option>
-        </select>
-        <button class="btn" type="submit">Add to cast</button>
-      </form>
-      <p :if={@addable == [] and @cast != []} class="faint">
-        Every one of your characters<span :if={@bible_name}> in <%= @bible_name %></span> is already in the cast.
-      </p>
-      <p :if={@addable == [] and @cast == []} class="faint">
-        No characters available<span :if={@bible_name}> for <%= @bible_name %></span> —
-        create one in the <a href={~p"/library"}>Library</a><span :if={@bible_name}> and attach it to this world</span>.
-      </p>
-    </div>
-
-    <div class="card">
-      <div class="row">
-        <h3>World</h3>
-        <div class="spacer"></div>
-        <a :if={@bible_id} class="btn ghost sm" href={~p"/authoring/bible/#{@bible_id}"}>Edit world</a>
-        <span :if={is_nil(@bible_id)} class="faint">no world attached</span>
-      </div>
-      <p class="dim">The world bible grounds the setting for this campaign's scenes and its published snapshot.</p>
-      <form id="campaign-world" phx-change="select_world">
-        <select name="bible_id" style="width:auto;">
-          <option value="">— none —</option>
-          <option :for={b <- @bibles} value={b.id} selected={@bible_id == b.id}><%= bible_label_of(b) %></option>
-        </select>
-      </form>
-      <p :if={@bibles == []} class="faint">
-        No world bibles yet — create one in the <a href={~p"/library"}>Library</a>.
-      </p>
-    </div>
-
-    <div class="card">
-      <h3>Scenes</h3>
-      <div :if={@scenes == []} class="faint">No scenes yet. Start one above.</div>
-      <ul>
-        <li :for={s <- @scenes}><a href={~p"/play/#{s}"}>Scene <%= String.slice(s, 0, 12) %></a></li>
-      </ul>
+      <Kit.empty :if={@bibles == []} headline="No worlds written yet.">
+        A campaign can play without one, but the Director has less to go on.
+        <:action>
+          <.link navigate={~p"/library"} class="btn btn-pri btn-sm">Go to your stuff</.link>
+        </:action>
+      </Kit.empty>
     </div>
     """
   end
+
+  # ── Cast ──────────────────────────────────────────────────────────────────────
+
+  defp cast_tab(assigns) do
+    ~H"""
+    <div>
+      <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
+        <span class="lbl dim">Cast · <%= length(@cast) %></span>
+        <div class="flex gap-1.5">
+          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={@cast == []}>
+            Set a scene
+          </Kit.btn>
+        </div>
+      </Kit.row>
+
+      <Kit.row :for={{c, i} <- Enum.with_index(@cast)} class="px-4 py-2.5 flex items-center gap-2.5">
+        <span class="av shrink-0" style={"background:#{cast_colour(i)}"}></span>
+        <div class="min-w-0 flex-1">
+          <div class="text-[13.5px] font-semibold"><%= char_name(c) %></div>
+          <div class="text-[11px] dim truncate"><%= char_blurb(c) %></div>
+        </div>
+        <Kit.pill :if={pending?(c)} colour="var(--lamp)">Pending</Kit.pill>
+        <.link navigate={~p"/authoring/character/#{c.id}"} class="btn btn-gh btn-sm shrink-0">Edit</.link>
+        <Kit.btn kind={:pen} size={:sm} phx-click="remove_character" phx-value-id={c.id}>Remove</Kit.btn>
+      </Kit.row>
+
+      <Kit.empty :if={@cast == []} headline="Nobody is in this story yet.">
+        A campaign needs at least one character before a scene can open.
+      </Kit.empty>
+
+      <div :if={@addable != []} class="px-4 py-3" style="background:var(--b2)">
+        <form id="add-character" phx-submit="add_character" class="flex gap-1.5">
+          <label for="add-character-select" class="sr-only">Add a character</label>
+          <select id="add-character-select" name="id" class="field px-3 py-2 text-[13px] flex-1">
+            <option :for={c <- @addable} value={c.id}>
+              <%= char_name(c) %><%= if pending?(c), do: " (pending)", else: "" %>
+            </option>
+          </select>
+          <Kit.btn kind={:ghost} type="submit">Add</Kit.btn>
+        </form>
+      </div>
+
+      <p :if={@addable == [] and @cast != []} class="px-4 py-3 text-[11px] leading-relaxed dim">
+        Everyone you've written<span :if={@bible_name}> in <%= @bible_name %></span> is already
+        in the cast.
+      </p>
+
+      <Kit.row class="px-4 py-3 flex items-center justify-between gap-2">
+        <span class="text-[11px] dim">Publishing exposes the omniscient story.</span>
+        <Kit.btn
+          kind={:ghost}
+          size={:sm}
+          phx-click="publish"
+          data-confirm="Publish a public snapshot? It exposes the omniscient story."
+        >
+          Publish
+        </Kit.btn>
+      </Kit.row>
+    </div>
+    """
+  end
+
+  # ── Premise ───────────────────────────────────────────────────────────────────
+
+  defp premise_tab(assigns) do
+    ~H"""
+    <div class="px-4 py-4">
+      <%!-- Premise comes after Cast in the tab order because the pitch is written
+            *from* the cast — which is also what Expand reads. --%>
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <span class="lbl dim">What this story is about</span>
+        <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="expand_premise" disabled={@expanding_premise}>
+          <%= if @expanding_premise, do: "✦ …", else: "✦ Expand" %>
+        </Kit.btn>
+      </div>
+
+      <form id="campaign-premise" phx-change="update_details">
+        <label for="premise-input" class="sr-only">Premise</label>
+        <textarea
+          id="premise-input"
+          name="premise"
+          rows="8"
+          phx-debounce="blur"
+          class="field px-3.5 py-3 text-[14px] leading-relaxed w-full"
+          placeholder="A shipment came in that isn't on any manifest…"
+        ><%= @payload[:premise] %></textarea>
+      </form>
+
+      <p class="text-[11px] leading-relaxed dim mt-2">
+        Expand deepens whatever's saved, grounded in the world and the cast — so it reads best
+        once both exist.
+      </p>
+    </div>
+    """
+  end
+
+  # ── Scenes ────────────────────────────────────────────────────────────────────
+
+  defp scenes_tab(assigns) do
+    ~H"""
+    <div>
+      <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
+        <span class="lbl dim"><%= length(@scenes) %> <%= if length(@scenes) == 1, do: "scene", else: "scenes" %></span>
+        <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={@cast == []}>
+          Set a scene
+        </Kit.btn>
+      </Kit.row>
+
+      <Kit.row :for={s <- @scenes} class="px-4 py-3">
+        <.link navigate={~p"/play/#{s}"} class="flex items-center justify-between gap-2">
+          <span class="ttl text-[14.5px] font-semibold min-w-0 truncate"><%= scene_label(s) %></span>
+          <span class="dim text-[14px] shrink-0">›</span>
+        </.link>
+      </Kit.row>
+
+      <Kit.empty :if={@scenes == []} headline="Nothing has happened yet.">
+        Set a scene and the Director will open it.
+        <:action>
+          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={@cast == []}>
+            Set a scene
+          </Kit.btn>
+        </:action>
+      </Kit.empty>
+
+      <Kit.row class="px-4 py-3 flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="text-[13px] font-semibold">What play has changed</div>
+          <div class="text-[11px] dim">Arc the scenes proposed, waiting on you</div>
+        </div>
+        <.link navigate={~p"/arc/#{@entry.id}"} class="btn btn-gh btn-sm shrink-0">Review</.link>
+      </Kit.row>
+    </div>
+    """
+  end
+
+  # ── Render helpers ────────────────────────────────────────────────────────────
+
+  defp campaign_title(payload) do
+    case payload[:name] do
+      n when is_binary(n) and n != "" -> n
+      _ -> "Untitled campaign"
+    end
+  end
+
+  # The meta line the mock puts under the title: world, cast size, scene count. Says
+  # "Nothing built yet" on a campaign that has none of them rather than "0 · 0".
+  defp campaign_meta(assigns) do
+    parts =
+      [
+        assigns.bible_name,
+        count_label(length(assigns.cast), "cast", "cast"),
+        count_label(length(assigns.scenes), "scene", "scenes")
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    if parts == [], do: "Nothing built yet", else: Enum.join(parts, " · ")
+  end
+
+  defp count_label(0, _one, _many), do: nil
+  defp count_label(1, one, _many), do: "1 #{one}"
+  defp count_label(n, _one, many), do: "#{n} #{many}"
+
+  # The kit's amber dot on a tab means *unbuilt*, and the mock uses it only on a
+  # campaign's first run — an invitation, not an error. So it goes once something
+  # exists anywhere.
+  defp unbuilt?(assigns, slug) do
+    first_run?(assigns) and
+      case slug do
+        "world" -> is_nil(assigns.bible_id)
+        "cast" -> assigns.cast == []
+        "premise" -> assigns.payload[:premise] in [nil, ""]
+        _ -> false
+      end
+  end
+
+  defp first_run?(assigns),
+    do: assigns.cast == [] and is_nil(assigns.bible_id) and assigns.scenes == []
+
+  defp content_categories,
+    do: [
+      {"sexual", "Sex"},
+      {"graphic_violence", "Graphic violence"},
+      {"other", "Other mature themes"}
+    ]
+
+  # Cast avatars take voice colours in cast order, the same rule play uses — so a
+  # character is the same hue here as in the transcript they appear in.
+  defp cast_colour(index), do: "var(--v#{rem(index, PolyphonyWeb.Voice.count()) + 1})"
+
+  defp char_blurb(entry) do
+    case Library.payload(entry) do
+      %CharacterSheet{premise: p} when is_binary(p) and p != "" -> p
+      _ -> "No sheet written yet"
+    end
+  end
+
+  defp scene_label(scene_id), do: "Scene " <> String.slice(to_string(scene_id), 0, 12)
 
   defp char_name(entry) do
     case Library.payload(entry) do
