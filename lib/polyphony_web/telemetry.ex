@@ -14,9 +14,9 @@ defmodule PolyphonyWeb.Telemetry do
   in a request duration — the work happens in an Oban job long after the response went
   out. `oban.job.*` sees the job; `polyphony.llm.*` sees the call inside it.
 
-  History is not wired: LiveDashboard keeps what it observes while a tab is open and
-  forgets the rest, which is the right trade for a bring-up tool. Anything worth
-  retaining belongs in a reporter.
+  A ten-minute backlog is kept by `PolyphonyWeb.Telemetry.History`, so the charts are
+  already populated when the page opens — without it the dashboard only draws what
+  happens while you watch, which is no use for something that already went wrong.
   """
   use Supervisor
 
@@ -28,7 +28,7 @@ defmodule PolyphonyWeb.Telemetry do
   def init(_arg) do
     # `telemetry_poller`'s own application starts a default poller that emits the
     # `[:vm, …]` events below, so there is nothing to add here for those.
-    Supervisor.init([], strategy: :one_for_one)
+    Supervisor.init([PolyphonyWeb.Telemetry.History], strategy: :one_for_one)
   end
 
   @doc "Metric definitions rendered by the dashboard's Metrics tab."

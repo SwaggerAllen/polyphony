@@ -183,7 +183,11 @@ for it.
   so there is no domain metric; a permanently empty chart reads as "nothing is
   happening" rather than "nothing is measured". The route has its own CSP with a
   per-request nonce, because the dashboard ships inline `<script>` that
-  `script-src 'self'` otherwise refuses — silently.
+  `script-src 'self'` otherwise refuses — silently. `Telemetry.History` keeps a
+  ten-minute ETS backlog so the charts are populated on open rather than only drawing
+  what happens while you watch; it borrows LiveDashboard's own (private) datapoint
+  extractor so history and live points share a series, and a test fails loudly if an
+  upgrade moves it.
 - **Mail is viewable locally.** Dev uses Swoosh's `Local` adapter with the real
   `Transport.Email`, so `mix phx.server` then `/dev/mailbox` shows the actual sent
   message — body, and the provider headers — rather than the link the login screen

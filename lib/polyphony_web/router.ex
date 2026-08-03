@@ -106,6 +106,7 @@ defmodule PolyphonyWeb.Router do
 
     live_dashboard("/dashboard",
       metrics: PolyphonyWeb.Telemetry,
+      metrics_history: {PolyphonyWeb.Telemetry.History, :metrics_history, []},
       on_mount: [{PolyphonyWeb.Auth, :require_admin}],
       csp_nonce_assign_key: %{img: :img_nonce, style: :style_nonce, script: :script_nonce},
       allow_destructive_actions: false
@@ -127,6 +128,17 @@ defmodule PolyphonyWeb.Router do
   # default, elsewhere via STORYBOOK=true — so the routes don't exist at all in a
   # plain prod boot. It renders components and reads nothing from the domain,
   # which is why it needs no auth pipeline.
+  if Application.compile_env(:polyphony, :storybook, false) do
+    scope "/" do
+      storybook_assets()
+    end
+
+    scope "/", PolyphonyWeb do
+      pipe_through(:browser)
+      live_storybook("/storybook", backend_module: PolyphonyWeb.Storybook)
+    end
+  end
+
   defp put_dashboard_nonce(conn, _opts) do
     nonce = 18 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
 
@@ -141,16 +153,5 @@ defmodule PolyphonyWeb.Router do
         "connect-src 'self' ws: wss:; base-uri 'self'; form-action 'self'; " <>
         "frame-ancestors 'none'; object-src 'none'"
     )
-  end
-
-  if Application.compile_env(:polyphony, :storybook, false) do
-    scope "/" do
-      storybook_assets()
-    end
-
-    scope "/", PolyphonyWeb do
-      pipe_through(:browser)
-      live_storybook("/storybook", backend_module: PolyphonyWeb.Storybook)
-    end
   end
 end

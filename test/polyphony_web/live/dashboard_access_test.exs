@@ -69,6 +69,23 @@ defmodule PolyphonyWeb.DashboardAccessTest do
     end
   end
 
+  describe "the metrics page" do
+    test "mounts with history wired, which is where a bad MFA contract shows up" do
+      # `metrics_history` is applied per metric on mount. A wrong return shape is a
+      # 500 on this page rather than a missing chart, and nothing else exercises it.
+      :telemetry.execute([:polyphony, :llm, :call, :stop], %{duration: 5}, %{
+        provider: SomeProvider,
+        outcome: :ok
+      })
+
+      # The page groups charts by name prefix and redirects to add `?nav=`; ours is
+      # the `polyphony` group.
+      {:ok, _view, html} = live(admin_conn(), ~p"/admin/dashboard/metrics?nav=polyphony")
+
+      assert html =~ "polyphony.llm.call.stop.duration"
+    end
+  end
+
   describe "the metrics it renders" do
     test "every metric names an event something actually emits" do
       # A permanently empty chart reads as "nothing is happening" rather than "nothing
