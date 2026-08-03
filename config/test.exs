@@ -103,3 +103,9 @@ config :polyphony, Polyphony.PersistentApp,
   registry: :local
 
 config :logger, level: :warning
+
+# Email goes to the test-process mailbox, so `Transport.Email` can be exercised for
+# real (address, subject, body) without a relay. The notification transport itself
+# stays the logging one — prod switches it in `runtime.exs` once SMTP is configured —
+# so no other test's delivery path changes.
+config :polyphony, Polyphony.Mailer, adapter: Swoosh.Adapters.Test

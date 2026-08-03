@@ -86,9 +86,12 @@ defmodule PolyphonyWeb.KitPortTest do
 
     # app.css is an ordered manifest and the order is the point: Tailwind, then the
     # kit, so the kit outranks a utility it overlaps with. A third entry means a
-    # second design system came back.
+    # second design system came back — including for internal surfaces: the debug
+    # drawer is built from kit classes over the kit's own `.dock`, not a stylesheet
+    # of its own.
     assert imports == ["tailwind-full", "kit"]
     refute File.exists?("assets/css/legacy.css")
+    refute File.exists?("assets/css/debug.css")
   end
 
   defp classes(css), do: Regex.scan(~r/\.[a-z][a-z0-9-]*/, css) |> List.flatten() |> Enum.uniq()

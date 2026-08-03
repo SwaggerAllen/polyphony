@@ -10,7 +10,10 @@ defmodule Polyphony.Notifications.Transport.Log do
 
   @impl true
   def deliver_email(to, subject, _body) do
-    Logger.info("email → #{to}: #{subject}")
+    Logger.info(
+      "[mail] would send to #{Polyphony.Notifications.Transport.redact(to)}: #{subject}"
+    )
+
     {:ok, :logged}
   end
 end

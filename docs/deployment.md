@@ -65,6 +65,60 @@ without a code change:
 > two env vars before the first run. Everything else stays offline — nothing but
 > the DeepInfra call leaves the box.
 
+## Email, and how anyone signs in
+
+Sign-in is **magic-link only — there are no passwords**. That makes the mailer part of
+the critical path rather than a nicety: with no mail configured, nobody can get in.
+
+The trap to know about is that this fails *quietly*. `Notifications` talks to a
+pluggable transport, and the default is `Transport.Log`, which writes
+`email → someone@example.com: <subject>` to the log and returns `{:ok, :logged}`.
+Every layer above it then behaves as though delivery succeeded — the `notifications`
+row is written with status `"sent"`. A log full of successful sends and an empty inbox
+is the symptom.
+
+`runtime.exs` swaps in the real transport **only when `SMTP_HOST` and `MAIL_FROM` are
+both set**. Half-configured stays on the logging transport deliberately, so the
+failure is "no mail configured" rather than a stream of relay errors.
+
+- `SMTP_HOST` / `SMTP_PORT` — the relay. Port defaults to `587` (STARTTLS), which is
+  what every provider wants. Use `465` with `SMTP_SSL=true` for implicit TLS.
+- `SMTP_USERNAME` / `SMTP_PASSWORD` — provider credentials.
+- `MAIL_FROM` — the sender address. **It must be on a domain you have verified with
+  the provider**; an unverified sender is the most common reason mail vanishes without
+  an error.
+- `MAIL_FROM_NAME` — display name, defaults to `Polyphony`.
+
+SMTP rather than a provider HTTP API is a deliberate choice: Resend, Postmark,
+SendGrid, Mailgun and SES all speak it, so the provider is a credential rather than a
+deploy. The TLS options in `runtime.exs` verify the relay's certificate against the
+system CA bundle — `gen_smtp` defaults to `:verify_none`, which would hand the
+credentials to anyone who can answer for the host.
+
+> If outbound SMTP turns out to be blocked, swapping to a provider's HTTP API is a
+> config line plus that adapter's HTTP client dep — `Polyphony.Mailer` and the
+> `Transport` seam don't change.
+
+### Getting in the first time
+
+The **first account created in the database becomes superadmin** and needs no invite
+(`Accounts.gate_signup/2`); every later signup needs a valid unspent invite. So the
+bootstrap is: deploy with mail working, sign up once, and that account is the admin.
+
+If you need a link before mail works, mint one from the running release — this is the
+supported way in, and it needs shell access to the box, which is the point:
+
+```bash
+bin/polyphony rpc 'Polyphony.Accounts.get_by_email("you@example.com") |> PolyphonyWeb.Auth.deliver_magic_link() |> IO.puts()'
+```
+
+That prints the URL (15-minute TTL) and sends it via whatever transport is configured.
+
+> The sign-in screen can also print the link on the page, but **only outside prod** —
+> `:expose_magic_link` in `config/config.exs`, false for `MIX_ENV=prod` and pinned by a
+> test. It must never be on in production: it hands a working session to anyone who
+> types a known address.
+
 ## First deploy
 
 1. **Create the app from the spec:**
@@ -83,6 +137,8 @@ without a code change:
    |-----|--------|
    | `SECRET_KEY_BASE` | `mix phx.gen.secret` (64 bytes) |
    | `DEEPINFRA_API_KEY` | your DeepInfra key |
+   | `SMTP_HOST` / `SMTP_USERNAME` / `SMTP_PASSWORD` | your mail provider's SMTP credentials |
+   | `MAIL_FROM` | sender address, on a domain verified with that provider |
    | `DEEPINFRA_MODEL` | real workhorse model id (replace the spec placeholder) |
    | `DEEPINFRA_MODEL_HEAVY` | real heavy model id (replace the spec placeholder) |
    | `DATABASE_URL` | injected from the managed db (`${db.DATABASE_URL}`) |

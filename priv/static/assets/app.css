@@ -10,10 +10,14 @@
  * directives live in their own file — `@import` has to lead a stylesheet, so a file
  * can't ask for anything *after* its own `@tailwind` lines.
  *
- * There is no third layer. The first-cut design system that used to sit here is gone
- * (see docs/frontend.md): screens are being rebuilt from the kit, and the ones that
- * haven't been yet render unstyled in the meantime — deliberately, since the app has
- * no users until the rebuild lands.
+ * The first-cut design system that used to sit here is gone (see docs/frontend.md):
+ * screens are being rebuilt from the kit, and the ones that haven't been yet render
+ * unstyled in the meantime — deliberately, since the app has no users until the
+ * rebuild lands.
+ *
+ * There is no third layer. Even the debug drawer — internal, in none of the mocks —
+ * is built from kit classes over a `.dock` primitive in the kit itself (§11), because
+ * a floating panel is a position, not a second design language.
  *
  * Rebuild with `mix assets.build` after touching either file; `mix kit.port`
  * regenerates kit.css from the design. */
@@ -1020,6 +1024,14 @@ video {
   white-space: nowrap;
 }
 
+.whitespace-pre-wrap {
+  white-space: pre-wrap;
+}
+
+.rounded-full {
+  border-radius: 9999px;
+}
+
 .rounded-lg {
   border-radius: 0.5rem;
 }
@@ -1204,6 +1216,10 @@ video {
   padding-top: 1rem;
 }
 
+.pt-\[\.15rem\] {
+  padding-top: .15rem;
+}
+
 .text-left {
   text-align: left;
 }
@@ -1286,6 +1302,10 @@ video {
 
 .leading-\[1\.55\] {
   line-height: 1.55;
+}
+
+.leading-\[1\.5\] {
+  line-height: 1.5;
 }
 
 .leading-\[1\.75\] {
@@ -2113,6 +2133,46 @@ video {
   height:12px;
   border-radius:4px;
   background:var(--b3);
+}
+
+/* ============================================================================
+   11 · DOCK
+   A panel pinned to the viewport rather than to the page — the debug drawer
+   today, and the shape any toast or mobile action sheet would take.
+
+   Only the pinning lives here. What sits inside is ordinary kit: a .sheet, a
+   .row for its head, .pill and .dot for status, .scroller for the list. That is
+   the whole reason this is three rules rather than a stylesheet of its own —
+   a floating panel is a *position*, not a second design language.
+
+   The insets are not decoration. A dock is read one-handed on a phone, where the
+   home indicator and a landscape notch will otherwise sit on top of whatever the
+   dock puts in its corner.
+   ============================================================================ */
+
+.dock {
+  position:fixed;
+  right:0;
+  bottom:0;
+  z-index:60;
+  padding:0 calc(env(safe-area-inset-right) + .5rem)
+                calc(env(safe-area-inset-bottom) + .5rem) 0;
+}
+
+/* Wide enough to read a wrapped line, never wider than the screen. */
+
+.dock-panel {
+  width:min(100vw - 1rem, 46rem);
+  max-height:min(70vh, 32rem);
+  box-shadow:0 8px 32px rgb(0 0 0 / 55%);
+}
+
+/* 44px: the smallest reliably tappable target, and a dock is opened one-handed
+   while something is already going wrong. */
+
+.dock-tab {
+  min-height:44px;
+  box-shadow:0 2px 12px rgb(0 0 0 / 35%);
 }
 
 .last\:mb-0:last-child {

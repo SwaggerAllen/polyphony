@@ -144,4 +144,46 @@ if config_env() == :prod do
   # DeepInfra connection config above; ⚠ the embed model must be 1024-dim to match
   # the summary embedding column (see config/config.exs).
   config :polyphony, :embedder, Polyphony.SceneClose.DeepInfraEmbedder
+
+  # ── Email (§B4) ──────────────────────────────────────────────────────────────
+  #
+  # Sign-in is magic-link only, so **mail is the front door**: with no mailer
+  # configured nobody can log in at all. Configured entirely from env vars, and only
+  # switched on when SMTP_HOST and MAIL_FROM are both present — a half-configured
+  # mailer stays on the logging transport, where a delivery is recorded rather than
+  # silently dropped.
+  #
+  # SMTP rather than a provider API on purpose: Resend, Postmark, SendGrid, Mailgun
+  # and SES all speak it, so the choice of provider is a credential rather than a
+  # deploy. Port 587 with STARTTLS is what every one of them wants; 465 is implicit
+  # TLS, which needs SMTP_SSL=true instead.
+  smtp_host = System.get_env("SMTP_HOST")
+  mail_from = System.get_env("MAIL_FROM")
+
+  if smtp_host not in [nil, ""] and mail_from not in [nil, ""] do
+    config :polyphony, Polyphony.Mailer,
+      adapter: Swoosh.Adapters.SMTP,
+      relay: smtp_host,
+      port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
+      username: System.get_env("SMTP_USERNAME"),
+      password: System.get_env("SMTP_PASSWORD"),
+      ssl: System.get_env("SMTP_SSL", "false") in ~w(true 1),
+      tls: :always,
+      auth: :always,
+      # Verify the relay's certificate against the system CA bundle. `:verify_none`
+      # is the gen_smtp default and would hand the credentials to anyone who can
+      # answer for the host.
+      tls_options: [
+        verify: :verify_peer,
+        cacerts: :public_key.cacerts_get(),
+        server_name_indication: String.to_charlist(smtp_host),
+        depth: 3
+      ],
+      retries: 2,
+      no_mx_lookups: false
+
+    config :polyphony, :mail_from, mail_from
+    config :polyphony, :mail_from_name, System.get_env("MAIL_FROM_NAME") || "Polyphony"
+    config :polyphony, :notification_transport, Polyphony.Notifications.Transport.Email
+  end
 end

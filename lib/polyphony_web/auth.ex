@@ -14,12 +14,18 @@ defmodule PolyphonyWeb.Auth do
   import Plug.Conn
   import Phoenix.Controller
 
+  require Logger
+
   alias Polyphony.{Accounts, Notifications}
   alias Polyphony.Accounts.Roles
   alias Phoenix.LiveView
 
   @salt "magic link"
   @max_age 60 * 15
+
+  # Same flag the login screen's on-page link uses, read the same fail-closed way:
+  # only an explicit `true` outside prod lets a usable link reach a log or a page.
+  @expose_magic_link Application.compile_env(:polyphony, :expose_magic_link, false) == true
 
   # ── Token (magic link) ─────────────────────────────────────────────────────────
 
@@ -36,10 +42,37 @@ defmodule PolyphonyWeb.Auth do
   dev can surface it). Sends a `:magic_link`-typed notification, `force:`d past prefs.
   """
   def deliver_magic_link(user) do
-    url = url(~p"/auth/verify/#{sign_token(user.id)}")
+    token = sign_token(user.id)
+    url = url(~p"/auth/verify/#{token}")
+
+    # Logged so the trail reaches the debug drawer: on a phone, with no console, the
+    # question is always "was a link even generated, and did the mail go anywhere?".
+    # `Notifications.dispatch/6` logs the delivery outcome and which transport ran;
+    # this line is the request side of the same story.
+    #
+    # The token is **fingerprinted, not printed**. The drawer renders for anyone who
+    # can load a page while `DEBUG_DRAWER` is on — it is not admin-gated, and it can't
+    # be, because its most valuable use is diagnosing sign-in while signed out. A live
+    # 15-minute session token in that stream is the same account-takeover hole the
+    # login screen's on-page link was. Eight characters is plenty to match the link
+    # you received against the one that was sent, and useless for signing in.
+    Logger.info("[mail] magic_link requested for user ##{user.id} · token #{fingerprint(token)}")
+
+    log_url(url)
+
     Notifications.deliver(user, :magic_link, %{url: url}, force: true)
     url
   end
+
+  # Branched at compile time, as `LoginLive` does with the same flag: a prod build
+  # contains no clause that can put a usable link in a log.
+  if @expose_magic_link do
+    defp log_url(url), do: Logger.info("[mail] magic_link url #{url}")
+  else
+    defp log_url(_url), do: :ok
+  end
+
+  defp fingerprint(token), do: String.slice(token, 0, 8) <> "…"
 
   # ── Plug (dead views) ───────────────────────────────────────────────────────────
 

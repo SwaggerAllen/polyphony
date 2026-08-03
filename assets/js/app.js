@@ -209,12 +209,22 @@ function initDebugDrawer(liveSocket) {
   // the dot on the collapsed toggle, so connection state is visible either way.
   const pill = document.getElementById("socket-status")
   const dot = document.getElementById("socket-status-toggle")
+  // Colour comes from the kit's semantic tokens, applied inline to a plain .pill
+  // and .dot — the same "colour by meaning" rule the mocks use. Nothing here needs
+  // a class of its own, which is why the drawer has no stylesheet of its own.
+  const COLOUR = {
+    connecting: "var(--lamp)",
+    connected: "var(--ok)",
+    disconnected: "var(--pencil)"
+  }
   const setStatus = (state, label) => {
+    const colour = COLOUR[state] || "var(--bcm)"
     if (pill) {
-      pill.className = `socket-status ${state}`
+      pill.style.color = colour
+      pill.style.borderColor = colour
       pill.textContent = label
     }
-    if (dot) dot.className = `socket-dot ${state}`
+    if (dot) dot.style.background = colour
   }
 
   setStatus("connecting", "connecting…")

@@ -37,6 +37,24 @@ services:
       - key: DEEPINFRA_API_KEY
         scope: RUN_TIME
         type: SECRET
+      # Email (§B4). Sign-in is magic-link only, so with these unset **nobody can log
+      # in** — the app falls back to the logging transport, which records a delivery
+      # that never happened. SMTP_HOST and MAIL_FROM together arm the real mailer.
+      # Any provider that speaks SMTP works (Resend, Postmark, SendGrid, Mailgun, SES).
+      - key: SMTP_HOST
+        scope: RUN_TIME
+        value: "REPLACE_WITH_SMTP_HOST"
+      - key: SMTP_USERNAME
+        scope: RUN_TIME
+        type: SECRET
+      - key: SMTP_PASSWORD
+        scope: RUN_TIME
+        type: SECRET
+      # Must be an address on a domain you have verified with the provider —
+      # an unverified sender is the usual reason mail silently goes nowhere.
+      - key: MAIL_FROM
+        scope: RUN_TIME
+        value: "REPLACE_WITH_FROM_ADDRESS"
       # Real DeepInfra model ids — the config/config.exs defaults are placeholders.
       # DEEPINFRA_MODEL is the workhorse (every turn); DEEPINFRA_MODEL_HEAVY is
       # reserved for character/world generation. Set both before the first run.
