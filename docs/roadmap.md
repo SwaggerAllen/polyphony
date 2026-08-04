@@ -299,14 +299,22 @@ rough order of how much a user would notice:
 |---|---|---|---|
 | **Assisted drafts** (§1.5) | ✅ | ✅ **now built** | — was: Continue stopped the beat and nothing appeared |
 | **User-controlled turns** (§A1) | ✅ `submit_user_turn` / `pass_turn` | ✅ **now built** | — was: "I write their turns" had no interactive effect and double-turned |
-| **Group arc fan-out** (§3.0b) | ✅ `GroupArc.fan_out/3` | ⚠️ half — the review card reads `pending/2`, nothing calls `fan_out/3` | the collapsed group card can never populate |
+| **Group arc fan-out** (§3.0b) | ✅ `GroupArc.fan_out/3` | ❌ **still open — needs a screen, not a wire** | see below |
 | **Edit with tail invalidation** (§1.2) | ✅ `Edit.edit/6` | ✅ **now built** | — was: every edit was silently `:valid`, leaving turns written on top of a line that had changed |
 | **Fork / branch from beat N** (§1.1) | ✅ `Fork.fork/3` | ⚠️ reachable via an invalidating edit, which is now wired | a scene branches when an edit changes what happened; there is still no bare "branch from here" |
-| **Draft editing before accepting** | ✅ `Drafts.edit/3` | ❌ no caller | the card takes or discards; it can't correct |
-| **Scene location as an authored field** (§2.3) | ✅ `OpenScene` takes `location:` | ❌ never passed | a scene's location is always blank |
-| **Notification preferences** (§B4) | ✅ `Notifications.Prefs` | ❌ no screen | opt-outs exist and are unreachable |
+| **Draft editing before accepting** | ✅ `Drafts.edit/3` | ✅ **now built** | — was: take it whole or throw it away |
+| **Scene location as an authored field** (§2.3) | ✅ `OpenScene` takes `location:` | ✅ **now built** | — was: every scene opened nowhere |
+| **Notification preferences** (§B4) | ✅ `Notifications.Prefs` | ✅ **now built** | — was: opt-outs existed and were unreachable |
 | **Export / download** (§B6) | ❌ | ❌ | not started either side — no gap, just absent |
 | **Failed turns requeue to tail** (§1.4) | ❌ deferred by decision | — | a failed turn is retried in place |
+
+**Group arc is the one that isn't a wiring job.** `fan_out/3` raises proposals when a
+group's *template* changes — and `Groups.create/3` and `update_fields/3` have no
+production callers either, because there is no group editor. The library lists groups
+that only tests can make. So the missing piece is a group authoring screen, with the
+fan-out as the thing its save calls; wiring `fan_out/3` alone would give it nowhere to
+be called from. Deliberately left, and it is the only row above that is a feature rather
+than a connection.
 
 Two documentation defects found in the same pass, both since corrected: `Polyphony.Groups`
 claimed the audience picker and group fan-out were unbuilt (the picker shipped; `fan_out/3`

@@ -74,6 +74,7 @@ defmodule PolyphonyWeb.CampaignLive do
          qb_seeds: [""],
          qb_suggest: true,
          quick_build_open: false,
+         scene_location: "",
          tab: "settings"
        )
        |> load()}
@@ -157,6 +158,9 @@ defmodule PolyphonyWeb.CampaignLive do
     )
     |> preflight()
   end
+
+  def handle_event("set_scene_location", %{"location" => where}, socket),
+    do: {:noreply, assign(socket, scene_location: where)}
 
   def handle_event("toggle_quick_build", _params, socket),
     do: {:noreply, assign(socket, quick_build_open: not socket.assigns.quick_build_open)}
@@ -509,6 +513,7 @@ defmodule PolyphonyWeb.CampaignLive do
       App.dispatch(%OpenScene{
         scene_id: scene_id,
         campaign_id: entry.id,
+        location_id: blank_to_nil(socket.assigns.scene_location),
         premise: premise,
         opened_beat: 0
       })
@@ -1284,6 +1289,28 @@ defmodule PolyphonyWeb.CampaignLive do
         <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={@cast == []}>
           Set a scene
         </Kit.btn>
+      </Kit.row>
+
+      <%!-- `OpenScene` has carried `location_id` since §2.3 and nothing ever passed
+            one, so every scene opened nowhere. It is a reference field on purpose — a
+            string today, a location entity later without changing the event — which is
+            why this is a line of text rather than a picker. --%>
+      <Kit.row class="px-4 py-3">
+        <form id="scene-where" phx-change="set_scene_location">
+          <label for="scene-location" class="lbl dim">Where the next scene happens</label>
+          <input
+            id="scene-location"
+            type="text"
+            name="location"
+            value={@scene_location}
+            phx-debounce="blur"
+            placeholder="The quay, after the second bell"
+            class="field px-3 py-2.5 text-[14px] w-full mt-1.5"
+          />
+          <p class="text-[11px] leading-relaxed dim mt-1.5">
+            The Director opens there, and it grounds what everyone can see.
+          </p>
+        </form>
       </Kit.row>
 
       <Kit.row :for={s <- @scenes} class="px-4 py-3">

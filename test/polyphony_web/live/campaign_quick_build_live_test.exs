@@ -277,6 +277,39 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     assert html =~ ~s(href="/authoring/bible/#{bible.id}")
   end
 
+  test "a scene opens where the author said, not nowhere", %{conn: conn, user: user} do
+    char =
+      Library.put(%{
+        owner: Owner.of(user),
+        kind: "character",
+        payload: %CharacterSheet{name: "Wren", status: :full}
+      })
+
+    camp = campaign(user, %{character_ids: [char.id]})
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=scenes")
+
+    view
+    |> form("#scene-where", %{location: "The quay, after the second bell"})
+    |> render_change()
+
+    # Two "Set a scene" buttons on this tab — the header's and the empty state's — and
+    # they do the same thing, so the event is what matters rather than which one.
+    render_click(view, "start_scene", %{})
+
+    [scene | _] = Library.payload(Library.get(camp.id))[:scenes]
+
+    # `OpenScene` has carried `location_id` since §2.3 and nothing ever passed one, so
+    # every scene opened nowhere.
+    opened =
+      for %Polyphony.Events.SceneOpened{} = e <-
+            Polyphony.App
+            |> Commanded.EventStore.stream_forward(scene)
+            |> Enum.map(& &1.data),
+          do: e
+
+    assert [%{location_id: "The quay, after the second bell"}] = opened
+  end
+
   test "expand deepens the campaign premise", %{conn: conn, user: user} do
     camp = campaign(user, %{premise: "A heist."})
     # Premise is its own tab now, and sits after Cast — the pitch is written from

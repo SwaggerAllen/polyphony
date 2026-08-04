@@ -105,6 +105,7 @@ defmodule PolyphonyWeb.PlayLive do
        control_modes: %{},
        failures: [],
        drafts: [],
+       editing_draft: nil,
        editing: nil,
        composing: false,
        debug_events: DebugFlags.get(:events),
@@ -769,6 +770,35 @@ defmodule PolyphonyWeb.PlayLive do
     end)
   end
 
+  def handle_event("edit_draft", %{"id" => id}, socket),
+    do: {:noreply, assign(socket, editing_draft: String.to_integer(id))}
+
+  def handle_event("cancel_draft_edit", _params, socket),
+    do: {:noreply, assign(socket, editing_draft: nil)}
+
+  # Correct a draft before taking it. `Drafts.edit/3` has always been able to do this
+  # and nothing called it, so the card could only take a turn whole or throw it away —
+  # and a turn that is nearly right is the ordinary case, which is the entire argument
+  # for approving one rather than letting it commit.
+  def handle_event("save_draft_edit", %{"draft_id" => id} = params, socket) do
+    safe(socket, fn ->
+      case TurnEdit.parse(params["text"] || "") do
+        {[], _self_state} ->
+          {:noreply, put_flash(socket, :error, "The turn can't be empty.")}
+
+        {moves, self_state} ->
+          corrected =
+            Cast.resolve_addressees(
+              socket.assigns.cast,
+              %TurnPacket{moves: moves, self_state: self_state}
+            )
+
+          Drafts.edit(String.to_integer(id), corrected)
+          {:noreply, socket |> assign(editing_draft: nil) |> reload()}
+      end
+    end)
+  end
+
   def handle_event("discard_draft", %{"id" => id}, socket) do
     safe(socket, fn ->
       case BeatDriver.discard_draft(String.to_integer(id)) do
@@ -1402,6 +1432,14 @@ defmodule PolyphonyWeb.PlayLive do
   defp turn_text(block, cast),
     do: TurnEdit.serialize(block.msgs, &Cast.render_name(cast, &1))
 
+  # The draft's own moves, put through the same serializer the transcript editor uses —
+  # so a draft reads, and edits, exactly like the turn it is about to become.
+  defp draft_text(draft, cast),
+    do:
+      draft
+      |> draft_moves(draft.row.character_id)
+      |> TurnEdit.serialize(&Cast.render_name(cast, &1))
+
   # ── Beat-loop progress ─────────────────────────────────────────────────────────
 
   defp idle, do: %{phase: :idle, subject: nil, beat: nil}
@@ -1592,6 +1630,7 @@ defmodule PolyphonyWeb.PlayLive do
           cast={@cast}
           voices={@voices}
           register={@register}
+          editing={@editing_draft == d.row.id}
         />
 
         <%!-- The walk has stopped on this character and is holding the beat open for
@@ -1889,6 +1928,7 @@ defmodule PolyphonyWeb.PlayLive do
   attr(:cast, :any, required: true)
   attr(:voices, :map, required: true)
   attr(:register, :atom, required: true)
+  attr(:editing, :boolean, default: false)
 
   defp draft_card(assigns) do
     assigns =
@@ -1905,16 +1945,48 @@ defmodule PolyphonyWeb.PlayLive do
         <span class="lbl dim">beat <%= @draft.row.beat %></span>
       </Kit.row>
 
-      <div class="px-3.5 py-2.5">
+      <div :if={not @editing} class="px-3.5 py-2.5">
         <div :for={m <- draft_moves(@draft, @draft.row.character_id)}>
           <%= Transcript.render_move(m, @cast, @register, @voices) %>
         </div>
       </div>
 
-      <Kit.row class="px-3.5 py-2.5 flex items-center gap-1.5">
+      <%!-- A turn that is nearly right is the ordinary case, and the whole argument for
+            approving one instead of letting it commit. Same editor format as the
+            transcript's, so correcting a draft and correcting a committed turn are the
+            same skill. --%>
+      <form
+        :if={@editing}
+        id={"draft-edit-#{@draft.row.id}"}
+        phx-submit="save_draft_edit"
+        class="px-3.5 py-2.5"
+      >
+        <%!-- `draft_id`, not `id`: LiveView reserves that name for the form's own DOM
+              id and warns that the value would be remapped underneath us. --%>
+        <input type="hidden" name="draft_id" value={@draft.row.id} />
+        <label for={"draft-text-#{@draft.row.id}"} class="sr-only">Edit this turn</label>
+        <textarea
+          id={"draft-text-#{@draft.row.id}"}
+          name="text"
+          rows="4"
+          class="field say-input px-3 py-2 text-[14px] w-full"
+        ><%= draft_text(@draft, @cast) %></textarea>
+        <div class="flex gap-1.5 mt-1.5">
+          <Kit.btn kind={:primary} size={:sm} type="submit">Save</Kit.btn>
+          <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="cancel_draft_edit">
+            Cancel
+          </Kit.btn>
+        </div>
+      </form>
+
+      <Kit.row :if={not @editing} class="px-3.5 py-2.5 flex items-center gap-1.5 flex-wrap">
         <Kit.btn kind={:primary} size={:sm} type="button"
                  phx-click="accept_draft" phx-value-id={@draft.row.id}>
           Take it
+        </Kit.btn>
+        <Kit.btn kind={:ghost} size={:sm} type="button"
+                 phx-click="edit_draft" phx-value-id={@draft.row.id}>
+          Edit first
         </Kit.btn>
         <%!-- Discarding is a **pass**, not a deletion — the slot gives up its turn and
               the beat walks on, which is what the backend does with it. Saying

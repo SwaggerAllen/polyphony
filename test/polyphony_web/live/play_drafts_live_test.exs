@@ -151,6 +151,42 @@ defmodule PolyphonyWeb.PlayDraftsLiveTest do
     refute Map.has_key?(event, :moves)
   end
 
+  test "a nearly-right turn can be corrected before it is taken", %{conn: conn} do
+    scene = scene_with(["mira"])
+    row = draft(scene)
+
+    {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+
+    # `Drafts.edit/3` has always been able to do this and nothing called it, so the
+    # card could only take a turn whole or throw it away — and nearly-right is the
+    # ordinary case, which is the whole argument for approving one at all.
+    view
+    |> element(~s(button[phx-click="edit_draft"][phx-value-id="#{row.id}"]))
+    |> render_click()
+
+    view
+    |> form(~s(form[phx-submit="save_draft_edit"]), %{
+      draft_id: to_string(row.id),
+      text: "Nobody rings it three times."
+    })
+    |> render_submit()
+
+    # Corrected in place and still pending — editing is not accepting.
+    assert Drafts.get(row.id).status == "pending"
+    assert Drafts.get(row.id).edited
+    assert render(view) =~ "Nobody rings it three times."
+    assert render(view) =~ "Waiting on you"
+
+    # And taking it commits what the author wrote, not what the model did.
+    view
+    |> element(~s(button[phx-click="accept_draft"][phx-value-id="#{row.id}"]))
+    |> render_click()
+
+    html = render(view)
+    assert html =~ "Nobody rings it three times."
+    refute html =~ "Nobody rings it twice."
+  end
+
   test "with nothing pending there is no card", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/play/#{scene_with(["mira"])}")
 
