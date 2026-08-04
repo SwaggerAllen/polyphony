@@ -148,6 +148,117 @@ defmodule Polyphony.MailConfigTest do
     end
   end
 
+  describe "the two TLS shapes" do
+    test "a submission port opens in the clear and upgrades" do
+      config =
+        mailer_config(%{"SMTP_HOST" => "smtp.sendgrid.net", "MAIL_FROM" => "a@e.com"})
+
+      refute config[:ssl]
+      assert config[:tls] == :always
+    end
+
+    test "465 is implicit TLS, taken from the port alone" do
+      config =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.sendgrid.net",
+          "SMTP_PORT" => "465",
+          "MAIL_FROM" => "a@e.com"
+        })
+
+      assert config[:ssl] == true
+
+      # Not additive with the above: a socket that is already TLS never advertises
+      # STARTTLS, and `tls: :always` against that is `{:missing_requirement, :tls}`.
+      assert config[:tls] == :never
+    end
+
+    test "implicit TLS carries the verification options through sockopts" do
+      config =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.sendgrid.net",
+          "SMTP_PORT" => "465",
+          "MAIL_FROM" => "a@e.com"
+        })
+
+      # gen_smtp applies `tls_options` only to the STARTTLS upgrade; the implicit-TLS
+      # connect gets `sockopts` merged over its own defaults, which name no CA store.
+      # On OTP 27 that combination doesn't connect *unverified* — it doesn't connect,
+      # because the client default is now `verify_peer`. Proven, not assumed:
+      assert {:error, {:options, :incompatible, [verify: :verify_peer, cacerts: :undefined]}} =
+               :ssl.connect({127, 0, 0, 1}, 1, [active: false, depth: 0, packet: :line], 100)
+
+      assert config[:sockopts][:verify] == :verify_peer
+      assert config[:sockopts][:cacerts]
+      assert config[:sockopts][:server_name_indication] == ~c"smtp.sendgrid.net"
+      # gen_smtp's own default is `depth: 0`, which rejects any chain with an
+      # intermediate — i.e. every provider's.
+      assert config[:sockopts][:depth] == 3
+    end
+
+    test "STARTTLS passes no TLS options as socket options" do
+      config =
+        mailer_config(%{"SMTP_HOST" => "smtp.sendgrid.net", "MAIL_FROM" => "a@e.com"})
+
+      # These would reach `gen_tcp:connect` on the plaintext path, where they are not
+      # options at all.
+      assert config[:sockopts] == []
+    end
+
+    test "an explicit SMTP_SSL still wins, and is warned about when it fights the port" do
+      forced =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "SMTP_PORT" => "587",
+          "SMTP_SSL" => "true",
+          "MAIL_FROM" => "a@e.com"
+        })
+
+      assert forced[:ssl] == true
+
+      warning =
+        ExUnit.CaptureIO.capture_io(fn ->
+          mailer_config(%{
+            "SMTP_HOST" => "smtp.example.com",
+            "SMTP_PORT" => "587",
+            "SMTP_SSL" => "true",
+            "MAIL_FROM" => "a@e.com"
+          })
+        end)
+
+      # Both halves of the mismatch fail as a dropped connection rather than as
+      # anything mentioning TLS, so the boot line is the only place it can be named.
+      assert warning =~ "WARNING SMTP_SSL"
+    end
+
+    test "no warning when the port and the mode agree" do
+      for port <- ~w(587 465) do
+        warning =
+          ExUnit.CaptureIO.capture_io(fn ->
+            mailer_config(%{
+              "SMTP_HOST" => "smtp.example.com",
+              "SMTP_PORT" => port,
+              "MAIL_FROM" => "a@e.com"
+            })
+          end)
+
+        refute warning =~ "WARNING SMTP_SSL"
+      end
+    end
+
+    test "the boot line names the mode, since nothing else will" do
+      boot =
+        ExUnit.CaptureIO.capture_io(fn ->
+          mailer_config(%{
+            "SMTP_HOST" => "smtp.example.com",
+            "SMTP_PORT" => "465",
+            "MAIL_FROM" => "a@e.com"
+          })
+        end)
+
+      assert boot =~ "tls=implicit"
+    end
+  end
+
   describe "the Postmark message stream" do
     defp headers(extra), do: read_prod(extra) |> get_in([:polyphony, :mail_headers])
 

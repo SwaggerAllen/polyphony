@@ -85,17 +85,38 @@ failure is "no mail configured" rather than a stream of relay errors.
   port. A host of `smtp.example.com:587` is handed straight to DNS by gen_smtp and
   fails as `:nxdomain` — an error that names DNS rather than the mistake — so a port
   found on the host is now split off and used, but keeping them separate is clearer.
-- `SMTP_PORT` — defaults to `587` (STARTTLS), which every provider offers. Use `465`
-  with `SMTP_SSL=true` for implicit TLS. **Avoid `25`**: it is server-to-server relay
-  and App Platform, like most hosts, blocks it outbound — which surfaces as a network
-  timeout rather than anything mentioning ports.
+- `SMTP_PORT` — defaults to `587` (STARTTLS), which every provider offers. `465`
+  switches to implicit TLS on its own; you do not need `SMTP_SSL`. **Avoid `25`**: it
+  is server-to-server relay and App Platform, like most hosts, blocks it outbound —
+  which surfaces as a network timeout rather than anything mentioning ports.
+- `SMTP_SSL` — override the port's TLS shape. Rarely wanted, and the two are not
+  additive: implicit TLS is the whole connection, STARTTLS is an upgrade partway
+  through a plaintext one, so exactly one of them applies. A mismatch is warned about
+  at boot because it fails as a dropped connection with nothing about TLS in it —
+  plaintext at 465 gets hung up on (`{:network_failure, …, {:error, :closed}}`), and a
+  handshake at 587 is answered with a plaintext banner the client can't read.
 - `SMTP_USERNAME` / `SMTP_PASSWORD` — provider credentials. **Postmark uses the
   Server API token as both**, which is easy to miss when you are looking for a
   username; there is no separate SMTP user.
 
-The boot log prints what was resolved — `[boot] mail relay=host:port from=… auth=set`
-— so a misconfiguration is visible on startup rather than at the first failed send.
-`auth=MISSING` means `SMTP_USERNAME` never arrived.
+The boot log prints what was resolved — `[boot] mail relay=host:port tls=starttls
+from=… auth=set` — so a misconfiguration is visible on startup rather than at the
+first failed send. `auth=MISSING` means `SMTP_USERNAME` never arrived.
+
+### Reading a send failure
+
+The four failure shapes name four different mistakes, and only one of them is about
+the network:
+
+| Error | What it means |
+|---|---|
+| `{:network_failure, host, {:error, :nxdomain}}` | The relay name doesn't resolve. Usually a port left on `SMTP_HOST`, or a typo'd domain. |
+| `{:temporary_failure, host, :tls_failed}` + `hostname_check_failed` | Connected, but the certificate is for a different name — read the `{:received, …}` list, it names the host you should have used. |
+| `{:network_failure, host, {:error, :closed}}` | Connected, then the relay hung up without a reply. Either the TLS shape is wrong for the port (see `SMTP_SSL` above), or the provider is refusing the account — a new or under-review account is the common one. |
+| `{:permanent_failure, host, :auth_failed}` | Reached AUTH and was rejected: wrong credentials. Check the username column in the table below before assuming the key is bad. |
+
+Every one arrives wrapped in `{:retries_exceeded, …}`, which just means all three
+attempts failed the same way.
 
 ### Locally
 
