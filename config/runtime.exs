@@ -237,9 +237,15 @@ if config_env() == :prod do
     # **raises** on a non-binary, so an unset SMTP_USERNAME would turn every send into
     # an ArgumentError out of the LiveView rather than a delivery error the sign-in
     # screen can report.
+    #
+    # Trimmed for the same reason SMTP_HOST is: these are pasted into a hosting
+    # dashboard, and a trailing newline is invisible there and fatal here — the relay
+    # answers a whitespace-padded API key with a 535 that says the key is invalid,
+    # which sends you back to the provider to re-issue a key that was fine.
     smtp_credentials =
       for key <- [:username, :password],
           value = System.get_env("SMTP_#{String.upcase(to_string(key))}"),
+          value = String.trim(value),
           value != "",
           do: {key, value}
 

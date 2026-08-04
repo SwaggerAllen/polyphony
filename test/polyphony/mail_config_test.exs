@@ -275,6 +275,34 @@ defmodule Polyphony.MailConfigTest do
       assert config[:auth] == :never
     end
 
+    test "are trimmed — a pasted newline is invisible in a hosting dashboard" do
+      config =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.sendgrid.net",
+          "MAIL_FROM" => "a@e.com",
+          "SMTP_USERNAME" => "apikey\n",
+          "SMTP_PASSWORD" => "  SG.secret\n"
+        })
+
+      # Sent as-is, the relay answers with a 535 saying the key is invalid — which
+      # sends you back to the provider to re-issue a key that was fine all along.
+      assert config[:username] == "apikey"
+      assert config[:password] == "SG.secret"
+    end
+
+    test "whitespace alone counts as unset" do
+      config =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "MAIL_FROM" => "a@e.com",
+          "SMTP_USERNAME" => "  ",
+          "SMTP_PASSWORD" => "\n"
+        })
+
+      refute Keyword.has_key?(config, :username)
+      assert config[:auth] == :never
+    end
+
     test "an empty string counts as unset" do
       config =
         mailer_config(%{

@@ -91,7 +91,8 @@ defmodule Polyphony.Notifications do
 
       {:error, reason} ->
         Logger.error(
-          "[mail] #{type} → #{redact(email)} FAILED via #{inspect(transport)}: #{inspect(reason)}"
+          "[mail] #{type} → #{redact(email)} FAILED via #{inspect(transport)}: " <>
+            "#{inspect(reason)}#{hint(reason)}"
         )
 
         record(recipient_id, email, type, subject, body, "failed", opts)
@@ -100,6 +101,43 @@ defmodule Polyphony.Notifications do
   end
 
   defp redact(email), do: Transport.redact(email)
+
+  # gen_smtp reports the *last* thing that went wrong, which is not always the thing
+  # that went wrong. A rejected password is the worst of them: gen_smtp answers a 535
+  # by trying the next auth mechanism, on a socket the relay has already dropped — so
+  # bad credentials surface as `:closed`, a network fault, on the one failure that has
+  # nothing whatever to do with the network. Two deploys went looking for a firewall.
+  defp hint(reason) do
+    case cause(reason) do
+      {:error, :closed} ->
+        " — the relay hung up mid-conversation. Most often rejected credentials (a 535" <>
+          " reaches us as this); otherwise the TLS mode is wrong for the port." <>
+          " SMTP_TRACE=true logs the dialogue and settles it."
+
+      {:error, :nxdomain} ->
+        " — the relay hostname does not resolve. A port left on SMTP_HOST does this."
+
+      :auth_failed ->
+        " — the relay rejected the credentials. Check SMTP_USERNAME first: several" <>
+          " providers want a fixed literal there rather than an account name."
+
+      :tls_failed ->
+        " — the certificate did not verify for SMTP_HOST. The error above names the" <>
+          " host it is actually valid for."
+
+      _other ->
+        ""
+    end
+  end
+
+  # The reason arrives two or three layers deep — `{:retries_exceeded,
+  # {:network_failure, host, {:error, :closed}}}` — and only the innermost term says
+  # anything. The host is already in the message.
+  defp cause({:retries_exceeded, inner}), do: cause(inner)
+  defp cause({:network_failure, _host, inner}), do: cause(inner)
+  defp cause({:temporary_failure, _host, inner}), do: cause(inner)
+  defp cause({:permanent_failure, _host, inner}), do: cause(inner)
+  defp cause(other), do: other
 
   # Bounded: a relay's reply is short, but it is remote input reaching a log that the
   # debug drawer renders.
