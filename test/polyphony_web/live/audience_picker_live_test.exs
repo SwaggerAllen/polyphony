@@ -212,6 +212,80 @@ defmodule PolyphonyWeb.AudiencePickerLiveTest do
     end
   end
 
+  describe "as an overlay" do
+    setup %{user: user} do
+      wren =
+        character(user, %CharacterSheet{
+          name: "Wren Ashgrove",
+          facts: [%Fact{statement: @kestrel, concealed: true}]
+        })
+
+      %{wren: wren}
+    end
+
+    defp open(view),
+      do:
+        view |> element("button[phx-click=open_audience][phx-value-index='0']") |> render_click()
+
+    test "it draws over the page rather than further down it", %{conn: conn, wren: wren} do
+      {:ok, view, html} = live(conn, ~p"/authoring/character/#{wren.id}")
+      refute html =~ ~s(class="scrim")
+
+      html = open(view)
+
+      # The whole point: opened from a control halfway down a long sheet, an inline
+      # panel lands off-screen and reads as nothing having happened.
+      assert html =~ ~s(class="scrim")
+      assert html =~ ~s(class="overlay")
+      assert html =~ "sheet modal"
+      assert html =~ ~s(role="dialog")
+      assert html =~ ~s(aria-modal="true")
+    end
+
+    test "the scrim is a way out, and so is Escape", %{conn: conn, wren: wren} do
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{wren.id}")
+
+      open(view)
+      html = view |> element(".scrim") |> render_click()
+      refute html =~ "Who starts out knowing"
+
+      open(view)
+      html = view |> element(".overlay") |> render_keyup(%{"key" => "Escape"})
+      refute html =~ "Who starts out knowing"
+    end
+
+    test "and so is the control in its head, which says what it does", %{conn: conn, wren: wren} do
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{wren.id}")
+
+      html = open(view)
+      # "Done" rather than a ×: the ticks apply as you make them, so there is nothing
+      # to confirm and nothing to cancel — the only question is whether you're finished.
+      assert html =~ "Done"
+
+      html =
+        view
+        |> element("button[phx-click=close_audience]", "Done")
+        |> render_click()
+
+      refute html =~ "Who starts out knowing"
+    end
+
+    test "the way out and the count stay put while the list scrolls",
+         %{conn: conn, user: user, wren: wren} do
+      character(user, %CharacterSheet{name: "Sable Quist"})
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{wren.id}")
+      open(view)
+
+      # Only the middle scrolls. A close you have to scroll to find is not a close,
+      # and a resolved count you can't see while ticking isn't the honesty check —
+      # so the list is what's inside `.modal-body`, and neither of those two is.
+      assert has_element?(view, ".modal-body button[phx-click=toggle_audience]")
+      refute has_element?(view, ".modal-body button[phx-click=close_audience]")
+      refute has_element?(view, ".modal-body .dot[style*='--secret']")
+    end
+  end
+
   describe "the read-back on a character's sheet" do
     test "shows what they start out knowing, and says how they came by it",
          %{conn: conn, user: user} do

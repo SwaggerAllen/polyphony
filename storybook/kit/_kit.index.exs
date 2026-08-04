@@ -22,6 +22,7 @@ defmodule Storybook.Kit do
   def entry("info"), do: [name: "Info affordance"]
   def entry("sheet"), do: [name: "Sheets"]
   def entry("row"), do: [name: "Rows"]
+  def entry("overlay"), do: [name: "Overlay"]
   def entry("tabs"), do: [name: "Tabs"]
   def entry("jump"), do: [name: "Jump bar & scrubber"]
   def entry("beat_rule"), do: [name: "Beat rule"]

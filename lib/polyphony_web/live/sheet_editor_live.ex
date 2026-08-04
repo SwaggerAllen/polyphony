@@ -1477,7 +1477,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
         </Kit.sheet>
         </form>
 
-        <%!-- The shared picker, outside the sheet's form like every other panel. --%>
+        <%!-- The shared picker, outside the sheet's form like every other panel. It
+              draws itself as a `Kit.overlay` — this sheet is long enough that an
+              inline panel opened from a fact halfway down lands off-screen. --%>
         <AudiencePicker.picker
           :if={open_fact(assigns)}
           statement={open_fact(assigns).statement}

@@ -860,7 +860,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
           </.drawer>
 
           <%!-- Outside the form, like every other panel: it isn't part of the sheet's
-                own submission, and a form inside a form isn't a thing. --%>
+                own submission, and a form inside a form isn't a thing. It draws itself
+                as a `Kit.overlay`, so where in the document it sits stops mattering. --%>
           <AudiencePicker.picker
             :if={open_item(assigns)}
             statement={open_item(assigns).statement}
