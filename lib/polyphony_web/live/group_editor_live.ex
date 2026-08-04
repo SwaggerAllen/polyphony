@@ -37,7 +37,7 @@ defmodule PolyphonyWeb.GroupEditorLive do
   alias Polyphony.{Groups, Library, Owner}
   alias Polyphony.Authoring.{ArcEntry, Autofill, Group, GroupArc}
   alias Polyphony.Authoring.CharacterSheet.Fact
-  alias PolyphonyWeb.{Kit, Layouts, Voice}
+  alias PolyphonyWeb.{Autosave, Kit, Layouts, Voice}
 
   @prose_specs [
     {"premise", "What they are"},
@@ -78,6 +78,7 @@ defmodule PolyphonyWeb.GroupEditorLive do
          generating: MapSet.new(),
          saved: false,
          dirty: false,
+         autosave_ref: nil,
          panel: nil,
          telling: nil
        )
@@ -102,6 +103,25 @@ defmodule PolyphonyWeb.GroupEditorLive do
     assign(socket, members: members, owner: owner)
   end
 
+  @doc false
+  # The open panel lives in the **URL** rather than in the socket — see
+  # `BibleEditorLive.handle_params/3` for why, and for what it buys on a phone.
+  def handle_params(params, _uri, socket),
+    do: {:noreply, assign(socket, panel: present(params["panel"]))}
+
+  defp view_patch(socket, changes) do
+    params =
+      %{"panel" => socket.assigns.panel}
+      |> Map.merge(Map.new(changes, fn {k, v} -> {to_string(k), v} end))
+      |> Enum.reject(fn {_k, v} -> v in [nil, false, ""] end)
+
+    push_patch(socket, to: ~p"/authoring/group/#{socket.assigns.entry.id}?#{params}")
+  end
+
+  defp present(nil), do: nil
+  defp present(""), do: nil
+  defp present(value) when is_binary(value), do: value
+
   # ── Editing ───────────────────────────────────────────────────────────────────
 
   def handle_event("sync", params, socket),
@@ -109,26 +129,8 @@ defmodule PolyphonyWeb.GroupEditorLive do
 
   def handle_event("save", params, socket) do
     safe(socket, fn ->
-      socket = assign_form(socket, params)
-      %{name: name, blocks: blocks, facts: facts, entry: entry} = socket.assigns
-
-      group = %Group{
-        socket.assigns.group
-        | name: name,
-          premise: join_blocks(blocks["premise"]),
-          appearance: join_blocks(blocks["appearance"]),
-          temperament: join_blocks(blocks["temperament"]),
-          backstory: join_blocks(blocks["backstory"]),
-          facts: facts
-      }
-
-      {:ok, _} = Groups.update_fields(entry.id, group)
-      entry = Library.get(entry.id)
-
-      {:noreply,
-       socket
-       |> assign(entry: entry, group: group, saved: true, dirty: false)
-       |> load_members()}
+      socket = socket |> assign_form(params) |> Autosave.cancel()
+      {:noreply, load_members(persist(socket))}
     end)
   end
 
@@ -144,7 +146,7 @@ defmodule PolyphonyWeb.GroupEditorLive do
   def handle_event("panel", %{"panel" => panel}, socket),
     do:
       {:noreply,
-       assign(socket,
+       view_patch(socket,
          panel: if(panel == "" or socket.assigns.panel == panel, do: nil, else: panel)
        )}
 
@@ -156,7 +158,7 @@ defmodule PolyphonyWeb.GroupEditorLive do
 
         text ->
           facts = socket.assigns.facts ++ [%Fact{statement: text}]
-          {:noreply, socket |> assign(facts: facts, panel: nil) |> touch()}
+          {:noreply, socket |> assign(facts: facts) |> touch() |> view_patch(panel: nil)}
       end
     end)
   end
@@ -300,7 +302,33 @@ defmodule PolyphonyWeb.GroupEditorLive do
       |> assign(blocks: Map.update!(socket.assigns.blocks, field, fun))
       |> touch()
 
-  defp touch(socket), do: assign(socket, dirty: true, saved: false)
+  # A group has no gate on any of its fields, so the quiet write and the deliberate one
+  # are the same write — Save only differs in flushing now and reloading the roster.
+  def handle_info(:autosave, socket), do: {:noreply, persist(socket)}
+
+  def terminate(_reason, socket), do: Autosave.flush(socket, &persist/1)
+
+  defp persist(socket) do
+    %{name: name, blocks: blocks, facts: facts, entry: entry} = socket.assigns
+
+    group = %Group{
+      socket.assigns.group
+      | name: name,
+        premise: join_blocks(blocks["premise"]),
+        appearance: join_blocks(blocks["appearance"]),
+        temperament: join_blocks(blocks["temperament"]),
+        backstory: join_blocks(blocks["backstory"]),
+        facts: facts
+    }
+
+    {:ok, _} = Groups.update_fields(entry.id, group)
+
+    socket
+    |> assign(entry: Library.get(entry.id), group: group)
+    |> Autosave.saved()
+  end
+
+  defp touch(socket), do: Autosave.touch(socket)
 
   defp mark(socket, key, on?) do
     set = socket.assigns.generating

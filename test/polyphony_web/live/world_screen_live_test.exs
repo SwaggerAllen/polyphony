@@ -226,7 +226,7 @@ defmodule PolyphonyWeb.WorldScreenLiveTest do
       # Marked only at the field, the refusal rendered where the author wasn't looking,
       # and pressing Save read as nothing happening at all — which is how a working
       # guard gets reported as "saving is broken".
-      assert html =~ "Not saved — you already have a world called Saltmarch"
+      assert html =~ "Not saved under that name — you already have a world called Saltmarch"
 
       # The other world is routinely one nobody made on purpose (an interrupted Quick
       # Build persists its world before anything associates it), so "open that one" has
