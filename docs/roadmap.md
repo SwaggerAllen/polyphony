@@ -268,7 +268,7 @@ Because content is stored unencrypted and the operator is a data controller:
 
 ---
 
-## FE/BE parity audit ⬜ **Planned — recurring gap**
+## FE/BE parity audit 🔨 **Run once — findings below**
 
 The same shape of bug keeps surfacing: a capability lives on **one** side only. Either
 the backend has it with no way to reach it (boundary authoring, human-controlled
@@ -288,6 +288,35 @@ prompt-template editor); backend features whose UI is flagged deferred in §B (*
 resume/raise-cap surface, **B6** export/download hooks, **B9** delete-confirmation flow,
 **B4** notification-prefs UI); and the standing invariant that any *new* event type or
 `Costs`/retrieval/generation seam gets checked for a live caller, not just a test.
+
+### Findings, verified against the code (not against this document)
+
+Each was checked by counting **production** callers, not test callers — a module with
+seven test references and none in `lib/` is exactly the shape that reads as shipped. In
+rough order of how much a user would notice:
+
+| Capability | Backend | Frontend | What a user sees |
+|---|---|---|---|
+| **Assisted drafts** (§1.5) | ✅ | ✅ **now built** | — was: Continue stopped the beat and nothing appeared |
+| **User-controlled turns** (§A1) | ✅ `submit_user_turn` / `pass_turn` | ❌ no caller | "I write their turns" has no interactive effect; speaking as a Director-driven character double-turns |
+| **Group arc fan-out** (§3.0b) | ✅ `GroupArc.fan_out/3` | ⚠️ half — the review card reads `pending/2`, nothing calls `fan_out/3` | the collapsed group card can never populate |
+| **Edit with tail invalidation** (§1.2) | ✅ `Edit.edit/6` | ❌ `PlayLive.save_edit` hand-rolls supersede+commit | no way to say "this changes what happened"; every edit is silently `:valid` |
+| **Fork / branch from beat N** (§1.1) | ✅ `Fork.fork/3` | ❌ only reachable via `Edit`'s `:invalid` path, which nothing calls | a published story can be forked; your own scene can't be branched |
+| **Draft editing before accepting** | ✅ `Drafts.edit/3` | ❌ no caller | the card takes or discards; it can't correct |
+| **Scene location as an authored field** (§2.3) | ✅ `OpenScene` takes `location:` | ❌ never passed | a scene's location is always blank |
+| **Notification preferences** (§B4) | ✅ `Notifications.Prefs` | ❌ no screen | opt-outs exist and are unreachable |
+| **Export / download** (§B6) | ❌ | ❌ | not started either side — no gap, just absent |
+| **Failed turns requeue to tail** (§1.4) | ❌ deferred by decision | — | a failed turn is retried in place |
+
+Two documentation defects found in the same pass, both since corrected: `Polyphony.Groups`
+claimed the audience picker and group fan-out were unbuilt (the picker shipped; `fan_out/3`
+exists and is merely uncalled), and `backend-backlog.md` §1.5 still said the approve card
+was deferred after it was built. **A moduledoc that under-claims is how a shipped feature
+gets built twice**, so these are worth the same care as the code.
+
+The standing rule this pass exists to enforce: a new event type, context function, or
+`Costs`/retrieval/generation seam is not done when its test passes — it is done when
+something on the live path calls it.
 
 **Interactive user-controlled turns (backend-built, FE-unwired) — deliberately deferred.**
 The beat loop fully supports a `user_controlled` slot: `BeatDriver` pauses at that
