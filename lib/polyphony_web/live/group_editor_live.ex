@@ -286,7 +286,13 @@ defmodule PolyphonyWeb.GroupEditorLive do
   end
 
   defp blocks_from_group(group),
-    do: Map.new(@prose_fields, fn f -> {f, to_blocks(Map.get(group, String.to_atom(f)))} end)
+    do: Map.new(@prose_fields, fn f -> {f, to_blocks(Map.get(group, field_atom(f)))} end)
+
+  # `to_existing_atom`, as the bible editor already does it. The field names here are a
+  # compile-time list so nothing untrusted reaches it either way — but `String.to_atom`
+  # on anything derived from a parameter is how the atom table gets exhausted, and
+  # sobelow is right to refuse to distinguish the safe uses from the unsafe ones.
+  defp field_atom(f), do: String.to_existing_atom(f)
 
   defp update_blocks(socket, field, fun),
     do:
