@@ -89,6 +89,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
          bible: bible,
          name: bible.name || "",
          name_error: nil,
+         name_clash: nil,
          cover: bible.cover,
          blocks: blocks_from_bible(bible),
          items: items_from_bible(bible),
@@ -126,11 +127,24 @@ defmodule PolyphonyWeb.BibleEditorLive do
       # The clash the design catches at the field (§03). Refused rather than saved
       # with a suffix: two worlds called Saltmarch is a mistake heading somewhere
       # confusing, and the author is the only one who can say which they meant.
-      if Library.name_taken?(Owner.of(socket.assigns.current_user), "world_bible", name,
-           except: entry.id
-         ) do
+      #
+      # Also flashed, not only marked at the field. Save sits at the foot of a sheet
+      # several viewports tall and Name is at its head, so the refusal rendered
+      # somewhere the author wasn't looking — pressing Save read as nothing happening
+      # at all, which is how a working guard becomes "saving is broken".
+      clash =
+        Library.name_clash(Owner.of(socket.assigns.current_user), "world_bible", name,
+          except: entry.id
+        )
+
+      if clash do
         {:noreply,
-         assign(socket, name_error: "You already have a world called #{String.trim(name)}.")}
+         socket
+         |> assign(
+           name_error: "You already have a world called #{String.trim(name)}.",
+           name_clash: clash
+         )
+         |> put_flash(:error, "Not saved — you already have a world called #{String.trim(name)}.")}
       else
         bible = %WorldBible{
           socket.assigns.bible
@@ -150,6 +164,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
            bible: bible,
            name: bible.name,
            name_error: nil,
+           name_clash: nil,
            blocks: blocks_from_bible(bible),
            items: items_from_bible(bible),
            saved: true,
@@ -787,7 +802,16 @@ defmodule PolyphonyWeb.BibleEditorLive do
                 <div :if={@name_error} class="flex items-start gap-1.5 mt-1.5">
                   <Kit.dot colour="var(--pencil)" class="mt-1.5 shrink-0" />
                   <span class="text-[12px] leading-relaxed" style="color:var(--pencil)">
-                    <%= @name_error %> Pick something else, or open that one.
+                    <%= @name_error %> Pick something else, or
+                    <%!-- A real link, because the other world is usually one nobody
+                          made on purpose — an interrupted Quick Build's leftover — and
+                          "open that one" was advice with nowhere to click. --%>
+                    <.link
+                      :if={@name_clash}
+                      navigate={~p"/authoring/bible/#{@name_clash.id}"}
+                      class="underline"
+                    >
+                      open that one</.link><span :if={!@name_clash}>open that one</span>.
                   </span>
                 </div>
               </div>

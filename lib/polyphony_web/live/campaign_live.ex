@@ -172,6 +172,39 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
+  # Same reasoning as `new_group`, and the same gap it closed: everything under Cast
+  # could *add* a character that already existed, and nothing could write one. On a
+  # first-run campaign the picker is empty and hidden, so the cast tab offered no way
+  # into the character editor at all — Quick Build was the only route to a cast.
+  #
+  # Written as a **stub**, which is not a judgement about how much they matter (that's
+  # `tier`, a separate axis) but the thing that keeps a blank sheet out of a scene:
+  # `SceneControl` refuses a non-`:full` character, and the editor flips it on the
+  # first save (§B8). So an abandoned one reads as pending instead of standing in the
+  # cast with nothing written.
+  def handle_event("new_character", _params, socket) do
+    safe(socket, fn ->
+      entry =
+        Library.put(%{
+          owner: socket.assigns.owner,
+          kind: "character",
+          payload: %CharacterSheet{
+            name: "New character",
+            status: :stub,
+            world_bible_id: socket.assigns.bible_id
+          }
+        })
+
+      # Cast them on the way out. The button is *in* the cast list, so anything else
+      # would be a character written from a campaign that isn't in it.
+      ids = cast_ids(socket.assigns.payload) ++ [entry.id]
+      payload = Map.put(socket.assigns.payload, :character_ids, ids)
+      {:ok, _} = Library.update_payload(socket.assigns.entry.id, payload)
+
+      {:noreply, push_navigate(socket, to: ~p"/authoring/character/#{entry.id}")}
+    end)
+  end
+
   def handle_event("set_scene_location", %{"location" => where}, socket),
     do: {:noreply, assign(socket, scene_location: where)}
 
@@ -1220,6 +1253,7 @@ defmodule PolyphonyWeb.CampaignLive do
       <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
         <span class="lbl dim">Cast · <%= length(@cast) %></span>
         <div class="flex gap-1.5">
+          <Kit.btn size={:sm} type="button" phx-click="new_character">✦ Write one</Kit.btn>
           <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={@cast == []}>
             Set a scene
           </Kit.btn>
@@ -1253,6 +1287,11 @@ defmodule PolyphonyWeb.CampaignLive do
 
       <Kit.empty :if={@cast == []} headline="Nobody is in this story yet.">
         A campaign needs at least one character before a scene can open.
+        <:action>
+          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="new_character">
+            ✦ Write a character
+          </Kit.btn>
+        </:action>
       </Kit.empty>
 
       <div :if={@addable != []} class="px-4 py-3" style="background:var(--b2)">

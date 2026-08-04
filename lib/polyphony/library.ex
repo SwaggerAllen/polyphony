@@ -642,17 +642,30 @@ defmodule Polyphony.Library do
   `except` skips one entry, so saving a world under its own name is not a clash.
   """
   @spec name_taken?(term(), String.t(), String.t(), keyword()) :: boolean()
-  def name_taken?(owner, kind, name, opts \\ []) do
+  def name_taken?(owner, kind, name, opts \\ []),
+    do: name_clash(owner, kind, name, opts) != nil
+
+  @doc """
+  The entry `name` clashes with, or nil — `name_taken?/4` with the culprit attached.
+
+  Refusing a save is only half a fix if the author can't get at the thing they're
+  clashing with. It is routinely one they never made on purpose: an interrupted Quick
+  Build persists its world before anything associates it, so a retry leaves two worlds
+  of the same name and no obvious sign that the first exists. The screen needs to be
+  able to link straight to it.
+  """
+  @spec name_clash(term(), String.t(), String.t(), keyword()) :: LibraryEntry.t() | nil
+  def name_clash(owner, kind, name, opts \\ []) do
     case normalize_name(name) do
       "" ->
-        false
+        nil
 
       wanted ->
         except = Keyword.get(opts, :except)
 
         owner
         |> list_for_owner(opts)
-        |> Enum.any?(fn e ->
+        |> Enum.find(fn e ->
           e.kind == to_string(kind) and e.id != except and
             normalize_name(payload_name(e)) == wanted
         end)
