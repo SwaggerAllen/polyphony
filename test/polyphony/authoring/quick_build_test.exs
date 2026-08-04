@@ -105,6 +105,35 @@ defmodule Polyphony.Authoring.QuickBuildTest do
     end
   end
 
+  test "the world is written knowing who is about to be cast", %{owner: owner} do
+    me = self()
+
+    # The world is generated first, so without this it is generated blind — and a world
+    # that needs a harbour-master invents one, names her into `starting_canon`, and the
+    # next phase generates that same seed as somebody else.
+    Application.put_env(:polyphony, :llm,
+      provider: Polyphony.LLM.Stub,
+      stub_response: fn messages ->
+        send(me, {:prompt, Enum.map_join(messages, "\n", & &1.content)})
+        {:ok, ~s({"name":"Saltmarch"})}
+      end
+    )
+
+    on_exit(fn -> Application.put_env(:polyphony, :llm, provider: Polyphony.LLM.Mock) end)
+
+    QuickBuild.build(
+      owner: owner,
+      world_seed: "a rain-drowned harbour city",
+      character_seeds: ["a disgraced harbour-master"],
+      provider: Polyphony.LLM.Stub
+    )
+
+    # The world call is the first one out.
+    assert_receive {:prompt, world_prompt}
+    assert world_prompt =~ "a disgraced harbour-master"
+    assert world_prompt =~ "Do not name them"
+  end
+
   test "the whole cast lands in the owner's library", %{owner: owner} do
     before = Enum.count(Library.list_for_owner(owner))
 
