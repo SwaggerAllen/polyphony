@@ -82,6 +82,48 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
       assert html =~ "Untitled campaign"
     end
 
+    test "every campaign can be opened, whatever state it is in", %{conn: conn, user: user} do
+      playing = campaign(user, %{name: "The Salt Line", scenes: ["s1"]})
+      fresh = campaign(user, %{name: ""})
+
+      {:ok, _view, html} = live(conn, ~p"/library")
+
+      # The only link on a row used to be "Carry on", which is `:playing` only — so a
+      # campaign you had just made had nothing to click, and an untitled one looked
+      # like a dead entry rather than an unopened one.
+      assert html =~ ~s(href="/campaigns/#{playing.id}")
+      assert html =~ ~s(href="/campaigns/#{fresh.id}")
+    end
+
+    test "a row can be filed or thrown away, which nothing could do", %{conn: conn, user: user} do
+      entry = campaign(user, %{name: "The Salt Line"})
+      {:ok, view, _html} = live(conn, ~p"/library")
+
+      # `Library.archive/2` had no caller anywhere, so the Archive shelf this screen is
+      # the front door for could only ever be empty.
+      view
+      |> element(~s(button[phx-click="archive"][phx-value-id="#{entry.id}"]))
+      |> render_click()
+
+      assert [%{id: id}] = Library.archived(Owner.of(user))
+      assert id == entry.id
+      refute Enum.any?(Library.list_for_owner(Owner.of(user)), &(&1.id == entry.id))
+    end
+
+    test "trash is soft, and the row says so before you use it", %{conn: conn, user: user} do
+      entry = campaign(user, %{name: "The Salt Line"})
+      {:ok, view, html} = live(conn, ~p"/library")
+
+      # No confirmation here on purpose: the irreversible button lives on the trash
+      # shelf, where the clock is visible.
+      assert html =~ "Recoverable until it expires."
+
+      view |> element(~s(button[phx-click="trash"][phx-value-id="#{entry.id}"])) |> render_click()
+
+      assert [%{id: id}] = Library.trash(Owner.of(user))
+      assert id == entry.id
+    end
+
     test "a finished campaign stays on the shelf — it's a statement, not filing", %{
       conn: conn,
       user: user
