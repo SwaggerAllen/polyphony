@@ -22,7 +22,9 @@ defmodule PolyphonyWeb.CampaignLive do
     WorldBible
   }
 
+  alias Polyphony.Authoring.Group
   alias Polyphony.Events.SceneOpened
+  alias Polyphony.Groups
   alias Polyphony.Campaigns
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Publication
@@ -154,9 +156,20 @@ defmodule PolyphonyWeb.CampaignLive do
       llm: Settings.from_payload(payload),
       global_models: global_models(),
       content: CampaignConfig.from_payload(payload),
+      groups: group_rows(owner),
       published?: Library.published?(socket.assigns.entry)
     )
     |> preflight()
+  end
+
+  # A group is made **inside** a campaign, like a world or a character — the library's
+  # only create action is a campaign (`LibraryLive`), and two front doors for one thing
+  # is how they drift.
+  def handle_event("new_group", _params, socket) do
+    safe(socket, fn ->
+      entry = Groups.create(socket.assigns.owner, %Group{name: "New group"})
+      {:noreply, push_navigate(socket, to: ~p"/authoring/group/#{entry.id}")}
+    end)
   end
 
   def handle_event("set_scene_location", %{"location" => where}, socket),
@@ -1030,6 +1043,25 @@ defmodule PolyphonyWeb.CampaignLive do
 
   defp filled(value), do: is_binary(value) and String.trim(value) != ""
 
+  # Groups sit beside Cast because that is where they are used (§06b): a group is
+  # written like a character and used as a starting point for others.
+  defp group_rows(owner) do
+    for entry <- Groups.list(owner) do
+      group = Library.payload(entry)
+
+      %{
+        id: entry.id,
+        name: group_name(entry, group),
+        members: length(group.member_ids || []),
+        secrets: length(Group.secrets(group)),
+        colour: Voice.of_sheet(group)
+      }
+    end
+  end
+
+  defp group_name(_entry, %{name: n}) when is_binary(n) and n != "", do: n
+  defp group_name(entry, _group), do: "Unnamed group (##{entry.id})"
+
   defp world_payload(_bibles, nil), do: nil
 
   defp world_payload(bibles, id) do
@@ -1240,6 +1272,11 @@ defmodule PolyphonyWeb.CampaignLive do
         in the cast.
       </p>
 
+      <%!-- Beside Cast, per §06b: groups are written with the character editor and
+            seed the people they produce, so this is where they belong rather than in
+            a corner of their own. --%>
+      <.groups_card {assigns} />
+
       <.publish_panel {assigns} />
     </div>
     """
@@ -1277,6 +1314,57 @@ defmodule PolyphonyWeb.CampaignLive do
       </p>
     </div>
     """
+  end
+
+  # `ux/polyphony-campaign.html` §06b, which had no implementation at all — the domain
+  # could seed from a group, resolve an audience through one, and fan its arc out to
+  # every member, and there was no way to make one.
+  defp groups_card(assigns) do
+    ~H"""
+    <Kit.sheet class="m-4">
+      <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
+        <span class="lbl dim">Groups · <%= length(@groups) %></span>
+        <Kit.btn size={:sm} type="button" phx-click="new_group">✦ Write one</Kit.btn>
+      </Kit.row>
+
+      <Kit.row :for={g <- @groups} class="px-4 py-2.5 flex items-center gap-2.5">
+        <span class="av shrink-0" style={"background:#{g.colour}"}></span>
+        <.link navigate={~p"/authoring/group/#{g.id}"} class="min-w-0 flex-1">
+          <div class="text-[13.5px] font-semibold truncate"><%= g.name %></div>
+          <div class="text-[11px] dim"><%= group_line(g) %></div>
+        </.link>
+        <span class="dim text-[14px] shrink-0">›</span>
+      </Kit.row>
+
+      <div :if={@groups != []} class="px-4 py-2.5">
+        <p class="text-[11px] leading-relaxed dim">
+          Anyone written from a group starts with its fields and knows whatever it knows.
+        </p>
+      </div>
+
+      <Kit.empty :if={@groups == []} headline="No groups yet." class="py-6">
+        A group is written like a character and used as a starting point for others — a
+        crew, a household, an order. It saves writing the same person five times, and
+        gives secrets somewhere to point.
+        <:action>
+          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="new_group">
+            ✦ Write a group
+          </Kit.btn>
+        </:action>
+      </Kit.empty>
+    </Kit.sheet>
+    """
+  end
+
+  # The design's own line: "6 members · seeds new people · 2 secrets".
+  defp group_line(g) do
+    [
+      "#{g.members} member#{if g.members == 1, do: "", else: "s"}",
+      "seeds new people",
+      g.secrets > 0 && "#{g.secrets} secret#{if g.secrets == 1, do: "", else: "s"}"
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join(" · ")
   end
 
   # ── Scenes ────────────────────────────────────────────────────────────────────

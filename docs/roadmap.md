@@ -299,7 +299,7 @@ rough order of how much a user would notice:
 |---|---|---|---|
 | **Assisted drafts** (§1.5) | ✅ | ✅ **now built** | — was: Continue stopped the beat and nothing appeared |
 | **User-controlled turns** (§A1) | ✅ `submit_user_turn` / `pass_turn` | ✅ **now built** | — was: "I write their turns" had no interactive effect and double-turned |
-| **Group arc fan-out** (§3.0b) | ✅ `GroupArc.fan_out/3` | ❌ **still open — needs a screen, not a wire** | see below |
+| **Group arc fan-out** (§3.0b) | ✅ `GroupArc.fan_out/3` | ✅ **now built** | — was: no group editor at all, so the collapsed card could never populate |
 | **Edit with tail invalidation** (§1.2) | ✅ `Edit.edit/6` | ✅ **now built** | — was: every edit was silently `:valid`, leaving turns written on top of a line that had changed |
 | **Fork / branch from beat N** (§1.1) | ✅ `Fork.fork/3` | ⚠️ reachable via an invalidating edit, which is now wired | a scene branches when an edit changes what happened; there is still no bare "branch from here" |
 | **Draft editing before accepting** | ✅ `Drafts.edit/3` | ✅ **now built** | — was: take it whole or throw it away |
@@ -308,13 +308,12 @@ rough order of how much a user would notice:
 | **Export / download** (§B6) | ❌ | ❌ | not started either side — no gap, just absent |
 | **Failed turns requeue to tail** (§1.4) | ❌ deferred by decision | — | a failed turn is retried in place |
 
-**Group arc is the one that isn't a wiring job.** `fan_out/3` raises proposals when a
-group's *template* changes — and `Groups.create/3` and `update_fields/3` have no
-production callers either, because there is no group editor. The library lists groups
-that only tests can make. So the missing piece is a group authoring screen, with the
-fan-out as the thing its save calls; wiring `fan_out/3` alone would give it nowhere to
-be called from. Deliberately left, and it is the only row above that is a feature rather
-than a connection.
+**Group arc was the one that wasn't a wiring job**, and it is now done.
+`PolyphonyWeb.GroupEditorLive` (§06b) is the missing half: a group is written like a
+character — the same prose blocks, the same secret control on its facts — with a Groups
+card beside Cast to make one. Telling the members is deliberately *not* what saving
+does: it is its own action, because seeding is a copy and members are separate people,
+and `1 + n` reviewable proposals is what makes refusing one of them a story beat.
 
 Two documentation defects found in the same pass, both since corrected: `Polyphony.Groups`
 claimed the audience picker and group fan-out were unbuilt (the picker shipped; `fan_out/3`
