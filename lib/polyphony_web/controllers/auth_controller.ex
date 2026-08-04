@@ -18,4 +18,13 @@ defmodule PolyphonyWeb.AuthController do
   end
 
   def logout(conn, _params), do: Auth.log_out_user(conn)
+
+  # A GET rather than an event, because deleting a cookie needs a response and nothing
+  # sent over the LiveView socket has one. Same shape as `logout` above.
+  def forget(conn, _params) do
+    conn
+    |> Auth.forget()
+    |> put_flash(:info, "Forgotten — this device won't offer to sign you in.")
+    |> redirect(to: ~p"/login")
+  end
 end

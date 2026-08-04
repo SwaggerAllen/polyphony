@@ -105,6 +105,7 @@ defmodule PolyphonyWeb.Auth do
     conn
     |> renew_session()
     |> put_session(:user_id, user.id)
+    |> remember(user)
     |> put_flash(:info, "Signed in as @#{user.username}.#{note}")
     |> redirect(to: ~p"/library")
   end
@@ -118,10 +119,20 @@ defmodule PolyphonyWeb.Auth do
     end
   end
 
-  @doc "Log out: drop the session."
+  @doc """
+  Log out: drop the session, and forget the device.
+
+  Forgetting is the difference between *signed out* and *expired*. The remember cookie
+  exists because the session cookie has no `max_age` — it dies when the browser does,
+  which on a phone is whenever the OS feels like it — and coming back to a form you
+  have to retype is the entire complaint. But "sign me out" is a deliberate act, and
+  leaving the address behind for the next person to see would answer a question nobody
+  asked.
+  """
   def log_out_user(conn) do
     conn
     |> renew_session()
+    |> forget()
     |> put_flash(:info, "Signed out.")
     |> redirect(to: ~p"/")
   end
@@ -129,6 +140,63 @@ defmodule PolyphonyWeb.Auth do
   defp renew_session(conn) do
     conn |> configure_session(renew: true) |> clear_session()
   end
+
+  # ── Remember this device (§B2) ──────────────────────────────────────────────────
+
+  # Deliberately **not** a credential. It holds a user id and nothing else, and the
+  # only thing it can do is put a *Send me a link* button on screen — the link still
+  # goes to the inbox, which is the one thing a stolen device doesn't come with. That
+  # is the whole reason this can be a year-long cookie while the session is not: the
+  # worst it grants is the ability to send its owner an email.
+  @remember_cookie "_polyphony_remember"
+  @remember_max_age 60 * 60 * 24 * 60
+
+  @doc "Remember this device, so an expired session lands on `/resume` and not a form."
+  @spec remember(Plug.Conn.t(), Accounts.User.t()) :: Plug.Conn.t()
+  def remember(conn, user) do
+    put_resp_cookie(conn, @remember_cookie, user.id,
+      # Encrypted rather than signed: signing only stops tampering, and the value
+      # would still be readable by anything that can see the cookie. There is no
+      # reason for it to be legible at all.
+      encrypt: true,
+      max_age: @remember_max_age,
+      http_only: true,
+      same_site: "Lax",
+      # Automatic, so dev over http still works and prod is never sent in the clear.
+      secure: conn.scheme == :https
+    )
+  end
+
+  @doc "Forget this device."
+  @spec forget(Plug.Conn.t()) :: Plug.Conn.t()
+  def forget(conn), do: delete_resp_cookie(conn, @remember_cookie)
+
+  @doc """
+  The `live_session :session` MFA: lifts the remember cookie into the LiveView session.
+
+  It has to come this way round. `on_mount` hooks are handed the session, not the
+  conn, and cookies are not in `connect_info` — so a hook has no way to read one. This
+  runs on the dead render, where the conn still exists, and the result is merged into
+  the session both mounts see.
+  """
+  @spec remembered_session(Plug.Conn.t()) :: %{optional(String.t()) => term()}
+  def remembered_session(conn) do
+    case fetch_cookies(conn, encrypted: [@remember_cookie]).cookies[@remember_cookie] do
+      nil -> %{}
+      user_id -> %{"remembered_user_id" => user_id}
+    end
+  end
+
+  @doc """
+  The remembered `%User{}`, or nil.
+
+  Loaded through the same `load_user/1` as a live session, so a suspended or deleted
+  account is not remembered either — the cookie outlives both, and a device that keeps
+  offering to sign you into an account that no longer exists is worse than one that
+  forgets.
+  """
+  @spec remembered_user(map()) :: Accounts.User.t() | nil
+  def remembered_user(session), do: load_user(session["remembered_user_id"])
 
   # ── on_mount (LiveViews) ─────────────────────────────────────────────────────────
 
@@ -142,10 +210,7 @@ defmodule PolyphonyWeb.Auth do
     if socket.assigns.current_user do
       {:cont, socket}
     else
-      {:halt,
-       socket
-       |> LiveView.put_flash(:error, "Please sign in.")
-       |> LiveView.redirect(to: ~p"/login")}
+      {:halt, send_to_sign_in(socket, session)}
     end
   end
 
@@ -159,6 +224,23 @@ defmodule PolyphonyWeb.Auth do
       {:halt,
        socket |> LiveView.put_flash(:error, "Admins only.") |> LiveView.redirect(to: ~p"/")}
     end
+  end
+
+  # A device that has signed in before goes to the one-button resume screen rather than
+  # the form — the *page* is what differs, so it is a redirect and not a flash. No
+  # flash on that branch either: `/resume` says why you are there, and hearing it twice
+  # reads as two separate things having gone wrong.
+  #
+  # The id is passed through unverified. Checking it here would put a query on the
+  # signed-out path of every gated page; `/resume` loads it once and falls back to the
+  # form when there is no account behind it, which keeps one place responsible.
+  defp send_to_sign_in(socket, %{"remembered_user_id" => id}) when not is_nil(id),
+    do: LiveView.redirect(socket, to: ~p"/resume")
+
+  defp send_to_sign_in(socket, _session) do
+    socket
+    |> LiveView.put_flash(:error, "Please sign in.")
+    |> LiveView.redirect(to: ~p"/login")
   end
 
   defp assign_current_user(socket, session) do

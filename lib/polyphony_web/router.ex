@@ -59,10 +59,17 @@ defmodule PolyphonyWeb.Router do
 
     get("/logout", AuthController, :logout)
 
-    live_session :public, on_mount: [{PolyphonyWeb.Auth, :mount_current_user}] do
+    # `session:` lifts the remember-me cookie into the LiveView session. It has to
+    # happen here: `on_mount` hooks are handed the session rather than the conn, and
+    # cookies aren't in `connect_info`, so this dead-render callback is the only place
+    # with a conn to read one from.
+    live_session :public,
+      on_mount: [{PolyphonyWeb.Auth, :mount_current_user}],
+      session: {PolyphonyWeb.Auth, :remembered_session, []} do
       live("/", HomeLive, :index)
       live("/login", LoginLive, :index)
       live("/signup", SignupLive, :index)
+      live("/resume", ResumeLive, :index)
       live("/browse", BrowseLive, :index)
       live("/s/:token", ShareLive, :show)
     end
@@ -72,13 +79,18 @@ defmodule PolyphonyWeb.Router do
   scope "/auth", PolyphonyWeb do
     pipe_through(:browser)
     get("/verify/:token", AuthController, :verify)
+    get("/forget", AuthController, :forget)
   end
 
   # Requires a signed-in account.
   scope "/", PolyphonyWeb do
     pipe_through(:browser)
 
-    live_session :authed, on_mount: [{PolyphonyWeb.Auth, :require_authed}] do
+    # Same `session:` as `:public`, and this is the one that earns it: `require_authed`
+    # reads the remembered id to decide between `/resume` and `/login`.
+    live_session :authed,
+      on_mount: [{PolyphonyWeb.Auth, :require_authed}],
+      session: {PolyphonyWeb.Auth, :remembered_session, []} do
       live("/library", LibraryLive, :index)
       live("/settings", SettingsLive, :index)
       live("/campaigns/:id", CampaignLive, :show)
