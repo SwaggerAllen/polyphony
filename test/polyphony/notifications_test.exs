@@ -27,6 +27,15 @@ defmodule Polyphony.NotificationsTest do
     def deliver_email(_to, _subject, _body), do: {:error, :smtp_down}
   end
 
+  # Fails with whatever the test asks for, so the real gen_smtp error shapes can be
+  # replayed without a relay.
+  defmodule RelayTransport do
+    @behaviour Polyphony.Notifications.Transport
+    @impl true
+    def deliver_email(_to, _subject, _body),
+      do: {:error, Application.get_env(:polyphony, :notif_test_error)}
+  end
+
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     Application.put_env(:polyphony, :notif_test_pid, self())
@@ -75,6 +84,56 @@ defmodule Polyphony.NotificationsTest do
                )
 
       assert [%{status: "failed"}] = Notifications.history(u.id)
+    end
+
+    test "a relay failure is logged with what it actually means" do
+      # gen_smtp reports the *last* thing that went wrong, and on the failure that
+      # matters most that is the wrong thing: it answers a rejected password by trying
+      # the next auth mechanism, on a socket the relay has already dropped — so bad
+      # credentials arrive as `:closed`, a network fault. Two deploys went looking for
+      # a firewall. The raw term stays in the line; the hint is what it means.
+      cases = [
+        {{:retries_exceeded, {:network_failure, ~c"smtp.relay.net", {:error, :closed}}},
+         "rejected credentials"},
+        {{:retries_exceeded, {:network_failure, ~c"smtp.relay.net", {:error, :nxdomain}}},
+         "does not resolve"},
+        {{:temporary_failure, ~c"smtp.relay.net", :tls_failed}, "certificate did not verify"},
+        {{:permanent_failure, ~c"smtp.relay.net", :auth_failed}, "rejected the credentials"}
+      ]
+
+      for {reason, expected} <- cases do
+        Application.put_env(:polyphony, :notif_test_error, reason)
+        u = user("user", "hint#{:erlang.phash2(reason)}")
+
+        log =
+          ExUnit.CaptureLog.capture_log(fn ->
+            assert {:error, ^reason} =
+                     Notifications.deliver(u, :owner_warning, %{message: "hi"},
+                       transport: RelayTransport
+                     )
+          end)
+
+        assert log =~ expected, "no hint for #{inspect(reason)}"
+        # The term itself is not replaced by the gloss — it is the thing to search for.
+        assert log =~ "smtp.relay.net"
+      end
+
+      Application.delete_env(:polyphony, :notif_test_error)
+    end
+
+    test "a failure with nothing useful to say gets no invented explanation" do
+      Application.put_env(:polyphony, :notif_test_error, :some_new_thing)
+      on_exit(fn -> Application.delete_env(:polyphony, :notif_test_error) end)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          Notifications.deliver(user("user", "quiet"), :owner_warning, %{message: "hi"},
+            transport: RelayTransport
+          )
+        end)
+
+      assert log =~ ":some_new_thing"
+      refute log =~ " — "
     end
 
     test "an unknown type or missing email is rejected without sending" do
