@@ -31,7 +31,13 @@ defmodule Polyphony.Authoring.Autofill do
     {"appearance", :string, "how they look and physically carry themselves"},
     {"voice", :string, "how they speak — diction, rhythm, verbal tics"},
     {"temperament", :string, "core disposition and emotional default"},
-    {"backstory", :string, "the formative history behind who they are now"}
+    {"backstory", :string, "the formative history behind who they are now"},
+    # A list, like a world's rules: each is one statement an author can mark secret
+    # on its own. Last in the order deliberately — these are read off the character
+    # the fields above have already established, not invented alongside them.
+    {"facts", :lines,
+     "things that are true about them right now — circumstances, ties, what they " <>
+       "owe or are owed, what they are hiding; one statement per line"}
   ]
 
   @world_bible [

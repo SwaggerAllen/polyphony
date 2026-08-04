@@ -552,6 +552,26 @@ defmodule PolyphonyWeb.SheetEditorLive do
     if socket.assigns.boundaries == [], do: suggest_boundaries(socket), else: socket
   end
 
+  # Only onto an empty list, like the two above: generate-all drafts a fresh sheet, and
+  # appending to facts somebody has already written and marked would be a second author
+  # rather than a first draft. Everything arrives public — concealment is the author's
+  # decision, taken one fact at a time from its own menu.
+  defp put_generated_facts(socket, nil), do: socket
+
+  defp put_generated_facts(%{assigns: %{facts: [_ | _]}} = socket, _lines), do: socket
+
+  defp put_generated_facts(socket, lines) do
+    facts =
+      for statement <-
+            List.wrap(if(is_binary(lines), do: String.split(lines, "\n"), else: lines)),
+          is_binary(statement),
+          trimmed = String.trim(statement),
+          trimmed != "",
+          do: %Fact{statement: trimmed}
+
+    if facts == [], do: socket, else: assign(socket, facts: facts)
+  end
+
   # ── Async generation results ──────────────────────────────────────────────────
 
   def handle_async(:gen_all, {:ok, {:ok, values}}, socket) do
@@ -562,12 +582,13 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
     name = if values["name"] in [nil, ""], do: socket.assigns.name, else: values["name"]
 
-    # "Generate all fields" also fills relationships and boundaries when they're empty
-    # (a fresh character), so one click drafts the whole sheet. Existing ones are left
-    # alone — the author can top them up with each card's ✨ Suggest.
+    # "Generate all fields" also fills facts, relationships and boundaries when they're
+    # empty (a fresh character), so one click drafts the whole sheet. Existing ones are
+    # left alone — the author can top them up with each card's ✨ Suggest.
     {:noreply,
      socket
      |> assign(name: name, blocks: blocks)
+     |> put_generated_facts(values["facts"])
      |> mark("all", false)
      |> touch()
      |> maybe_suggest_relationships()
@@ -1393,7 +1414,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
           <div class="px-4 py-3" id="groups">
             <div class="flex items-center justify-between gap-2 mb-2">
               <span class="flex items-center gap-1.5">
-                <span class="lbl dim">They belong to</span>
+                <span class="lbl dim">Groups they belong to</span>
                 <Kit.info label="groups" phx-click="drawer" phx-value-section="groups" />
               </span>
             </div>

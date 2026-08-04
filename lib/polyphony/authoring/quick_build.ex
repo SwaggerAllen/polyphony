@@ -14,7 +14,10 @@ defmodule Polyphony.Authoring.QuickBuild do
        can reuse one instead of inventing a duplicate,
     4. cross-links the cast — every character gets a directional regard toward each other
        one (`Autofill.regard_map`, asymmetrical), and
-    5. drafts a **campaign premise** grounded in the world and cast.
+    5. drafts a **campaign premise** grounded in the world and cast, and
+    6. writes a **cover** for the world and for each character — last, because a cover
+       is written *from* everything else and is the only part a stranger reads before
+       taking either (§2.12).
 
   Everything is persisted to the author's `Library` as ordinary owned entries — the
   same kinds the editors produce — so each can be opened and fleshed out afterwards.
@@ -32,8 +35,8 @@ defmodule Polyphony.Authoring.QuickBuild do
   """
 
   alias Polyphony.Library
-  alias Polyphony.Authoring.{Autofill, CharacterSheet, Stub, WorldBible}
-  alias Polyphony.Authoring.CharacterSheet.{Boundary, Relationship}
+  alias Polyphony.Authoring.{Autofill, CharacterSheet, Cover, Stub, WorldBible}
+  alias Polyphony.Authoring.CharacterSheet.{Boundary, Fact, Relationship}
 
   @doc """
   Build a world, a cast, and a premise from seeds. `opts`:
@@ -44,7 +47,7 @@ defmodule Polyphony.Authoring.QuickBuild do
     * `:suggest_offscreen` — also stub AI-suggested off-screen people per character
       (default `false`).
     * `:progress` — an optional 1-arg fn called with `%{done, total, label}` before each
-      phase (world → each character → linking → premise), for a UI progress bar.
+      phase (world → each character → linking → premise → covers), for a UI progress bar.
     * `:provider` / `:user_id` / `:campaign_id` — metering passthrough.
   """
   @spec build(keyword()) :: {:ok, map()} | {:error, term()}
@@ -57,8 +60,8 @@ defmodule Polyphony.Authoring.QuickBuild do
     suggest? = Keyword.get(opts, :suggest_offscreen, false)
     meter = Keyword.take(opts, [:provider, :user_id, :campaign_id])
 
-    # Phases: the world, one per character, linking the cast, the premise.
-    report = progress_fn(Keyword.get(opts, :progress), length(seeds) + 3)
+    # Phases: the world, one per character, linking the cast, the premise, the covers.
+    report = progress_fn(Keyword.get(opts, :progress), length(seeds) + 4)
     report.(0, "Dreaming up the world")
 
     # The **world** is the only hard requirement — with nothing to attach, there's no
@@ -84,8 +87,36 @@ defmodule Polyphony.Authoring.QuickBuild do
         report.(length(seeds) + 2, "Framing the premise")
         premise = build_premise(world_ctx, char_entries, meter)
 
-        report.(length(seeds) + 3, "Done")
+        # Last, because a cover is written *from* everything else — a world's rules and
+        # canon, a character's facts — and is the only part a stranger reads before
+        # taking either. Written here rather than left for the author because the
+        # alternative is a library full of things with no blurb, which is what
+        # "published" looks like when nobody went back and wrote one.
+        report.(length(seeds) + 3, "Writing the covers")
+        bible_entry = write_cover(bible_entry, meter)
+        char_entries = Enum.map(char_entries, &write_cover(&1, meter))
+
+        report.(length(seeds) + 4, "Done")
         {:ok, %{bible: bible_entry, characters: char_entries, premise: premise, failed: failed}}
+    end
+  end
+
+  # Best-effort, one entry at a time: a cover is the last thing written and the least
+  # load-bearing, so a provider failure — or `{:error, :leaked}`, which is `Cover`
+  # refusing to ship a blurb that quoted a secret — leaves the entry exactly as it was.
+  # An empty cover is a prompt on the editor; a wrong one is a spoiler.
+  defp write_cover(entry, meter) do
+    subject = Library.payload(entry)
+
+    case Cover.generate(subject, meter) do
+      {:ok, prose} ->
+        case Library.update_payload(entry.id, %{subject | cover: prose}) do
+          {:ok, updated} -> updated
+          _ -> entry
+        end
+
+      {:error, _reason} ->
+        entry
     end
   end
 
@@ -388,11 +419,18 @@ defmodule Polyphony.Authoring.QuickBuild do
   defp to_character_sheet(fields, bible_id) do
     %CharacterSheet{
       name: fields["name"],
+      # Generated all along and dropped on the floor here, which left every quick-built
+      # character with the model inferring pronouns from a name each time it wrote them.
+      pronouns: fields["pronouns"],
       premise: fields["premise"],
       appearance: fields["appearance"],
       voice: fields["voice"],
       temperament: fields["temperament"],
       backstory: fields["backstory"],
+      # Everything starts public, exactly as the editor's own add does — concealment
+      # is an authoring decision, and a build that guessed at it would be deciding
+      # what a character may know on the author's behalf.
+      facts: for(s <- lines(fields["facts"]), do: %Fact{statement: s}),
       status: :full,
       world_bible_id: bible_id
     }

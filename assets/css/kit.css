@@ -268,7 +268,12 @@
                    border-radius:99px; background:var(--lamp);
                    margin-left:.35rem; vertical-align:middle; }
 
-.jump { display:flex; gap:.15rem; overflow-x:auto; padding:.5rem .9rem;
+/* Sticky, like .beat-rule and for the same reason: it is navigation for a document
+   that is one long scroll, and navigation you have to scroll back to reach is not
+   navigation. Sticks to whichever ancestor scrolls — the pane on a screen whose
+   height is fixed, the viewport on one whose isn't — so it holds either way. */
+.jump { position:sticky; top:0; z-index:5;
+        display:flex; gap:.15rem; overflow-x:auto; padding:.5rem .9rem;
         width:100%; max-width:100%; min-width:0;
         background:var(--b2); border-bottom:1px solid var(--rule); }
 .jump::-webkit-scrollbar { display:none; }
