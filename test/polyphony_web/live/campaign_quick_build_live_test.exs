@@ -76,6 +76,58 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     assert cast_html =~ ~s(href="/authoring/character/#{cid}")
   end
 
+  test "a built campaign is not still being offered the builder", %{conn: conn, user: user} do
+    camp = campaign(user)
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+    open_quick_build(view)
+
+    html =
+      view
+      |> form("#quick-build", %{"world_seed" => "a city", "char_seed" => ["a harbor-master"]})
+      |> render_submit()
+
+    assert html =~ "quick-build"
+
+    html = render_async(view, 5_000)
+
+    # Quick Build is a one-shot. The card is first-run only and disappears on its own,
+    # but the form it opens was shown on the open flag alone and nothing cleared it —
+    # so it stayed on screen offering to build the world and cast that had just been
+    # built, underneath the settings for them.
+    refute html =~ "quick-build"
+    refute html =~ "Try Quick Build"
+
+    # And it stays gone on a fresh mount, rather than only in the socket that built it.
+    {:ok, _view, reloaded} = live(conn, ~p"/campaigns/#{camp.id}")
+    refute reloaded =~ "quick-build"
+  end
+
+  test "a failed build leaves the form up, because the next move is to try again",
+       %{conn: conn, user: user} do
+    # Every call errors, so nothing is written at all — the total failure, not the
+    # partial one, which takes the success path with a list of what it couldn't make.
+    Application.put_env(:polyphony, :llm,
+      provider: Polyphony.LLM.Stub,
+      stub_response: {:error, :nope}
+    )
+
+    on_exit(fn -> Application.put_env(:polyphony, :llm, provider: Polyphony.LLM.Mock) end)
+
+    camp = campaign(user, %{name: "Doomed"})
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+    open_quick_build(view)
+
+    view
+    |> form("#quick-build", %{"world_seed" => "", "char_seed" => [""]})
+    |> render_submit()
+
+    html = render_async(view, 5_000)
+
+    # Nothing was built, so the campaign is still first-run — and taking the form away
+    # here would leave someone staring at the card that opens it.
+    assert html =~ "quick-build"
+  end
+
   test "character rows can be added and removed", %{conn: conn, user: user} do
     camp = campaign(user)
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")

@@ -464,6 +464,10 @@ defmodule PolyphonyWeb.CampaignLive do
         entry: entry,
         building: false,
         build_progress: nil,
+        # Closed as well as emptied. The render guard covers this too, but a flag left
+        # true is a form that springs open the moment a campaign is emptied back to
+        # first-run, which is not something anyone asked for.
+        quick_build_open: false,
         qb_world: "",
         qb_seeds: [""],
         qb_suggest: true
@@ -763,7 +767,7 @@ defmodule PolyphonyWeb.CampaignLive do
         </Kit.btn>
       </div>
 
-      <.quick_build :if={@quick_build_open} {assigns} />
+      <.quick_build :if={quick_build_open?(assigns)} {assigns} />
 
       <form id="campaign-details" phx-change="update_details">
         <label for="campaign-name" class="lbl dim">Campaign name</label>
@@ -1266,6 +1270,14 @@ defmodule PolyphonyWeb.CampaignLive do
 
   defp first_run?(assigns),
     do: assigns.cast == [] and is_nil(assigns.bible_id) and assigns.scenes == []
+
+  # The card and the form it opens are one thing, so they ask one question. They drifted
+  # apart: the card is first-run only, but the form was shown on the open flag alone —
+  # and a successful build never cleared it. So the card vanished the moment the
+  # campaign stopped being first-run, and the form it had opened stayed on screen,
+  # offering to build a world and cast that now existed, underneath the settings for
+  # them.
+  defp quick_build_open?(assigns), do: assigns.quick_build_open and first_run?(assigns)
 
   defp content_categories,
     do: [
