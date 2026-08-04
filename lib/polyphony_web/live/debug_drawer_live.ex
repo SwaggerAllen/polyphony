@@ -122,6 +122,14 @@ defmodule PolyphonyWeb.DebugDrawerLive do
           </Kit.btn>
           <Kit.btn size={:sm} kind={:ghost} type="button" id="debug-copy">Copy</Kit.btn>
           <Kit.btn size={:sm} kind={:ghost} type="button" phx-click="clear">Clear</Kit.btn>
+          <%!-- Gets the tab out of the bottom-right corner, where it sits on top of
+                whatever the app itself puts there. Client-side and remembered, like
+                open/closed — a drawer that un-tucks itself on the next navigation is
+                back in the way, which is the whole complaint. --%>
+          <Kit.btn size={:sm} kind={:ghost} type="button" id="debug-drawer-tuck"
+                   title="Shrink the tab to a sliver at the edge">
+            Tuck away
+          </Kit.btn>
           <Kit.btn size={:sm} kind={:ghost} type="button" id="debug-drawer-close">✕</Kit.btn>
         </Kit.row>
 
@@ -146,8 +154,11 @@ defmodule PolyphonyWeb.DebugDrawerLive do
         </div>
       </Kit.sheet>
 
+      <%!-- The label is what the tucked state drops; the status dot is outside it and
+            stays, because "is the socket alive" is the one thing worth reading from a
+            sliver. --%>
       <Kit.btn kind={:ghost} type="button" id="debug-drawer-toggle" class="dock-tab rounded-full px-3.5">
-        ⚙ log <Kit.pill><%= @count %></Kit.pill>
+        <span class="dock-tab-label">⚙ log <Kit.pill><%= @count %></Kit.pill></span>
         <span id="socket-status-toggle" class="dot" phx-update="ignore"></span>
       </Kit.btn>
     </div>

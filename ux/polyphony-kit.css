@@ -172,6 +172,17 @@
 .viewas i { width:7px; height:7px; border-radius:999px;
             background:var(--vc); display:inline-block; }
 
+/* The switchable form of it. `Kit.viewas` draws its ▾ as text, and a <select>
+   cannot hold one — `appearance:none` is what makes it a pill rather than an OS
+   widget, and it takes the platform's own chevron with it, leaving a control that
+   reads as a label. So the select is stripped to nothing and worn *inside* the
+   pill, with the same ▾ beside it: one treatment, which is the whole point of
+   this section. */
+.viewas-select { appearance:none; -webkit-appearance:none; background:transparent;
+                 border:0; padding:0; margin:0; color:inherit; font:inherit;
+                 line-height:inherit; cursor:pointer; }
+.viewas-select:focus-visible { outline:1px solid var(--vc); outline-offset:3px; }
+
 
 /* ============================================================================
    6 · THE INFO AFFORDANCE
@@ -219,6 +230,31 @@
 .beat-rule::after  { content:""; flex:1; height:1px; background:var(--rule); }
 
 
+/* The composer. It grows with what is typed, to about five lines, and then
+   scrolls: past that the transcript it is a reply to has gone off the top, and you
+   are writing into a keyhole. `field-sizing` does this in CSS; app.js keeps a JS
+   fallback for browsers that lack it.
+
+   Full screen is the escape hatch for a turn that is genuinely long. The bar it
+   lives in becomes the page — everything else is still there, behind it — and the
+   cap comes off, because at that point the room is the point. */
+.say-input { field-sizing:content; max-height:9.5em; overflow-y:auto; }
+
+/* The way out is a button, not a key. Escape is not something a phone has, and full
+   screen is precisely where somebody goes to write at length and then needs to read
+   the scene they are answering. So the control that opened it says, in the open
+   state, that it closes it. */
+.say-exit  { display:none; }
+.say-full .say-exit  { display:inline; }
+.say-full .say-enter { display:none; }
+
+.say-full .say-bar   { position:fixed; inset:0; z-index:50; display:flex;
+                       flex-direction:column; gap:.5rem;
+                       padding-bottom:calc(env(safe-area-inset-bottom) + .75rem); }
+.say-full .say-bar form { display:flex; flex-direction:column; flex:1; min-height:0; }
+.say-full .say-input { field-sizing:fixed; max-height:none; flex:1; min-height:0; }
+
+
 /* ============================================================================
    8 · STATUS STRIP
    Above the composer in both registers: a slot per cast member, then one
@@ -260,7 +296,12 @@
                    border-radius:99px; background:var(--lamp);
                    margin-left:.35rem; vertical-align:middle; }
 
-.jump { display:flex; gap:.15rem; overflow-x:auto; padding:.5rem .9rem;
+/* Sticky, like .beat-rule and for the same reason: it is navigation for a document
+   that is one long scroll, and navigation you have to scroll back to reach is not
+   navigation. Sticks to whichever ancestor scrolls — the pane on a screen whose
+   height is fixed, the viewport on one whose isn't — so it holds either way. */
+.jump { position:sticky; top:0; z-index:5;
+        display:flex; gap:.15rem; overflow-x:auto; padding:.5rem .9rem;
         width:100%; max-width:100%; min-width:0;
         background:var(--b2); border-bottom:1px solid var(--rule); }
 .jump::-webkit-scrollbar { display:none; }
@@ -349,6 +390,19 @@
 /* 44px: the smallest reliably tappable target, and a dock is opened one-handed
    while something is already going wrong. */
 .dock-tab { min-height:44px; box-shadow:0 2px 12px rgb(0 0 0 / 35%); }
+
+/* Tucked: the tab slides off the right edge, leaving a sliver.
+
+   A dock is pinned over an app that has its own controls in that corner, and being
+   in the way of them is reason enough to move. What it must not do is disappear —
+   the state persists, and the log is what you reach for when nothing else works. So
+   it narrows rather than hides: the label goes, the status dot stays (it is the one
+   thing worth seeing at a glance), and it keeps its 44px height, because a target
+   you cannot hit is the same as no target. Vertical edge, so overshooting to the
+   right lands on it rather than past it. */
+.dock-tucked .dock-tab       { transform:translateX(calc(100% - 15px));
+                               padding-left:.3rem; padding-right:.3rem; }
+.dock-tucked .dock-tab-label { display:none; }
 
 
 /* ============================================================================

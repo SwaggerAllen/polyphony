@@ -91,6 +91,33 @@ Hooks.ComposerInput = {
         }, 0)
       })
 
+      // Full screen. A class on <body>, not on the bar: the bar belongs to a
+      // LiveView that re-renders on every event in the scene, and an attribute set
+      // here would be dropped by the next patch — the same reason the dock's
+      // open state lives there. Escape closes it, because a control that takes the
+      // whole screen has to have an exit that needs no aim.
+      const full = document.getElementById("composer-fullscreen")
+      if (full) {
+        const setFull = (on) => {
+          document.body.classList.toggle("say-full", on)
+          full.setAttribute("aria-pressed", String(on))
+          if (on) this.el.focus()
+          this.grow()
+        }
+
+        full.addEventListener("click", (e) => {
+          e.preventDefault()
+          setFull(!document.body.classList.contains("say-full"))
+        })
+
+        this.el.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && document.body.classList.contains("say-full")) setFull(false)
+        })
+
+        // Sending is the end of the turn, so it is the end of the room it needed.
+        this.el.form.addEventListener("submit", () => setFull(false))
+      }
+
       // ✨ Expand: send the current draft to the server for a generated turn.
       const expand = this.el.form.querySelector("[data-composer-expand]")
       if (expand) {
@@ -178,6 +205,7 @@ function initDebugDrawer(liveSocket) {
 
   const toggle = document.getElementById("debug-drawer-toggle")
   const closeBtn = document.getElementById("debug-drawer-close")
+  const tuckBtn = document.getElementById("debug-drawer-tuck")
   const copyBtn = document.getElementById("debug-copy")
 
   // Open/closed is a class on <body>, deliberately not an inline style on the panel.
@@ -188,8 +216,29 @@ function initDebugDrawer(liveSocket) {
   // LiveView patches, so the state survives.
   const setOpen = (open) => document.body.classList.toggle("dock-open", open)
 
-  if (toggle) toggle.addEventListener("click", () => setOpen(true))
+  // Tucked shrinks the closed tab to a sliver at the right edge, because the dock is
+  // pinned over an app with its own controls in that corner. Remembered across loads:
+  // a tab that un-tucks itself on the next page is back in the way, which is the whole
+  // point of tucking it. localStorage may throw (private mode, storage disabled), and
+  // failing to remember a preference must never take the drawer down with it.
+  const TUCK_KEY = "polyphony:dock-tucked"
+  const isTucked = () => document.body.classList.contains("dock-tucked")
+
+  const setTucked = (tucked) => {
+    document.body.classList.toggle("dock-tucked", tucked)
+    try {
+      if (tucked) { localStorage.setItem(TUCK_KEY, "1") } else { localStorage.removeItem(TUCK_KEY) }
+    } catch (_e) { /* preference not remembered; the class still applies */ }
+  }
+
+  try { if (localStorage.getItem(TUCK_KEY)) setTucked(true) } catch (_e) {}
+
+  // Un-tuck first, open second. A sliver on the screen edge is easy to hit by
+  // accident, and having that throw a full-height panel over the app would undo the
+  // reason it was tucked.
+  if (toggle) toggle.addEventListener("click", () => (isTucked() ? setTucked(false) : setOpen(true)))
   if (closeBtn) closeBtn.addEventListener("click", () => setOpen(false))
+  if (tuckBtn) tuckBtn.addEventListener("click", () => { setTucked(true); setOpen(false) })
   if (copyBtn) {
     copyBtn.addEventListener("click", () => {
       const list = document.getElementById("debug-log-list")

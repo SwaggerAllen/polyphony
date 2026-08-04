@@ -552,6 +552,26 @@ defmodule PolyphonyWeb.SheetEditorLive do
     if socket.assigns.boundaries == [], do: suggest_boundaries(socket), else: socket
   end
 
+  # Only onto an empty list, like the two above: generate-all drafts a fresh sheet, and
+  # appending to facts somebody has already written and marked would be a second author
+  # rather than a first draft. Everything arrives public — concealment is the author's
+  # decision, taken one fact at a time from its own menu.
+  defp put_generated_facts(socket, nil), do: socket
+
+  defp put_generated_facts(%{assigns: %{facts: [_ | _]}} = socket, _lines), do: socket
+
+  defp put_generated_facts(socket, lines) do
+    facts =
+      for statement <-
+            List.wrap(if(is_binary(lines), do: String.split(lines, "\n"), else: lines)),
+          is_binary(statement),
+          trimmed = String.trim(statement),
+          trimmed != "",
+          do: %Fact{statement: trimmed}
+
+    if facts == [], do: socket, else: assign(socket, facts: facts)
+  end
+
   # ── Async generation results ──────────────────────────────────────────────────
 
   def handle_async(:gen_all, {:ok, {:ok, values}}, socket) do
@@ -562,12 +582,13 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
     name = if values["name"] in [nil, ""], do: socket.assigns.name, else: values["name"]
 
-    # "Generate all fields" also fills relationships and boundaries when they're empty
-    # (a fresh character), so one click drafts the whole sheet. Existing ones are left
-    # alone — the author can top them up with each card's ✨ Suggest.
+    # "Generate all fields" also fills facts, relationships and boundaries when they're
+    # empty (a fresh character), so one click drafts the whole sheet. Existing ones are
+    # left alone — the author can top them up with each card's ✨ Suggest.
     {:noreply,
      socket
      |> assign(name: name, blocks: blocks)
+     |> put_generated_facts(values["facts"])
      |> mark("all", false)
      |> touch()
      |> maybe_suggest_relationships()
@@ -1393,7 +1414,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
           <div class="px-4 py-3" id="groups">
             <div class="flex items-center justify-between gap-2 mb-2">
               <span class="flex items-center gap-1.5">
-                <span class="lbl dim">They belong to</span>
+                <span class="lbl dim">Groups they belong to</span>
                 <Kit.info label="groups" phx-click="drawer" phx-value-section="groups" />
               </span>
             </div>
@@ -1616,28 +1637,32 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   defp fact_row(assigns) do
     ~H"""
-    <div class="flex items-start gap-2 py-2.5" id={"fact-#{@index}"}>
-      <%!-- Secret owns the left border and always-in-mind is a chip, because only one
-            of them can own the structure and a fact can be both. --%>
-      <Kit.marked mark={if(@fact.concealed, do: :secret, else: :plain)} class="min-w-0 flex-1">
-        <p class="text-[13.5px] leading-relaxed"><%= @fact.statement %></p>
-        <div
-          :if={@fact.concealed or @fact.core}
-          class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1"
-        >
-          <%!-- The audience is part of the item, so the count reads without opening
-                anything (§01). --%>
-          <AudiencePicker.line :if={@fact.concealed} audience={@fact.audience} labels={@labels} />
-          <Kit.chip_core :if={@fact.core} />
-        </div>
-      </Kit.marked>
+    <%!-- The menu opens **in the flow**. The kit's `.sheet` is `overflow:hidden` — it
+          is what rounds the corners — so an absolutely-positioned panel was clipped by
+          the sheet's bottom edge, which meant the last facts on a sheet, the ones
+          nearest that edge, were the ones whose menus you couldn't read. Same fix and
+          same reason as the world bible's lists: this is one control in three places
+          (§04) and it must not behave differently in one of them. --%>
+    <details class="py-2.5" id={"fact-#{@index}"}>
+      <summary class="flex items-start gap-2 list-none cursor-pointer">
+        <%!-- Secret owns the left border and always-in-mind is a chip, because only one
+              of them can own the structure and a fact can be both. --%>
+        <Kit.marked mark={if(@fact.concealed, do: :secret, else: :plain)} class="min-w-0 flex-1">
+          <p class="text-[13.5px] leading-relaxed"><%= @fact.statement %></p>
+          <div
+            :if={@fact.concealed or @fact.core}
+            class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1"
+          >
+            <%!-- The audience is part of the item, so the count reads without opening
+                  anything (§01). --%>
+            <AudiencePicker.line :if={@fact.concealed} audience={@fact.audience} labels={@labels} />
+            <Kit.chip_core :if={@fact.core} />
+          </div>
+        </Kit.marked>
+        <span class="pill shrink-0" aria-label="Change this fact">⋯</span>
+      </summary>
 
-      <details class="relative shrink-0">
-        <summary class="pill list-none cursor-pointer" aria-label="Change this fact">⋯</summary>
-        <nav
-          class="sheet absolute right-0 top-full mt-1 z-20 min-w-[15rem] overflow-hidden"
-          style="background:var(--b2)"
-        >
+      <nav class="sheet mt-1.5" style="background:var(--b2)">
           <button
             type="button"
             class="row w-full px-4 py-2.5 flex items-center justify-between gap-3 text-left"
@@ -1686,9 +1711,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
           >
             Delete
           </button>
-        </nav>
-      </details>
-    </div>
+      </nav>
+    </details>
     """
   end
 

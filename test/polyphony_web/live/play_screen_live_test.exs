@@ -160,4 +160,82 @@ defmodule PolyphonyWeb.PlayScreenLiveTest do
       assert html |> String.split("beat-rule") |> length() == 2
     end
   end
+
+  describe "the strip is people, so tapping one is looking through their eyes" do
+    test "each slot switches perspective to whoever it stands for",
+         %{conn: conn, user: user} do
+      {scene, cast} = scene_with_cast(user, ["Wren", "Ilias"])
+      {:ok, view, html} = live(conn, ~p"/play/#{scene}")
+
+      for id <- Map.values(cast) do
+        assert html =~ ~s(href="/play/#{scene}?as=#{id}")
+      end
+
+      # A patch, not a navigate: the perspective control is the product's spine and
+      # switching it is the same screen on the same scene, which a remount throws away.
+      [wren, _] = Map.values(cast)
+      view |> element(~s(a[href="/play/#{scene}?as=#{wren}"])) |> render_click()
+
+      # `.page` is the reading register — proof the viewer actually changed.
+      assert render(view) =~ ~s(class="fr page dark)
+    end
+
+    test "the slot you are already looking through isn't a link to here",
+         %{conn: conn, user: user} do
+      {scene, cast} = scene_with_cast(user, ["Wren", "Ilias"])
+      [wren, ilias] = Map.values(cast)
+
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}?as=#{wren}")
+
+      refute html =~ ~s(href="/play/#{scene}?as=#{wren}")
+      assert html =~ ~s(href="/play/#{scene}?as=#{ilias}")
+    end
+  end
+
+  describe "the perspective picker" do
+    test "carries a chevron, so it reads as a menu rather than a label",
+         %{conn: conn, user: user} do
+      {scene, _cast} = scene_with_cast(user, ["Wren"])
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+      # `appearance:none` is what makes it a pill rather than an OS widget, and it
+      # takes the platform's own chevron with it. `Kit.viewas` draws a ▾ as text; a
+      # bare <select> can't hold one, so the pill wears it outside.
+      assert html =~ ~s(class="viewas-select")
+      assert html =~ "▾"
+      # And the drift this ends: three screens had grown their own bare select.
+      refute html =~ "viewas appearance-none"
+    end
+  end
+
+  describe "the composer" do
+    test "grows with what is typed, and can take the whole screen",
+         %{conn: conn, user: user} do
+      {scene, cast} = scene_with_cast(user, ["Wren"])
+      [id | _] = Map.values(cast)
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}?as=#{id}")
+
+      # `.say-input` was referenced by the template and defined by no stylesheet, and
+      # app.js short-circuits its JS fallback whenever the browser supports
+      # `field-sizing` — so on a modern browser nothing sized it at all.
+      assert html =~ "say-input"
+      assert html =~ "say-bar"
+      assert html =~ ~s(id="composer-fullscreen")
+    end
+
+    test "full screen says how to leave it, in the state where that matters",
+         %{conn: conn, user: user} do
+      {scene, cast} = scene_with_cast(user, ["Wren"])
+      [id | _] = Map.values(cast)
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}?as=#{id}")
+
+      # Both labels ship; the class on <body> picks. Escape is not a key a phone has,
+      # and full screen covers the scene you are answering — so the way back has to be
+      # a visible control that says what it does.
+      assert html =~ "Full screen"
+      assert html =~ "Close full screen"
+      assert html =~ ~s(class="say-enter")
+      assert html =~ ~s(class="say-exit")
+    end
+  end
 end

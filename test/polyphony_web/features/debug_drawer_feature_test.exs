@@ -75,6 +75,63 @@ defmodule PolyphonyWeb.DebugDrawerFeatureTest do
     assert shown?(session, "#debug-drawer-body"), "the drawer would not reopen"
   end
 
+  feature "tucking it clears the corner, and it can be got back", %{session: session} do
+    session =
+      session
+      |> visit("/login")
+      |> click(css("#debug-drawer-toggle"))
+      |> click(css("#debug-drawer-tuck"))
+
+    # Tucked shrinks the tab rather than hiding it: the state persists, and a control
+    # you cannot find again is worse than one that is in the way.
+    refute shown?(session, "#debug-drawer-body"), "tucking left the panel open"
+    assert shown?(session, "#debug-drawer-toggle")
+
+    assert width_of(session, "#debug-drawer-toggle") < 60,
+           "the tab is still full width — nothing was tucked"
+
+    # First tap restores the tab, second opens the drawer. A sliver on the screen edge
+    # is easy to hit by accident, and throwing a full-height panel over the app on that
+    # tap would undo the reason it was tucked.
+    session = click(session, css("#debug-drawer-toggle"))
+    refute shown?(session, "#debug-drawer-body"), "a tap on the sliver opened the panel"
+    assert width_of(session, "#debug-drawer-toggle") > 60
+
+    session = click(session, css("#debug-drawer-toggle"))
+    assert shown?(session, "#debug-drawer-body")
+  end
+
+  feature "it stays tucked on the next page, which is the point of tucking it",
+          %{session: session} do
+    session =
+      session
+      |> visit("/login")
+      |> click(css("#debug-drawer-toggle"))
+      |> click(css("#debug-drawer-tuck"))
+      |> visit("/signup")
+
+    # A tab that un-tucks itself on the next navigation is back on top of whatever the
+    # app puts in that corner, which is the whole complaint.
+    assert width_of(session, "#debug-drawer-toggle") < 60
+  end
+
+  # The browser's own measurement, not a class: the assertion is that the thing takes
+  # up less room, and a class name is a claim about that rather than the fact.
+  defp width_of(session, selector) do
+    Wallaby.Browser.execute_script(
+      session,
+      "return document.querySelector(arguments[0]).getBoundingClientRect().width",
+      [selector],
+      fn width -> send(self(), {:width, width}) end
+    )
+
+    receive do
+      {:width, width} -> width
+    after
+      2_000 -> flunk("no width for #{selector}")
+    end
+  end
+
   feature "the log keeps streaming into an open drawer", %{session: session} do
     session =
       session

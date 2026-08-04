@@ -26,6 +26,22 @@ defmodule PolyphonyWeb.KitPortTest do
            "#{@target} is stale — run `mix kit.port` and commit the result"
   end
 
+  test "the jump bar is pinned, because two screens describe it as one" do
+    css = File.read!(@target)
+
+    # `BibleEditorLive` and `SheetEditorLive` both call it "a sticky `Kit.jump`" and
+    # it never was: the class carried no positioning at all, so on a document that
+    # scrolls it left with the page. Both screens are one long scroll by design — no
+    # accordions — which makes this the only navigation they have, and navigation you
+    # have to scroll back to reach is not navigation.
+    [rule] = Regex.run(~r/^\.jump \{.*?\}/ms, css) |> List.wrap()
+
+    assert rule =~ "position:sticky"
+    assert rule =~ "top:0"
+    # And a background, or the content scrolls through it.
+    assert rule =~ "background:var(--b2)"
+  end
+
   test "everything above the mock chrome survives byte for byte" do
     source = File.read!(@source)
     ported = KitPort.port(source)

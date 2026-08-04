@@ -70,9 +70,12 @@ per scene/beat (writers who don't want reordering; solo players who just want pl
 multiplayer retry/fairness once dice land), so requeue-to-tail becomes one policy among several
 rather than a hardcoded change.
 
-### 1.5 Draft accept / discard · ✅ **Shipped (backend)**
-`BeatDriver.accept_draft/2` and `discard_draft/2` complete and tested; the approve/discard card
-is frontend, deferred. See `completed-roadmap.md`.
+### 1.5 Draft accept / discard · ✅ **Shipped**
+`BeatDriver.accept_draft/2` and `discard_draft/2` complete and tested. The approve/discard card
+is built: `PlayLive` loads open drafts on every reload and renders each through the transcript's
+own `render_move/4`, so what is approved reads as it will read committed. Drafts announce on
+`Drafts.topic/1` — a workflow topic carrying no fiction — which is what lets a character's view
+hear about one without subscribing to the omniscient projection. See `completed-roadmap.md`.
 
 ### 1.6 Pass turn · ✅ **Shipped (backend)**
 `BeatDriver.pass_turn/4` complete; the composer/quick-sheet entry points are frontend, deferred.

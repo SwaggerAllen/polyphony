@@ -81,6 +81,16 @@ components.
   decides who may do what; the web layer signs a `Phoenix.Token`, verifies it, and stores
   the user id in the session. `on_mount` hooks (`require_authed` / `require_admin`) gate
   the live sessions.
+- **Remember-me is a hint, never a credential.** The session cookie has no `max_age`,
+  so it dies with the browser — which on a phone is whenever the OS decides. Signing in
+  therefore also sets `_polyphony_remember`: encrypted, http-only, 60 days, holding a
+  user id and nothing else. An expired session on a remembered device lands on
+  `/resume` — one button that emails a fresh magic link — rather than a form asking for
+  an address the server already knows. It buys **only** that button: the link still goes
+  to the inbox, which is the one thing a stolen phone doesn't come with, and that is
+  what lets it outlive the session by two months. `/auth/forget` deletes it (a GET,
+  because nothing over the socket can set a cookie), and so does signing out — expiring
+  and leaving are different things.
 - **Ownership through `Owner`.** Library screens scope every read/write through
   `Polyphony.Owner.of(current_user)` — never a raw user id — so org support later is a
   bolt-on, not a rewrite (decisions §P2/§P8).

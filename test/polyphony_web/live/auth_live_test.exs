@@ -168,6 +168,9 @@ defmodule PolyphonyWeb.AuthLiveTest do
         Phoenix.ConnTest.build_conn()
         |> Phoenix.ConnTest.init_test_session(%{})
         |> Phoenix.Controller.fetch_flash()
+        # Signing in now also writes the encrypted remember-me cookie, which needs the
+        # key base a real request always carries and a hand-built conn does not.
+        |> Map.put(:secret_key_base, PolyphonyWeb.Endpoint.config(:secret_key_base))
         |> PolyphonyWeb.Auth.log_in_user(user)
 
       assert Accounts.get(user.id).deletion_requested_at == nil

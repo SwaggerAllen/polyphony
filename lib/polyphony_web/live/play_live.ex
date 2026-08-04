@@ -32,6 +32,7 @@ defmodule PolyphonyWeb.PlayLive do
     Broadcast,
     Context,
     DebugFlags,
+    Drafts,
     Failures,
     Library,
     MembershipSet,
@@ -42,6 +43,7 @@ defmodule PolyphonyWeb.PlayLive do
   }
 
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
+  alias Polyphony.Director.BeatDriver
   alias Polyphony.Scene.Cast
   alias PolyphonyWeb.Kit
   alias PolyphonyWeb.Transcript
@@ -84,6 +86,10 @@ defmodule PolyphonyWeb.PlayLive do
       # Beat-loop activity (Director deciding / who's generating / idle) — every viewer
       # subscribes so the indicator is accurate and input can be blocked while a beat runs.
       Phoenix.PubSub.subscribe(Polyphony.PubSub, Broadcast.progress_topic(scene_id))
+      # Drafts have a topic of their own — workflow, never fiction — so this holds
+      # through a perspective change without ever subscribing a character's view to
+      # the omniscient projection.
+      Phoenix.PubSub.subscribe(Polyphony.PubSub, Drafts.topic(scene_id))
     end
 
     {:ok,
@@ -97,6 +103,7 @@ defmodule PolyphonyWeb.PlayLive do
        introductions: [],
        control_modes: %{},
        failures: [],
+       drafts: [],
        editing: nil,
        composing: false,
        debug_events: DebugFlags.get(:events),
@@ -200,9 +207,18 @@ defmodule PolyphonyWeb.PlayLive do
       # omniscient view shows the queue (and each carries how it resolves).
       introductions: intro_queue(socket, plain, cast),
       failures: failures,
+      drafts: open_drafts(scene_id),
       debug_feed: feed,
       debug_feed_text: feed_text(feed)
     )
+  end
+
+  # Assisted turns awaiting the author (§A2). Not filtered by viewer: a draft is
+  # authoring workflow, it has never touched the log, and the person deciding is the
+  # author whichever pair of eyes they are currently borrowing. Decoded here so the
+  # template renders moves rather than a binary.
+  defp open_drafts(scene_id) do
+    for row <- Drafts.list_open(scene_id), do: %{row: row, packet: Drafts.packet(row)}
   end
 
   # Open generation failures for this scene, scoped to the viewer (§1.7): the GM
@@ -713,6 +729,37 @@ defmodule PolyphonyWeb.PlayLive do
 
   # ── Director introductions (resolve the pending queue) ─────────────────────────
 
+  # ── Assisted drafts (§A2) ────────────────────────────────────────────────────
+  #
+  # The half of §1.5 that was deferred: the backend has committed and discarded
+  # drafts since it shipped, and nothing on screen ever showed one — press Continue
+  # on a character set to draft-and-approve and the beat simply stopped, with the
+  # turn sitting in a table.
+
+  def handle_event("accept_draft", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      case BeatDriver.accept_draft(String.to_integer(id)) do
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Couldn't take that turn: #{inspect(reason)}")}
+
+        _ ->
+          {:noreply, socket |> reload() |> put_flash(:info, "Taken.")}
+      end
+    end)
+  end
+
+  def handle_event("discard_draft", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      case BeatDriver.discard_draft(String.to_integer(id)) do
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Couldn't discard that: #{inspect(reason)}")}
+
+        _ ->
+          {:noreply, socket |> reload() |> put_flash(:info, "Discarded — they pass.")}
+      end
+    end)
+  end
+
   def handle_event("intro_admit", %{"name" => name}, socket) do
     safe(socket, fn ->
       case find_owned(socket, name) do
@@ -753,6 +800,13 @@ defmodule PolyphonyWeb.PlayLive do
   end
 
   # ── Live events ──────────────────────────────────────────────────────────────
+
+  # A draft landed. The beat has stopped and is waiting on a decision, so stop
+  # showing it as in-flight — otherwise the composer stays blocked behind a spinner
+  # for a beat that isn't going anywhere on its own.
+  def handle_info({:polyphony_event, %{type: "draft.ready"}}, socket) do
+    {:noreply, socket |> assign(progress: idle()) |> reload()}
+  end
 
   def handle_info({:polyphony_event, %{type: "generation.failed"}}, socket) do
     # A turn couldn't be generated — stop waiting and surface the open failure
@@ -1230,6 +1284,18 @@ defmodule PolyphonyWeb.PlayLive do
   # The single edge between the id-keyed log and the name-keyed fiction. Every
   # human-facing string on this page goes through here; nothing that routes does.
 
+  # Tapping a slot puts you behind that person's eyes — the same move the perspective
+  # picker makes, so it goes the same way: a patch on `?as=`, which `handle_params/3`
+  # already resolves. Only for someone the scene actually knows, since a slot can carry
+  # a name the log mentioned and the cast has never held, and never for the perspective
+  # you are already in.
+  defp slot_view(%{id: id}, %Cast{} = cast, scene_id, viewer) when is_binary(id) do
+    if Map.has_key?(cast.id_to_name, id) and viewer != {:character, id},
+      do: ~p"/play/#{scene_id}?#{[as: id]}"
+  end
+
+  defp slot_view(_slot, _cast, _scene_id, _viewer), do: nil
+
   defp name_of(%{assigns: %{cast: cast}}, id), do: Cast.render_name(cast, id)
   defp name_of(%Cast{} = cast, id), do: Cast.render_name(cast, id)
   defp name_of(_socket, id), do: to_string(id)
@@ -1341,16 +1407,15 @@ defmodule PolyphonyWeb.PlayLive do
       <Kit.header title={@scene_title} eyebrow={@campaign_name}>
         <:actions>
           <form id="viewer-form" phx-change="view_as">
-            <label for="viewer-select" class="sr-only">Viewing as</label>
-            <select
+            <Kit.viewas_select
               id="viewer-select"
+              label="Viewing as"
               name="as"
-              class="viewas appearance-none bg-transparent"
-              style={Voice.var("--vc", viewer_colour(@viewer, @voices))}
+              colour={viewer_colour(@viewer, @voices)}
             >
               <option value="" selected={@viewer == :omniscient}>Omniscient</option>
               <option :for={c <- @roster} value={c} selected={@viewer == {:character, c}}><%= name_of(@cast, c) %></option>
-            </select>
+            </Kit.viewas_select>
           </form>
           <Layouts.nav_menu current_user={@current_user} />
         </:actions>
@@ -1445,15 +1510,24 @@ defmodule PolyphonyWeb.PlayLive do
           state={s.state}
           colour={s.colour}
           you={s.you}
+          patch={slot_view(s, @cast, @scene_id, @viewer)}
         />
       </Kit.strip>
 
       <%!-- The bottom bar. A player writes; the GM directs. --%>
       <div
-        class="shrink-0 px-4 py-3"
+        class="say-bar shrink-0 px-4 py-3"
         style="background:var(--b2);border-top:1px solid var(--rule)"
       >
         <Kit.waiting_line :if={beat_busy?(@progress)} label={progress_label(@progress, @cast)} />
+
+        <.draft_card
+          :for={d <- @drafts}
+          draft={d}
+          cast={@cast}
+          voices={@voices}
+          register={@register}
+        />
 
         <form :if={@speaker} id="say-form" phx-submit="say">
           <div class="flex items-center gap-1.5 mb-2 flex-wrap">
@@ -1475,15 +1549,36 @@ defmodule PolyphonyWeb.PlayLive do
             placeholder={"What does #{name_of(@cast, @speaker)} do?"}
           ></textarea>
           <div class="flex items-center justify-between mt-2.5 gap-2">
-            <Kit.btn
-              kind={:ghost}
-              type="button"
-              data-composer-expand="true"
-              disabled={@composing or beat_busy?(@progress)}
-              title="Draft or expand this turn for you — you can edit it before sending"
-            >
-              <%= if @composing, do: "✦ …", else: "✦ Expand" %>
-            </Kit.btn>
+            <div class="flex items-center gap-1.5">
+              <Kit.btn
+                kind={:ghost}
+                type="button"
+                data-composer-expand="true"
+                disabled={@composing or beat_busy?(@progress)}
+                title="Draft or expand this turn for you — you can edit it before sending"
+              >
+                <%= if @composing, do: "✦ …", else: "✦ Expand" %>
+              </Kit.btn>
+              <%!-- The field grows to about five lines and then scrolls; past that
+                    the transcript it answers has gone off the top. For a turn that is
+                    genuinely long, this hands the whole screen over instead. Plain JS
+                    like the rest of the composer — a class on <body>, so a re-render
+                    can't drop it.
+
+                    One button, labelled for the state it is in. Full screen covers the
+                    scene you are answering, and on a phone there is no Escape key to
+                    get back to it, so the way out has to be visible and say so. --%>
+              <Kit.btn
+                kind={:ghost}
+                type="button"
+                id="composer-fullscreen"
+                aria-pressed="false"
+                title="Write with the whole screen"
+              >
+                <span class="say-enter">⤢ Full screen</span>
+                <span class="say-exit">⤡ Close full screen</span>
+              </Kit.btn>
+            </div>
             <Kit.btn kind={:primary} type="submit" disabled={beat_busy?(@progress)}>
               Take the turn
             </Kit.btn>
@@ -1684,6 +1779,81 @@ defmodule PolyphonyWeb.PlayLive do
     </div>
     """
   end
+
+  # A turn that was generated and is waiting to be taken (§A2). Rendered through the
+  # *same* `render_move/4` the transcript uses, so what is approved reads exactly as
+  # it will read once committed — a second renderer here would drift, and the whole
+  # point of approving is seeing the thing itself.
+  attr(:draft, :map, required: true)
+  attr(:cast, :any, required: true)
+  attr(:voices, :map, required: true)
+  attr(:register, :atom, required: true)
+
+  defp draft_card(assigns) do
+    assigns =
+      assigns
+      |> assign(:colour, Voice.of(assigns.voices, assigns.draft.row.character_id))
+      |> assign(:name, name_of(assigns.cast, assigns.draft.row.character_id))
+
+    ~H"""
+    <Kit.sheet class="mb-3" style={"border-color:#{@colour}"}>
+      <Kit.row class="px-3.5 py-2 flex items-center gap-2 flex-wrap" style="background:var(--b2)">
+        <span class="ttl text-[14px] font-semibold" style={"color:#{@colour}"}><%= @name %></span>
+        <Kit.pill class="dim">Waiting on you</Kit.pill>
+        <span class="flex-1"></span>
+        <span class="lbl dim">beat <%= @draft.row.beat %></span>
+      </Kit.row>
+
+      <div class="px-3.5 py-2.5">
+        <div :for={m <- draft_moves(@draft, @draft.row.character_id)}>
+          <%= Transcript.render_move(m, @cast, @register, @voices) %>
+        </div>
+      </div>
+
+      <Kit.row class="px-3.5 py-2.5 flex items-center gap-1.5">
+        <Kit.btn kind={:primary} size={:sm} type="button"
+                 phx-click="accept_draft" phx-value-id={@draft.row.id}>
+          Take it
+        </Kit.btn>
+        <%!-- Discarding is a **pass**, not a deletion — the slot gives up its turn and
+              the beat walks on, which is what the backend does with it. Saying
+              "discard" alone would read as "try again". --%>
+        <Kit.btn kind={:pen} size={:sm} type="button"
+                 phx-click="discard_draft" phx-value-id={@draft.row.id}>
+          Discard — they pass
+        </Kit.btn>
+      </Kit.row>
+    </Kit.sheet>
+    """
+  end
+
+  # A draft holds `TurnPacket.Move` structs; the transcript renders committed *events*.
+  # Mapping one onto the other is what lets both go through a single renderer.
+  defp draft_moves(%{packet: %{moves: moves}}, character_id) do
+    moves
+    |> Enum.sort_by(& &1.seq)
+    |> Enum.map(fn m ->
+      case m.type do
+        :speech ->
+          %{
+            kind: "SpeechUttered",
+            payload: %{
+              content: m.content,
+              audibility: m.audibility,
+              addressed_to: m.addressed_to
+            }
+          }
+
+        :thought ->
+          %{kind: "ThoughtOccurred", payload: %{content: m.content, character_id: character_id}}
+
+        _ ->
+          %{kind: "ActionTaken", payload: %{content: m.content}}
+      end
+    end)
+  end
+
+  defp draft_moves(_draft, _character_id), do: []
 
   defp control_label("assisted"), do: "Draft & approve"
   defp control_label("user_controlled"), do: "Yours"

@@ -149,6 +149,7 @@ defmodule PolyphonyWeb.CampaignLive do
       bibles: bibles,
       bible_id: world_id,
       bible_name: bible_label(bibles, world_id),
+      world: world_payload(bibles, world_id),
       llm: Settings.from_payload(payload),
       global_models: global_models(),
       content: CampaignConfig.from_payload(payload),
@@ -464,6 +465,10 @@ defmodule PolyphonyWeb.CampaignLive do
         entry: entry,
         building: false,
         build_progress: nil,
+        # Closed as well as emptied. The render guard covers this too, but a flag left
+        # true is a form that springs open the moment a campaign is emptied back to
+        # first-run, which is not something anyone asked for.
+        quick_build_open: false,
         qb_world: "",
         qb_seeds: [""],
         qb_suggest: true
@@ -763,7 +768,7 @@ defmodule PolyphonyWeb.CampaignLive do
         </Kit.btn>
       </div>
 
-      <.quick_build :if={@quick_build_open} {assigns} />
+      <.quick_build :if={quick_build_open?(assigns)} {assigns} />
 
       <form id="campaign-details" phx-change="update_details">
         <label for="campaign-name" class="lbl dim">Campaign name</label>
@@ -919,11 +924,18 @@ defmodule PolyphonyWeb.CampaignLive do
   defp world_tab(assigns) do
     ~H"""
     <div>
-      <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
+      <%!-- `ux/polyphony-campaign.html` §04 "Attached", which had never been ported:
+            the tab showed the picker and nothing whatever about the world it had
+            picked. A quick-built campaign therefore read as a name in a dropdown and
+            no setting at all — the world had been written, it just wasn't on screen. --%>
+      <.attached_world :if={@world} {assigns} />
+
+      <Kit.row
+        :if={is_nil(@world)}
+        class="px-4 py-2.5 flex items-center justify-between gap-2"
+        style="background:var(--b2)"
+      >
         <span class="lbl dim">The world</span>
-        <.link :if={@bible_id} navigate={~p"/authoring/bible/#{@bible_id}"} class="btn btn-gh btn-sm">
-          Edit world
-        </.link>
       </Kit.row>
 
       <div class="px-4 py-3.5">
@@ -951,6 +963,83 @@ defmodule PolyphonyWeb.CampaignLive do
       </Kit.empty>
     </div>
     """
+  end
+
+  # The attached world, read rather than edited — enough to know what the Director is
+  # working from without leaving the campaign. Every section is guarded, because a world
+  # attached by hand can be a name and nothing else, and a heading over an empty space
+  # reads as a bug rather than as an absence.
+  defp attached_world(assigns) do
+    ~H"""
+    <div>
+      <Kit.row
+        class="px-4 py-3 flex items-center justify-between gap-2"
+        style="background:var(--b2)"
+      >
+        <div class="min-w-0">
+          <div class="ttl text-[15px] font-semibold truncate"><%= @bible_name %></div>
+          <%!-- Attaching **copies** (§2.5b), so this is no longer the library's world:
+                editing here can't reach back and change the template, and the label is
+                the only place that's visible. --%>
+          <div class="lbl dim mt-0.5">This campaign's copy</div>
+        </div>
+        <.link navigate={~p"/authoring/bible/#{@bible_id}"} class="btn btn-gh btn-sm shrink-0">
+          Edit
+        </.link>
+      </Kit.row>
+
+      <Kit.row :if={filled(@world.setting)} class="px-4 py-3">
+        <div class="lbl dim mb-1">Setting</div>
+        <p class="text-[13px] leading-relaxed"><%= @world.setting %></p>
+      </Kit.row>
+
+      <Kit.row :if={filled(@world.tone)} class="px-4 py-3">
+        <div class="lbl dim mb-1">Tone</div>
+        <p class="text-[13px] leading-relaxed"><%= @world.tone %></p>
+      </Kit.row>
+
+      <Kit.row :if={world_rules(@world) != []} class="px-4 py-3">
+        <div class="lbl dim mb-1.5">Rules</div>
+        <div class="space-y-1 text-[13px] leading-relaxed">
+          <%!-- Concealed rules are shown: the author is omniscient over their own
+                world, and `:secret` is the same mark the bible editor gives them, so
+                the two screens don't describe the same entry differently. What a
+                *character* may know is `Polyphony.Visibility`'s business and is not
+                this screen. --%>
+          <Kit.marked
+            :for={{entry, i} <- Enum.with_index(world_rules(@world), 1)}
+            mark={if(entry.concealed, do: :secret, else: :plain)}
+            class="flex gap-2"
+          >
+            <span class="dim mono text-[11px] pt-0.5"><%= i %></span>
+            <span><%= entry.statement %></span>
+          </Kit.marked>
+        </div>
+      </Kit.row>
+    </div>
+    """
+  end
+
+  defp world_rules(%WorldBible{rules: rules}), do: WorldBible.entries(rules)
+  defp world_rules(_), do: []
+
+  defp filled(value), do: is_binary(value) and String.trim(value) != ""
+
+  defp world_payload(_bibles, nil), do: nil
+
+  defp world_payload(bibles, id) do
+    # Explicitly `nil` on anything that isn't a bible. A bare `with` would hand back
+    # the unmatched payload, and the template would then read `.setting` off it.
+    case Enum.find(bibles, &(&1.id == id)) do
+      nil ->
+        nil
+
+      entry ->
+        case Library.payload(entry) do
+          %WorldBible{} = bible -> bible
+          _ -> nil
+        end
+    end
   end
 
   # Publishing asks **two separate questions, not one ladder** (§3.1c): how it's meant
@@ -1266,6 +1355,14 @@ defmodule PolyphonyWeb.CampaignLive do
 
   defp first_run?(assigns),
     do: assigns.cast == [] and is_nil(assigns.bible_id) and assigns.scenes == []
+
+  # The card and the form it opens are one thing, so they ask one question. They drifted
+  # apart: the card is first-run only, but the form was shown on the open flag alone —
+  # and a successful build never cleared it. So the card vanished the moment the
+  # campaign stopped being first-run, and the form it had opened stayed on screen,
+  # offering to build a world and cast that now existed, underneath the settings for
+  # them.
+  defp quick_build_open?(assigns), do: assigns.quick_build_open and first_run?(assigns)
 
   defp content_categories,
     do: [

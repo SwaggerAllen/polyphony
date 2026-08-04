@@ -19,7 +19,7 @@ defmodule Storybook.Kit.Strip do
       %Variation{
         id: :your_turn,
         description:
-          "Above the composer in both registers: a slot per cast member, then one sentence. No beat number — the transcript rule owns that — and no navigation.",
+          "Above the composer in both registers: a slot per cast member, then one sentence. No beat number — the transcript rule owns that.",
         attributes: %{sentence: "Your turn.", tone: "var(--lamp)"},
         slots: [
           ~s|<:slot_item label="WREN" state={:took} colour="var(--v1)"/>|,
@@ -70,6 +70,20 @@ defmodule Storybook.Kit.Strip do
           ~s|<:slot_item label="O" state={:pass}/>|,
           ~s|<:slot_item label="H" state={:wait}/>|,
           ~s|<:slot_item label="T" state={:wait}/>|
+        ]
+      },
+      %Variation{
+        id: :slots_are_perspectives,
+        description:
+          "A slot with `patch` becomes a link: tapping a person puts you behind their eyes. " <>
+            "It patches rather than navigates, because switching perspective is the same " <>
+            "screen on the same scene. The one you are already in carries no link, so it " <>
+            "isn't offering to take you where you are.",
+        attributes: %{sentence: "Your turn."},
+        slots: [
+          ~s|<:slot_item label="WREN" state={:took} colour="var(--v1)" patch="/play/demo?as=wren"/>|,
+          ~s|<:slot_item label="YOU" state={:now} you/>|,
+          ~s|<:slot_item label="CORR" state={:wait} patch="/play/demo?as=corr"/>|
         ]
       }
     ]
