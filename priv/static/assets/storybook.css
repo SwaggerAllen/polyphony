@@ -1595,6 +1595,26 @@
   box-shadow:0 2px 12px rgb(0 0 0 / 35%);
 }
 
+/* Tucked: the tab slides off the right edge, leaving a sliver.
+
+   A dock is pinned over an app that has its own controls in that corner, and being
+   in the way of them is reason enough to move. What it must not do is disappear —
+   the state persists, and the log is what you reach for when nothing else works. So
+   it narrows rather than hides: the label goes, the status dot stays (it is the one
+   thing worth seeing at a glance), and it keeps its 44px height, because a target
+   you cannot hit is the same as no target. Vertical edge, so overshooting to the
+   right lands on it rather than past it. */
+
+.dock-tucked .dock-tab       {
+  transform:translateX(calc(100% - 15px));
+  padding-left:.3rem;
+  padding-right:.3rem;
+}
+
+.dock-tucked .dock-tab-label {
+  display:none;
+}
+
 .last\:mb-0:last-child {
   margin-bottom: 0px;
 }

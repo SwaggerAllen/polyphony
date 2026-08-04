@@ -1762,18 +1762,18 @@
     canPushState() {
       return typeof history.pushState !== "undefined";
     },
-    dropLocal(localStorage, namespace, subkey) {
-      return localStorage.removeItem(this.localKey(namespace, subkey));
+    dropLocal(localStorage2, namespace, subkey) {
+      return localStorage2.removeItem(this.localKey(namespace, subkey));
     },
-    updateLocal(localStorage, namespace, subkey, initial, func) {
-      const current = this.getLocal(localStorage, namespace, subkey);
+    updateLocal(localStorage2, namespace, subkey, initial, func) {
+      const current = this.getLocal(localStorage2, namespace, subkey);
       const key = this.localKey(namespace, subkey);
       const newVal = current === null ? initial : func(current);
-      localStorage.setItem(key, JSON.stringify(newVal));
+      localStorage2.setItem(key, JSON.stringify(newVal));
       return newVal;
     },
-    getLocal(localStorage, namespace, subkey) {
-      return JSON.parse(localStorage.getItem(this.localKey(namespace, subkey)));
+    getLocal(localStorage2, namespace, subkey) {
+      return JSON.parse(localStorage2.getItem(this.localKey(namespace, subkey)));
     },
     updateCurrentState(callback) {
       if (!this.canPushState()) {
@@ -8833,10 +8833,32 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
     if (!drawer) return;
     const toggle = document.getElementById("debug-drawer-toggle");
     const closeBtn = document.getElementById("debug-drawer-close");
+    const tuckBtn = document.getElementById("debug-drawer-tuck");
     const copyBtn = document.getElementById("debug-copy");
     const setOpen = (open) => document.body.classList.toggle("dock-open", open);
-    if (toggle) toggle.addEventListener("click", () => setOpen(true));
+    const TUCK_KEY = "polyphony:dock-tucked";
+    const isTucked = () => document.body.classList.contains("dock-tucked");
+    const setTucked = (tucked) => {
+      document.body.classList.toggle("dock-tucked", tucked);
+      try {
+        if (tucked) {
+          localStorage.setItem(TUCK_KEY, "1");
+        } else {
+          localStorage.removeItem(TUCK_KEY);
+        }
+      } catch (_e) {
+      }
+    };
+    try {
+      if (localStorage.getItem(TUCK_KEY)) setTucked(true);
+    } catch (_e) {
+    }
+    if (toggle) toggle.addEventListener("click", () => isTucked() ? setTucked(false) : setOpen(true));
     if (closeBtn) closeBtn.addEventListener("click", () => setOpen(false));
+    if (tuckBtn) tuckBtn.addEventListener("click", () => {
+      setTucked(true);
+      setOpen(false);
+    });
     if (copyBtn) {
       copyBtn.addEventListener("click", () => {
         const list = document.getElementById("debug-log-list");

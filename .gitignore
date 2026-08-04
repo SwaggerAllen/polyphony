@@ -24,3 +24,7 @@ erl_crash.dump
 # Dialyzer's PLT — a ~7 MB build artifact derived from OTP + deps. CI caches it on
 # mix.lock rather than tracking it.
 /priv/plts/
+
+# Wallaby writes here on a failed feature test (and on demand). Artefacts of a
+# run, never of the source.
+/screenshots/
