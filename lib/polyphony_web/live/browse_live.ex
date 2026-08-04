@@ -654,12 +654,11 @@ defmodule PolyphonyWeb.BrowseLive do
       >
         <:actions>
           <form id="mode-form" phx-change="switch_mode">
-            <label for="mode-select" class="sr-only">Reading as</label>
-            <select
+            <Kit.viewas_select
               id="mode-select"
+              label="Reading as"
               name="as"
-              class="viewas appearance-none bg-transparent"
-              style={"--vc:#{mode_colour(@mode, voices(@snapshot))}"}
+              colour={mode_colour(@mode, voices(@snapshot))}
             >
               <optgroup label="Who can show you this">
                 <option
@@ -681,7 +680,7 @@ defmodule PolyphonyWeb.BrowseLive do
                   <%= Publication.label(m, nil, @names) %> — wasn't there
                 </option>
               </optgroup>
-            </select>
+            </Kit.viewas_select>
           </form>
           <Layouts.nav_menu current_user={@current_user} />
         </:actions>

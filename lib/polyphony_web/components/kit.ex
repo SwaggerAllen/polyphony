@@ -229,6 +229,37 @@ defmodule PolyphonyWeb.Kit do
     """
   end
 
+  @doc """
+  The perspective control as a **switchable menu** — the same pill, wrapped round a
+  `<select>`.
+
+  Three screens had grown their own `<select class="viewas appearance-none">`, which
+  is the drift `ux/README.md` names as the design pass's worst consistency failure,
+  and it cost them the chevron: `appearance:none` strips the platform's own, and a
+  bare select can't carry the `▾` that `viewas/1` draws as text. So the mark lives
+  out here beside the control, and the select inside it is stripped to nothing.
+
+  The `<form>` and its `phx-change` stay at the call site — each screen names a
+  different event — and options are the inner block, because one of them groups.
+  """
+  attr(:id, :string, required: true)
+  attr(:label, :string, required: true, doc: "the screen-reader label — Viewing as, Reading as")
+  attr(:colour, :string, default: "var(--bc)")
+  attr(:class, :string, default: nil)
+  attr(:rest, :global, include: ~w(name form))
+  slot(:inner_block, required: true, doc: "the <option>s")
+
+  def viewas_select(assigns) do
+    ~H"""
+    <span class={["viewas", @class]} style={Voice.var("--vc", @colour)}>
+      <i></i>
+      <label for={@id} class="sr-only"><%= @label %></label>
+      <select id={@id} class="viewas-select" {@rest}><%= render_slot(@inner_block) %></select>
+      <span aria-hidden="true">▾</span>
+    </span>
+    """
+  end
+
   # ── Controls ───────────────────────────────────────────────────────────────
 
   @doc """
@@ -597,6 +628,7 @@ defmodule PolyphonyWeb.Kit do
     attr(:state, :atom)
     attr(:colour, :string)
     attr(:you, :boolean)
+    attr(:navigate, :string, doc: "where this person is — makes the slot a link")
   end
 
   slot(:aside, doc: "trailing control on the sentence line — e.g. jump-to-failure")
@@ -605,13 +637,10 @@ defmodule PolyphonyWeb.Kit do
     ~H"""
     <div class={["strip", @class]}>
       <div class="slots">
-        <div
-          :for={s <- @slot_item}
-          class={["slot", slot_state(s[:state]), s[:you] && "slot-you"]}
-          style={s[:colour] && Voice.var("--sc", s[:colour])}
-        >
-          <%= s[:label] %>
-        </div>
+        <%!-- A slot is a person, and a person on screen that isn't reachable reads as
+              a bug. `navigate` is optional so the strip still renders for a viewer
+              with nowhere to send them — a published snapshot has no editor. --%>
+        <.slot_chip :for={s <- @slot_item} s={s} />
       </div>
       <div :if={@sentence} class="flex items-center justify-between gap-2 mt-1.5">
         <span class={["text-[13px]", is_nil(@tone) && "dim"]} style={@tone && "color:#{@tone}"}>
@@ -619,6 +648,31 @@ defmodule PolyphonyWeb.Kit do
         </span>
         <%= render_slot(@aside) %>
       </div>
+    </div>
+    """
+  end
+
+  # One loop, two tags. Two `:for`s — links then divs — would have reordered the
+  # strip the moment one person was reachable and another wasn't, and the strip is
+  # turn order.
+  attr(:s, :map, required: true)
+
+  defp slot_chip(assigns) do
+    ~H"""
+    <.link
+      :if={@s[:navigate]}
+      navigate={@s[:navigate]}
+      class={["slot", slot_state(@s[:state]), @s[:you] && "slot-you"]}
+      style={@s[:colour] && Voice.var("--sc", @s[:colour])}
+    >
+      <%= @s[:label] %>
+    </.link>
+    <div
+      :if={is_nil(@s[:navigate])}
+      class={["slot", slot_state(@s[:state]), @s[:you] && "slot-you"]}
+      style={@s[:colour] && Voice.var("--sc", @s[:colour])}
+    >
+      <%= @s[:label] %>
     </div>
     """
   end

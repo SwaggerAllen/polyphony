@@ -172,6 +172,17 @@
 .viewas i { width:7px; height:7px; border-radius:999px;
             background:var(--vc); display:inline-block; }
 
+/* The switchable form of it. `Kit.viewas` draws its ▾ as text, and a <select>
+   cannot hold one — `appearance:none` is what makes it a pill rather than an OS
+   widget, and it takes the platform's own chevron with it, leaving a control that
+   reads as a label. So the select is stripped to nothing and worn *inside* the
+   pill, with the same ▾ beside it: one treatment, which is the whole point of
+   this section. */
+.viewas-select { appearance:none; -webkit-appearance:none; background:transparent;
+                 border:0; padding:0; margin:0; color:inherit; font:inherit;
+                 line-height:inherit; cursor:pointer; }
+.viewas-select:focus-visible { outline:1px solid var(--vc); outline-offset:3px; }
+
 
 /* ============================================================================
    6 · THE INFO AFFORDANCE
@@ -217,6 +228,23 @@
 .beat-rule         { position:sticky; top:0; z-index:5; background:var(--b1);
                      display:flex; align-items:center; gap:.7rem; padding:.55rem 0 .5rem; }
 .beat-rule::after  { content:""; flex:1; height:1px; background:var(--rule); }
+
+
+/* The composer. It grows with what is typed, to about five lines, and then
+   scrolls: past that the transcript it is a reply to has gone off the top, and you
+   are writing into a keyhole. `field-sizing` does this in CSS; app.js keeps a JS
+   fallback for browsers that lack it.
+
+   Full screen is the escape hatch for a turn that is genuinely long. The bar it
+   lives in becomes the page — everything else is still there, behind it — and the
+   cap comes off, because at that point the room is the point. */
+.say-input { field-sizing:content; max-height:9.5em; overflow-y:auto; }
+
+.say-full .say-bar   { position:fixed; inset:0; z-index:50; display:flex;
+                       flex-direction:column; gap:.5rem;
+                       padding-bottom:calc(env(safe-area-inset-bottom) + .75rem); }
+.say-full .say-bar form { display:flex; flex-direction:column; flex:1; min-height:0; }
+.say-full .say-input { field-sizing:fixed; max-height:none; flex:1; min-height:0; }
 
 
 /* ============================================================================

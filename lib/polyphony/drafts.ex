@@ -46,6 +46,18 @@ defmodule Polyphony.Drafts do
     row
   end
 
+  @doc """
+  The PubSub topic for a scene's draft workflow.
+
+  Its own topic, deliberately **not** a viewer projection. A draft is workflow state
+  that never touches the log, so it carries no fiction and no visibility decision —
+  which is what lets a character view subscribe to it. Subscribing that view to the
+  omniscient projection topic instead, to catch the same announcement, would hand it
+  every other character's turns.
+  """
+  @spec topic(String.t()) :: String.t()
+  def topic(scene_id), do: "scene:#{scene_id}:drafts"
+
   @doc "A draft row (packet still encoded — use `packet/1` to decode), or nil."
   def get(id, opts \\ []), do: PacketDraft.get(Keyword.get(opts, :repo, Repo), id)
 
@@ -134,18 +146,23 @@ defmodule Polyphony.Drafts do
   # ── Broadcast ─────────────────────────────────────────────────────────────
 
   defp broadcast(%PacketDraft{} = row) do
-    Phoenix.PubSub.broadcast(@pubsub, Broadcast.topic(row.scene_id, :omniscient), {
-      :polyphony_event,
-      %{
-        type: "draft.ready",
-        viewer: "omniscient",
-        draft_id: row.id,
-        scene_id: row.scene_id,
-        beat: row.beat,
-        character_id: row.character_id,
-        source: row.source
-      }
-    })
+    announcement =
+      {:polyphony_event,
+       %{
+         type: "draft.ready",
+         viewer: "omniscient",
+         draft_id: row.id,
+         scene_id: row.scene_id,
+         beat: row.beat,
+         character_id: row.character_id,
+         source: row.source
+       }}
+
+    Phoenix.PubSub.broadcast(@pubsub, Broadcast.topic(row.scene_id, :omniscient), announcement)
+    # And on the workflow topic, so a screen looking through a character's eyes hears
+    # about a draft awaiting them without subscribing to the omniscient projection —
+    # which would hand it every other character's turns.
+    Phoenix.PubSub.broadcast(@pubsub, topic(row.scene_id), announcement)
 
     :ok
   end

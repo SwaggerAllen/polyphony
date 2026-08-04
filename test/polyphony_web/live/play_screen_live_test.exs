@@ -160,4 +160,49 @@ defmodule PolyphonyWeb.PlayScreenLiveTest do
       assert html |> String.split("beat-rule") |> length() == 2
     end
   end
+
+  describe "the strip is people, so it goes to them" do
+    test "each slot links to the character it stands for", %{conn: conn, user: user} do
+      {scene, cast} = scene_with_cast(user, ["Wren", "Ilias"])
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+      # A person on screen who isn't reachable reads as a bug. `character_id` *is* the
+      # library entry id, so their sheet is one hop away.
+      for id <- Map.values(cast) do
+        assert html =~ ~s(href="/authoring/character/#{id}")
+      end
+    end
+  end
+
+  describe "the perspective picker" do
+    test "carries a chevron, so it reads as a menu rather than a label",
+         %{conn: conn, user: user} do
+      {scene, _cast} = scene_with_cast(user, ["Wren"])
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+      # `appearance:none` is what makes it a pill rather than an OS widget, and it
+      # takes the platform's own chevron with it. `Kit.viewas` draws a ▾ as text; a
+      # bare <select> can't hold one, so the pill wears it outside.
+      assert html =~ ~s(class="viewas-select")
+      assert html =~ "▾"
+      # And the drift this ends: three screens had grown their own bare select.
+      refute html =~ "viewas appearance-none"
+    end
+  end
+
+  describe "the composer" do
+    test "grows with what is typed, and can take the whole screen",
+         %{conn: conn, user: user} do
+      {scene, cast} = scene_with_cast(user, ["Wren"])
+      [id | _] = Map.values(cast)
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}?as=#{id}")
+
+      # `.say-input` was referenced by the template and defined by no stylesheet, and
+      # app.js short-circuits its JS fallback whenever the browser supports
+      # `field-sizing` — so on a modern browser nothing sized it at all.
+      assert html =~ "say-input"
+      assert html =~ "say-bar"
+      assert html =~ ~s(id="composer-fullscreen")
+    end
+  end
 end

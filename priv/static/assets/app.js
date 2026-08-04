@@ -8769,6 +8769,23 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
             this.grow();
           }, 0);
         });
+        const full = document.getElementById("composer-fullscreen");
+        if (full) {
+          const setFull = (on) => {
+            document.body.classList.toggle("say-full", on);
+            full.setAttribute("aria-pressed", String(on));
+            if (on) this.el.focus();
+            this.grow();
+          };
+          full.addEventListener("click", (e) => {
+            e.preventDefault();
+            setFull(!document.body.classList.contains("say-full"));
+          });
+          this.el.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && document.body.classList.contains("say-full")) setFull(false);
+          });
+          this.el.form.addEventListener("submit", () => setFull(false));
+        }
         const expand = this.el.form.querySelector("[data-composer-expand]");
         if (expand) {
           expand.addEventListener("click", (e) => {

@@ -647,18 +647,17 @@ defmodule PolyphonyWeb.BibleEditorLive do
       >
         <:actions>
           <form id="preview-form" phx-change="preview">
-            <label for="preview-select" class="sr-only">Preview as</label>
-            <select
+            <Kit.viewas_select
               id="preview-select"
+              label="Preview as"
               name="as"
-              class="viewas appearance-none bg-transparent"
-              style={"--vc:#{if @preview, do: "var(--secret)", else: "var(--bc)"}"}
+              colour={if @preview, do: "var(--secret)", else: "var(--bc)"}
             >
               <option value="" selected={not @preview}>Omniscient</option>
               <%!-- Short here, spelled out in the banner: the control is a chip and a
                     long option would stretch it across the header. --%>
               <option value="stranger" selected={@preview}>A stranger</option>
-            </select>
+            </Kit.viewas_select>
           </form>
           <Kit.pill><%= String.capitalize(@entry.visibility) %></Kit.pill>
           <Layouts.nav_menu current_user={@current_user} />

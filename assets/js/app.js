@@ -91,6 +91,33 @@ Hooks.ComposerInput = {
         }, 0)
       })
 
+      // Full screen. A class on <body>, not on the bar: the bar belongs to a
+      // LiveView that re-renders on every event in the scene, and an attribute set
+      // here would be dropped by the next patch — the same reason the dock's
+      // open state lives there. Escape closes it, because a control that takes the
+      // whole screen has to have an exit that needs no aim.
+      const full = document.getElementById("composer-fullscreen")
+      if (full) {
+        const setFull = (on) => {
+          document.body.classList.toggle("say-full", on)
+          full.setAttribute("aria-pressed", String(on))
+          if (on) this.el.focus()
+          this.grow()
+        }
+
+        full.addEventListener("click", (e) => {
+          e.preventDefault()
+          setFull(!document.body.classList.contains("say-full"))
+        })
+
+        this.el.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && document.body.classList.contains("say-full")) setFull(false)
+        })
+
+        // Sending is the end of the turn, so it is the end of the room it needed.
+        this.el.form.addEventListener("submit", () => setFull(false))
+      }
+
       // ✨ Expand: send the current draft to the server for a generated turn.
       const expand = this.el.form.querySelector("[data-composer-expand]")
       if (expand) {
