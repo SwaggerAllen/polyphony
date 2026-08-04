@@ -32,6 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
+        id: beam
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
@@ -40,8 +41,8 @@ jobs:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-lint-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-lint-
+          key: ${{ runner.os }}-mix-lint-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-lint-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-
 
       - run: mix deps.get
       - run: mix format --check-formatted
@@ -75,6 +76,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
+        id: beam
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
@@ -83,8 +85,8 @@ jobs:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-test-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-test-
+          key: ${{ runner.os }}-mix-test-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-test-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-
 
       - run: mix deps.get
       # The `test` alias creates + migrates the test DB (the migration enables
@@ -115,6 +117,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
+        id: beam
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
@@ -123,8 +126,8 @@ jobs:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-test-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-test-
+          key: ${{ runner.os }}-mix-test-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-test-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-
 
       # Wallaby drives a real Chrome over chromedriver, and chromedriver refuses to
       # drive a browser of a different major version. Installing both together is what
@@ -156,6 +159,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
+        id: beam
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
@@ -164,8 +168,8 @@ jobs:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-lint-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-lint-
+          key: ${{ runner.os }}-mix-lint-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-lint-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-
 
       - run: mix deps.get
 
@@ -189,6 +193,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
+        id: beam
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
@@ -197,25 +202,42 @@ jobs:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-lint-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-lint-
+          key: ${{ runner.os }}-mix-lint-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-lint-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-
 
       # The PLT is built from OTP plus every dependency and takes ~2 minutes, so it is
-      # cached separately and keyed on mix.lock — the only thing that invalidates it.
+      # cached separately, keyed on mix.lock and on the **resolved** toolchain.
+      # Resolved, not requested: `otp-version: "27.3"` is a range, and the runner
+      # image moves within it (27.3.4.1 → 27.3.4.9) without the key changing — which
+      # served a PLT dialyzer rejects outright as "Old PLT file".
       # `restore-keys` matters more than the exact hit: an almost-current PLT is
       # incrementally updated in seconds, while no PLT at all pays the full build.
       - uses: actions/cache@v4
         with:
           path: priv/plts
-          key: ${{ runner.os }}-plt-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-plt-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-
+          key: ${{ runner.os }}-plt-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-plt-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-
 
       - run: mix deps.get
       # Split from the run so a PLT build failure reads as a PLT build failure, and so
       # the cache is written even when the analysis below finds something.
       - run: mix dialyzer --plt
 
-      - run: mix dialyzer --format short
+      # A PLT is derived data, so a stale one must never read as a type error — and it
+      # does by default: dialyxir's "PLT is up to date!" tracks *our* modules, not the
+      # OTP the PLT was built against, so the step above passes and the analysis then
+      # halts with `:dialyzer.run error: Old PLT file`. The key above is the fix; this
+      # is the belt for the next time something slips past it. Only that one error is
+      # retried — anything else is the analysis doing its job.
+      - name: Analyse
+        run: |
+          set -o pipefail
+          if ! mix dialyzer --format short 2>&1 | tee /tmp/dialyzer.log; then
+            grep -q "Old PLT file" /tmp/dialyzer.log || exit 1
+            echo "::warning::cached PLT was built against another OTP — rebuilding"
+            rm -rf priv/plts
+            mix dialyzer --format short
+          fi
 
   audit:
     name: security audit
@@ -225,6 +247,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
+        id: beam
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
@@ -233,8 +256,8 @@ jobs:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-lint-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-lint-
+          key: ${{ runner.os }}-mix-lint-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-lint-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-
 
       - run: mix deps.get
 
