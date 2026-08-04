@@ -122,4 +122,70 @@ defmodule PolyphonyWeb.CampaignCastLiveTest do
 
     assert :binary.match(html, "Zeno") < :binary.match(html, "Alma")
   end
+
+  describe "writing one, rather than adding one that exists" do
+    test "an empty cast offers a way in — it had none", %{conn: conn, user: user} do
+      camp = campaign(user, %{})
+
+      {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+
+      # The gap: everything under Cast could *add* someone who already existed, and the
+      # picker that does it is hidden when there's nobody to pick. On a first-run
+      # campaign that left no route into the character editor at all, so Quick Build was
+      # the only way to get a cast.
+      assert html =~ "Nobody is in this story yet."
+
+      assert {:error, {:live_redirect, %{to: "/authoring/character/" <> id}}} =
+               view
+               |> element(~s(button[phx-click="new_character"]), "Write a character")
+               |> render_click()
+
+      sheet = Library.payload(Library.get(id))
+      assert sheet.name == "New character"
+
+      # Cast on the way out: the button is *in* the cast list, so anything else writes
+      # a character into a campaign that doesn't have them.
+      assert String.to_integer(id) in Library.payload(Library.get(camp.id))[:character_ids]
+    end
+
+    test "they start as a stub, so a blank sheet can't walk into a scene",
+         %{conn: conn, user: user} do
+      camp = campaign(user, %{})
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+
+      assert {:error, {:live_redirect, %{to: "/authoring/character/" <> id}}} =
+               view
+               |> element(~s(button[phx-click="new_character"]), "Write a character")
+               |> render_click()
+
+      # `:stub` is not a claim about how much they matter — that's `tier`, a separate
+      # axis. It's what `SceneControl` refuses, and the editor lifts it on the first
+      # save (§B8), so an abandoned one reads as pending rather than as a cast member
+      # with nothing written.
+      assert Library.payload(Library.get(id)).status == :stub
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+      assert html =~ "Pending"
+    end
+
+    test "they inherit the campaign's world, like every other route in",
+         %{conn: conn, user: user} do
+      bible =
+        Library.put(%{
+          owner: Owner.of(user),
+          kind: "world_bible",
+          payload: %WorldBible{name: "Saltmarch"}
+        })
+
+      camp = campaign(user, %{bible_id: bible.id})
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+
+      assert {:error, {:live_redirect, %{to: "/authoring/character/" <> id}}} =
+               view
+               |> element(~s(button[phx-click="new_character"]), "Write a character")
+               |> render_click()
+
+      assert Library.payload(Library.get(id)).world_bible_id == bible.id
+    end
+  end
 end

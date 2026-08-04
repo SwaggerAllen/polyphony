@@ -405,6 +405,48 @@
 .dock-tucked .dock-tab-label { display:none; }
 
 
+/* An overlay: a panel over the page, with the page still behind it.
+
+   Distinct from .dock, which is *pinned and ignorable* — you keep working with it
+   on screen. This is modal: while it is open it is the only thing you can act on,
+   which is exactly right for a decision taken about one item and exactly wrong for
+   anything you need to keep referring to.
+
+   It exists because the alternative doesn't work. A panel rendered inline appears
+   wherever it happens to sit in the document — which, on a long authoring screen,
+   is far below the control that opened it. You can't tell it opened, you can't find
+   its close, and the page's own buttons still look live while the panel is what
+   you're actually editing.
+
+   Bottom-anchored on a phone, because the reachable area is the bottom third and a
+   sheet that rises from the edge reads as attached to the tap that summoned it.
+   Centred once there's room.
+
+   The scrim is a *sibling* rather than a parent: it takes the click that dismisses,
+   and the panel layer above it passes clicks through everywhere it isn't. Nesting
+   them would mean stopping propagation on every click inside the panel.
+   ============================================================================ */
+
+.scrim   { position:fixed; inset:0; z-index:70; background:rgb(0 0 0 / 55%); }
+.overlay { position:fixed; inset:0; z-index:71; display:flex;
+           align-items:flex-end; justify-content:center; pointer-events:none; }
+.overlay > * { pointer-events:auto; }
+
+.modal { width:100%; max-width:34rem; max-height:min(85vh, 44rem);
+         display:flex; flex-direction:column;
+         border-bottom-left-radius:0; border-bottom-right-radius:0;
+         padding-bottom:env(safe-area-inset-bottom);
+         box-shadow:0 -8px 32px rgb(0 0 0 / 55%); }
+/* The head and the foot stay put; only the middle scrolls, so the way out is never
+   the thing you have to scroll to find. */
+.modal-body { overflow-y:auto; min-height:0; }
+
+@media (min-width: 640px) {
+  .overlay { align-items:center; padding:1rem; }
+  .modal   { border-radius:14px; box-shadow:0 8px 40px rgb(0 0 0 / 60%); }
+}
+
+
 /* ============================================================================
    12 · MOCK CHROME
    Wall labels and notes around the frames. Not part of the product — strip

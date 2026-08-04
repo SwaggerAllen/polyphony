@@ -47,8 +47,13 @@ defmodule PolyphonyWeb.AudiencePicker do
   note}]` and `[{id, label, tier, colour}]`. `owner` is the character the secret is
   about, or nil. `resolved` is the id list `Audience.resolve/2` returned.
 
+  Draws as a `Kit.overlay` — modal, over the page. It is opened from a control on a
+  screen long enough that an inline panel would render far below it, which read as
+  nothing having happened at all.
+
   Events go to the host LiveView: `toggle_audience` with `kind` (`group`/`character`)
-  and `id`, and `close_audience`.
+  and `id`, and `close_audience` — which the scrim and `Escape` push too, so *Done*
+  is the obvious way out rather than the only one.
   """
   attr(:statement, :string, required: true)
   attr(:context_label, :string, default: nil, doc: "where the secret lives — *Saltmarch*")
@@ -69,17 +74,19 @@ defmodule PolyphonyWeb.AudiencePicker do
       |> assign(:tiers, tiers_present(assigns.people))
 
     ~H"""
-    <Kit.sheet class={Enum.join(["mx-4 mb-4", @class || ""], " ")}>
-      <Kit.row class="px-4 py-3" style="background:var(--b2)">
+    <Kit.overlay label="Who starts out knowing" on_close="close_audience" class={@class}>
+      <%!-- Outside the scroller: the head carries the way out, and a way out you
+            have to scroll to find is not one. --%>
+      <Kit.row class="px-4 py-3 shrink-0" style="background:var(--b2)">
         <div class="flex items-center justify-between gap-2 mb-1.5">
           <span class="ttl text-[15px] font-semibold">Who starts out knowing</span>
           <button
             type="button"
-            class="dim text-[17px] leading-none shrink-0"
+            class="btn btn-sm btn-gh shrink-0"
             phx-click="close_audience"
             aria-label="Close"
           >
-            ×
+            Done
           </button>
         </div>
         <p class="text-[13px] leading-relaxed"><%= @statement %></p>
@@ -91,6 +98,7 @@ defmodule PolyphonyWeb.AudiencePicker do
         </div>
       </Kit.row>
 
+      <div class="modal-body">
       <%!-- The owner, locked on. Drawn first because it's the one row that isn't a
             choice, and burying it would invite someone to look for the tick. --%>
       <Kit.row :if={@owner} class="px-4 py-2.5 flex items-center gap-2.5">
@@ -152,10 +160,17 @@ defmodule PolyphonyWeb.AudiencePicker do
         Nobody has been written into this campaign yet. The secret keeps — you can come
         back to this.
       </Kit.empty>
+      </div>
 
       <%!-- The honesty check: who this means *right now*, because a group's
-            membership will change and a count frozen at authoring time is a lie. --%>
-      <div :if={@groups != [] or @people != []} class="px-4 py-3" style="background:var(--b2)">
+            membership will change and a count frozen at authoring time is a lie.
+            Pinned below the scroller, so the count you're deciding against is
+            visible while you tick people rather than only at the bottom. --%>
+      <div
+        :if={@groups != [] or @people != []}
+        class="px-4 py-3 shrink-0"
+        style="background:var(--b2)"
+      >
         <div class="flex items-start gap-2">
           <Kit.dot colour="var(--secret)" class="mt-1.5 shrink-0" />
           <p class="text-[12.5px] leading-relaxed"><%= resolved_line(@resolved) %></p>
@@ -164,7 +179,7 @@ defmodule PolyphonyWeb.AudiencePicker do
           Anyone written into <%= group_phrase(@groups, @group_ids) %> later will know it too.
         </p>
       </div>
-    </Kit.sheet>
+    </Kit.overlay>
     """
   end
 

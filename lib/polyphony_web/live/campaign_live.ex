@@ -15,7 +15,6 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Authoring.{
     Autofill,
     CharacterSheet,
-    QuickBuild,
     Effective,
     SceneGate,
     StubGen,
@@ -25,6 +24,9 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Authoring.Group
   alias Polyphony.Events.SceneOpened
   alias Polyphony.Groups
+  alias Polyphony.Builds
+  alias Polyphony.Jobs.QuickBuild, as: BuildJob
+  alias Polyphony.ReadModels.BuildRun
   alias Polyphony.Campaigns
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Publication
@@ -62,8 +64,10 @@ defmodule PolyphonyWeb.CampaignLive do
        |> assign(
          page_title: "Campaign",
          entry: entry,
-         building: false,
-         build_progress: nil,
+         # Not `building: false` and a progress map. The build is a row now (§Builds),
+         # so the socket holds a *view* of it that a reconnect re-reads rather than
+         # state a reconnect loses.
+         build: Builds.get(entry.id),
          expanding_premise: false,
          generating: false,
          # Nothing is granted until the author says so — the spoiler control has no
@@ -79,6 +83,7 @@ defmodule PolyphonyWeb.CampaignLive do
          scene_location: "",
          tab: "settings"
        )
+       |> subscribe_build(entry)
        |> load()}
     else
       redirect_missing(socket, entry)
@@ -169,6 +174,39 @@ defmodule PolyphonyWeb.CampaignLive do
     safe(socket, fn ->
       entry = Groups.create(socket.assigns.owner, %Group{name: "New group"})
       {:noreply, push_navigate(socket, to: ~p"/authoring/group/#{entry.id}")}
+    end)
+  end
+
+  # Same reasoning as `new_group`, and the same gap it closed: everything under Cast
+  # could *add* a character that already existed, and nothing could write one. On a
+  # first-run campaign the picker is empty and hidden, so the cast tab offered no way
+  # into the character editor at all — Quick Build was the only route to a cast.
+  #
+  # Written as a **stub**, which is not a judgement about how much they matter (that's
+  # `tier`, a separate axis) but the thing that keeps a blank sheet out of a scene:
+  # `SceneControl` refuses a non-`:full` character, and the editor flips it on the
+  # first save (§B8). So an abandoned one reads as pending instead of standing in the
+  # cast with nothing written.
+  def handle_event("new_character", _params, socket) do
+    safe(socket, fn ->
+      entry =
+        Library.put(%{
+          owner: socket.assigns.owner,
+          kind: "character",
+          payload: %CharacterSheet{
+            name: "New character",
+            status: :stub,
+            world_bible_id: socket.assigns.bible_id
+          }
+        })
+
+      # Cast them on the way out. The button is *in* the cast list, so anything else
+      # would be a character written from a campaign that isn't in it.
+      ids = cast_ids(socket.assigns.payload) ++ [entry.id]
+      payload = Map.put(socket.assigns.payload, :character_ids, ids)
+      {:ok, _} = Library.update_payload(socket.assigns.entry.id, payload)
+
+      {:noreply, push_navigate(socket, to: ~p"/authoring/character/#{entry.id}")}
     end)
   end
 
@@ -285,14 +323,19 @@ defmodule PolyphonyWeb.CampaignLive do
   end
 
   # Quick Build: from a world seed and one seed per character, generate a world, a cast,
-  # cross-linked relationships, and a premise — all persisted — then attach them here.
+  # cross-linked relationships and a premise — all persisted, and all associated to this
+  # campaign *as they are written* rather than at the end.
+  #
+  # Enqueued rather than run here. It was a `start_async` linked to this socket, which
+  # made a multi-minute, paid, half-persisting job depend on the tab staying open — and
+  # an interrupted one left an orphan world under the name the author was about to use
+  # (see `Polyphony.Jobs.QuickBuild`). Now the screen starts it and watches it; it does
+  # not own it, so closing the tab is not an event the build has to survive.
   def handle_event("quick_build", params, socket) do
     safe(socket, fn ->
       # Every character row becomes a character, even a blank one (it generates freely
       # from the world) — the row count is the cast size the author asked for.
       seeds = params["char_seed"] |> List.wrap() |> Enum.map(&String.trim/1)
-
-      lv = self()
 
       opts =
         [
@@ -300,19 +343,30 @@ defmodule PolyphonyWeb.CampaignLive do
           world_seed: params["world_seed"] || "",
           character_seeds: seeds,
           suggest_offscreen: params["suggest_offscreen"] == "true",
-          campaign_id: socket.assigns.entry.id,
-          # The build runs in the async task; forward each phase to this LiveView.
-          progress: fn step -> send(lv, {:quick_build_progress, step}) end
+          campaign_id: socket.assigns.entry.id
         ] ++ meter_attribution(socket)
 
-      {:noreply,
-       socket
-       |> assign(
-         building: true,
-         build_progress: %{done: 0, total: length(seeds) + 3, label: "Starting"}
-       )
-       |> start_async(:quick_build, fn -> QuickBuild.build(opts) end)}
+      case BuildJob.enqueue(opts) do
+        {:ok, run} ->
+          {:noreply, assign(socket, build: run)}
+
+        :taken ->
+          {:noreply,
+           socket
+           |> assign(build: Builds.get(socket.assigns.entry.id))
+           |> put_flash(:info, "A build is already running for this campaign.")}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Couldn't start the build: #{inspect(reason)}")}
+      end
     end)
+  end
+
+  # The author has read the outcome. Dismissing forgets the row rather than hiding it,
+  # because the next build needs the campaign unclaimed.
+  def handle_event("dismiss_build", _params, socket) do
+    Builds.clear(socket.assigns.entry.id)
+    {:noreply, socket |> assign(build: nil) |> load()}
   end
 
   def handle_event("start_scene", _params, socket) do
@@ -462,57 +516,33 @@ defmodule PolyphonyWeb.CampaignLive do
      |> put_flash(:error, "Premise generation failed: #{inspect(reason(result))}")}
   end
 
-  def handle_async(:quick_build, {:ok, {:ok, result}}, socket) do
-    %{bible: bible, characters: chars, premise: premise} = result
-    failed = Map.get(result, :failed, [])
-    existing = cast_ids(socket.assigns.payload)
-    ids = Enum.uniq(existing ++ Enum.map(chars, & &1.id))
+  # Progress from the build job, over PubSub. The row is the truth and this is only the
+  # fast path — anything missed while disconnected is picked up by the read in `mount`,
+  # which is what makes coming back to a running build work at all.
+  def handle_info({:build_progress, %BuildRun{} = run}, socket) do
+    socket = assign(socket, build: run)
 
-    payload =
-      socket.assigns.payload
-      |> Map.put(:bible_id, bible.id)
-      |> Map.put(:character_ids, ids)
-      |> Map.put(:premise, premise)
-
-    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
-
-    socket =
-      socket
-      |> assign(
-        entry: entry,
-        building: false,
-        build_progress: nil,
-        # Closed as well as emptied. The render guard covers this too, but a flag left
-        # true is a form that springs open the moment a campaign is emptied back to
-        # first-run, which is not something anyone asked for.
-        quick_build_open: false,
-        qb_world: "",
-        qb_seeds: [""],
-        qb_suggest: true
-      )
-      |> load()
-      |> put_flash(
-        :info,
-        "Built a world, #{length(chars)} character(s), and a premise. Open each to flesh it out."
-      )
-
-    {:noreply, flash_failures(socket, failed)}
-  end
-
-  def handle_async(:quick_build, result, socket) do
-    Logger.warning("[campaign] quick build failed: #{inspect(result)}")
+    # Re-read the *entry*, not just the derived assigns: the job writes the world, the
+    # cast and the premise onto the campaign row, and `load/1` projects from the entry
+    # struct the socket is holding. Without this the screen renders a campaign frozen at
+    # the moment it was opened while the database has the built one.
+    socket = assign(socket, entry: Library.get(socket.assigns.entry.id) || socket.assigns.entry)
 
     {:noreply,
-     socket
-     |> assign(building: false, build_progress: nil)
-     |> put_flash(:error, "Quick build failed: #{inspect(reason(result))}")}
+     if run.status == "done" do
+       # Clear the form only on success. A failed build leaves it up, because the next
+       # move is to change a seed and go again — and taking it away would leave the
+       # author looking at the card that opens it.
+       socket
+       |> assign(quick_build_open: false, qb_world: "", qb_seeds: [""], qb_suggest: true)
+       |> load()
+     else
+       load(socket)
+     end}
   end
 
-  # Progress from the running Quick Build (sent by its :progress callback).
-  def handle_info({:quick_build_progress, %{} = step}, socket) do
-    {:noreply,
-     if(socket.assigns.building, do: assign(socket, build_progress: step), else: socket)}
-  end
+  def handle_info({:build_cleared, _campaign_id}, socket),
+    do: {:noreply, assign(socket, build: nil)}
 
   # Open the scene for the ready cast (the arc-review gate has passed).
   defp start_scene(socket, ready, pending) do
@@ -666,27 +696,6 @@ defmodule PolyphonyWeb.CampaignLive do
   defp reason({:exit, r}), do: r
   defp reason(other), do: other
 
-  # The bar fills as each phase *completes*: `done` is the count finished, so the bar
-  # shows the fraction done while the label names the phase now in flight.
-  defp qb_pct(%{done: done, total: total}) when is_integer(total) and total > 0,
-    do: round(done / total * 100)
-
-  defp qb_pct(_), do: 0
-
-  # Surface any per-character generation failures on top of the success flash, naming
-  # the seeds and the reason so the author can retry just those.
-  defp flash_failures(socket, []), do: socket
-
-  defp flash_failures(socket, failed) do
-    listed = Enum.map_join(failed, "; ", fn {seed, reason} -> "#{seed} (#{inspect(reason)})" end)
-
-    put_flash(
-      socket,
-      :error,
-      "#{length(failed)} character(s) couldn't be generated — add them by hand or retry: #{listed}"
-    )
-  end
-
   # The `char_seed[]` params: a list when several rows exist, a bare string for one,
   # nil when the form omitted them (a change from another field) — fall back then.
   defp seeds_param(list, _fallback) when is_list(list), do: list
@@ -787,6 +796,7 @@ defmodule PolyphonyWeb.CampaignLive do
       </div>
 
       <.quick_build :if={quick_build_open?(assigns)} {assigns} />
+      <.build_card :if={@build} build={@build} />
 
       <form id="campaign-details" phx-change="update_details">
         <label for="campaign-name" class="lbl dim">Campaign name</label>
@@ -920,19 +930,53 @@ defmodule PolyphonyWeb.CampaignLive do
         </label>
 
         <div class="mt-3">
-          <Kit.btn kind={:primary} type="submit" disabled={@building}>
-            <%= if @building, do: "✦ Building…", else: "✦ Quick build" %>
+          <Kit.btn kind={:primary} type="submit" disabled={building?(assigns)}>
+            <%= if building?(assigns), do: "✦ Building…", else: "✦ Quick build" %>
           </Kit.btn>
         </div>
-
-        <div :if={@building and @build_progress} class="mt-3">
-          <Kit.bar fraction={qb_pct(@build_progress) / 100} />
-          <div class="text-[11px] dim mt-1.5">
-            <%= @build_progress.label %>…
-            <span class="mono">(<%= min(@build_progress.done + 1, @build_progress.total) %>/<%= @build_progress.total %>)</span>
-          </div>
-        </div>
       </form>
+    </Kit.sheet>
+    """
+  end
+
+  @doc false
+  # The build's own card, drawn from the run row rather than from socket state — so it
+  # is the same card whether you started the build, came back to it on a phone, or
+  # reloaded the page while it ran. Outside the Quick Build form on purpose: the form is
+  # first-run only, and the build that empties "first run" would take its own progress
+  # off the screen with it.
+  defp build_card(assigns) do
+    ~H"""
+    <Kit.sheet class="m-4">
+      <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
+        <span class="lbl dim">Quick build</span>
+        <Kit.pill :if={@build.status == "running"} colour="var(--lamp)">Running</Kit.pill>
+        <Kit.pill :if={@build.status == "failed"} colour="var(--pencil)">Failed</Kit.pill>
+        <Kit.pill :if={@build.status == "done"} colour="var(--ok)">Done</Kit.pill>
+      </Kit.row>
+
+      <div class="px-4 py-3">
+        <Kit.bar :if={@build.status == "running"} fraction={Builds.percent(@build) / 100} />
+        <div class="text-[12px] mt-1.5 leading-relaxed">
+          <%= @build.label %><span :if={@build.status == "running"}>…</span>
+          <span :if={@build.status == "running"} class="mono dim">
+            (<%= min(@build.step + 1, @build.total) %>/<%= @build.total %>)
+          </span>
+        </div>
+        <p :if={@build.detail} class="text-[12px] leading-relaxed dim mt-1.5"><%= @build.detail %></p>
+
+        <%!-- The sentence that makes leaving safe. It is the whole point of the row:
+              the work is not in your browser, so neither is your obligation to sit
+              and watch it. --%>
+        <p :if={@build.status == "running"} class="text-[11px] leading-relaxed dim mt-2">
+          This runs on the server. You can leave this page — the world and everyone
+          written so far are already attached to this campaign.
+        </p>
+
+        <div :if={@build.status != "running"} class="mt-2.5">
+          <Kit.btn size={:sm} type="button" phx-click="dismiss_build">Dismiss</Kit.btn>
+        </div>
+      </div>
     </Kit.sheet>
     """
   end
@@ -1220,6 +1264,7 @@ defmodule PolyphonyWeb.CampaignLive do
       <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
         <span class="lbl dim">Cast · <%= length(@cast) %></span>
         <div class="flex gap-1.5">
+          <Kit.btn size={:sm} type="button" phx-click="new_character">✦ Write one</Kit.btn>
           <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={@cast == []}>
             Set a scene
           </Kit.btn>
@@ -1253,6 +1298,11 @@ defmodule PolyphonyWeb.CampaignLive do
 
       <Kit.empty :if={@cast == []} headline="Nobody is in this story yet.">
         A campaign needs at least one character before a scene can open.
+        <:action>
+          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="new_character">
+            ✦ Write a character
+          </Kit.btn>
+        </:action>
       </Kit.empty>
 
       <div :if={@addable != []} class="px-4 py-3" style="background:var(--b2)">
@@ -1466,6 +1516,17 @@ defmodule PolyphonyWeb.CampaignLive do
         "premise" -> assigns.payload[:premise] in [nil, ""]
         _ -> false
       end
+  end
+
+  # A view of the row, not a flag of its own — `building?` is only ever asked of what
+  # the database says, so a socket that reconnects mid-build gets the right answer.
+  defp building?(%{build: %BuildRun{status: "running"}}), do: true
+  defp building?(_), do: false
+
+  # Only the live socket subscribes: the first (static) mount has no process to keep.
+  defp subscribe_build(socket, entry) do
+    if connected?(socket), do: Builds.subscribe(entry.id)
+    socket
   end
 
   defp first_run?(assigns),

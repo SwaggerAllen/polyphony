@@ -91,6 +91,29 @@ components.
   what lets it outlive the session by two months. `/auth/forget` deletes it (a GET,
   because nothing over the socket can set a cookie), and so does signing out — expiring
   and leaving are different things.
+- **Nothing important lives in the socket.** A LiveView process ends when its socket
+  does, so a phone that backgrounds a tab for a minute comes back to a fresh mount —
+  and everything the assigns alone knew is gone. That produced three separate bug
+  reports before it was recognised as one cause, so state now has three homes, none of
+  them the process:
+  - **The writing autosaves** (`PolyphonyWeb.Autosave`). Every mutation already routed
+    through `touch/1` to set the dirty flag; it now also schedules a debounced write,
+    and `terminate/2` flushes the last one. The alternative — persisting the *buffer*
+    to a local store or a drafts table — keeps the unsaved-work concept alive and adds
+    a second copy of every sheet that can disagree with the first. Deleting the concept
+    is cheaper. Save stays: it flushes now, and it is where a validation gate belongs.
+    What it does *not* do automatically is the part that isn't typing — seeding stubs,
+    promoting a stub to a castable character, spending a provider call on reciprocals.
+    Those are decisions, and a timer must not make them.
+  - **The view state is in the URL.** Which panel, drawer or picker is open is a query
+    param, so a remount restores it, Back closes it (the gesture a phone user already
+    reaches for), and a link describes a place. Anything decoded from a param is
+    checked rather than trusted — no atoms are minted from a query string.
+  - **Long work is an Oban job.** Quick Build was a `start_async` linked to the socket;
+    see `Polyphony.Builds` and `Polyphony.Jobs.QuickBuild`. Progress is a row, so it
+    survives a reconnect and shows on a second device, and the job associates each
+    entry to the campaign *as it writes it* — an interrupted build leaves a half-built
+    campaign rather than orphans in the library.
 - **Ownership through `Owner`.** Library screens scope every read/write through
   `Polyphony.Owner.of(current_user)` — never a raw user id — so org support later is a
   bolt-on, not a rewrite (decisions §P2/§P8).

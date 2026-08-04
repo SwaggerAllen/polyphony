@@ -47,7 +47,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
   alias Polyphony.{Characters, Groups, Library, Owner}
   alias Polyphony.Authoring.{Audience, Autofill, Cover, WorldBible}
   alias Polyphony.Authoring.WorldBible.Entry
-  alias PolyphonyWeb.{AudiencePicker, Kit, Layouts}
+  alias PolyphonyWeb.{AudiencePicker, Autosave, Kit, Layouts}
 
   # Prose, edited as paragraph blocks.
   @prose_specs [{"setting", "Setting"}, {"tone", "Tone"}]
@@ -89,12 +89,14 @@ defmodule PolyphonyWeb.BibleEditorLive do
          bible: bible,
          name: bible.name || "",
          name_error: nil,
+         name_clash: nil,
          cover: bible.cover,
          blocks: blocks_from_bible(bible),
          items: items_from_bible(bible),
          generating: MapSet.new(),
          saved: false,
          dirty: false,
+         autosave_ref: nil,
          drawer: nil,
          panel: nil,
          preview: false,
@@ -112,6 +114,65 @@ defmodule PolyphonyWeb.BibleEditorLive do
     end
   end
 
+  @doc false
+  # Which panel, drawer, picker or preview is open lives in the **URL**, not in the
+  # socket. The reason is the same one that moved Quick Build out of a task: a LiveView
+  # process ends when its socket does, and everything it was holding ends with it. A
+  # phone that backgrounds a tab for a minute comes back to a fresh mount, and anything
+  # the assigns alone knew is gone.
+  #
+  # Two things fall out of it for free, and both are worth more than the reconnect: the
+  # back button closes what's open — which on a phone is the gesture people already
+  # reach for — and a URL now describes a place rather than a page.
+  def handle_params(params, _uri, socket) do
+    {:noreply,
+     assign(socket,
+       panel: present(params["panel"]),
+       drawer: present(params["drawer"]),
+       preview: params["preview"] == "1",
+       audience_at: decode_audience(params["audience"])
+     )}
+  end
+
+  # `{field, index}`, over the wire as `rules:2`. Default-deny on the field name: an
+  # unknown one is no picker rather than a crash, which is also why nothing here ever
+  # builds an atom out of a query string.
+  defp decode_audience(nil), do: nil
+
+  defp decode_audience(value) when is_binary(value) do
+    with [field, index] <- String.split(value, ":", parts: 2),
+         true <- field in @list_fields,
+         {i, ""} <- Integer.parse(index) do
+      {field, i}
+    else
+      _ -> nil
+    end
+  end
+
+  defp encode_audience({field, index}), do: "#{field}:#{index}"
+  defp encode_audience(_), do: nil
+
+  # Patch to the same screen with the view state changed. A push rather than a replace:
+  # closing a panel with Back is the behaviour a phone user expects, and history is
+  # where that expectation is met.
+  defp view_patch(socket, changes) do
+    params =
+      %{
+        "panel" => socket.assigns.panel,
+        "drawer" => socket.assigns.drawer,
+        "preview" => socket.assigns.preview && "1",
+        "audience" => encode_audience(socket.assigns.audience_at)
+      }
+      |> Map.merge(Map.new(changes, fn {k, v} -> {to_string(k), v} end))
+      |> Enum.reject(fn {_k, v} -> v in [nil, false, ""] end)
+
+    push_patch(socket, to: ~p"/authoring/bible/#{socket.assigns.entry.id}?#{params}")
+  end
+
+  defp present(nil), do: nil
+  defp present(""), do: nil
+  defp present(value) when is_binary(value), do: value
+
   # ── Editing ───────────────────────────────────────────────────────────────────
 
   def handle_event("sync", params, socket) do
@@ -120,41 +181,25 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   def handle_event("save", params, socket) do
     safe(socket, fn ->
-      socket = assign_form(socket, params)
-      %{name: name, blocks: blocks, items: items, entry: entry} = socket.assigns
+      socket = socket |> assign_form(params) |> Autosave.cancel()
 
-      # The clash the design catches at the field (§03). Refused rather than saved
-      # with a suffix: two worlds called Saltmarch is a mistake heading somewhere
-      # confusing, and the author is the only one who can say which they meant.
-      if Library.name_taken?(Owner.of(socket.assigns.current_user), "world_bible", name,
-           except: entry.id
-         ) do
-        {:noreply,
-         assign(socket, name_error: "You already have a world called #{String.trim(name)}.")}
-      else
-        bible = %WorldBible{
-          socket.assigns.bible
-          | name: name,
-            cover: blank_to_nil(socket.assigns.cover),
-            setting: join_blocks(blocks["setting"]),
-            tone: join_blocks(blocks["tone"]),
-            rules: items["rules"],
-            starting_canon: items["starting_canon"]
-        }
+      case persist(socket) do
+        {:ok, socket} ->
+          {:noreply, socket}
 
-        {:ok, entry} = Library.update_payload(entry.id, bible)
-
-        {:noreply,
-         assign(socket,
-           entry: entry,
-           bible: bible,
-           name: bible.name,
-           name_error: nil,
-           blocks: blocks_from_bible(bible),
-           items: items_from_bible(bible),
-           saved: true,
-           dirty: false
-         )}
+        {:clash, socket} ->
+          # Also flashed, not only marked at the field. Save sits at the foot of a
+          # sheet several viewports tall and Name is at its head, so the refusal
+          # rendered somewhere the author wasn't looking — pressing Save read as
+          # nothing happening at all, which is how a working guard becomes "saving is
+          # broken".
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "Not saved under that name — you already have a world called " <>
+               String.trim(socket.assigns.name) <> "."
+           )}
       end
     end)
   end
@@ -181,7 +226,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
           {:noreply,
            socket
            |> update_items(f, &(&1 ++ [%Entry{statement: text}]))
-           |> assign(panel: nil)}
+           |> view_patch(panel: nil)}
       end
     end)
   end
@@ -341,11 +386,11 @@ defmodule PolyphonyWeb.BibleEditorLive do
   # anything (`ux/polyphony-audience-picker.html` §01).
   def handle_event("open_audience", %{"field" => f, "index" => i}, socket)
       when f in @list_fields do
-    {:noreply, assign(socket, audience_at: {f, String.to_integer(i)}, panel: nil)}
+    {:noreply, view_patch(socket, audience: "#{f}:#{i}", panel: nil)}
   end
 
   def handle_event("close_audience", _params, socket),
-    do: {:noreply, assign(socket, audience_at: nil)}
+    do: {:noreply, view_patch(socket, audience: nil)}
 
   def handle_event("toggle_audience", %{"kind" => kind, "id" => id}, socket) do
     case socket.assigns.audience_at do
@@ -366,12 +411,12 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   def handle_event("drawer", %{"section" => section}, socket) do
     {:noreply,
-     assign(socket, drawer: if(socket.assigns.drawer == section, do: nil, else: section))}
+     view_patch(socket, drawer: if(socket.assigns.drawer == section, do: nil, else: section))}
   end
 
   def handle_event("panel", %{"panel" => panel}, socket) do
     {:noreply,
-     assign(socket,
+     view_patch(socket,
        panel: if(panel == "" or socket.assigns.panel == panel, do: nil, else: panel)
      )}
   end
@@ -380,7 +425,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
     do: {:noreply, assign(socket, brief_open: not socket.assigns.brief_open)}
 
   def handle_event("preview", %{"as" => as}, socket) do
-    {:noreply, assign(socket, preview: as != "")}
+    {:noreply, view_patch(socket, preview: as != "" && "1")}
   end
 
   # ── Async results ─────────────────────────────────────────────────────────────
@@ -603,7 +648,61 @@ defmodule PolyphonyWeb.BibleEditorLive do
       end
   end
 
-  defp touch(socket), do: assign(socket, saved: false, dirty: true)
+  # The quiet write. Nothing here is a decision the author hasn't already made by
+  # typing, which is the rule for anything that fires on a timer.
+  def handle_info(:autosave, socket) do
+    {:noreply, elem(persist(socket), 1)}
+  end
+
+  # The tab going away is the case this whole mechanism exists for, and the pending
+  # timer dies with the process.
+  def terminate(_reason, socket), do: Autosave.flush(socket, &persist/1)
+
+  # Write the bible as it currently stands, and answer whether the *name* went with it.
+  #
+  # The name is the one field with a gate on it (§03: two worlds called Saltmarch is a
+  # mistake heading somewhere confusing, and only the author can say which they meant),
+  # so a clash holds the name back and lets everything else through. Refusing the whole
+  # sheet over it would mean an autosave discarding the prose it exists to protect —
+  # and, on an explicit save, throwing away an afternoon's writing to enforce a label.
+  defp persist(socket) do
+    %{name: name, blocks: blocks, items: items, entry: entry} = socket.assigns
+
+    clash =
+      Library.name_clash(Owner.of(socket.assigns.current_user), "world_bible", name,
+        except: entry.id
+      )
+
+    bible = %WorldBible{
+      socket.assigns.bible
+      | name: if(clash, do: socket.assigns.bible.name, else: name),
+        cover: blank_to_nil(socket.assigns.cover),
+        setting: join_blocks(blocks["setting"]),
+        tone: join_blocks(blocks["tone"]),
+        rules: items["rules"],
+        starting_canon: items["starting_canon"]
+    }
+
+    {:ok, entry} = Library.update_payload(entry.id, bible)
+
+    socket =
+      socket
+      |> assign(
+        entry: entry,
+        bible: bible,
+        name_error: clash && "You already have a world called #{String.trim(name)}.",
+        name_clash: clash,
+        blocks: blocks_from_bible(bible),
+        items: items_from_bible(bible)
+      )
+      |> Autosave.saved()
+
+    # The name field keeps what was typed on a clash — retyping it is the author's job,
+    # and silently reverting the field would hide the very thing being complained about.
+    if clash, do: {:clash, socket}, else: {:ok, assign(socket, name: bible.name)}
+  end
+
+  defp touch(socket), do: Autosave.touch(socket)
 
   defp leave_confirm(true), do: "You have unsaved changes. Leave without saving?"
   defp leave_confirm(false), do: nil
@@ -787,7 +886,16 @@ defmodule PolyphonyWeb.BibleEditorLive do
                 <div :if={@name_error} class="flex items-start gap-1.5 mt-1.5">
                   <Kit.dot colour="var(--pencil)" class="mt-1.5 shrink-0" />
                   <span class="text-[12px] leading-relaxed" style="color:var(--pencil)">
-                    <%= @name_error %> Pick something else, or open that one.
+                    <%= @name_error %> Pick something else, or
+                    <%!-- A real link, because the other world is usually one nobody
+                          made on purpose — an interrupted Quick Build's leftover — and
+                          "open that one" was advice with nowhere to click. --%>
+                    <.link
+                      :if={@name_clash}
+                      navigate={~p"/authoring/bible/#{@name_clash.id}"}
+                      class="underline"
+                    >
+                      open that one</.link><span :if={!@name_clash}>open that one</span>.
                   </span>
                 </div>
               </div>
@@ -860,7 +968,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
           </.drawer>
 
           <%!-- Outside the form, like every other panel: it isn't part of the sheet's
-                own submission, and a form inside a form isn't a thing. --%>
+                own submission, and a form inside a form isn't a thing. It draws itself
+                as a `Kit.overlay`, so where in the document it sits stops mattering. --%>
           <AudiencePicker.picker
             :if={open_item(assigns)}
             statement={open_item(assigns).statement}

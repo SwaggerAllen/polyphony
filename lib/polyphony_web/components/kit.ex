@@ -452,6 +452,50 @@ defmodule PolyphonyWeb.Kit do
     """
   end
 
+  @doc """
+  A panel over the page — the kit's modal surface (§11).
+
+  The sibling of `.dock`, and deliberately its opposite: a dock is *pinned and
+  ignorable*, something you keep working alongside; this is the decision you take
+  about one item, and while it is open it is the only thing you can act on.
+
+  Reach for it whenever a panel is opened *from* a control rather than being part
+  of the page. Rendered inline instead, a panel lands wherever it happens to sit in
+  the document — on a long authoring screen that is far below the button that
+  opened it, so it reads as nothing having happened, its close control is
+  off-screen, and the page's own buttons still look live while the panel is what
+  you are actually editing.
+
+  Three ways out, because a modal with one is a trap: the scrim, `Escape`, and
+  whatever the caller puts in the panel's own header. All three push `on_close` to
+  the host LiveView.
+
+  The body scrolls, the head and foot don't — put the head and any foot outside a
+  `.modal-body` so the way out is never the thing you have to scroll to find.
+  """
+  attr(:label, :string, required: true, doc: "accessible name for the dialog")
+  attr(:on_close, :string, required: true, doc: "event pushed by the scrim and by Escape")
+  attr(:class, :string, default: nil)
+  slot(:inner_block, required: true)
+
+  def overlay(assigns) do
+    ~H"""
+    <div class="scrim" aria-hidden="true" phx-click={@on_close}></div>
+    <div
+      class="overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={@label}
+      phx-window-keyup={@on_close}
+      phx-key="Escape"
+    >
+      <.sheet class={Enum.join(Enum.reject(["modal", @class], &is_nil/1), " ")}>
+        <%= render_slot(@inner_block) %>
+      </.sheet>
+    </div>
+    """
+  end
+
   # ── Navigation ─────────────────────────────────────────────────────────────
 
   @doc """

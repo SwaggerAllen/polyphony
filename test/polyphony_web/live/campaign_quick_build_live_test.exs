@@ -3,6 +3,11 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
   The campaign editor's Quick Build (scaffold a world, cast & premise in one shot), the
   premise ✨ Expand button, and the edit links that jump into the world / character
   editors. Driven by the offline Mock so generation is deterministic.
+
+  Quick Build is an **Oban job** rather than a `start_async` — see
+  `Polyphony.Jobs.QuickBuild` for why — so these tests submit the form and then drain
+  the queue. The screen's job is to start it and watch it; the build's job is to finish
+  whether or not anyone is watching, which is the thing worth pinning here.
   """
   use PolyphonyWeb.ConnCase, async: false
 
@@ -33,6 +38,10 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
   defp open_quick_build(view),
     do: view |> element("button[phx-click=toggle_quick_build]") |> render_click()
 
+  # Oban runs `testing: :manual`, so the enqueued build executes when the test says so.
+  # That separation is the point: the form submit and the work are no longer one act.
+  defp drain, do: Oban.drain_queue(queue: :generation)
+
   test "quick build scaffolds a world, cast, and premise onto the campaign",
        %{conn: conn, user: user} do
     camp = campaign(user)
@@ -49,9 +58,7 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     })
     |> render_submit()
 
-    # Quick Build is a multi-phase generation (world, then each character, then the
-    # premise), so it wants more than the default 100ms even against the Mock.
-    _html = render_async(view, 5_000)
+    drain()
 
     payload = Library.payload(Library.get(camp.id))
     # A world and two characters are attached, and a premise was drafted.
@@ -108,7 +115,8 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
 
     assert html =~ "quick-build"
 
-    html = render_async(view, 5_000)
+    drain()
+    html = render(view)
 
     # Quick Build is a one-shot. The card is first-run only and disappears on its own,
     # but the form it opens was shown on the open flag alone and nothing cleared it —
@@ -141,11 +149,17 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     |> form("#quick-build", %{"world_seed" => "", "char_seed" => [""]})
     |> render_submit()
 
-    html = render_async(view, 5_000)
+    drain()
+    html = render(view)
 
     # Nothing was built, so the campaign is still first-run — and taking the form away
     # here would leave someone staring at the card that opens it.
     assert html =~ "quick-build"
+
+    # And it says so rather than going quiet. The author was probably not looking when
+    # it failed, so a build that just stops is indistinguishable from one that never ran.
+    assert html =~ "Failed"
+    assert html =~ "The world couldn&#39;t be written"
   end
 
   test "character rows can be added and removed", %{conn: conn, user: user} do

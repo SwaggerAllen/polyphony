@@ -57,7 +57,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   alias Polyphony.Authoring.{Audience, Autofill, CharacterSheet, Cover, Stub, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.{Boundary, Fact, Relationship}
   alias Polyphony.ReadModels.Membership
-  alias PolyphonyWeb.{AudiencePicker, Kit, Layouts, Voice}
+  alias PolyphonyWeb.{AudiencePicker, Autosave, Kit, Layouts, Voice}
 
   # Prose fields are edited as blocks; name stays a single-line scalar.
   @field_specs [
@@ -111,6 +111,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
          generating: MapSet.new(),
          saved: false,
          dirty: false,
+         autosave_ref: nil,
          drawer: nil,
          panel: nil,
          # Index of the fact whose audience is open, or nil.
@@ -150,6 +151,46 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   # ── Editing the sheet form ──────────────────────────────────────────────────
 
+  @doc false
+  # The open panel, drawer and picker live in the **URL** rather than in the socket —
+  # see `BibleEditorLive.handle_params/3` for why, and for what it buys on a phone.
+  def handle_params(params, _uri, socket) do
+    {:noreply,
+     assign(socket,
+       panel: present(params["panel"]),
+       drawer: present(params["drawer"]),
+       audience_at: decode_index(params["audience"])
+     )}
+  end
+
+  defp decode_index(nil), do: nil
+
+  defp decode_index(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {i, ""} when i >= 0 -> i
+      _ -> nil
+    end
+  end
+
+  defp decode_index(i) when is_integer(i), do: i
+
+  defp view_patch(socket, changes) do
+    params =
+      %{
+        "panel" => socket.assigns.panel,
+        "drawer" => socket.assigns.drawer,
+        "audience" => socket.assigns.audience_at
+      }
+      |> Map.merge(Map.new(changes, fn {k, v} -> {to_string(k), v} end))
+      |> Enum.reject(fn {_k, v} -> v in [nil, false, ""] end)
+
+    push_patch(socket, to: ~p"/authoring/character/#{socket.assigns.entry.id}?#{params}")
+  end
+
+  defp present(nil), do: nil
+  defp present(""), do: nil
+  defp present(value) when is_binary(value), do: value
+
   def handle_event("sync", params, socket) do
     {:noreply, socket |> assign_form(params) |> touch()}
   end
@@ -164,57 +205,30 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def handle_event("save", params, socket) do
     safe(socket, fn ->
       %{current_user: user, entry: %{id: id}} = socket.assigns
-      socket = assign_form(socket, params)
-      %{name: name, blocks: blocks, relationships: rels} = socket.assigns
+      socket = socket |> assign_form(params) |> Autosave.cancel()
+      %{name: name, relationships: rels} = socket.assigns
 
       existing_entries = other_characters(user, id)
       existing = char_names(existing_entries)
       world_bible_id = world_id_int(socket.assigns.world_id)
+
+      # The three things a *deliberate* save does that a timer must not. Seeding stubs
+      # writes new people into the library; promotion makes a half-written sheet
+      # castable; the reciprocal pass spends a provider call. None of them are decisions
+      # the author has made merely by typing, and all three would fire every couple of
+      # seconds while they were still mid-sentence.
       stubbed = seed_stubs(rels, existing, name, Owner.of(user), world_bible_id, id)
 
       # Every relationship that names a real character (existing or just-stubbed) now
       # carries its stable id, so links and context resolve by id, not name.
       rels = resolve_target_ids(rels, existing_entries, stubbed)
 
-      sheet = %CharacterSheet{
-        socket.assigns.sheet
-        | name: name,
-          pronouns: blank_to_nil(socket.assigns.pronouns),
-          role: blank_to_nil(socket.assigns.role),
-          cover: blank_to_nil(socket.assigns.cover),
-          tier: socket.assigns.tier,
-          premise: join_blocks(blocks["premise"]),
-          appearance: join_blocks(blocks["appearance"]),
-          voice: join_blocks(blocks["voice"]),
-          temperament: join_blocks(blocks["temperament"]),
-          backstory: join_blocks(blocks["backstory"]),
-          world_bible_id: world_id_int(socket.assigns.world_id),
-          relationships: rels,
-          boundaries: socket.assigns.boundaries,
-          facts: socket.assigns.facts,
-          # Saving finalizes a pending stub — the author has reviewed it by editing
-          # and saving, so it silently becomes a usable (:full) character.
-          status: :full
-      }
-
-      {:ok, entry} = Library.update_payload(id, sheet)
-
       socket =
         socket
-        |> assign(
-          entry: entry,
-          sheet: sheet,
-          name: sheet.name || "",
-          pronouns: sheet.pronouns || "",
-          blocks: blocks_from_sheet(sheet),
-          saved: true,
-          dirty: false
-        )
+        |> assign_relationships(rels)
+        |> persist(status: :full)
         |> assign_characters(other_characters(user, id))
         |> assign_relationships(rels)
-
-      socket =
-        socket
         |> maybe_flash_stubs(stubbed)
         |> generate_reciprocals(stubbed, name, id)
 
@@ -316,8 +330,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
           {:noreply,
            socket
            |> assign_relationships(socket.assigns.relationships ++ [rel])
-           |> assign(panel: nil)
-           |> touch()}
+           |> touch()
+           |> view_patch(panel: nil)}
       end
     end)
   end
@@ -342,11 +356,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
         _topic ->
           {:noreply,
            socket
-           |> assign(
-             boundaries: socket.assigns.boundaries ++ [Boundary.from_map(params)],
-             panel: nil
-           )
-           |> touch()}
+           |> assign(boundaries: socket.assigns.boundaries ++ [Boundary.from_map(params)])
+           |> touch()
+           |> view_patch(panel: nil)}
       end
     end)
   end
@@ -380,7 +392,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
           fact = %Fact{statement: statement}
 
           {:noreply,
-           socket |> assign(facts: socket.assigns.facts ++ [fact], panel: nil) |> touch()}
+           socket
+           |> assign(facts: socket.assigns.facts ++ [fact])
+           |> touch()
+           |> view_patch(panel: nil)}
       end
     end)
   end
@@ -420,10 +435,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # Reachable only from a secret, and the same component the world bible opens — one
   # implementation, two headers, so the two can't drift.
   def handle_event("open_audience", %{"index" => i}, socket),
-    do: {:noreply, assign(socket, audience_at: String.to_integer(i), panel: nil)}
+    do: {:noreply, view_patch(socket, audience: i, panel: nil)}
 
   def handle_event("close_audience", _params, socket),
-    do: {:noreply, assign(socket, audience_at: nil)}
+    do: {:noreply, view_patch(socket, audience: nil)}
 
   def handle_event("toggle_audience", %{"kind" => kind, "id" => id}, socket) do
     case socket.assigns.audience_at do
@@ -484,7 +499,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def handle_event("join_group", %{"group_id" => group_id}, socket) do
     safe(socket, fn ->
       {:ok, _} = Groups.add_member(group_id, socket.assigns.entry.id)
-      {:noreply, socket |> reload_groups() |> assign(panel: nil)}
+      {:noreply, socket |> reload_groups() |> view_patch(panel: nil)}
     end)
   end
 
@@ -502,7 +517,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # one shut is what the × does, so both use this event.
   def handle_event("drawer", %{"section" => section}, socket) do
     {:noreply,
-     assign(socket, drawer: if(socket.assigns.drawer == section, do: nil, else: section))}
+     view_patch(socket, drawer: if(socket.assigns.drawer == section, do: nil, else: section))}
   end
 
   # ── Add panels ──────────────────────────────────────────────────────────────
@@ -513,7 +528,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # form without nesting a second one inside it.
   def handle_event("panel", %{"panel" => panel}, socket) do
     {:noreply,
-     assign(socket, panel: if(panel == "" or socket.assigns.panel == panel, do: nil, else: panel))}
+     view_patch(socket,
+       panel: if(panel == "" or socket.assigns.panel == panel, do: nil, else: panel)
+     )}
   end
 
   defp reload_groups(socket) do
@@ -803,7 +820,51 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   # Mark the form as having unsaved edits (hides the ✓ indicator, arms the
   # leave-confirmation on navigation links).
-  defp touch(socket), do: assign(socket, saved: false, dirty: true)
+  # The quiet write: the sheet exactly as it stands, and nothing more. Deliberately
+  # narrower than Save — see the note there.
+  def handle_info(:autosave, socket), do: {:noreply, persist(socket, [])}
+
+  def terminate(_reason, socket), do: Autosave.flush(socket, &persist(&1, []))
+
+  defp persist(socket, opts) do
+    %{entry: %{id: id}, blocks: blocks} = socket.assigns
+
+    sheet = %CharacterSheet{
+      socket.assigns.sheet
+      | name: socket.assigns.name,
+        pronouns: blank_to_nil(socket.assigns.pronouns),
+        role: blank_to_nil(socket.assigns.role),
+        cover: blank_to_nil(socket.assigns.cover),
+        tier: socket.assigns.tier,
+        premise: join_blocks(blocks["premise"]),
+        appearance: join_blocks(blocks["appearance"]),
+        voice: join_blocks(blocks["voice"]),
+        temperament: join_blocks(blocks["temperament"]),
+        backstory: join_blocks(blocks["backstory"]),
+        world_bible_id: world_id_int(socket.assigns.world_id),
+        relationships: socket.assigns.relationships,
+        boundaries: socket.assigns.boundaries,
+        facts: socket.assigns.facts,
+        # Promotion is Save's, not the timer's: a stub becomes castable because the
+        # author reviewed it and said so, and `SceneControl` is entitled to read that
+        # as a decision rather than as evidence that a key was pressed.
+        status: Keyword.get(opts, :status, socket.assigns.sheet.status)
+    }
+
+    {:ok, entry} = Library.update_payload(id, sheet)
+
+    socket
+    |> assign(
+      entry: entry,
+      sheet: sheet,
+      name: sheet.name || "",
+      pronouns: sheet.pronouns || "",
+      blocks: blocks_from_sheet(sheet)
+    )
+    |> Autosave.saved()
+  end
+
+  defp touch(socket), do: Autosave.touch(socket)
 
   defp assign_form(socket, params) do
     name = params["name"] || socket.assigns.name
@@ -1477,7 +1538,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
         </Kit.sheet>
         </form>
 
-        <%!-- The shared picker, outside the sheet's form like every other panel. --%>
+        <%!-- The shared picker, outside the sheet's form like every other panel. It
+              draws itself as a `Kit.overlay` — this sheet is long enough that an
+              inline panel opened from a fact halfway down lands off-screen. --%>
         <AudiencePicker.picker
           :if={open_fact(assigns)}
           statement={open_fact(assigns).statement}

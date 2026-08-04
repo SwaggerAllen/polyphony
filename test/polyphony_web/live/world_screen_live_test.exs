@@ -213,6 +213,27 @@ defmodule PolyphonyWeb.WorldScreenLiveTest do
       assert bible_of(other).name == "Low Water", "the clashing name must not have been saved"
     end
 
+    test "the refusal is visible from the foot of the sheet, and points at the culprit",
+         %{conn: conn, user: user} do
+      salt = world(user, %{name: "Saltmarch"})
+      other = world(user, %{name: "Low Water"})
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{other.id}")
+
+      html = view |> form("form[phx-submit=save]", %{name: "Saltmarch"}) |> render_submit()
+
+      # Save is at the foot of a sheet several viewports tall and Name is at its head.
+      # Marked only at the field, the refusal rendered where the author wasn't looking,
+      # and pressing Save read as nothing happening at all — which is how a working
+      # guard gets reported as "saving is broken".
+      assert html =~ "Not saved under that name — you already have a world called Saltmarch"
+
+      # The other world is routinely one nobody made on purpose (an interrupted Quick
+      # Build persists its world before anything associates it), so "open that one" has
+      # to be reachable rather than advice.
+      assert has_element?(view, ~s(a[href="/authoring/bible/#{salt.id}"]), "open that one")
+    end
+
     test "saving a world under its own name is not a clash", %{conn: conn, user: user} do
       entry = world(user, %{name: "Saltmarch"})
       {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
