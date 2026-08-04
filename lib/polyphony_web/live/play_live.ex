@@ -45,6 +45,7 @@ defmodule PolyphonyWeb.PlayLive do
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Director.BeatDriver
   alias Polyphony.Edit
+  alias Polyphony.Permissions
   alias Polyphony.Scene.Cast
   alias PolyphonyWeb.Kit
   alias PolyphonyWeb.Transcript
@@ -81,6 +82,21 @@ defmodule PolyphonyWeb.PlayLive do
   alias PolyphonyWeb.TurnEdit
 
   def mount(%{"scene_id" => scene_id}, _session, socket) do
+    # A scene is an event stream rather than a library entry, so its access is its
+    # **campaign's** — playing writes fiction into somebody's story, which is editing it
+    # under another name. Scene ids are `sc-<counter>`, so without this any signed-in
+    # account could walk into a stranger's scene and take a turn in it.
+    if Permissions.can_play?(campaign_of(scene_id), socket.assigns.current_user) do
+      mount_scene(scene_id, socket)
+    else
+      {:ok,
+       socket
+       |> put_flash(:error, "Scene not found.")
+       |> redirect(to: ~p"/library")}
+    end
+  end
+
+  defp mount_scene(scene_id, socket) do
     if connected?(socket) do
       DebugFlags.subscribe()
       DebugTap.subscribe(scene_id)
@@ -473,6 +489,13 @@ defmodule PolyphonyWeb.PlayLive do
          %{bible_id: bid} <- Library.payload(campaign) do
       normalize_id(bid)
     else
+      _ -> nil
+    end
+  end
+
+  defp campaign_of(scene_id) do
+    case scene_opened(scene_id) do
+      %SceneOpened{campaign_id: cid} -> cid
       _ -> nil
     end
   end

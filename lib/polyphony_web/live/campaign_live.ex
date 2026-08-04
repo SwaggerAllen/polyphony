@@ -9,6 +9,7 @@ defmodule PolyphonyWeb.CampaignLive do
   require Logger
 
   alias Polyphony.{Library, Owner, Context, App}
+  alias Polyphony.Permissions
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
 
@@ -31,6 +32,7 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Publication
   alias Polyphony.Publication.Preflight
+  alias PolyphonyWeb.Guard
   alias PolyphonyWeb.Kit
   alias PolyphonyWeb.Layouts
   alias PolyphonyWeb.Voice
@@ -58,7 +60,8 @@ defmodule PolyphonyWeb.CampaignLive do
     # editor on one would try to read a cast and a premise off a `Library.Snapshot`.
     # It's a readable thing, so it goes where reading happens. A taken-down one is
     # gone, and says so in its own words.
-    if entry && Campaigns.campaign?(entry) && not Library.hidden?(entry) do
+    if entry && Campaigns.campaign?(entry) &&
+         Permissions.can_edit?(entry, socket.assigns.current_user) do
       {:ok,
        socket
        |> assign(
@@ -92,22 +95,8 @@ defmodule PolyphonyWeb.CampaignLive do
 
   # A take-down removes the thing, not its listing — so this is the deleted experience
   # with the one difference that matters: they're told why, and where the rest of it is.
-  defp redirect_missing(socket, %{hidden_at: at} = _entry) when not is_nil(at),
-    do:
-      {:ok,
-       socket
-       |> put_flash(:error, "That was taken down after a report. Check your email.")
-       |> redirect(to: ~p"/library")}
-
-  defp redirect_missing(socket, %{frozen: true} = entry),
-    do:
-      {:ok,
-       socket
-       |> put_flash(:info, "That's a published copy — here's how it reads.")
-       |> redirect(to: ~p"/browse?#{[story: entry.id]}")}
-
-  defp redirect_missing(socket, _entry),
-    do: {:ok, socket |> put_flash(:error, "Campaign not found.") |> redirect(to: ~p"/library")}
+  defp redirect_missing(socket, entry),
+    do: Guard.refuse(socket, entry, "Campaign", socket.assigns.current_user)
 
   # The tab lives in the URL, so it's linkable, survives a reload, and back works
   # between sections of a screen that used to be one long scroll.
@@ -238,8 +227,15 @@ defmodule PolyphonyWeb.CampaignLive do
           {:noreply, socket}
 
         cid ->
-          ids = Enum.uniq(cast_ids(socket.assigns.payload) ++ [cid])
-          {:noreply, update_cast(socket, ids, "Added #{display_name(cid)} to the cast.")}
+          # The picker only ever offers this user's own people, but the id arrives in a
+          # form and the cast is what feeds every character's context — an unchecked id
+          # here casts a stranger's private sheet into your scenes and renders it back.
+          if Permissions.can_edit?(Library.get(cid), socket.assigns.current_user) do
+            ids = Enum.uniq(cast_ids(socket.assigns.payload) ++ [cid])
+            {:noreply, update_cast(socket, ids, "Added #{display_name(cid)} to the cast.")}
+          else
+            {:noreply, put_flash(socket, :error, "That character isn't yours to cast.")}
+          end
       end
     end)
   end
@@ -1604,6 +1600,13 @@ defmodule PolyphonyWeb.CampaignLive do
     cond do
       is_nil(source) ->
         {nil, "That world is gone."}
+
+      # Attaching *copies*, so an unchecked id is a way to take a private bible —
+      # secrets included — out of somebody else's library. Taking a published world is
+      # a real flow, but it belongs to Browse, which strips what was kept back
+      # (`WorldBible.stripped/1`); this path would copy it whole.
+      not Permissions.can_edit?(source, socket.assigns.current_user) ->
+        {socket.assigns.payload[:bible_id], "That world isn't yours to attach."}
 
       # Already this campaign's own copy — re-selecting it must not copy the copy.
       source.id == socket.assigns.payload[:bible_id] ->

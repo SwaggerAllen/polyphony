@@ -38,11 +38,23 @@ defmodule PolyphonyWeb.ArcReviewLive do
   alias Polyphony.{Groups, Library, Owner, Repo}
   alias Polyphony.Authoring.ArcEntry
   alias Polyphony.ReadModels.ArcEntry, as: ArcEntryRepo
-  alias PolyphonyWeb.{Kit, Layouts, Voice}
+  alias Polyphony.Permissions
+  alias PolyphonyWeb.{Guard, Kit, Layouts, Voice}
 
   def mount(%{"campaign_id" => id}, _session, socket) do
     entry = Library.get(id)
-    campaign = entry && Library.payload(entry)
+
+    # Accepting an arc proposal writes to the campaign's characters, so this screen is
+    # an editing surface wearing a review's clothes — it takes the same gate.
+    if Permissions.can_edit?(entry, socket.assigns.current_user) do
+      mount_review(id, entry, socket)
+    else
+      Guard.refuse(socket, entry, "Campaign", socket.assigns.current_user)
+    end
+  end
+
+  defp mount_review(id, entry, socket) do
+    campaign = Library.payload(entry)
 
     {:ok,
      socket

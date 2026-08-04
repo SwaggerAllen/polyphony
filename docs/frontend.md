@@ -117,6 +117,16 @@ components.
 - **Ownership through `Owner`.** Library screens scope every read/write through
   `Polyphony.Owner.of(current_user)` — never a raw user id — so org support later is a
   bolt-on, not a rewrite (decisions §P2/§P8).
+- **Authorization is `Polyphony.Permissions`, and it is one function.** Scoped *lists*
+  were never the gate: the screens loaded whatever entry the URL named and asked only
+  whether it existed. `can_edit?/2` is now the single answer, and `editors_of/1` is the
+  whole seam for shared editing — empty today, so edit access means ownership, and
+  multiplayer is a change there plus a table rather than a sweep through the screens.
+  A scene has no owner of its own; `can_play?/2` asks its campaign, because taking a
+  turn writes fiction into somebody's story. `PolyphonyWeb.Guard` owns what a refusal
+  *says*: taken-down says so, published points at the copy, and everything else —
+  including private-and-not-yours — is "not found", because a distinct "not allowed"
+  confirms an id belongs to something.
 - **The Play view is the guarantee, visible.** It renders a scene as a
   viewer-parameterized projection (omniscient or as any character); a whisper the viewer
   wasn't part of is silently absent. That is `Polyphony.Visibility.project/2` — the same

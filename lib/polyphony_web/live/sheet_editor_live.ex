@@ -57,7 +57,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
   alias Polyphony.Authoring.{Audience, Autofill, CharacterSheet, Cover, Stub, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.{Boundary, Fact, Relationship}
   alias Polyphony.ReadModels.Membership
-  alias PolyphonyWeb.{AudiencePicker, Autosave, Kit, Layouts, Voice}
+  alias Polyphony.Permissions
+  alias PolyphonyWeb.{AudiencePicker, Autosave, Guard, Kit, Layouts, Voice}
 
   # Prose fields are edited as blocks; name stays a single-line scalar.
   @field_specs [
@@ -90,7 +91,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def mount(%{"id" => id}, _session, socket) do
     entry = Library.get(id)
 
-    if entry && entry.kind == "character" && not Library.hidden?(entry) do
+    if entry && entry.kind == "character" &&
+         Permissions.can_edit?(entry, socket.assigns.current_user) do
       # struct/2 fills any field the stored struct predates (e.g. world_bible_id).
       sheet = struct(CharacterSheet, Map.from_struct(Library.payload(entry)))
       worlds = load_worlds(socket.assigns.current_user)
@@ -133,10 +135,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
        |> assign_knows()
        |> assign_characters(other_characters(socket.assigns.current_user, entry.id))}
     else
-      # A take-down removes the thing rather than its listing, so this is the deleted
-      # experience — with the one difference that matters: they're told why.
-      {:ok,
-       socket |> put_flash(:error, gone_note(entry, "Character")) |> redirect(to: ~p"/library")}
+      Guard.refuse(socket, entry, "Character", socket.assigns.current_user)
     end
   end
 
@@ -498,8 +497,15 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   def handle_event("join_group", %{"group_id" => group_id}, socket) do
     safe(socket, fn ->
-      {:ok, _} = Groups.add_member(group_id, socket.assigns.entry.id)
-      {:noreply, socket |> reload_groups() |> view_patch(panel: nil)}
+      # Joining writes to the group, and membership is what resolves an audience — so
+      # an unchecked id here is a way to put your own character inside somebody else's
+      # secret.
+      if Permissions.can_edit?(Library.get(group_id), socket.assigns.current_user) do
+        {:ok, _} = Groups.add_member(group_id, socket.assigns.entry.id)
+        {:noreply, socket |> reload_groups() |> view_patch(panel: nil)}
+      else
+        {:noreply, put_flash(socket, :error, "That group isn't yours.")}
+      end
     end)
   end
 
@@ -2219,9 +2225,4 @@ defmodule PolyphonyWeb.SheetEditorLive do
       trimmed -> trimmed
     end
   end
-
-  defp gone_note(%{hidden_at: at}, _noun) when not is_nil(at),
-    do: "That was taken down after a report. Check your email."
-
-  defp gone_note(_entry, noun), do: "#{noun} not found."
 end

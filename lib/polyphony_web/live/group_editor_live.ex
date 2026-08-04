@@ -37,7 +37,9 @@ defmodule PolyphonyWeb.GroupEditorLive do
   alias Polyphony.{Groups, Library, Owner}
   alias Polyphony.Authoring.{ArcEntry, Autofill, Group, GroupArc}
   alias Polyphony.Authoring.CharacterSheet.Fact
-  alias PolyphonyWeb.{Autosave, Kit, Layouts, Voice}
+  alias Polyphony.Permissions
+  alias Polyphony.Permissions
+  alias PolyphonyWeb.{Autosave, Guard, Kit, Layouts, Voice}
 
   @prose_specs [
     {"premise", "What they are"},
@@ -63,7 +65,8 @@ defmodule PolyphonyWeb.GroupEditorLive do
   def mount(%{"id" => id}, _session, socket) do
     entry = Library.get(id)
 
-    if entry && entry.kind == Group.kind() && not Library.hidden?(entry) do
+    if entry && entry.kind == Group.kind() &&
+         Permissions.can_edit?(entry, socket.assigns.current_user) do
       group = struct(Group, Map.from_struct(Library.payload(entry)))
 
       {:ok,
@@ -84,10 +87,7 @@ defmodule PolyphonyWeb.GroupEditorLive do
        )
        |> load_members()}
     else
-      {:ok,
-       socket
-       |> put_flash(:error, "That group isn't here any more.")
-       |> redirect(to: ~p"/library")}
+      Guard.refuse(socket, entry, "Group", socket.assigns.current_user)
     end
   end
 
