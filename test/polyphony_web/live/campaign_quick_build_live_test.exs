@@ -74,6 +74,26 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     # The built cast shows on its own tab now, each row linking into its sheet.
     {:ok, _cast_view, cast_html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
     assert cast_html =~ ~s(href="/authoring/character/#{cid}")
+
+    # And the world it built is legible on the World tab — the reported symptom was a
+    # name in a dropdown and nothing else, with the setting written but never rendered.
+    built = Library.payload(Library.get(payload[:bible_id]))
+    {:ok, _world_view, world_html} = live(conn, ~p"/campaigns/#{camp.id}?tab=world")
+
+    # Guard the assertions below against passing on emptiness: `html =~ ""` is true of
+    # every page, and a `for` over no rules checks nothing at all.
+    assert built.setting not in [nil, ""]
+    assert built.tone not in [nil, ""]
+    assert WorldBible.entries(built.rules) != []
+
+    assert world_html =~ "This campaign&#39;s copy"
+    assert world_html =~ Phoenix.HTML.html_escape(built.setting) |> Phoenix.HTML.safe_to_string()
+    assert world_html =~ Phoenix.HTML.html_escape(built.tone) |> Phoenix.HTML.safe_to_string()
+
+    for entry <- WorldBible.entries(built.rules) do
+      assert world_html =~
+               entry.statement |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+    end
   end
 
   test "a built campaign is not still being offered the builder", %{conn: conn, user: user} do
@@ -145,6 +165,105 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     |> render_click()
 
     assert length(Regex.scan(~r/name="char_seed\[\]"/, render(view))) == 2
+  end
+
+  describe "the attached world" do
+    test "is shown, not just named", %{conn: conn, user: user} do
+      bible =
+        Library.put(%{
+          owner: Owner.of(user),
+          kind: "world_bible",
+          payload: %WorldBible{
+            name: "Saltmarch",
+            setting: "A port town on a tidal flat, half of it underwater twice a day.",
+            tone: "Damp, close, quietly criminal.",
+            rules:
+              WorldBible.entries([
+                "The tide bell is never rung twice by accident.",
+                %{statement: "Debts outlive the people who owe them.", concealed: true}
+              ])
+          }
+        })
+
+      camp = campaign(user, %{bible_id: bible.id})
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=world")
+
+      # The complaint this fixes: the tab showed the picker and nothing about what it
+      # had picked, so a quick-built campaign read as a name in a dropdown.
+      assert html =~ "Saltmarch"
+      assert html =~ "underwater twice a day"
+      assert html =~ "quietly criminal"
+      assert html =~ "The tide bell is never rung twice by accident"
+
+      # Attaching copies, and the label is the only place that says so.
+      assert html =~ "This campaign&#39;s copy"
+    end
+
+    test "a concealed rule is the author's to see, and marked the way the editor marks it",
+         %{conn: conn, user: user} do
+      bible =
+        Library.put(%{
+          owner: Owner.of(user),
+          kind: "world_bible",
+          payload: %WorldBible{
+            name: "Saltmarch",
+            rules: WorldBible.entries([%{statement: "The bell is a signal.", concealed: true}])
+          }
+        })
+
+      camp = campaign(user, %{bible_id: bible.id})
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=world")
+
+      # The author is omniscient over their own world — what a *character* may know is
+      # `Polyphony.Visibility`'s business and not this screen's. `secret` is the kit
+      # mark the bible editor uses, so the two don't describe one entry differently.
+      assert html =~ "The bell is a signal."
+      assert html =~ ~s(class="secret)
+    end
+
+    test "a world that is only a name renders no empty headings", %{conn: conn, user: user} do
+      bible =
+        Library.put(%{
+          owner: Owner.of(user),
+          kind: "world_bible",
+          payload: %WorldBible{name: "Bare", setting: "", tone: nil, rules: []}
+        })
+
+      camp = campaign(user, %{bible_id: bible.id})
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=world")
+
+      assert html =~ "Bare"
+      # A heading over an empty space reads as a bug rather than as an absence.
+      refute html =~ ">Setting<"
+      refute html =~ ">Tone<"
+      refute html =~ ">Rules<"
+    end
+
+    test "with nothing attached the tab is the picker, and doesn't pretend otherwise",
+         %{conn: conn, user: user} do
+      camp = campaign(user)
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=world")
+
+      assert html =~ "The world"
+      refute html =~ "This campaign&#39;s copy"
+      # Swapping or detaching stays possible either way — the picker is not replaced.
+      assert html =~ ~s(id="bible-select")
+    end
+
+    test "the picker survives an attachment, so a world can still be swapped",
+         %{conn: conn, user: user} do
+      bible =
+        Library.put(%{
+          owner: Owner.of(user),
+          kind: "world_bible",
+          payload: %WorldBible{name: "Saltmarch", setting: "A port town."}
+        })
+
+      camp = campaign(user, %{bible_id: bible.id})
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=world")
+
+      assert html =~ ~s(id="bible-select")
+    end
   end
 
   test "the world card links into the bible editor once a world is attached",
