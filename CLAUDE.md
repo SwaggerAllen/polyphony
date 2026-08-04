@@ -183,13 +183,21 @@ for it.
   so there is no domain metric; a permanently empty chart reads as "nothing is
   happening" rather than "nothing is measured". The route has its own CSP with a
   per-request nonce, because the dashboard ships inline `<script>` that
-  `script-src 'self'` otherwise refuses — silently.
+  `script-src 'self'` otherwise refuses — silently. `Telemetry.History` keeps a
+  ten-minute ETS backlog so the charts are populated on open rather than only drawing
+  what happens while you watch; it borrows LiveDashboard's own (private) datapoint
+  extractor so history and live points share a series, and a test fails loudly if an
+  upgrade moves it.
 - **Mail is viewable locally.** Dev uses Swoosh's `Local` adapter with the real
   `Transport.Email`, so `mix phx.server` then `/dev/mailbox` shows the actual sent
   message — body, and the provider headers — rather than the link the login screen
   prints. No supervision to add: Swoosh's own app supervises the in-memory store
-  (`config :swoosh, :local`, default true). The route is compiled in only under
-  `:dev_mailbox`, false by default, since it renders every magic link ever sent.
+  (`config :swoosh, :local`, default true). The route is gated at request time by
+  `:allow_mailbox` — open in dev, HTTP Basic auth from `MAILBOX_PASSWORD` in prod
+  (which also switches prod to the Local adapter when no `SMTP_HOST` is set), and 404
+  when neither. Basic auth rather than `require_admin` because you need it precisely
+  when signed out; it renders every magic link the node has sent, so treat those
+  credentials as root.
 - **Email is the front door.** Sign-in is magic-link only, so an unconfigured mailer
   means nobody can log in — and it fails *quietly*, because the default
   `Transport.Log` records the notification as `"sent"`. `runtime.exs` arms the real

@@ -137,4 +137,68 @@ defmodule Polyphony.MailerTest do
       end
     end
   end
+
+  describe "the SMTP dialogue trace" do
+    # The exact call gen_smtp makes on the implicit-TLS path — its own source, verbatim
+    # — and the reason this needs a test at all: the format is `~p` and the argument is
+    # the **whole options proplist**, credentials included.
+    @options [
+      relay: "smtp.sendgrid.net",
+      username: "apikey",
+      password: "SG.the-actual-api-key",
+      tls: :never,
+      cacerts: [<<48, 130>>, <<48, 131>>]
+    ]
+
+    test "the conversation is rendered, and tagged for the debug drawer" do
+      line =
+        Polyphony.Mailer.trace_line(~c"connected to ~s; banner was ~s~n", [
+          ~c"smtp.sendgrid.net",
+          ~c"220 ready"
+        ])
+
+      # The tag is what the drawer filters on — this is read from a phone.
+      assert line =~ "[mail] smtp:"
+      assert line =~ "connected to smtp.sendgrid.net; banner was 220 ready"
+      # One line, not two: gen_smtp's formats all end in `~n`.
+      refute line =~ ~r/\n$/
+    end
+
+    test "credentials never reach it" do
+      line = Polyphony.Mailer.trace_line(~c"TLS not requested ~p~n", [@options])
+
+      # This is the branch that fires on the implicit-TLS path, and the drawer renders
+      # raw logs. A trace that leaked the relay password would be a worse bug than the
+      # one it diagnoses.
+      refute line =~ "SG.the-actual-api-key"
+      refute line =~ "apikey"
+      assert line =~ "[FILTERED]"
+
+      # Still worth reading: the relay and the TLS mode are the two facts this line
+      # exists to report. Erlang term syntax, not Elixir — `~p` is gen_smtp's own
+      # formatting, passed through rather than re-rendered.
+      assert line =~ "smtp.sendgrid.net"
+      assert line =~ "{tls,never}"
+    end
+
+    test "the CA bundle is summarised rather than inlined" do
+      line = Polyphony.Mailer.trace_line(~c"~p~n", [@options])
+
+      # Thousands of bytes of DER would bury the one fact the line was printed for.
+      refute line =~ "48,130"
+      assert line =~ "{cacerts,'...'}"
+    end
+
+    test "a credential nested inside another term is redacted too" do
+      line = Polyphony.Mailer.trace_line(~c"~p~n", [[{:sockopts, [password: "hunter2"]}]])
+
+      refute line =~ "hunter2"
+    end
+
+    test "gen_smtp gets a trace_fun that answers :ok" do
+      # gen_smtp ignores the return, but a raise here happens mid-send and would turn a
+      # diagnostic into a failed delivery.
+      assert Polyphony.Mailer.trace(~c"~s~n", [~c"ok"]) == :ok
+    end
+  end
 end

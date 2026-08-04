@@ -69,12 +69,30 @@ defmodule PolyphonyWeb.DashboardAccessTest do
     end
   end
 
+  describe "the metrics page" do
+    test "mounts with history wired, which is where a bad MFA contract shows up" do
+      # `metrics_history` is applied per metric on mount. A wrong return shape is a
+      # 500 on this page rather than a missing chart, and nothing else exercises it.
+      :telemetry.execute([:polyphony, :llm, :call, :stop], %{duration: 5}, %{
+        provider: SomeProvider,
+        outcome: :ok
+      })
+
+      # The page groups charts by name prefix and redirects to add `?nav=`; ours is
+      # the `polyphony` group.
+      {:ok, _view, html} = live(admin_conn(), ~p"/admin/dashboard/metrics?nav=polyphony")
+
+      assert html =~ "polyphony.llm.call.stop.duration"
+    end
+  end
+
   describe "the metrics it renders" do
     test "every metric names an event something actually emits" do
       # A permanently empty chart reads as "nothing is happening" rather than "nothing
-      # is measured", which is worse than no chart. Nothing in `Polyphony` emits
-      # telemetry yet, so no metric may claim to be about the domain.
-      emitters = ~w(oban polyphony.repo phoenix vm)
+      # is measured", which is worse than no chart. Each prefix here is something that
+      # demonstrably publishes: the first three out of the box, `polyphony.llm` from
+      # the span in `LLM.call/2` (pinned by Polyphony.LLMTelemetryTest).
+      emitters = ~w(oban polyphony.repo phoenix vm polyphony.llm)
 
       for metric <- PolyphonyWeb.Telemetry.metrics() do
         name = Enum.map_join(metric.name, ".", &to_string/1)

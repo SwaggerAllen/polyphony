@@ -22,8 +22,9 @@ defmodule Polyphony.MailConfigTest do
     "PHX_HOST" => "example.com"
   }
 
-  @mail_vars ~w(SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_SSL MAIL_FROM
-               MAIL_FROM_NAME POSTMARK_MESSAGE_STREAM)
+  @mail_vars ~w(SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_SSL SMTP_TRACE
+               MAIL_FROM MAIL_FROM_NAME POSTMARK_MESSAGE_STREAM MAILBOX_USER
+               MAILBOX_PASSWORD)
 
   # Reads the real file with a **clean** mail environment each time: the vars are
   # process-global, so anything left behind by a previous case would arm a mailer the
@@ -148,6 +149,181 @@ defmodule Polyphony.MailConfigTest do
     end
   end
 
+  describe "the two TLS shapes" do
+    test "a submission port opens in the clear and upgrades" do
+      config =
+        mailer_config(%{"SMTP_HOST" => "smtp.sendgrid.net", "MAIL_FROM" => "a@e.com"})
+
+      refute config[:ssl]
+      assert config[:tls] == :always
+    end
+
+    test "465 is implicit TLS, taken from the port alone" do
+      config =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.sendgrid.net",
+          "SMTP_PORT" => "465",
+          "MAIL_FROM" => "a@e.com"
+        })
+
+      assert config[:ssl] == true
+
+      # Not additive with the above: a socket that is already TLS never advertises
+      # STARTTLS, and `tls: :always` against that is `{:missing_requirement, :tls}`.
+      assert config[:tls] == :never
+    end
+
+    test "implicit TLS carries the verification options through sockopts" do
+      config =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.sendgrid.net",
+          "SMTP_PORT" => "465",
+          "MAIL_FROM" => "a@e.com"
+        })
+
+      # gen_smtp applies `tls_options` only to the STARTTLS upgrade; the implicit-TLS
+      # connect gets `sockopts` merged over its own defaults, which name no CA store.
+      # On OTP 27 that combination doesn't connect *unverified* — it doesn't connect,
+      # because the client default is now `verify_peer`. Proven, not assumed:
+      assert {:error, {:options, :incompatible, [verify: :verify_peer, cacerts: :undefined]}} =
+               :ssl.connect({127, 0, 0, 1}, 1, [active: false, depth: 0, packet: :line], 100)
+
+      assert config[:sockopts][:verify] == :verify_peer
+      assert config[:sockopts][:cacerts]
+      assert config[:sockopts][:server_name_indication] == ~c"smtp.sendgrid.net"
+      # gen_smtp's own default is `depth: 0`, which rejects any chain with an
+      # intermediate — i.e. every provider's.
+      assert config[:sockopts][:depth] == 3
+    end
+
+    test "STARTTLS passes no TLS options as socket options" do
+      config =
+        mailer_config(%{"SMTP_HOST" => "smtp.sendgrid.net", "MAIL_FROM" => "a@e.com"})
+
+      # These would reach `gen_tcp:connect` on the plaintext path, where they are not
+      # options at all.
+      assert config[:sockopts] == []
+    end
+
+    test "an explicit SMTP_SSL still wins, and is warned about when it fights the port" do
+      forced =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "SMTP_PORT" => "587",
+          "SMTP_SSL" => "true",
+          "MAIL_FROM" => "a@e.com"
+        })
+
+      assert forced[:ssl] == true
+
+      warning =
+        ExUnit.CaptureIO.capture_io(fn ->
+          mailer_config(%{
+            "SMTP_HOST" => "smtp.example.com",
+            "SMTP_PORT" => "587",
+            "SMTP_SSL" => "true",
+            "MAIL_FROM" => "a@e.com"
+          })
+        end)
+
+      # Both halves of the mismatch fail as a dropped connection rather than as
+      # anything mentioning TLS, so the boot line is the only place it can be named.
+      assert warning =~ "WARNING SMTP_SSL"
+    end
+
+    test "no warning when the port and the mode agree" do
+      for port <- ~w(587 465) do
+        warning =
+          ExUnit.CaptureIO.capture_io(fn ->
+            mailer_config(%{
+              "SMTP_HOST" => "smtp.example.com",
+              "SMTP_PORT" => port,
+              "MAIL_FROM" => "a@e.com"
+            })
+          end)
+
+        refute warning =~ "WARNING SMTP_SSL"
+      end
+    end
+
+    test "the boot line names the mode, since nothing else will" do
+      boot =
+        ExUnit.CaptureIO.capture_io(fn ->
+          mailer_config(%{
+            "SMTP_HOST" => "smtp.example.com",
+            "SMTP_PORT" => "465",
+            "MAIL_FROM" => "a@e.com"
+          })
+        end)
+
+      assert boot =~ "tls=implicit"
+    end
+  end
+
+  describe "credentials" do
+    test "are omitted entirely when unset, rather than passed as nil" do
+      config = mailer_config(%{"SMTP_HOST" => "smtp.example.com", "MAIL_FROM" => "a@e.com"})
+
+      # Swoosh type-checks these two and **raises** on a non-binary. Passing nil turns
+      # every send into an ArgumentError out of the LiveView rather than a delivery
+      # error the sign-in screen can report.
+      refute Keyword.has_key?(config, :username)
+      refute Keyword.has_key?(config, :password)
+
+      # And there is nothing to authenticate with, so don't demand AUTH — `auth_failed`
+      # reads as "wrong password" rather than "no password".
+      assert config[:auth] == :never
+    end
+
+    test "an empty string counts as unset" do
+      config =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "MAIL_FROM" => "a@e.com",
+          "SMTP_USERNAME" => "",
+          "SMTP_PASSWORD" => ""
+        })
+
+      refute Keyword.has_key?(config, :username)
+    end
+
+    test "both present arms authentication" do
+      config =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.sendgrid.net",
+          "MAIL_FROM" => "a@e.com",
+          "SMTP_USERNAME" => "apikey",
+          "SMTP_PASSWORD" => "SG.secret"
+        })
+
+      assert config[:username] == "apikey"
+      assert config[:password] == "SG.secret"
+      assert config[:auth] == :always
+    end
+  end
+
+  describe "dialogue tracing" do
+    test "off unless asked for" do
+      config = mailer_config(%{"SMTP_HOST" => "smtp.example.com", "MAIL_FROM" => "a@e.com"})
+
+      refute config[:trace_fun]
+    end
+
+    test "SMTP_TRACE points gen_smtp at the redacting tracer" do
+      config =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "MAIL_FROM" => "a@e.com",
+          "SMTP_TRACE" => "true"
+        })
+
+      # A named function rather than a closure on purpose: a release evaluates
+      # runtime.exs into a throwaway module, and an anonymous fun captured there does
+      # not survive being written out and read back.
+      assert config[:trace_fun] == (&Polyphony.Mailer.trace/2)
+    end
+  end
+
   describe "the Postmark message stream" do
     defp headers(extra), do: read_prod(extra) |> get_in([:polyphony, :mail_headers])
 
@@ -183,6 +359,44 @@ defmodule Polyphony.MailConfigTest do
       assert get_in(dev, [:polyphony, Polyphony.Mailer])[:adapter] == Swoosh.Adapters.Local
       # `Transport.Email` refuses without one, so dev needs a sender too.
       assert get_in(dev, [:polyphony, :mail_from])
+    end
+
+    test "no provider plus a mailbox password captures mail in memory instead" do
+      config =
+        read_prod(%{"MAILBOX_PASSWORD" => "hunter2", "MAILBOX_USER" => "allen"})
+
+      # The point of this mode: mail is *captured* rather than dropped. Without it the
+      # transport stays on `Transport.Log`, which reports success and sends nothing.
+      assert get_in(config, [:polyphony, Polyphony.Mailer])[:adapter] == Swoosh.Adapters.Local
+
+      assert get_in(config, [:polyphony, :notification_transport]) ==
+               Polyphony.Notifications.Transport.Email
+
+      assert get_in(config, [:polyphony, :mailbox_auth]) == [
+               username: "allen",
+               password: "hunter2"
+             ]
+    end
+
+    test "a real provider wins over the in-memory mailbox" do
+      config =
+        read_prod(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "MAIL_FROM" => "a@e.com",
+          "MAILBOX_PASSWORD" => "hunter2"
+        })
+
+      # Otherwise a leftover MAILBOX_PASSWORD would silently divert real mail into a
+      # buffer nobody reads.
+      assert get_in(config, [:polyphony, Polyphony.Mailer])[:adapter] == Swoosh.Adapters.SMTP
+      refute get_in(config, [:polyphony, :mailbox_auth])
+    end
+
+    test "without a password there is no mailbox and no capture" do
+      config = read_prod(%{})
+
+      refute get_in(config, [:polyphony, :mailbox_auth])
+      refute get_in(config, [:polyphony, :notification_transport])
     end
 
     test "the mail viewer is dev-only, and off unless switched on" do
