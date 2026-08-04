@@ -40,6 +40,7 @@ defmodule PolyphonyWeb.SettingsLive do
   use PolyphonyWeb, :live_view
 
   alias Polyphony.{Accounts, Campaigns, Costs, Library, Owner}
+  alias Polyphony.Notifications.Prefs
   alias PolyphonyWeb.{Kit, Layouts}
 
   def mount(_params, _session, socket) do
@@ -60,6 +61,7 @@ defmodule PolyphonyWeb.SettingsLive do
       cap: cap,
       spent_today: spent,
       fraction: fraction(spent, cap),
+      notifications: notification_prefs(user),
       turns_left: Costs.turns_remaining(user),
       this_month: Costs.this_month(user.id),
       spend_rows: spend_rows(user),
@@ -166,6 +168,16 @@ defmodule PolyphonyWeb.SettingsLive do
     end)
   end
 
+  # Opt-out, so a row is written only to say no. Reading it back through `wants?/3`
+  # rather than trusting the checkbox keeps the screen honest about what is stored.
+  def handle_event("toggle_notification", %{"type" => type}, socket) do
+    safe(socket, fn ->
+      user = socket.assigns.current_user
+      Prefs.set(user.id, type, not Prefs.wants?(user.id, type))
+      {:noreply, assign(socket, notifications: notification_prefs(user))}
+    end)
+  end
+
   def handle_event("confirm_delete", _params, socket),
     do: {:noreply, assign(socket, confirming_delete: true)}
 
@@ -227,6 +239,7 @@ defmodule PolyphonyWeb.SettingsLive do
 
           <.spending {assigns} />
           <.you {assigns} />
+          <.notifications_section {assigns} />
           <.data_section {assigns} />
         </Kit.sheet>
 
@@ -366,6 +379,59 @@ defmodule PolyphonyWeb.SettingsLive do
   end
 
   # ── Data ─────────────────────────────────────────────────────────────────────
+
+  # §B4's preferences, which existed as rows nobody could reach. Opt-*out*: a row is
+  # written only when somebody turns something off, so the absence of a row is consent
+  # rather than a gap, and a new notification type doesn't need a backfill.
+  #
+  # `magic_link` is deliberately absent from the list. It is the only way into the
+  # account, and a switch that can lock you out of your own sign-in is not a
+  # preference — `Notifications` forces it past prefs for the same reason.
+  defp notifications_section(assigns) do
+    ~H"""
+    <div class="px-4 py-3">
+      <div class="lbl dim mb-2">Email</div>
+      <Kit.sheet>
+        <label
+          :for={{type, label, note} <- notification_types()}
+          class="px-3.5 py-2.5 row last:border-b-0 flex items-center justify-between gap-3 cursor-pointer"
+        >
+          <span>
+            <span class="text-[13px] font-semibold block"><%= label %></span>
+            <span class="text-[11px] leading-relaxed dim"><%= note %></span>
+          </span>
+          <input
+            type="checkbox"
+            class="sr-only"
+            phx-click="toggle_notification"
+            phx-value-type={type}
+          />
+          <Kit.sw on={@notifications[type]} />
+        </label>
+      </Kit.sheet>
+      <p class="text-[11px] leading-relaxed dim mt-1.5">
+        Sign-in links always arrive — they are the way back in, not a subscription.
+      </p>
+    </div>
+    """
+  end
+
+  # Ordered by how much a person would miss it. Everything the system can send, minus
+  # the one that isn't optional.
+  defp notification_prefs(user) do
+    Map.new(notification_types(), fn {type, _label, _note} ->
+      {type, Prefs.wants?(user.id, type)}
+    end)
+  end
+
+  defp notification_types do
+    [
+      {"report_alert", "Something you moderate", "A report lands on a campaign you run."},
+      {"owner_warning", "A warning about your account", "Rare, and worth reading."},
+      {"comment_reply", "Replies to you", "When someone answers something you wrote."},
+      {"subscription", "Campaigns you follow", "New chapters in something you're reading."}
+    ]
+  end
 
   defp data_section(assigns) do
     ~H"""

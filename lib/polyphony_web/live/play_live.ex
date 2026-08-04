@@ -44,6 +44,7 @@ defmodule PolyphonyWeb.PlayLive do
 
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Director.BeatDriver
+  alias Polyphony.Edit
   alias Polyphony.Scene.Cast
   alias PolyphonyWeb.Kit
   alias PolyphonyWeb.Transcript
@@ -104,6 +105,7 @@ defmodule PolyphonyWeb.PlayLive do
        control_modes: %{},
        failures: [],
        drafts: [],
+       editing_draft: nil,
        editing: nil,
        composing: false,
        debug_events: DebugFlags.get(:events),
@@ -511,6 +513,27 @@ defmodule PolyphonyWeb.PlayLive do
   # ✨ Expand: draft the user's next turn from their character's *filtered* view (§11),
   # seeded by whatever they've typed (expanded/polished) or from scratch if empty. The
   # result is pushed back into the composer to edit before sending — never auto-committed.
+  # Give up the slot the walk is waiting on. Only offered while it *is* waiting — a
+  # pass outside a paused slot has nothing to pass on, and the beat would carry on
+  # without it.
+  def handle_event("pass_turn", _params, socket) do
+    safe(socket, fn ->
+      case awaiting(socket.assigns.progress) do
+        {character, beat} ->
+          BeatDriver.pass_turn(socket.assigns.scene_id, beat, character)
+
+          {:noreply,
+           socket
+           |> assign(progress: idle())
+           |> reload()
+           |> put_flash(:info, "#{name_of(socket, character)} passes.")}
+
+        nil ->
+          {:noreply, put_flash(socket, :error, "Nothing is waiting on you.")}
+      end
+    end)
+  end
+
   def handle_event("compose", %{"text" => draft}, socket) do
     if beat_busy?(socket.assigns.progress) do
       {:noreply, put_flash(socket, :error, "Hold on — the scene is still advancing.")}
@@ -599,7 +622,7 @@ defmodule PolyphonyWeb.PlayLive do
   # attempt (same aloud/whisper inference as the composer).
   def handle_event(
         "save_edit",
-        %{"beat" => b, "character" => c, "packet" => pid} = params,
+        %{"beat" => b, "character" => c} = params,
         socket
       ) do
     safe(socket, fn ->
@@ -611,39 +634,38 @@ defmodule PolyphonyWeb.PlayLive do
           {:noreply, put_flash(socket, :error, "The turn can't be empty.")}
 
         {moves, self_state} ->
-          attempt = BeatOps.next_attempt(BeatOps.stored_events(scene), scene, beat, c)
-          new_id = BeatOps.reroll_packet_id(scene, beat, c, attempt)
+          # Through `Edit.edit/6` rather than hand-rolled supersede-and-commit. The
+          # module has always known both halves — correct in place, or fork and drop the
+          # stale tail — and this screen implemented only the first, so an edit that
+          # changed what happened left every turn written on top of it standing.
+          corrected =
+            Cast.resolve_addressees(
+              socket.assigns.cast,
+              %TurnPacket{moves: moves, self_state: self_state}
+            )
 
-          :ok =
-            App.dispatch(%SupersedePacket{
-              scene_id: scene,
-              beat: beat,
-              character_id: c,
-              packet_id: pid,
-              attempt: attempt,
-              reason: "edited by author"
-            })
+          validity = if params["invalidates"] == "true", do: :invalid, else: :valid
 
-          :ok =
-            App.dispatch(%CommitPacket{
-              scene_id: scene,
-              character_id: c,
-              beat: beat,
-              packet_id: new_id,
-              # The author edited names back into the whisper line; ids go to the log.
-              packet:
-                Cast.resolve_addressees(
-                  socket.assigns.cast,
-                  %TurnPacket{moves: moves, self_state: self_state}
-                ),
-              edited: true
-            })
+          case Edit.edit(scene, beat, c, corrected, validity, label: "edited at beat #{beat}") do
+            {:ok, %{forked: true, scene_id: branch}} ->
+              # The branch is where the corrected turn lives, so that is where the
+              # author now is. The original is untouched and still reachable by its id.
+              {:noreply,
+               socket
+               |> assign(editing: nil)
+               |> put_flash(:info, "Branched here. The original scene is unchanged.")
+               |> push_navigate(to: ~p"/play/#{branch}")}
 
-          {:noreply,
-           socket
-           |> assign(editing: nil)
-           |> put_flash(:info, "Updated #{name_of(socket, c)}'s turn.")
-           |> reload()}
+            {:ok, _} ->
+              {:noreply,
+               socket
+               |> assign(editing: nil)
+               |> put_flash(:info, "Updated #{name_of(socket, c)}'s turn.")
+               |> reload()}
+
+            {:error, reason} ->
+              {:noreply, put_flash(socket, :error, "Couldn't edit that turn: #{inspect(reason)}")}
+          end
       end
     end)
   end
@@ -748,6 +770,35 @@ defmodule PolyphonyWeb.PlayLive do
     end)
   end
 
+  def handle_event("edit_draft", %{"id" => id}, socket),
+    do: {:noreply, assign(socket, editing_draft: String.to_integer(id))}
+
+  def handle_event("cancel_draft_edit", _params, socket),
+    do: {:noreply, assign(socket, editing_draft: nil)}
+
+  # Correct a draft before taking it. `Drafts.edit/3` has always been able to do this
+  # and nothing called it, so the card could only take a turn whole or throw it away —
+  # and a turn that is nearly right is the ordinary case, which is the entire argument
+  # for approving one rather than letting it commit.
+  def handle_event("save_draft_edit", %{"draft_id" => id} = params, socket) do
+    safe(socket, fn ->
+      case TurnEdit.parse(params["text"] || "") do
+        {[], _self_state} ->
+          {:noreply, put_flash(socket, :error, "The turn can't be empty.")}
+
+        {moves, self_state} ->
+          corrected =
+            Cast.resolve_addressees(
+              socket.assigns.cast,
+              %TurnPacket{moves: moves, self_state: self_state}
+            )
+
+          Drafts.edit(String.to_integer(id), corrected)
+          {:noreply, socket |> assign(editing_draft: nil) |> reload()}
+      end
+    end)
+  end
+
   def handle_event("discard_draft", %{"id" => id}, socket) do
     safe(socket, fn ->
       case BeatDriver.discard_draft(String.to_integer(id)) do
@@ -817,7 +868,10 @@ defmodule PolyphonyWeb.PlayLive do
   # Beat-loop activity: reflect what's running now (Director / a character / idle) so the
   # indicator is accurate and input stays blocked until the beat truly settles.
   def handle_info({:scene_progress, %{phase: phase} = p}, socket) do
-    {:noreply, assign(socket, progress: %{phase: phase, subject: p[:subject]})}
+    # The beat comes with it and used to be dropped. `submit_user_turn/5` needs the beat
+    # the walk actually paused on — committing at `next_beat` instead is how a
+    # user-controlled turn lands outside the beat that is waiting for it.
+    {:noreply, assign(socket, progress: %{phase: phase, subject: p[:subject], beat: p[:beat]})}
   end
 
   def handle_info({:polyphony_event, %{type: "packet.superseded"}}, socket) do
@@ -945,8 +999,6 @@ defmodule PolyphonyWeb.PlayLive do
           {:noreply, put_flash(socket, :error, "Type something to say.")}
 
         {as, {moves, self_state}} ->
-          beat = socket.assigns.next_beat
-
           # The player types "(whisper to Bram: …)" — a name. `addressed_to` is the
           # routing key visibility matches on, so resolve it to an id here, at the
           # last moment before the packet becomes a fact in the log (§5.2).
@@ -956,19 +1008,44 @@ defmodule PolyphonyWeb.PlayLive do
               %TurnPacket{moves: moves, self_state: self_state}
             )
 
-          :ok =
-            App.dispatch(%CommitPacket{
-              scene_id: socket.assigns.scene_id,
-              character_id: as,
-              beat: beat,
-              packet_id: BeatOps.packet_id(socket.assigns.scene_id, beat, as),
-              packet: packet,
-              edited: true
-            })
-
-          {:noreply, socket |> assign(next_beat: beat + 1) |> reload()}
+          {:noreply, take_turn(socket, as, packet)}
       end
     end)
+  end
+
+  # Two ways a turn reaches the log, and which one applies is not a preference.
+  #
+  # If the beat loop has **paused on this character's slot** (`user_controlled`, §A1),
+  # the turn belongs to that slot: `submit_user_turn/5` commits it against the paused
+  # beat, records the packet on the beat aggregate, and walks the Director on. Skipping
+  # that is what made "I write their turns" inert — the composer committed a free packet
+  # at `next_beat`, so the walk stayed paused and the Director wrote the same character
+  # a second time when it resumed.
+  #
+  # Otherwise nothing is waiting and this is the author speaking into the next beat,
+  # which is the original behaviour and still the right one for a scene nobody has
+  # pressed Continue on.
+  defp take_turn(socket, as, packet) do
+    case awaiting(socket.assigns.progress) do
+      {^as, beat} ->
+        BeatDriver.submit_user_turn(socket.assigns.scene_id, beat, as, packet)
+        socket |> assign(progress: idle()) |> reload()
+
+      _ ->
+        beat = socket.assigns.next_beat
+
+        :ok =
+          App.dispatch(%CommitPacket{
+            scene_id: socket.assigns.scene_id,
+            character_id: as,
+            beat: beat,
+            packet_id: BeatOps.packet_id(socket.assigns.scene_id, beat, as),
+            packet: packet,
+            edited: true
+          })
+
+        socket |> assign(next_beat: beat + 1) |> reload()
+    end
   end
 
   # Kick off the async Expand draft (§11) for the acting character, from their sheet +
@@ -1355,9 +1432,35 @@ defmodule PolyphonyWeb.PlayLive do
   defp turn_text(block, cast),
     do: TurnEdit.serialize(block.msgs, &Cast.render_name(cast, &1))
 
+  # The draft's own moves, put through the same serializer the transcript editor uses —
+  # so a draft reads, and edits, exactly like the turn it is about to become.
+  defp draft_text(draft, cast),
+    do:
+      draft
+      |> draft_moves(draft.row.character_id)
+      |> TurnEdit.serialize(&Cast.render_name(cast, &1))
+
   # ── Beat-loop progress ─────────────────────────────────────────────────────────
 
-  defp idle, do: %{phase: :idle, subject: nil}
+  defp idle, do: %{phase: :idle, subject: nil, beat: nil}
+
+  # The beat loop has walked to a `user_controlled` slot and stopped there (§A1). Until
+  # this was read, the composer always did a *free* `CommitPacket` at `next_beat`: the
+  # walk stayed paused forever, and speaking as a character the Director also drives
+  # produced two turns for one slot.
+  defp awaiting(%{phase: :awaiting_user, subject: c, beat: b})
+       when is_binary(c) and c != "" and is_integer(b),
+       do: {c, b}
+
+  defp awaiting(_progress), do: nil
+
+  # Is the composer's current speaker the one the walk is waiting on? Takes the render
+  # assigns, not the socket — inside `~H` those are the bare map.
+  defp your_slot?(%{progress: progress, speaker: speaker}) when is_binary(speaker) do
+    match?({^speaker, _beat}, awaiting(progress))
+  end
+
+  defp your_slot?(_assigns), do: false
 
   # "Busy" for the sake of blocking input: a beat is actively running (the Director is
   # deciding, or a character is generating). `:awaiting_user` is *not* busy — that's the
@@ -1527,7 +1630,22 @@ defmodule PolyphonyWeb.PlayLive do
           cast={@cast}
           voices={@voices}
           register={@register}
+          editing={@editing_draft == d.row.id}
         />
+
+        <%!-- The walk has stopped on this character and is holding the beat open for
+              them (§A1). Said out loud, because otherwise the only difference between
+              "your slot is waiting" and "you are speaking out of turn" is which one
+              produces a double turn later. --%>
+        <div
+          :if={your_slot?(assigns)}
+          class="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg"
+          style="background:color-mix(in srgb,var(--lamp) 12%,transparent)"
+        >
+          <Kit.dot colour="var(--lamp)" />
+          <span class="text-[12.5px] flex-1">The scene is waiting on your turn.</span>
+          <Kit.btn size={:sm} kind={:ghost} type="button" phx-click="pass_turn">Pass</Kit.btn>
+        </div>
 
         <form :if={@speaker} id="say-form" phx-submit="say">
           <div class="flex items-center gap-1.5 mb-2 flex-wrap">
@@ -1770,6 +1888,28 @@ defmodule PolyphonyWeb.PlayLive do
             rows="3"
             class="field say-input px-3 py-2 text-[14px] w-full"
           ><%= turn_text(@block, @cast) %></textarea>
+          <%!-- The question `Edit.edit/6` has always asked and nothing ever put to
+                anybody. Serial generation means a changed line may have changed what
+                *later* turns conditioned on, and only the author knows whether it did:
+                a typo didn't, a reversal did. Answering "it changed what happened"
+                forks at this beat, so the original timeline survives intact and the
+                stale tail is discarded on the branch rather than left standing under a
+                turn that no longer says what it said. --%>
+          <div class="mt-2">
+            <label class="flex items-start gap-2 cursor-pointer">
+              <input type="checkbox" name="invalidates" value="true" class="sr-only peer" />
+              <Kit.chk state={:off} class="mt-0.5 peer-checked:hidden" />
+              <Kit.chk state={:on} class="mt-0.5 hidden peer-checked:flex" />
+              <span class="text-[12px] leading-relaxed">
+                This changes what happened
+                <span class="dim block">
+                  Branches the scene here, keeping the original — anything written after
+                  this turn was written on top of it.
+                </span>
+              </span>
+            </label>
+          </div>
+
           <div class="flex gap-1.5 mt-1.5">
             <Kit.btn kind={:primary} size={:sm} type="submit">Save</Kit.btn>
             <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="cancel_edit">Cancel</Kit.btn>
@@ -1788,6 +1928,7 @@ defmodule PolyphonyWeb.PlayLive do
   attr(:cast, :any, required: true)
   attr(:voices, :map, required: true)
   attr(:register, :atom, required: true)
+  attr(:editing, :boolean, default: false)
 
   defp draft_card(assigns) do
     assigns =
@@ -1804,16 +1945,48 @@ defmodule PolyphonyWeb.PlayLive do
         <span class="lbl dim">beat <%= @draft.row.beat %></span>
       </Kit.row>
 
-      <div class="px-3.5 py-2.5">
+      <div :if={not @editing} class="px-3.5 py-2.5">
         <div :for={m <- draft_moves(@draft, @draft.row.character_id)}>
           <%= Transcript.render_move(m, @cast, @register, @voices) %>
         </div>
       </div>
 
-      <Kit.row class="px-3.5 py-2.5 flex items-center gap-1.5">
+      <%!-- A turn that is nearly right is the ordinary case, and the whole argument for
+            approving one instead of letting it commit. Same editor format as the
+            transcript's, so correcting a draft and correcting a committed turn are the
+            same skill. --%>
+      <form
+        :if={@editing}
+        id={"draft-edit-#{@draft.row.id}"}
+        phx-submit="save_draft_edit"
+        class="px-3.5 py-2.5"
+      >
+        <%!-- `draft_id`, not `id`: LiveView reserves that name for the form's own DOM
+              id and warns that the value would be remapped underneath us. --%>
+        <input type="hidden" name="draft_id" value={@draft.row.id} />
+        <label for={"draft-text-#{@draft.row.id}"} class="sr-only">Edit this turn</label>
+        <textarea
+          id={"draft-text-#{@draft.row.id}"}
+          name="text"
+          rows="4"
+          class="field say-input px-3 py-2 text-[14px] w-full"
+        ><%= draft_text(@draft, @cast) %></textarea>
+        <div class="flex gap-1.5 mt-1.5">
+          <Kit.btn kind={:primary} size={:sm} type="submit">Save</Kit.btn>
+          <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="cancel_draft_edit">
+            Cancel
+          </Kit.btn>
+        </div>
+      </form>
+
+      <Kit.row :if={not @editing} class="px-3.5 py-2.5 flex items-center gap-1.5 flex-wrap">
         <Kit.btn kind={:primary} size={:sm} type="button"
                  phx-click="accept_draft" phx-value-id={@draft.row.id}>
           Take it
+        </Kit.btn>
+        <Kit.btn kind={:ghost} size={:sm} type="button"
+                 phx-click="edit_draft" phx-value-id={@draft.row.id}>
+          Edit first
         </Kit.btn>
         <%!-- Discarding is a **pass**, not a deletion — the slot gives up its turn and
               the beat walks on, which is what the backend does with it. Saying

@@ -10,6 +10,7 @@ defmodule PolyphonyWeb.SettingsScreenLiveTest do
   use PolyphonyWeb.ConnCase, async: false
 
   alias Polyphony.{Accounts, Costs, Library, Owner}
+  alias Polyphony.Notifications.Prefs
 
   setup :register_and_log_in_user
 
@@ -168,6 +169,45 @@ defmodule PolyphonyWeb.SettingsScreenLiveTest do
 
       view |> element("button[phx-click=cancel_delete]") |> render_click()
       assert Accounts.get(user.id).deletion_requested_at == nil
+    end
+  end
+
+  describe "notification preferences" do
+    test "are reachable, and default to on", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/settings")
+
+      # §B4's prefs existed as rows nobody could reach: `Prefs` shipped with the
+      # notification path and no screen ever rendered it.
+      assert html =~ "Replies to you"
+      assert html =~ ~s(phx-click="toggle_notification")
+      # Opt-out: absence of a row is consent, so everything starts on.
+      assert html =~ "sw-on"
+    end
+
+    test "turning one off writes the row, and it survives a reload",
+         %{conn: conn, user: user} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+
+      view
+      |> element(~s([phx-click="toggle_notification"][phx-value-type="subscription"]))
+      |> render_click()
+
+      refute Prefs.wants?(user.id, :subscription)
+      # And the others are untouched — one switch, one type.
+      assert Prefs.wants?(user.id, :comment_reply)
+
+      {:ok, _view, html} = live(conn, ~p"/settings")
+      assert html =~ "Campaigns you follow"
+    end
+
+    test "sign-in links are not offered as a preference", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/settings")
+
+      # It is the only way into the account. A switch that can lock you out of your own
+      # sign-in is not a preference — `Notifications` forces it past prefs for the same
+      # reason, so offering it here would be a lie about what the switch does.
+      refute html =~ ~s(phx-value-type="magic_link")
+      assert html =~ "Sign-in links always arrive"
     end
   end
 end

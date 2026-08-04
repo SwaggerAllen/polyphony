@@ -3,7 +3,8 @@ defmodule Polyphony.Authoring.QuickBuild do
   One-shot scaffolding for a whole campaign (§15, authoring aid) — the "Quick Build"
   button on the campaign editor. From a world seed and one seed per character it:
 
-    1. generates a **world bible** (like ✨ Generate-all on the bible editor),
+    1. generates a **world bible** (like ✨ Generate-all on the bible editor), told who
+       is about to be cast so it doesn't name them first,
     2. generates each **character** in turn, grounded in that world **and the cast built
        so far** — the earlier characters' sheets and the off-screen people they
        introduced — so shared world detail stays consistent instead of each character
@@ -70,7 +71,13 @@ defmodule Polyphony.Authoring.QuickBuild do
     # gets the world + whatever cast succeeded to associate with the campaign. Previously
     # a late failure (e.g. the premise call) discarded the whole result even though the
     # world and characters were already persisted.
-    case Autofill.generate_all(:world_bible, world_seed, %{}, meter) do
+    #
+    # It is written **knowing who is about to be cast** (`cast_seeds`). Written from the
+    # world seed alone it has no idea, so a world that needs a harbour-master invents
+    # one and names her into `starting_canon` — and the very next phase generates that
+    # same seed as a character with a different name. The campaign opens with two of
+    # her, and the author's first job is a rename nobody asked for.
+    case Autofill.generate_all(:world_bible, world_seed, %{}, [cast_seeds: seeds] ++ meter) do
       {:error, reason} ->
         {:error, {:world_failed, reason}}
 

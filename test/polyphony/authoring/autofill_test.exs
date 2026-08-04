@@ -75,6 +75,43 @@ defmodule Polyphony.Authoring.AutofillTest do
       assert msgs =~ "memory can be sold"
     end
 
+    test "characters about to be cast reach the world prompt, named as not-to-name" do
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.generate_all(:world_bible, "a rain-drowned harbour city", %{},
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture,
+            cast_seeds: ["a disgraced harbour-master", "the collector who bought her past"]
+          )
+        end)
+
+      # The seeds themselves, so the world is written around people who are coming.
+      assert msgs =~ "a disgraced harbour-master"
+      assert msgs =~ "the collector who bought her past"
+
+      # And the constraint that is the whole point. Written blind, a world that needs a
+      # harbour-master invents one, names her into `starting_canon`, and the next phase
+      # generates that same seed as somebody else — the campaign opens with two of her.
+      assert msgs =~ "not yours to write"
+      assert msgs =~ "Do not name them"
+    end
+
+    test "no seeds means no block, rather than an empty heading" do
+      msgs =
+        capture_prompt(fn capture ->
+          Autofill.generate_all(:world_bible, "a harbour city", %{},
+            provider: Polyphony.LLM.Stub,
+            respond_with: capture,
+            cast_seeds: ["", "   "]
+          )
+        end)
+
+      # The bible editor's own "write the whole bible" passes none at all, and a row
+      # left blank in Quick Build is still a row — neither should spend prompt on an
+      # instruction about nobody.
+      refute msgs =~ "about to write these characters"
+    end
+
     test "the world context is injected into the single-field prompt" do
       msgs =
         capture_prompt(fn capture ->

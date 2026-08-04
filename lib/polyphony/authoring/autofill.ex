@@ -62,6 +62,12 @@ defmodule Polyphony.Authoring.Autofill do
 
   `opts[:world]` — an optional map of world-bible display fields (`name`, `setting`,
   `tone`, `rules`, `starting_canon`) used to ground the character in a setting.
+
+  `opts[:cast_seeds]` — one-line seeds for characters *about to be written* into what
+  is being generated. Quick Build writes the world first, so without these it writes
+  it blind: a world that needs a harbour-master invents and names one, and the cast
+  then names the same seed somebody else. The block tells the model the roles may be
+  needed and the people are not its to name.
   """
   @spec generate_all(kind(), String.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
   def generate_all(kind, brief, current \\ %{}, opts \\ []) do
@@ -812,10 +818,46 @@ defmodule Polyphony.Authoring.Autofill do
   # The generation context (world bible + related character sheets + a former stub's
   # inherited role), pulled from opts.
   defp context(opts),
-    do: %{world: opts[:world], relations: opts[:relations], role: opts[:role]}
+    do: %{
+      world: opts[:world],
+      relations: opts[:relations],
+      role: opts[:role],
+      cast_seeds: opts[:cast_seeds]
+    }
 
   defp context_block(%{} = ctx),
-    do: role_block(ctx[:role]) <> world_block(ctx[:world]) <> relations_block(ctx[:relations])
+    do:
+      role_block(ctx[:role]) <>
+        world_block(ctx[:world]) <>
+        relations_block(ctx[:relations]) <> cast_seeds_block(ctx[:cast_seeds])
+
+  # People who are **about to be written into this world** — the character seeds a
+  # Quick Build is holding while it generates the world first.
+  #
+  # Without them the world is written blind, and a world that needs a harbour-master
+  # invents one, names her, and writes her into `starting_canon`. Then the cast
+  # generation names the same person something else from the same seed, and the
+  # campaign opens with two harbour-masters — or one whose own world calls her by a
+  # name she has never had. Naming is the specific failure, so the instruction is
+  # specific about it: the role may be needed, the person is not yours.
+  defp cast_seeds_block(seeds) when is_list(seeds) do
+    case Enum.filter(seeds, &(is_binary(&1) and String.trim(&1) != "")) do
+      [] ->
+        ""
+
+      lines ->
+        "The author is about to write these characters into this world, from these " <>
+          "one-line seeds:\n" <>
+          Enum.map_join(lines, "\n", &"- #{String.trim(&1)}") <>
+          "\n\nThey do not exist yet and they are not yours to write. Do not name them, " <>
+          "do not describe them, and write nothing that contradicts them. Where the " <>
+          "setting needs their role, refer to the role and leave the person unnamed — " <>
+          "the character sheets name them, and a name invented here is a name they will " <>
+          "have to be renamed away from.\n\n"
+    end
+  end
+
+  defp cast_seeds_block(_), do: ""
 
   # A character stubbed from another's relationships carries a one-line `role` (how
   # that source character described them, e.g. "estranged mentor"). Feed it into

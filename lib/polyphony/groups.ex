@@ -32,17 +32,12 @@ defmodule Polyphony.Groups do
 
   ## What isn't here yet
 
-  **Group arc fan-out** (`backend-backlog.md` §3.0b): a group-targeting change
-  should raise one proposal against the template and one per current member, each
-  reviewed individually. The template half is just an arc subject; the fan-out and
-  its collapsed review card are not built.
-
-  **Audiences that name a group.** `secrets/1` gives a group somewhere for a secret
-  to point, but a `Fact` still carries only `concealed: true` rather than an
-  audience. Pointing one at a group — and resolving it *when a character enters the
-  story*, which is what makes a scene-9 walk-on arrive already knowing — is the
-  audience-picker work, and it needs `Visibility` in the loop rather than only this
-  module.
+  **Group arc fan-out has no caller.** `Authoring.GroupArc.fan_out/3` is written and
+  tested, and `ArcReviewLive` reads its `pending/2` and `counts/2` for the collapsed
+  card — but nothing on the live path ever *calls* `fan_out/3`, so a group-targeting
+  change raises no proposals and that card can never populate. The two halves exist
+  and have never been introduced (`backend-backlog.md` §3.0b, and the FE/BE parity
+  audit in `roadmap.md`).
   """
 
   alias Polyphony.Authoring.{CharacterSheet, Group}

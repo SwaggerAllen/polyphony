@@ -268,7 +268,7 @@ Because content is stored unencrypted and the operator is a data controller:
 
 ---
 
-## FE/BE parity audit ⬜ **Planned — recurring gap**
+## FE/BE parity audit 🔨 **Run once — findings below**
 
 The same shape of bug keeps surfacing: a capability lives on **one** side only. Either
 the backend has it with no way to reach it (boundary authoring, human-controlled
@@ -289,16 +289,51 @@ resume/raise-cap surface, **B6** export/download hooks, **B9** delete-confirmati
 **B4** notification-prefs UI); and the standing invariant that any *new* event type or
 `Costs`/retrieval/generation seam gets checked for a live caller, not just a test.
 
-**Interactive user-controlled turns (backend-built, FE-unwired) — deliberately deferred.**
-The beat loop fully supports a `user_controlled` slot: `BeatDriver` pauses at that
-character (`awaiting.user` broadcast) and `submit_user_turn`/`pass_turn` resume the walk.
-But the Play composer never consumes that pause — it always does a *free* `CommitPacket`
-at `next_beat`, so setting a character to "I write their turns" has no interactive effect,
-and speaking as a character the Director also drives produces a double turn. Wiring it
-(surface the paused slot; route the composer's Send → `submit_user_turn`, add Pass; show
-whose turn it is) is the path to "I play my character, the AI plays the rest" and to
-multiplayer. Left as-is by choice for now — the workaround is to not speak as a character
-you want the cast to drive.
+### Findings, verified against the code (not against this document)
+
+Each was checked by counting **production** callers, not test callers — a module with
+seven test references and none in `lib/` is exactly the shape that reads as shipped. In
+rough order of how much a user would notice:
+
+| Capability | Backend | Frontend | What a user sees |
+|---|---|---|---|
+| **Assisted drafts** (§1.5) | ✅ | ✅ **now built** | — was: Continue stopped the beat and nothing appeared |
+| **User-controlled turns** (§A1) | ✅ `submit_user_turn` / `pass_turn` | ✅ **now built** | — was: "I write their turns" had no interactive effect and double-turned |
+| **Group arc fan-out** (§3.0b) | ✅ `GroupArc.fan_out/3` | ❌ **still open — needs a screen, not a wire** | see below |
+| **Edit with tail invalidation** (§1.2) | ✅ `Edit.edit/6` | ✅ **now built** | — was: every edit was silently `:valid`, leaving turns written on top of a line that had changed |
+| **Fork / branch from beat N** (§1.1) | ✅ `Fork.fork/3` | ⚠️ reachable via an invalidating edit, which is now wired | a scene branches when an edit changes what happened; there is still no bare "branch from here" |
+| **Draft editing before accepting** | ✅ `Drafts.edit/3` | ✅ **now built** | — was: take it whole or throw it away |
+| **Scene location as an authored field** (§2.3) | ✅ `OpenScene` takes `location:` | ✅ **now built** | — was: every scene opened nowhere |
+| **Notification preferences** (§B4) | ✅ `Notifications.Prefs` | ✅ **now built** | — was: opt-outs existed and were unreachable |
+| **Export / download** (§B6) | ❌ | ❌ | not started either side — no gap, just absent |
+| **Failed turns requeue to tail** (§1.4) | ❌ deferred by decision | — | a failed turn is retried in place |
+
+**Group arc is the one that isn't a wiring job.** `fan_out/3` raises proposals when a
+group's *template* changes — and `Groups.create/3` and `update_fields/3` have no
+production callers either, because there is no group editor. The library lists groups
+that only tests can make. So the missing piece is a group authoring screen, with the
+fan-out as the thing its save calls; wiring `fan_out/3` alone would give it nowhere to
+be called from. Deliberately left, and it is the only row above that is a feature rather
+than a connection.
+
+Two documentation defects found in the same pass, both since corrected: `Polyphony.Groups`
+claimed the audience picker and group fan-out were unbuilt (the picker shipped; `fan_out/3`
+exists and is merely uncalled), and `backend-backlog.md` §1.5 still said the approve card
+was deferred after it was built. **A moduledoc that under-claims is how a shipped feature
+gets built twice**, so these are worth the same care as the code.
+
+The standing rule this pass exists to enforce: a new event type, context function, or
+`Costs`/retrieval/generation seam is not done when its test passes — it is done when
+something on the live path calls it.
+
+**Interactive user-controlled turns — ✅ wired.** `PlayLive` keeps the beat that
+`announce_progress` carries (it used to drop it), and the composer routes on it: with the
+walk paused on the speaker's slot, Send is `submit_user_turn/5` against *that* beat and a
+Pass control appears beside the field; with nothing waiting it is the free `CommitPacket`
+at `next_beat` it always was. The banner is explicit, because otherwise the only
+difference between "your slot is waiting" and "you are speaking out of turn" was which one
+produced a double turn later. This is the path to "I play my character, the AI plays the
+rest" and to multiplayer.
 
 ---
 
