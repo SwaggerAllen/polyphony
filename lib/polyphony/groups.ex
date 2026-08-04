@@ -30,14 +30,13 @@ defmodule Polyphony.Groups do
   principle as world-arc catch-up. Seeding happens once, when a character is
   *written from* a group (`write_character/3`).
 
-  ## What isn't here yet
+  ## Where the authoring happens
 
-  **Group arc fan-out has no caller.** `Authoring.GroupArc.fan_out/3` is written and
-  tested, and `ArcReviewLive` reads its `pending/2` and `counts/2` for the collapsed
-  card — but nothing on the live path ever *calls* `fan_out/3`, so a group-targeting
-  change raises no proposals and that card can never populate. The two halves exist
-  and have never been introduced (`backend-backlog.md` §3.0b, and the FE/BE parity
-  audit in `roadmap.md`).
+  `PolyphonyWeb.GroupEditorLive` writes one, and it is what calls `create/3`,
+  `update_fields/3` and — through **Tell the members** — `Authoring.GroupArc.fan_out/3`.
+  That last one is a button rather than a consequence of saving, and deliberately:
+  editing a template reaches nobody, so propagating on save would be the silent
+  propagation this whole design exists to refuse.
   """
 
   alias Polyphony.Authoring.{CharacterSheet, Group}

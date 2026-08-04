@@ -97,6 +97,7 @@ defmodule PolyphonyWeb.Router do
       live("/play/:scene_id", PlayLive, :show)
       live("/authoring/character/:id", SheetEditorLive, :edit)
       live("/authoring/bible/:id", BibleEditorLive, :edit)
+      live("/authoring/group/:id", GroupEditorLive, :edit)
       live("/arc/:campaign_id", ArcReviewLive, :index)
     end
   end

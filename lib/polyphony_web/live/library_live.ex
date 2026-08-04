@@ -362,6 +362,22 @@ defmodule PolyphonyWeb.LibraryLive do
     end)
   end
 
+  def handle_event("archive", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      Library.archive(id)
+      {:noreply, socket |> put_flash(:info, "Filed. It's on the archive shelf.") |> load()}
+    end)
+  end
+
+  # Soft, and on a clock — `Library.purge_expired/1` is what finally removes it, and
+  # the trash shelf carries the one irreversible button in the screen.
+  def handle_event("trash", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      {:ok, _} = Library.soft_delete(id)
+      {:noreply, socket |> put_flash(:info, "In the trash. You can put it back.") |> load()}
+    end)
+  end
+
   def handle_event("restore", %{"id" => id}, socket) do
     safe(socket, fn ->
       Library.restore(id)
@@ -431,6 +447,49 @@ defmodule PolyphonyWeb.LibraryLive do
     """
   end
 
+  # Filing and throwing away, which this screen is the front door for (see the
+  # moduledoc) and which the rows themselves had no way to reach: `Library.archive/2`
+  # had no caller anywhere, so the Archive shelf could only ever be empty.
+  #
+  # In the flow rather than floating, like every other row menu — the kit's `.sheet` is
+  # `overflow:hidden`, so an absolutely-positioned panel is clipped by the sheet edge
+  # and the last row's menu is the one you can't read.
+  attr(:c, :map, required: true)
+
+  defp row_menu(assigns) do
+    ~H"""
+    <details class="min-w-0">
+      <summary class="pill list-none cursor-pointer" aria-label={"Change #{@c.name}"}>⋯</summary>
+      <nav class="sheet mt-1.5" style="background:var(--b2)">
+        <.link navigate={~p"/campaigns/#{@c.id}"} class="row block px-4 py-2.5 text-[13px]">
+          Open
+        </.link>
+        <button
+          type="button"
+          class="row w-full px-4 py-2.5 text-[13px] text-left"
+          phx-click="archive"
+          phx-value-id={@c.id}
+        >
+          Archive
+          <span class="block text-[11px] dim">Out of the way, and nothing is at risk.</span>
+        </button>
+        <%!-- Trash is on a clock rather than immediate, so this needs no confirmation —
+              the irreversible button lives on the trash shelf, where it says so. --%>
+        <button
+          type="button"
+          class="w-full px-4 py-2.5 text-[13px] text-left"
+          style="color:var(--pencil)"
+          phx-click="trash"
+          phx-value-id={@c.id}
+        >
+          Move to trash
+          <span class="block text-[11px] dim">Recoverable until it expires.</span>
+        </button>
+      </nav>
+    </details>
+    """
+  end
+
   # ── Campaigns ────────────────────────────────────────────────────────────────
 
   defp campaigns(assigns) do
@@ -438,10 +497,20 @@ defmodule PolyphonyWeb.LibraryLive do
     <Kit.sheet class="m-4">
       <Kit.row :for={c <- @campaigns} class="px-4 py-3" style={row_tint(c)}>
         <div class="flex items-center justify-between gap-2 mb-1">
-          <div class={["ttl text-[16px] min-w-0 truncate font-semibold", !c.named? && "dim"]}>
+          <%!-- The title is the way in, whatever state the campaign is in. It used to
+                be that the only link on the row was "Carry on", which is `:playing`
+                only — so a campaign you had just made, or had finished, could not be
+                opened from the library at all. --%>
+          <.link
+            navigate={~p"/campaigns/#{c.id}"}
+            class={["ttl text-[16px] min-w-0 truncate font-semibold", !c.named? && "dim"]}
+          >
             <%= c.name %>
+          </.link>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <Kit.pill colour={status_colour(c)}><%= badge(c) %></Kit.pill>
+            <.row_menu c={c} />
           </div>
-          <Kit.pill colour={status_colour(c)} class="shrink-0"><%= badge(c) %></Kit.pill>
         </div>
 
         <div class="lbl dim mb-1.5"><%= meta_line(c) %></div>
