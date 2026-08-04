@@ -298,7 +298,7 @@ rough order of how much a user would notice:
 | Capability | Backend | Frontend | What a user sees |
 |---|---|---|---|
 | **Assisted drafts** (§1.5) | ✅ | ✅ **now built** | — was: Continue stopped the beat and nothing appeared |
-| **User-controlled turns** (§A1) | ✅ `submit_user_turn` / `pass_turn` | ❌ no caller | "I write their turns" has no interactive effect; speaking as a Director-driven character double-turns |
+| **User-controlled turns** (§A1) | ✅ `submit_user_turn` / `pass_turn` | ✅ **now built** | — was: "I write their turns" had no interactive effect and double-turned |
 | **Group arc fan-out** (§3.0b) | ✅ `GroupArc.fan_out/3` | ⚠️ half — the review card reads `pending/2`, nothing calls `fan_out/3` | the collapsed group card can never populate |
 | **Edit with tail invalidation** (§1.2) | ✅ `Edit.edit/6` | ❌ `PlayLive.save_edit` hand-rolls supersede+commit | no way to say "this changes what happened"; every edit is silently `:valid` |
 | **Fork / branch from beat N** (§1.1) | ✅ `Fork.fork/3` | ❌ only reachable via `Edit`'s `:invalid` path, which nothing calls | a published story can be forked; your own scene can't be branched |
@@ -318,16 +318,14 @@ The standing rule this pass exists to enforce: a new event type, context functio
 `Costs`/retrieval/generation seam is not done when its test passes — it is done when
 something on the live path calls it.
 
-**Interactive user-controlled turns (backend-built, FE-unwired) — deliberately deferred.**
-The beat loop fully supports a `user_controlled` slot: `BeatDriver` pauses at that
-character (`awaiting.user` broadcast) and `submit_user_turn`/`pass_turn` resume the walk.
-But the Play composer never consumes that pause — it always does a *free* `CommitPacket`
-at `next_beat`, so setting a character to "I write their turns" has no interactive effect,
-and speaking as a character the Director also drives produces a double turn. Wiring it
-(surface the paused slot; route the composer's Send → `submit_user_turn`, add Pass; show
-whose turn it is) is the path to "I play my character, the AI plays the rest" and to
-multiplayer. Left as-is by choice for now — the workaround is to not speak as a character
-you want the cast to drive.
+**Interactive user-controlled turns — ✅ wired.** `PlayLive` keeps the beat that
+`announce_progress` carries (it used to drop it), and the composer routes on it: with the
+walk paused on the speaker's slot, Send is `submit_user_turn/5` against *that* beat and a
+Pass control appears beside the field; with nothing waiting it is the free `CommitPacket`
+at `next_beat` it always was. The banner is explicit, because otherwise the only
+difference between "your slot is waiting" and "you are speaking out of turn" was which one
+produced a double turn later. This is the path to "I play my character, the AI plays the
+rest" and to multiplayer.
 
 ---
 

@@ -511,6 +511,27 @@ defmodule PolyphonyWeb.PlayLive do
   # ✨ Expand: draft the user's next turn from their character's *filtered* view (§11),
   # seeded by whatever they've typed (expanded/polished) or from scratch if empty. The
   # result is pushed back into the composer to edit before sending — never auto-committed.
+  # Give up the slot the walk is waiting on. Only offered while it *is* waiting — a
+  # pass outside a paused slot has nothing to pass on, and the beat would carry on
+  # without it.
+  def handle_event("pass_turn", _params, socket) do
+    safe(socket, fn ->
+      case awaiting(socket.assigns.progress) do
+        {character, beat} ->
+          BeatDriver.pass_turn(socket.assigns.scene_id, beat, character)
+
+          {:noreply,
+           socket
+           |> assign(progress: idle())
+           |> reload()
+           |> put_flash(:info, "#{name_of(socket, character)} passes.")}
+
+        nil ->
+          {:noreply, put_flash(socket, :error, "Nothing is waiting on you.")}
+      end
+    end)
+  end
+
   def handle_event("compose", %{"text" => draft}, socket) do
     if beat_busy?(socket.assigns.progress) do
       {:noreply, put_flash(socket, :error, "Hold on — the scene is still advancing.")}
@@ -817,7 +838,10 @@ defmodule PolyphonyWeb.PlayLive do
   # Beat-loop activity: reflect what's running now (Director / a character / idle) so the
   # indicator is accurate and input stays blocked until the beat truly settles.
   def handle_info({:scene_progress, %{phase: phase} = p}, socket) do
-    {:noreply, assign(socket, progress: %{phase: phase, subject: p[:subject]})}
+    # The beat comes with it and used to be dropped. `submit_user_turn/5` needs the beat
+    # the walk actually paused on — committing at `next_beat` instead is how a
+    # user-controlled turn lands outside the beat that is waiting for it.
+    {:noreply, assign(socket, progress: %{phase: phase, subject: p[:subject], beat: p[:beat]})}
   end
 
   def handle_info({:polyphony_event, %{type: "packet.superseded"}}, socket) do
@@ -945,8 +969,6 @@ defmodule PolyphonyWeb.PlayLive do
           {:noreply, put_flash(socket, :error, "Type something to say.")}
 
         {as, {moves, self_state}} ->
-          beat = socket.assigns.next_beat
-
           # The player types "(whisper to Bram: …)" — a name. `addressed_to` is the
           # routing key visibility matches on, so resolve it to an id here, at the
           # last moment before the packet becomes a fact in the log (§5.2).
@@ -956,19 +978,44 @@ defmodule PolyphonyWeb.PlayLive do
               %TurnPacket{moves: moves, self_state: self_state}
             )
 
-          :ok =
-            App.dispatch(%CommitPacket{
-              scene_id: socket.assigns.scene_id,
-              character_id: as,
-              beat: beat,
-              packet_id: BeatOps.packet_id(socket.assigns.scene_id, beat, as),
-              packet: packet,
-              edited: true
-            })
-
-          {:noreply, socket |> assign(next_beat: beat + 1) |> reload()}
+          {:noreply, take_turn(socket, as, packet)}
       end
     end)
+  end
+
+  # Two ways a turn reaches the log, and which one applies is not a preference.
+  #
+  # If the beat loop has **paused on this character's slot** (`user_controlled`, §A1),
+  # the turn belongs to that slot: `submit_user_turn/5` commits it against the paused
+  # beat, records the packet on the beat aggregate, and walks the Director on. Skipping
+  # that is what made "I write their turns" inert — the composer committed a free packet
+  # at `next_beat`, so the walk stayed paused and the Director wrote the same character
+  # a second time when it resumed.
+  #
+  # Otherwise nothing is waiting and this is the author speaking into the next beat,
+  # which is the original behaviour and still the right one for a scene nobody has
+  # pressed Continue on.
+  defp take_turn(socket, as, packet) do
+    case awaiting(socket.assigns.progress) do
+      {^as, beat} ->
+        BeatDriver.submit_user_turn(socket.assigns.scene_id, beat, as, packet)
+        socket |> assign(progress: idle()) |> reload()
+
+      _ ->
+        beat = socket.assigns.next_beat
+
+        :ok =
+          App.dispatch(%CommitPacket{
+            scene_id: socket.assigns.scene_id,
+            character_id: as,
+            beat: beat,
+            packet_id: BeatOps.packet_id(socket.assigns.scene_id, beat, as),
+            packet: packet,
+            edited: true
+          })
+
+        socket |> assign(next_beat: beat + 1) |> reload()
+    end
   end
 
   # Kick off the async Expand draft (§11) for the acting character, from their sheet +
@@ -1357,7 +1404,25 @@ defmodule PolyphonyWeb.PlayLive do
 
   # ── Beat-loop progress ─────────────────────────────────────────────────────────
 
-  defp idle, do: %{phase: :idle, subject: nil}
+  defp idle, do: %{phase: :idle, subject: nil, beat: nil}
+
+  # The beat loop has walked to a `user_controlled` slot and stopped there (§A1). Until
+  # this was read, the composer always did a *free* `CommitPacket` at `next_beat`: the
+  # walk stayed paused forever, and speaking as a character the Director also drives
+  # produced two turns for one slot.
+  defp awaiting(%{phase: :awaiting_user, subject: c, beat: b})
+       when is_binary(c) and c != "" and is_integer(b),
+       do: {c, b}
+
+  defp awaiting(_progress), do: nil
+
+  # Is the composer's current speaker the one the walk is waiting on? Takes the render
+  # assigns, not the socket — inside `~H` those are the bare map.
+  defp your_slot?(%{progress: progress, speaker: speaker}) when is_binary(speaker) do
+    match?({^speaker, _beat}, awaiting(progress))
+  end
+
+  defp your_slot?(_assigns), do: false
 
   # "Busy" for the sake of blocking input: a beat is actively running (the Director is
   # deciding, or a character is generating). `:awaiting_user` is *not* busy — that's the
@@ -1528,6 +1593,20 @@ defmodule PolyphonyWeb.PlayLive do
           voices={@voices}
           register={@register}
         />
+
+        <%!-- The walk has stopped on this character and is holding the beat open for
+              them (§A1). Said out loud, because otherwise the only difference between
+              "your slot is waiting" and "you are speaking out of turn" is which one
+              produces a double turn later. --%>
+        <div
+          :if={your_slot?(assigns)}
+          class="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg"
+          style="background:color-mix(in srgb,var(--lamp) 12%,transparent)"
+        >
+          <Kit.dot colour="var(--lamp)" />
+          <span class="text-[12.5px] flex-1">The scene is waiting on your turn.</span>
+          <Kit.btn size={:sm} kind={:ghost} type="button" phx-click="pass_turn">Pass</Kit.btn>
+        </div>
 
         <form :if={@speaker} id="say-form" phx-submit="say">
           <div class="flex items-center gap-1.5 mb-2 flex-wrap">
