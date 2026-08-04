@@ -22,8 +22,12 @@ defmodule Polyphony.Authoring.QuickBuild do
 
   Everything is persisted to the author's `Library` as ordinary owned entries — the
   same kinds the editors produce — so each can be opened and fleshed out afterwards.
-  It's a stateless orchestrator over `Autofill` + `Library`; the LiveView owns the
-  async/UI and attaches the results (bible id, character ids, premise) to the campaign.
+  It's a stateless orchestrator over `Autofill` + `Library`; `Polyphony.Jobs.QuickBuild`
+  runs it and owns the association, reporting phases through `:progress` and each
+  persisted entry through `:on_entry` as it goes. That second callback matters more than
+  it looks: this function writes to the library long before it returns, so a caller that
+  associates only from the return value strands everything built by a run that doesn't
+  finish.
 
   Returns `{:ok, %{bible: entry, characters: [entry], premise: string, failed: [...]}}` —
   `characters` is the **main cast** (stubs land in the library but aren't in the campaign
@@ -49,11 +53,20 @@ defmodule Polyphony.Authoring.QuickBuild do
       (default `false`).
     * `:progress` — an optional 1-arg fn called with `%{done, total, label}` before each
       phase (world → each character → linking → premise → covers), for a UI progress bar.
+    * `:on_entry` — an optional 1-arg fn called with `{:world, entry}` / `{:character,
+      entry}` the moment each is persisted, *before* the phases that follow it. The
+      caller uses it to associate as the build goes. This is not an optimisation: the
+      build writes to the library long before it returns, so a caller that associates
+      only from the return value leaves a world and a cast attached to nothing whenever
+      the build doesn't finish — and it doesn't have to crash to not finish, it only has
+      to be interrupted. Reporting is best-effort; a raising callback doesn't sink the
+      build.
     * `:provider` / `:user_id` / `:campaign_id` — metering passthrough.
   """
   @spec build(keyword()) :: {:ok, map()} | {:error, term()}
   def build(opts) do
     owner = Keyword.fetch!(opts, :owner)
+    announce = announcer(opts[:on_entry])
     world_seed = to_string(opts[:world_seed] || "")
     # One character per provided seed — a blank seed is kept, generating a character
     # freely from the world rather than dropping the row.
@@ -83,10 +96,20 @@ defmodule Polyphony.Authoring.QuickBuild do
 
       {:ok, world_fields} ->
         bible_entry = put(owner, "world_bible", to_world_bible(world_fields))
+        announce.({:world, bible_entry})
         world_ctx = world_context(world_fields)
 
         {char_entries, failed} =
-          generate_cast(owner, seeds, bible_entry.id, world_ctx, suggest?, meter, report)
+          generate_cast(
+            owner,
+            seeds,
+            bible_entry.id,
+            world_ctx,
+            suggest?,
+            meter,
+            report,
+            announce
+          )
 
         report.(length(seeds) + 1, "Connecting the cast")
         char_entries = interlink_cast(char_entries, meter)
@@ -138,6 +161,22 @@ defmodule Polyphony.Authoring.QuickBuild do
     end
   end
 
+  # A no-op when no `:on_entry` was given, and swallowing its exceptions when there is
+  # one: the callback exists so a caller can associate what has been built, and the
+  # build is worth less, not more, if a failure to *report* a world also destroys it.
+  defp announcer(nil), do: fn _ -> :ok end
+
+  defp announcer(fun) when is_function(fun, 1) do
+    fn event ->
+      try do
+        fun.(event)
+        :ok
+      rescue
+        _ -> :ok
+      end
+    end
+  end
+
   # Wrap an optional `%{done, total, label}` callback into a `(done, label)` reporter
   # (no-op when absent), so the build body just calls `report.(done, "…")` per phase.
   defp progress_fn(nil, _total), do: fn _done, _label -> :ok end
@@ -159,7 +198,7 @@ defmodule Polyphony.Authoring.QuickBuild do
   # Keeps the ones that succeed and collects `{seed, reason}` for the ones that don't (a
   # blank result counts as a failure). Always returns `{entries, failed}` — even a fully
   # failed cast still leaves the world built and associated.
-  defp generate_cast(owner, seeds, bible_id, world_ctx, suggest?, meter, report) do
+  defp generate_cast(owner, seeds, bible_id, world_ctx, suggest?, meter, report, announce) do
     n = length(seeds)
 
     {built, _stubs, failed} =
@@ -178,6 +217,7 @@ defmodule Polyphony.Authoring.QuickBuild do
             }
 
             entry = put(owner, "character", sheet)
+            announce.({:character, entry})
 
             {entry, stubs} =
               maybe_stub_offscreen(entry, sheet, built, suggest?, bible_id, owner, meter, stubs)
