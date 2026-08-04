@@ -73,7 +73,6 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   defp prose_specs, do: @prose_specs
   defp list_specs, do: @list_specs
-  defp list_fields, do: @list_fields
   defp stops, do: @stops
 
   def mount(%{"id" => id}, _session, socket) do
@@ -810,6 +809,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
                 field={f}
                 label={label}
                 add_label={add}
+                placeholder={panel_placeholder(f)}
+                panel={@panel}
                 items={@items[f]}
                 generating={@generating}
                 labels={@picker_labels}
@@ -871,12 +872,11 @@ defmodule PolyphonyWeb.BibleEditorLive do
             resolved={Audience.resolve(open_item(assigns).audience)}
           />
 
-          <.add_panel
-            :if={@panel in list_fields()}
-            field={@panel}
-            title={panel_title(@panel)}
-            placeholder={panel_placeholder(@panel)}
-          />
+          <%!-- The owner for the inline "add" control, which sits up in its own list
+                inside `#bible-form`. It carries no markup of its own: a form element
+                exists here only because one form cannot be nested in another, and the
+                control points at it with `form="item-form"`. --%>
+          <form id="item-form" phx-submit="add_item"></form>
 
           <%!-- ── Template or copy (§2.5b) ─────────────────────────────────── --%>
           <Kit.sheet class="m-4">
@@ -964,6 +964,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
   attr(:field, :string, required: true)
   attr(:label, :string, required: true)
   attr(:add_label, :string, required: true)
+  attr(:placeholder, :string, required: true)
+  attr(:panel, :any, required: true)
   attr(:items, :list, required: true)
   attr(:generating, :any, required: true)
   attr(:last, :boolean, default: false)
@@ -990,30 +992,34 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
       <p :if={@items == []} class="text-[13px] dim">Nothing yet.</p>
 
-      <div :for={{item, i} <- Enum.with_index(@items)} class="flex items-start gap-2 py-1.5">
-        <Kit.marked
-          mark={if(item.concealed, do: :secret, else: :plain)}
-          class="min-w-0 flex-1"
-        >
-          <span class="text-[13.5px] leading-relaxed"><%= item.statement %></span>
-          <%!-- The audience is part of the item, not behind the picker, so the count
-                is readable without opening anything (§01). --%>
-          <AudiencePicker.line
-            :if={item.concealed}
-            audience={item.audience}
-            labels={@labels}
-            class="mt-1"
-          />
-        </Kit.marked>
-
-        <details class="relative shrink-0">
-          <summary class="pill list-none cursor-pointer" aria-label={"Change item #{i + 1}"}>
-            ⋯
-          </summary>
-          <nav
-            class="sheet absolute right-0 top-full mt-1 z-20 min-w-[14rem] overflow-hidden"
-            style="background:var(--b2)"
+      <%!-- The menu opens **in the flow**, not as an absolutely-positioned layer. The
+            kit's `.sheet` is `overflow:hidden` (it's what rounds the corners), so a
+            floating panel was clipped by the sheet's bottom edge — which meant the
+            last items in a list, the ones nearest that edge, were exactly the ones
+            whose menus you couldn't read. It also matches how the mock draws a row
+            menu (`ux/polyphony-campaign.html` §05 "Row menu"): a panel, not a layer.
+            Opening the whole row rather than the ⋯ alone is the other half — a
+            fourteen-pixel target is not a phone affordance. --%>
+      <details :for={{item, i} <- Enum.with_index(@items)} class="py-1.5">
+        <summary class="flex items-start gap-2 list-none cursor-pointer">
+          <Kit.marked
+            mark={if(item.concealed, do: :secret, else: :plain)}
+            class="min-w-0 flex-1"
           >
+            <span class="text-[13.5px] leading-relaxed"><%= item.statement %></span>
+            <%!-- The audience is part of the item, not behind the picker, so the count
+                  is readable without opening anything (§01). --%>
+            <AudiencePicker.line
+              :if={item.concealed}
+              audience={item.audience}
+              labels={@labels}
+              class="mt-1"
+            />
+          </Kit.marked>
+          <span class="pill shrink-0" aria-label={"Change item #{i + 1}"}>⋯</span>
+        </summary>
+
+        <nav class="sheet mt-1.5" style="background:var(--b2)">
             <button
               type="button"
               class="row w-full px-4 py-2.5 flex items-center justify-between gap-3 text-left"
@@ -1071,11 +1077,16 @@ defmodule PolyphonyWeb.BibleEditorLive do
             >
               Delete
             </button>
-          </nav>
-        </details>
-      </div>
+        </nav>
+      </details>
 
+      <%!-- Adding happens **here**, in the list it adds to. It used to open a separate
+            sheet below the whole bible form, far enough away that the two didn't
+            obviously belong together — you pressed "Add something that's true…" and a
+            panel appeared somewhere else on the page. Closed, this is the same box as
+            before; open, that box is the input. --%>
       <button
+        :if={@panel != @field}
         type="button"
         class="field px-3 py-2 text-[13px] dim w-full text-left mt-2"
         phx-click="panel"
@@ -1083,48 +1094,39 @@ defmodule PolyphonyWeb.BibleEditorLive do
       >
         <%= @add_label %>
       </button>
-    </div>
-    """
-  end
 
-  attr(:field, :string, required: true)
-  attr(:title, :string, required: true)
-  attr(:placeholder, :string, required: true)
-
-  defp add_panel(assigns) do
-    ~H"""
-    <Kit.sheet class="mx-4 mb-4">
-      <Kit.row class="px-4 py-3 flex items-center justify-between" style="background:var(--b2)">
-        <span class="ttl text-[15px] font-semibold"><%= @title %></span>
-        <button
-          type="button"
-          class="dim text-[17px] leading-none"
-          phx-click="panel"
-          phx-value-panel=""
-          aria-label={"Close #{@title}"}
-        >
-          ×
-        </button>
-      </Kit.row>
-      <div class="px-4 py-3">
-        <form id="item-form" phx-submit="add_item">
-          <input type="hidden" name="field" value={@field} />
-          <label for="item-statement" class="sr-only">The statement</label>
+      <div :if={@panel == @field} class="mt-2">
+        <label for={"new-#{@field}"} class="sr-only"><%= @add_label %></label>
+        <div class="flex gap-1.5">
+          <%!-- `form=` rather than a nested `<form>`: this markup lives inside
+                `#bible-form`, a form inside a form isn't a thing, and without an owner
+                of its own Enter here would submit the *bible* and lose what was typed.
+                HTML form association puts the control on `#item-form` (rendered empty,
+                outside, below) wherever it happens to sit in the document.
+                `phx-mounted` rather than `autofocus`, for the same class of reason:
+                the attribute only fires on a page load, and this arrives by patch —
+                it would look right in the markup and leave the caret nowhere. --%>
           <input
-            id="item-statement"
+            id={"new-#{@field}"}
+            form="item-form"
             type="text"
             name="statement"
             autocomplete="off"
+            phx-mounted={JS.focus()}
             placeholder={@placeholder}
-            class="field px-3 py-2.5 text-[13px] w-full"
+            class="field px-3 py-2.5 text-[13px] flex-1"
           />
-          <Kit.btn kind={:primary} type="submit" class="mt-2">Add</Kit.btn>
-        </form>
-        <p class="text-[11px] leading-relaxed dim mt-2">
+          <input form="item-form" type="hidden" name="field" value={@field} />
+          <Kit.btn kind={:primary} type="submit" form="item-form">Add</Kit.btn>
+          <Kit.btn kind={:ghost} type="button" phx-click="panel" phx-value-panel="">
+            Cancel
+          </Kit.btn>
+        </div>
+        <p class="text-[11px] leading-relaxed dim mt-1.5">
           Everything starts public. Mark it secret from its own menu once it's on the list.
         </p>
       </div>
-    </Kit.sheet>
+    </div>
     """
   end
 
@@ -1277,9 +1279,6 @@ defmodule PolyphonyWeb.BibleEditorLive do
   end
 
   defp share_url(entry), do: "#{PolyphonyWeb.Endpoint.url()}/s/#{entry.share_token}"
-
-  defp panel_title("rules"), do: "A rule"
-  defp panel_title(_), do: "Something that's already true"
 
   defp panel_placeholder("rules"), do: "No magic. What looks like it is a bribe."
   defp panel_placeholder(_), do: "Nobody in Saltmarch has seen a customs inspector in nine years."

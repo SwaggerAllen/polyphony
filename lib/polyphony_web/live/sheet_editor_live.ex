@@ -1616,28 +1616,32 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   defp fact_row(assigns) do
     ~H"""
-    <div class="flex items-start gap-2 py-2.5" id={"fact-#{@index}"}>
-      <%!-- Secret owns the left border and always-in-mind is a chip, because only one
-            of them can own the structure and a fact can be both. --%>
-      <Kit.marked mark={if(@fact.concealed, do: :secret, else: :plain)} class="min-w-0 flex-1">
-        <p class="text-[13.5px] leading-relaxed"><%= @fact.statement %></p>
-        <div
-          :if={@fact.concealed or @fact.core}
-          class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1"
-        >
-          <%!-- The audience is part of the item, so the count reads without opening
-                anything (§01). --%>
-          <AudiencePicker.line :if={@fact.concealed} audience={@fact.audience} labels={@labels} />
-          <Kit.chip_core :if={@fact.core} />
-        </div>
-      </Kit.marked>
+    <%!-- The menu opens **in the flow**. The kit's `.sheet` is `overflow:hidden` — it
+          is what rounds the corners — so an absolutely-positioned panel was clipped by
+          the sheet's bottom edge, which meant the last facts on a sheet, the ones
+          nearest that edge, were the ones whose menus you couldn't read. Same fix and
+          same reason as the world bible's lists: this is one control in three places
+          (§04) and it must not behave differently in one of them. --%>
+    <details class="py-2.5" id={"fact-#{@index}"}>
+      <summary class="flex items-start gap-2 list-none cursor-pointer">
+        <%!-- Secret owns the left border and always-in-mind is a chip, because only one
+              of them can own the structure and a fact can be both. --%>
+        <Kit.marked mark={if(@fact.concealed, do: :secret, else: :plain)} class="min-w-0 flex-1">
+          <p class="text-[13.5px] leading-relaxed"><%= @fact.statement %></p>
+          <div
+            :if={@fact.concealed or @fact.core}
+            class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1"
+          >
+            <%!-- The audience is part of the item, so the count reads without opening
+                  anything (§01). --%>
+            <AudiencePicker.line :if={@fact.concealed} audience={@fact.audience} labels={@labels} />
+            <Kit.chip_core :if={@fact.core} />
+          </div>
+        </Kit.marked>
+        <span class="pill shrink-0" aria-label="Change this fact">⋯</span>
+      </summary>
 
-      <details class="relative shrink-0">
-        <summary class="pill list-none cursor-pointer" aria-label="Change this fact">⋯</summary>
-        <nav
-          class="sheet absolute right-0 top-full mt-1 z-20 min-w-[15rem] overflow-hidden"
-          style="background:var(--b2)"
-        >
+      <nav class="sheet mt-1.5" style="background:var(--b2)">
           <button
             type="button"
             class="row w-full px-4 py-2.5 flex items-center justify-between gap-3 text-left"
@@ -1686,9 +1690,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
           >
             Delete
           </button>
-        </nav>
-      </details>
-    </div>
+      </nav>
+    </details>
     """
   end
 

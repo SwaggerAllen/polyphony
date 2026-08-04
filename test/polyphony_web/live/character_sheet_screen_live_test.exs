@@ -127,6 +127,31 @@ defmodule PolyphonyWeb.CharacterSheetScreenLiveTest do
       assert [%Fact{concealed: true, core: false}] = sheet_of(entry).facts
     end
 
+    test "a fact's menu opens in the flow, where a sheet cannot clip it",
+         %{conn: conn, user: user} do
+      entry =
+        character(user, %CharacterSheet{
+          name: "Wren",
+          status: :full,
+          facts: [%Fact{statement: "She signed for the Kestrel."}]
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      # The kit's `.sheet` is `overflow:hidden` — it is what rounds the corners — so an
+      # absolutely-positioned menu was clipped by the sheet's bottom edge, and the last
+      # facts on a sheet were the ones whose menus you could not read. This is one
+      # control in three places (§04), so it is fixed the same way in each: the world
+      # bible's lists have the same test.
+      refute has_element?(view, "#fact-0 nav.absolute")
+      refute has_element?(view, "#fact-0 nav.top-full")
+      assert has_element?(view, "#fact-0 nav.sheet button[phx-click=toggle_fact]")
+
+      # The whole row opens it, not the ⋯ alone — a fourteen-pixel target is not a
+      # phone affordance.
+      assert has_element?(view, "#fact-0 > summary", "She signed for the Kestrel.")
+    end
+
     test "adding one goes through a panel, and persists on save", %{conn: conn, user: user} do
       entry = character(user, %CharacterSheet{name: "Wren", status: :full})
       {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")

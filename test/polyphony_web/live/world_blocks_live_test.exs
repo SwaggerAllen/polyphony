@@ -104,13 +104,26 @@ defmodule PolyphonyWeb.WorldBlocksLiveTest do
       assert html =~ ~s(phx-click="move_item")
     end
 
-    test "adding one goes through a panel and persists on save", %{conn: conn, user: user} do
+    test "adding one happens in the list it adds to, and persists on save",
+         %{conn: conn, user: user} do
       entry = world(user, %WorldBible{name: "W"})
       {:ok, view, html} = live(conn, ~p"/authoring/bible/#{entry.id}")
 
-      refute html =~ ~s(phx-submit="add_item")
+      # Closed, the add affordance is the box it has always been.
+      assert html =~ "Add a rule…"
+      refute html =~ ~s(id="new-rules")
 
-      view |> element("button[phx-click=panel][phx-value-panel=rules]") |> render_click()
+      html = view |> element("button[phx-click=panel][phx-value-panel=rules]") |> render_click()
+
+      # Open, that box *is* the input — it used to open a separate sheet below the
+      # whole bible form, far enough from the list that the two didn't read as one
+      # thing. Sitting inside `#rules` is what makes them one thing.
+      assert has_element?(view, "#rules #new-rules")
+      # The box became the input rather than growing a second one beside it. (The
+      # string survives as the input's screen-reader label, so this asks for the
+      # button, not for the words.)
+      refute has_element?(view, "button[phx-click=panel][phx-value-panel=rules]")
+      assert html =~ "Add something that's true…" or html =~ "Add something that&#39;s true…"
 
       view
       |> form("form[phx-submit=add_item]", %{field: "rules", statement: "No magic."})
@@ -119,6 +132,57 @@ defmodule PolyphonyWeb.WorldBlocksLiveTest do
       view |> form("form[phx-submit=save]", %{name: "W"}) |> render_submit()
 
       assert [%Entry{statement: "No magic.", concealed: false}] = bible_of(entry).rules
+    end
+
+    test "the add control belongs to its own form, not to the bible's",
+         %{conn: conn, user: user} do
+      entry = world(user, %WorldBible{name: "W"})
+      {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
+      view |> element("button[phx-click=panel][phx-value-panel=rules]") |> render_click()
+
+      # The input sits inside `#bible-form` — a form cannot be nested in a form — so
+      # `form=` is the only thing standing between pressing Enter here and submitting
+      # the *bible*, losing what was typed. Dropping the attribute leaves markup that
+      # still looks right and an interaction that quietly does the wrong thing.
+      assert has_element?(view, "#bible-form #new-rules"),
+             "the input no longer sits inside the bible form — if that is deliberate, " <>
+               "the form= association is redundant and this test should go"
+
+      assert has_element?(view, ~s(#new-rules[form="item-form"]))
+      assert has_element?(view, ~s(button[type="submit"][form="item-form"]))
+
+      # And the owner it points at exists, carries no markup, and is not nested.
+      assert has_element?(view, "form#item-form")
+      refute has_element?(view, "form#item-form *")
+      refute has_element?(view, "#bible-form form#item-form")
+    end
+
+    test "an item's menu opens in the flow, where a sheet cannot clip it",
+         %{conn: conn, user: user} do
+      entry =
+        world(user, %WorldBible{
+          name: "W",
+          starting_canon: [%Entry{statement: "the bridge is out"}]
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
+
+      # The kit's `.sheet` is `overflow:hidden` — it is what rounds the corners — so an
+      # absolutely-positioned menu was clipped by the sheet's bottom edge, and the
+      # items nearest that edge were exactly the ones whose menus you could not read.
+      assert has_element?(view, "#starting_canon details nav.sheet")
+      refute has_element?(view, "#starting_canon details nav.absolute")
+      refute has_element?(view, "#starting_canon details nav.top-full")
+
+      # The whole row opens it, not the ⋯ alone: a fourteen-pixel target is not a
+      # phone affordance, and this screen is used on one.
+      assert has_element?(view, "#starting_canon details summary", "the bridge is out")
+
+      # The menu is still reachable and still does what it did.
+      assert has_element?(
+               view,
+               "#starting_canon details nav button[phx-click=toggle_secret]"
+             )
     end
 
     test "order is authored, and Move up saturates rather than wrapping",
