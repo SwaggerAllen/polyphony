@@ -628,7 +628,7 @@ defmodule PolyphonyWeb.Kit do
     attr(:state, :atom)
     attr(:colour, :string)
     attr(:you, :boolean)
-    attr(:navigate, :string, doc: "where this person is — makes the slot a link")
+    attr(:patch, :string, doc: "the perspective this person is — makes the slot a link")
   end
 
   slot(:aside, doc: "trailing control on the sentence line — e.g. jump-to-failure")
@@ -637,9 +637,10 @@ defmodule PolyphonyWeb.Kit do
     ~H"""
     <div class={["strip", @class]}>
       <div class="slots">
-        <%!-- A slot is a person, and a person on screen that isn't reachable reads as
-              a bug. `navigate` is optional so the strip still renders for a viewer
-              with nowhere to send them — a published snapshot has no editor. --%>
+        <%!-- A slot is a person, and tapping a person should put you behind their
+              eyes — the perspective control is the product's spine, and the strip is
+              already showing you who is in the room. `patch` is optional so the strip
+              still renders where there is no perspective to switch to. --%>
         <.slot_chip :for={s <- @slot_item} s={s} />
       </div>
       <div :if={@sentence} class="flex items-center justify-between gap-2 mt-1.5">
@@ -655,20 +656,24 @@ defmodule PolyphonyWeb.Kit do
   # One loop, two tags. Two `:for`s — links then divs — would have reordered the
   # strip the moment one person was reachable and another wasn't, and the strip is
   # turn order.
+  #
+  # A patch rather than a navigate: a slot is a **perspective**, and switching
+  # perspective is the same screen looking at the same scene, which is the one thing
+  # a remount would throw away.
   attr(:s, :map, required: true)
 
   defp slot_chip(assigns) do
     ~H"""
     <.link
-      :if={@s[:navigate]}
-      navigate={@s[:navigate]}
+      :if={@s[:patch]}
+      patch={@s[:patch]}
       class={["slot", slot_state(@s[:state]), @s[:you] && "slot-you"]}
       style={@s[:colour] && Voice.var("--sc", @s[:colour])}
     >
       <%= @s[:label] %>
     </.link>
     <div
-      :if={is_nil(@s[:navigate])}
+      :if={is_nil(@s[:patch])}
       class={["slot", slot_state(@s[:state]), @s[:you] && "slot-you"]}
       style={@s[:colour] && Voice.var("--sc", @s[:colour])}
     >

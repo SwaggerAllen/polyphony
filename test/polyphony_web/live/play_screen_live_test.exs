@@ -161,16 +161,34 @@ defmodule PolyphonyWeb.PlayScreenLiveTest do
     end
   end
 
-  describe "the strip is people, so it goes to them" do
-    test "each slot links to the character it stands for", %{conn: conn, user: user} do
+  describe "the strip is people, so tapping one is looking through their eyes" do
+    test "each slot switches perspective to whoever it stands for",
+         %{conn: conn, user: user} do
       {scene, cast} = scene_with_cast(user, ["Wren", "Ilias"])
-      {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+      {:ok, view, html} = live(conn, ~p"/play/#{scene}")
 
-      # A person on screen who isn't reachable reads as a bug. `character_id` *is* the
-      # library entry id, so their sheet is one hop away.
       for id <- Map.values(cast) do
-        assert html =~ ~s(href="/authoring/character/#{id}")
+        assert html =~ ~s(href="/play/#{scene}?as=#{id}")
       end
+
+      # A patch, not a navigate: the perspective control is the product's spine and
+      # switching it is the same screen on the same scene, which a remount throws away.
+      [wren, _] = Map.values(cast)
+      view |> element(~s(a[href="/play/#{scene}?as=#{wren}"])) |> render_click()
+
+      # `.page` is the reading register — proof the viewer actually changed.
+      assert render(view) =~ ~s(class="fr page dark)
+    end
+
+    test "the slot you are already looking through isn't a link to here",
+         %{conn: conn, user: user} do
+      {scene, cast} = scene_with_cast(user, ["Wren", "Ilias"])
+      [wren, ilias] = Map.values(cast)
+
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}?as=#{wren}")
+
+      refute html =~ ~s(href="/play/#{scene}?as=#{wren}")
+      assert html =~ ~s(href="/play/#{scene}?as=#{ilias}")
     end
   end
 
@@ -203,6 +221,21 @@ defmodule PolyphonyWeb.PlayScreenLiveTest do
       assert html =~ "say-input"
       assert html =~ "say-bar"
       assert html =~ ~s(id="composer-fullscreen")
+    end
+
+    test "full screen says how to leave it, in the state where that matters",
+         %{conn: conn, user: user} do
+      {scene, cast} = scene_with_cast(user, ["Wren"])
+      [id | _] = Map.values(cast)
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}?as=#{id}")
+
+      # Both labels ship; the class on <body> picks. Escape is not a key a phone has,
+      # and full screen covers the scene you are answering — so the way back has to be
+      # a visible control that says what it does.
+      assert html =~ "Full screen"
+      assert html =~ "Close full screen"
+      assert html =~ ~s(class="say-enter")
+      assert html =~ ~s(class="say-exit")
     end
   end
 end

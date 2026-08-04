@@ -1275,6 +1275,23 @@
   overflow-y:auto;
 }
 
+/* The way out is a button, not a key. Escape is not something a phone has, and full
+   screen is precisely where somebody goes to write at length and then needs to read
+   the scene they are answering. So the control that opened it says, in the open
+   state, that it closes it. */
+
+.say-exit  {
+  display:none;
+}
+
+.say-full .say-exit  {
+  display:inline;
+}
+
+.say-full .say-enter {
+  display:none;
+}
+
 .say-full .say-bar   {
   position:fixed;
   inset:0;

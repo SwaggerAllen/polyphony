@@ -1284,15 +1284,17 @@ defmodule PolyphonyWeb.PlayLive do
   # The single edge between the id-keyed log and the name-keyed fiction. Every
   # human-facing string on this page goes through here; nothing that routes does.
 
-  # A strip slot links to whoever it stands for. `character_id` *is* the library entry
-  # id (see CLAUDE.md on identity), so the sheet is one hop away — but only when the
-  # scene actually knows this person, since a slot can carry a name the log mentioned
-  # and the library has never held.
-  defp slot_link(%{id: id}, %Cast{} = cast) when is_binary(id) do
-    if Map.has_key?(cast.id_to_name, id), do: ~p"/authoring/character/#{id}"
+  # Tapping a slot puts you behind that person's eyes — the same move the perspective
+  # picker makes, so it goes the same way: a patch on `?as=`, which `handle_params/3`
+  # already resolves. Only for someone the scene actually knows, since a slot can carry
+  # a name the log mentioned and the cast has never held, and never for the perspective
+  # you are already in.
+  defp slot_view(%{id: id}, %Cast{} = cast, scene_id, viewer) when is_binary(id) do
+    if Map.has_key?(cast.id_to_name, id) and viewer != {:character, id},
+      do: ~p"/play/#{scene_id}?#{[as: id]}"
   end
 
-  defp slot_link(_slot, _cast), do: nil
+  defp slot_view(_slot, _cast, _scene_id, _viewer), do: nil
 
   defp name_of(%{assigns: %{cast: cast}}, id), do: Cast.render_name(cast, id)
   defp name_of(%Cast{} = cast, id), do: Cast.render_name(cast, id)
@@ -1508,7 +1510,7 @@ defmodule PolyphonyWeb.PlayLive do
           state={s.state}
           colour={s.colour}
           you={s.you}
-          navigate={slot_link(s, @cast)}
+          patch={slot_view(s, @cast, @scene_id, @viewer)}
         />
       </Kit.strip>
 
@@ -1561,7 +1563,11 @@ defmodule PolyphonyWeb.PlayLive do
                     the transcript it answers has gone off the top. For a turn that is
                     genuinely long, this hands the whole screen over instead. Plain JS
                     like the rest of the composer — a class on <body>, so a re-render
-                    can't drop it. --%>
+                    can't drop it.
+
+                    One button, labelled for the state it is in. Full screen covers the
+                    scene you are answering, and on a phone there is no Escape key to
+                    get back to it, so the way out has to be visible and say so. --%>
               <Kit.btn
                 kind={:ghost}
                 type="button"
@@ -1569,7 +1575,8 @@ defmodule PolyphonyWeb.PlayLive do
                 aria-pressed="false"
                 title="Write with the whole screen"
               >
-                ⤢
+                <span class="say-enter">⤢ Full screen</span>
+                <span class="say-exit">⤡ Close full screen</span>
               </Kit.btn>
             </div>
             <Kit.btn kind={:primary} type="submit" disabled={beat_busy?(@progress)}>
