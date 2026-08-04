@@ -388,6 +388,27 @@ inert, server-less HTML.
 - **In the browser**, the debug drawer's socket-status dot goes 🟢 green once the
   socket connects; 🔴 red is the same diagnosis from the client side.
 
+### `PHX_HOST` also builds every link, including the only way in
+
+`CHECK_ORIGIN` fixes the websocket and nothing else. `PHX_HOST` is what `url/1` builds
+from, so it is also what the emailed magic link points at — and sign-in is magic-link
+only. Setting `CHECK_ORIGIN` and leaving `PHX_HOST` wrong gets you a fully working app
+that nobody can log into: the page works, the mail arrives, and the link goes to
+`https://localhost/auth/verify/…`.
+
+It resolves in this order, so a deployment on App Platform's own domain works with
+nothing set:
+
+1. `PHX_HOST` — the setting; a custom domain goes here.
+2. `APP_DOMAIN` — injected by App Platform, its primary domain.
+3. the host inside `APP_URL` — the same fact URL-shaped.
+4. `localhost`, which is never right in prod and logs
+   `[boot] WARNING PHX_HOST is unset …`.
+
+Blank counts as unset (an `${APP_DOMAIN}` that expanded to nothing would otherwise
+generate `https:///…`), and a whole URL pasted where a host belongs is unwrapped —
+`https://app.example.com/` and `app.example.com` both resolve to the host.
+
 ## First smoke test after deploy
 
 Once the app is live, confirm the whole stack — auth, DB, event store, and real
