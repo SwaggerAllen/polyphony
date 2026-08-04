@@ -1,16 +1,28 @@
 name: CI
 
+# Pull requests, plus `main` itself.
+#
+# It used to be `push: ["**"]` *and* `pull_request`, which ran the whole suite twice
+# for every commit on a branch with a PR open — six jobs each time, one of them a
+# real browser. The concurrency group below was supposed to collapse that and never
+# could: on a push `github.head_ref` is empty so the key is `refs/heads/foo`, while
+# the pull_request run keys on `foo`. Different strings, different groups, both run.
+#
+# `main` stays on push because a merge produces a commit nobody opened a PR for, and
+# an unverified default branch is how you find out at the next deploy. It costs one
+# run per merge and duplicates nothing — a merge commit has no open PR.
+#
+# The trade: a branch with no PR gets no CI. Push early, open the PR when you want
+# the checks.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
 
-# A push to a PR branch fires this twice (push + pull_request). Cancel the superseded
-# run rather than paying for both, and cancel the previous commit's run while we're
-# here — only the tip's result means anything.
+# Only the tip's result means anything, so a second push supersedes the first.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
