@@ -41,6 +41,30 @@ defmodule PolyphonyWeb.PlayTurnsLiveTest do
     scene
   end
 
+  # Two turns in one beat: Bram's is written *after* Mira's and therefore on top of it,
+  # which is the whole reason `:invalid` exists.
+  defp two_turn_scene do
+    scene = scene_with_turn("She agrees.")
+    :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: "bram", beat: 1})
+
+    :ok =
+      App.dispatch(%CommitPacket{
+        scene_id: scene,
+        character_id: "bram",
+        beat: 1,
+        packet_id: BeatOps.packet_id(scene, 1, "bram"),
+        packet: %TurnPacket{
+          moves: [%Move{seq: 1, type: :speech, content: "Then we sail."}],
+          self_state: %SelfState{}
+        },
+        edited: true
+      })
+
+    scene
+  end
+
+  defp transcript_of(scene), do: Enum.join(canonical_speech(scene), " | ")
+
   defp canonical_speech(scene) do
     scene
     |> BeatOps.stored_events()
@@ -168,5 +192,61 @@ defmodule PolyphonyWeb.PlayTurnsLiveTest do
     assert canonical_kind(scene, ThoughtOccurred) == ["I should stay wary."]
     assert canonical_kind(scene, ActionTaken) == ["draws the bolt"]
     refute render(view) =~ "Old words."
+  end
+
+  describe "an edit that changes what happened" do
+    test "forks here, keeps the original, and takes you to the branch", %{conn: conn} do
+      scene = two_turn_scene()
+      {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+
+      view
+      |> element(
+        ~s(button[phx-click="edit_turn"][phx-value-packet="#{BeatOps.packet_id(scene, 1, "mira")}"])
+      )
+      |> render_click()
+
+      # The checkbox `Edit.edit/6` has always asked for and nothing ever put to anybody.
+      result =
+        view
+        |> form(~s(form[phx-submit="save_edit"]), %{
+          text: "She refuses.",
+          invalidates: "true"
+        })
+        |> render_submit()
+
+      assert {:error, {:live_redirect, %{to: "/play/" <> branch}}} = result
+      refute branch == scene
+
+      # The original timeline survives intact — that is the whole reason this forks
+      # rather than editing in place.
+      assert transcript_of(scene) =~ "She agrees."
+      refute transcript_of(scene) =~ "She refuses."
+
+      # And the branch carries the correction with the stale tail discarded: the second
+      # turn was written on top of the line that just changed.
+      branch_text = transcript_of(branch)
+      assert branch_text =~ "She refuses."
+      refute branch_text =~ "Then we sail."
+    end
+
+    test "leaving it unticked corrects in place, as it always did", %{conn: conn} do
+      scene = two_turn_scene()
+      {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+
+      view
+      |> element(
+        ~s(button[phx-click="edit_turn"][phx-value-packet="#{BeatOps.packet_id(scene, 1, "mira")}"])
+      )
+      |> render_click()
+
+      html =
+        view
+        |> form(~s(form[phx-submit="save_edit"]), %{text: "She agrees, warily."})
+        |> render_submit()
+
+      # Same scene, and the tail is untouched: a typo didn't change what happened.
+      assert html =~ "She agrees, warily."
+      assert html =~ "Then we sail."
+    end
   end
 end

@@ -44,6 +44,7 @@ defmodule PolyphonyWeb.PlayLive do
 
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Director.BeatDriver
+  alias Polyphony.Edit
   alias Polyphony.Scene.Cast
   alias PolyphonyWeb.Kit
   alias PolyphonyWeb.Transcript
@@ -620,7 +621,7 @@ defmodule PolyphonyWeb.PlayLive do
   # attempt (same aloud/whisper inference as the composer).
   def handle_event(
         "save_edit",
-        %{"beat" => b, "character" => c, "packet" => pid} = params,
+        %{"beat" => b, "character" => c} = params,
         socket
       ) do
     safe(socket, fn ->
@@ -632,39 +633,38 @@ defmodule PolyphonyWeb.PlayLive do
           {:noreply, put_flash(socket, :error, "The turn can't be empty.")}
 
         {moves, self_state} ->
-          attempt = BeatOps.next_attempt(BeatOps.stored_events(scene), scene, beat, c)
-          new_id = BeatOps.reroll_packet_id(scene, beat, c, attempt)
+          # Through `Edit.edit/6` rather than hand-rolled supersede-and-commit. The
+          # module has always known both halves — correct in place, or fork and drop the
+          # stale tail — and this screen implemented only the first, so an edit that
+          # changed what happened left every turn written on top of it standing.
+          corrected =
+            Cast.resolve_addressees(
+              socket.assigns.cast,
+              %TurnPacket{moves: moves, self_state: self_state}
+            )
 
-          :ok =
-            App.dispatch(%SupersedePacket{
-              scene_id: scene,
-              beat: beat,
-              character_id: c,
-              packet_id: pid,
-              attempt: attempt,
-              reason: "edited by author"
-            })
+          validity = if params["invalidates"] == "true", do: :invalid, else: :valid
 
-          :ok =
-            App.dispatch(%CommitPacket{
-              scene_id: scene,
-              character_id: c,
-              beat: beat,
-              packet_id: new_id,
-              # The author edited names back into the whisper line; ids go to the log.
-              packet:
-                Cast.resolve_addressees(
-                  socket.assigns.cast,
-                  %TurnPacket{moves: moves, self_state: self_state}
-                ),
-              edited: true
-            })
+          case Edit.edit(scene, beat, c, corrected, validity, label: "edited at beat #{beat}") do
+            {:ok, %{forked: true, scene_id: branch}} ->
+              # The branch is where the corrected turn lives, so that is where the
+              # author now is. The original is untouched and still reachable by its id.
+              {:noreply,
+               socket
+               |> assign(editing: nil)
+               |> put_flash(:info, "Branched here. The original scene is unchanged.")
+               |> push_navigate(to: ~p"/play/#{branch}")}
 
-          {:noreply,
-           socket
-           |> assign(editing: nil)
-           |> put_flash(:info, "Updated #{name_of(socket, c)}'s turn.")
-           |> reload()}
+            {:ok, _} ->
+              {:noreply,
+               socket
+               |> assign(editing: nil)
+               |> put_flash(:info, "Updated #{name_of(socket, c)}'s turn.")
+               |> reload()}
+
+            {:error, reason} ->
+              {:noreply, put_flash(socket, :error, "Couldn't edit that turn: #{inspect(reason)}")}
+          end
       end
     end)
   end
@@ -1849,6 +1849,28 @@ defmodule PolyphonyWeb.PlayLive do
             rows="3"
             class="field say-input px-3 py-2 text-[14px] w-full"
           ><%= turn_text(@block, @cast) %></textarea>
+          <%!-- The question `Edit.edit/6` has always asked and nothing ever put to
+                anybody. Serial generation means a changed line may have changed what
+                *later* turns conditioned on, and only the author knows whether it did:
+                a typo didn't, a reversal did. Answering "it changed what happened"
+                forks at this beat, so the original timeline survives intact and the
+                stale tail is discarded on the branch rather than left standing under a
+                turn that no longer says what it said. --%>
+          <div class="mt-2">
+            <label class="flex items-start gap-2 cursor-pointer">
+              <input type="checkbox" name="invalidates" value="true" class="sr-only peer" />
+              <Kit.chk state={:off} class="mt-0.5 peer-checked:hidden" />
+              <Kit.chk state={:on} class="mt-0.5 hidden peer-checked:flex" />
+              <span class="text-[12px] leading-relaxed">
+                This changes what happened
+                <span class="dim block">
+                  Branches the scene here, keeping the original — anything written after
+                  this turn was written on top of it.
+                </span>
+              </span>
+            </label>
+          </div>
+
           <div class="flex gap-1.5 mt-1.5">
             <Kit.btn kind={:primary} size={:sm} type="submit">Save</Kit.btn>
             <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="cancel_edit">Cancel</Kit.btn>
