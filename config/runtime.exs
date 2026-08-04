@@ -6,7 +6,49 @@ if config_env() == :prod do
     System.get_env("SECRET_KEY_BASE") ||
       raise "SECRET_KEY_BASE is not set (generate with `mix phx.gen.secret`)."
 
-  host = System.get_env("PHX_HOST") || "localhost"
+  # The host every generated URL is built from — `url/1`, and so the emailed magic
+  # link. Sign-in is magic-link only, so this is not merely cosmetic: a wrong host
+  # sends a working token to a machine the recipient does not have, and it fails
+  # **silently**, because every page still renders and only the link is dead.
+  #
+  # `PHX_HOST` is the setting. App Platform publishes the app's own domain as
+  # `APP_DOMAIN` (and the same thing URL-shaped as `APP_URL`), so an unset PHX_HOST
+  # falls back to those before `localhost` — which is never the right answer in prod,
+  # and is the one value that cannot be a deliberate choice here.
+  # Reads a host out of any of the three, and copes with the two ways they arrive
+  # wrong: **blank** (`${APP_DOMAIN}` that expanded to nothing — `"" || "localhost"` is
+  # `""` in Elixir, so a bare `||` chain would keep it and generate `https:///…`), and
+  # **a whole URL** where a host belongs, which otherwise yields
+  # `https://https://app.example.com/…` in every link.
+  read_host = fn value ->
+    case String.trim(value || "") do
+      "" ->
+        nil
+
+      trimmed ->
+        with_scheme = if String.contains?(trimmed, "//"), do: trimmed, else: "//" <> trimmed
+
+        case URI.parse(with_scheme) do
+          %URI{host: found} when is_binary(found) and found != "" -> found
+          _ -> nil
+        end
+    end
+  end
+
+  host =
+    read_host.(System.get_env("PHX_HOST")) || read_host.(System.get_env("APP_DOMAIN")) ||
+      read_host.(System.get_env("APP_URL")) || "localhost"
+
+  # Loud, because the quiet version of this is a sign-in page that works, sends mail
+  # that arrives, and hands over a link to nowhere.
+  if host in ~w(localhost 127.0.0.1 0.0.0.0 ::1) do
+    IO.puts(
+      "[boot] WARNING PHX_HOST is unset — every URL this node generates points at " <>
+        "#{host}. Sign-in is magic-link only, so the emailed link is unusable and " <>
+        "nobody can sign in. CHECK_ORIGIN fixes the websocket, not the links."
+    )
+  end
+
   port = String.to_integer(System.get_env("PORT") || "4000")
 
   # Origin check for the LiveView websocket. By default the socket only accepts a
