@@ -38,13 +38,13 @@ defmodule PolyphonyWeb.PlayLive do
     MembershipSet,
     Owner,
     SceneControl,
-    Suggest,
     TurnOrder
   }
 
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Director.BeatDriver
   alias Polyphony.Edit
+  alias Polyphony.Generations
   alias Polyphony.Permissions
   alias Polyphony.Scene.Cast
   alias PolyphonyWeb.Kit
@@ -66,7 +66,7 @@ defmodule PolyphonyWeb.PlayLive do
     SupersedePacket
   }
 
-  alias Polyphony.Authoring.{Autofill, CharacterSheet, Stub, StubGen}
+  alias Polyphony.Authoring.{CharacterSheet, Stub}
 
   alias Polyphony.Events.{
     IntroductionProposed,
@@ -109,8 +109,11 @@ defmodule PolyphonyWeb.PlayLive do
       Phoenix.PubSub.subscribe(Polyphony.PubSub, Drafts.topic(scene_id))
     end
 
+    socket = assign(socket, scene_id: scene_id)
+
     {:ok,
-     assign(socket,
+     socket
+     |> assign(
        scene_id: scene_id,
        page_title: "Play",
        topic: nil,
@@ -137,7 +140,8 @@ defmodule PolyphonyWeb.PlayLive do
        campaign_name: "",
        scene_title: "The scene",
        strip: %{slots: [], sentence: nil, tone: nil}
-     )}
+     )
+     |> then(&if connected?(&1), do: restore_generations(&1), else: &1)}
   end
 
   # Viewer is chosen via ?as=<character> (absent → omniscient author view). Runs on
@@ -493,6 +497,37 @@ defmodule PolyphonyWeb.PlayLive do
     end
   end
 
+  # Play's generations are keyed on the **scene**, and tracked with the screen's own
+  # booleans rather than an editor's key set — so it talks to `Polyphony.Generations`
+  # directly. Same durability, same reason: an Expand takes seconds, and the answer must
+  # not belong to whichever tab happened to ask for it.
+  #
+  # The reroll deliberately stays a plain task: it supersedes a packet and enqueues
+  # `Jobs.GeneratePacket`, so the generation has always been a job and the replacement
+  # arrives on the transcript stream.
+  defp request_generation(socket, key, op, request) do
+    Generations.request(socket.assigns.scene_id, key, op, request)
+    socket
+  end
+
+  # Applying a result consumes it, so a live delivery can't be replayed on the next mount.
+  defp forget_generation(socket, key) do
+    Generations.forget(socket.assigns.scene_id, key)
+    socket
+  end
+
+  # A reconnect can't see the composer's spinner, and it can't see an answer that
+  # arrived while the tab was closed. Both come back from the rows.
+  defp restore_generations(socket) do
+    scene_id = socket.assigns.scene_id
+    Generations.subscribe(scene_id)
+
+    for {key, result} <- Generations.take(scene_id),
+        do: send(self(), {:generation, key, result})
+
+    assign(socket, composing: "compose" in Generations.running(scene_id))
+  end
+
   defp campaign_of(scene_id) do
     case scene_opened(scene_id) do
       %SceneOpened{campaign_id: cid} -> cid
@@ -703,7 +738,7 @@ defmodule PolyphonyWeb.PlayLive do
       {:noreply,
        socket
        |> put_flash(:info, "Scanning for mentioned characters…")
-       |> start_async(:mentions, fn -> Autofill.extract_mentions(prose, user_id: uid) end)}
+       |> request_generation("mentions", "play.mentions", %{prose: prose, user_id: uid})}
     end)
   end
 
@@ -869,7 +904,10 @@ defmodule PolyphonyWeb.PlayLive do
       {:noreply,
        socket
        |> put_flash(:info, "Generating #{name}…")
-       |> start_async({:intro_gen, name}, fn -> StubGen.finalize(entry, uid) end)}
+       |> request_generation("intro:#{name}", "play.intro", %{
+         entry_id: entry.id,
+         user_id: uid
+       })}
     end)
   end
 
@@ -930,10 +968,8 @@ defmodule PolyphonyWeb.PlayLive do
     end
   end
 
-  def handle_info(_other, socket), do: {:noreply, socket}
-
   # A just-generated introduction is now :full — admit them.
-  def handle_async({:intro_gen, name}, {:ok, :ok}, socket) do
+  def handle_info({:generation, "intro:" <> name, {:ok, _}}, socket) do
     safe(socket, fn ->
       case find_owned(socket, name) do
         {:full, entry} ->
@@ -946,12 +982,14 @@ defmodule PolyphonyWeb.PlayLive do
     end)
   end
 
-  def handle_async({:intro_gen, name}, _result, socket) do
+  def handle_info({:generation, "intro:" <> name, _result}, socket) do
     {:noreply,
-     put_flash(socket, :error, "Couldn't generate #{name} — open them to finish manually.")}
+     socket
+     |> forget_generation("intro:#{name}")
+     |> put_flash(:error, "Couldn't generate #{name} — open them to finish manually.")}
   end
 
-  def handle_async(:mentions, {:ok, {:ok, names}}, socket) do
+  def handle_info({:generation, "mentions", {:ok, names}}, socket) do
     safe(socket, fn ->
       case stub_mentions(socket, names) do
         [] ->
@@ -968,9 +1006,48 @@ defmodule PolyphonyWeb.PlayLive do
     end)
   end
 
-  def handle_async(:mentions, _result, socket),
-    do: {:noreply, put_flash(socket, :error, "Couldn't scan for mentioned characters.")}
+  def handle_info({:generation, "mentions", _result}, socket),
+    do:
+      {:noreply,
+       socket
+       |> forget_generation("mentions")
+       |> put_flash(:error, "Couldn't scan for mentioned characters.")}
 
+  def handle_info({:generation, "compose", {:ok, [packet | _]}}, socket) do
+    text = TurnEdit.serialize_packet(packet)
+
+    {:noreply,
+     socket
+     |> forget_generation("compose")
+     |> assign(composing: false)
+     |> push_event("set_composer", %{text: text})}
+  end
+
+  def handle_info({:generation, "compose", {:error, reason}}, socket) do
+    {:noreply,
+     socket
+     |> forget_generation("compose")
+     |> assign(composing: false)
+     |> put_flash(:error, compose_error(reason))}
+  end
+
+  def handle_info({:generation, "compose", _result}, socket) do
+    {:noreply,
+     socket
+     |> forget_generation("compose")
+     |> assign(composing: false)
+     |> put_flash(:error, "Couldn't draft a turn. Try again.")}
+  end
+
+  # Commit the player's typed turn (§A1). Grouped here (not among the handle_events) so
+  # the two "say" clauses stay adjacent.
+
+  def handle_info(_other, socket), do: {:noreply, socket}
+
+  # The reroll is the one generation still on a plain task, and deliberately: it
+  # supersedes a packet and enqueues `Jobs.GeneratePacket`, so what actually generates
+  # has always been a job and the replacement arrives on the transcript stream. What the
+  # task does is dispatch, which is fast and idempotent to lose.
   def handle_async({:reroll, _c}, {:ok, {:ok, _}}, socket),
     do: {:noreply, socket |> assign(waiting: :you) |> reload()}
 
@@ -986,30 +1063,6 @@ defmodule PolyphonyWeb.PlayLive do
     {:noreply, socket |> assign(waiting: :you) |> put_flash(:error, "Reroll of #{c} failed.")}
   end
 
-  def handle_async(:compose, {:ok, {:ok, [packet | _]}}, socket) do
-    text = TurnEdit.serialize_packet(packet)
-    {:noreply, socket |> assign(composing: false) |> push_event("set_composer", %{text: text})}
-  end
-
-  def handle_async(:compose, {:ok, {:error, reason}}, socket) do
-    {:noreply, socket |> assign(composing: false) |> put_flash(:error, compose_error(reason))}
-  end
-
-  # The async task itself crashed (e.g. a raise in the generation path).
-  def handle_async(:compose, {:exit, reason}, socket) do
-    {:noreply,
-     socket
-     |> assign(composing: false)
-     |> put_flash(:error, "The draft crashed: #{short_reason(reason)}. Try again.")}
-  end
-
-  def handle_async(:compose, _result, socket) do
-    {:noreply,
-     socket |> assign(composing: false) |> put_flash(:error, "Couldn't draft a turn. Try again.")}
-  end
-
-  # Commit the player's typed turn (§A1). Grouped here (not among the handle_events) so
-  # the two "say" clauses stay adjacent.
   defp say(socket, text) do
     safe(socket, fn ->
       # The composer parses the whole turn (speech + whisper, plus thinks:/does: from
@@ -1090,9 +1143,9 @@ defmodule PolyphonyWeb.PlayLive do
           {:noreply,
            socket
            |> assign(composing: true)
-           |> start_async(:compose, fn ->
-             compose_draft(scene_id, as, sheet, premise, bible, roster, draft, user)
-           end)}
+           |> request_generation("compose", "play.compose", %{
+             opts: compose_opts(scene_id, as, sheet, premise, bible, roster, draft, user)
+           })}
       end
     end)
   end
@@ -1140,10 +1193,10 @@ defmodule PolyphonyWeb.PlayLive do
   # Draft a turn from the character's filtered view (§11) — steered by the player's
   # partial text if any, else generated fresh. Never omniscient (a suggestion can't
   # react to something the character never learned).
-  defp compose_draft(scene_id, character, sheet, premise, bible, roster, draft, user) do
+  defp compose_opts(scene_id, character, sheet, premise, bible, roster, draft, user) do
     ctx = character_context(scene_id, character, sheet, premise, bible)
 
-    Suggest.variants(
+    [
       context: ctx,
       live_events: BeatOps.canonical_events(scene_id),
       members: roster,
@@ -1151,7 +1204,7 @@ defmodule PolyphonyWeb.PlayLive do
       steer: compose_steer(draft),
       user_id: user && user.id,
       usage_kind: "suggestion"
-    )
+    ]
   end
 
   # The character's frozen context — from the cache, or **rebuilt and re-cached on a

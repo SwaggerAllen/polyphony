@@ -45,7 +45,7 @@ defmodule PolyphonyWeb.PlayMentionsLiveTest do
     {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
     view |> element("button[phx-click=toggle_cast]") |> render_click()
     view |> element("button[phx-click=find_mentions]") |> render_click()
-    render_async(view)
+    generate(view)
 
     chars = Library.list_for_owner(Owner.of(user)) |> Enum.filter(&(&1.kind == "character"))
     # New pending stubs were created (the Mock returns deterministic names).

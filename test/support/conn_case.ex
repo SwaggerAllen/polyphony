@@ -29,6 +29,19 @@ defmodule PolyphonyWeb.ConnCase do
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 
+  @doc """
+  Run the enqueued authoring generations and re-render.
+
+  The ✦ controls used to be `start_async`, so tests waited with `render_async/1`. They
+  are Oban jobs now (`Polyphony.Jobs.Generate`) because a provider call that takes
+  seconds must not die with the tab — so the wait becomes a drain, and the separation is
+  the point: pressing the button and getting the answer are no longer one act.
+  """
+  def generate(view) do
+    Oban.drain_queue(queue: :generation)
+    Phoenix.LiveViewTest.render(view)
+  end
+
   @doc "Insert a user directly (bypassing the sign-up gates), returning the struct."
   def user_fixture(attrs \\ %{}) do
     n = System.unique_integer([:positive])

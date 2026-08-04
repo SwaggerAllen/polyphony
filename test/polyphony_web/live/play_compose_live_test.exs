@@ -37,7 +37,7 @@ defmodule PolyphonyWeb.PlayComposeLiveTest do
 
     # The ✨ button pushes "compose" through the composer hook with the current draft.
     view |> element("#say-input") |> render_hook("compose", %{"text" => "greet them warily"})
-    render_async(view)
+    generate(view)
 
     assert_push_event(view, "set_composer", %{text: text})
     assert is_binary(text) and String.trim(text) != ""
@@ -66,7 +66,7 @@ defmodule PolyphonyWeb.PlayComposeLiveTest do
     {:ok, view, _html} = live(conn, ~p"/play/#{scene}?as=mira")
     view |> element("#say-input") |> render_hook("compose", %{"text" => "greet them"})
     # Rebuilding a cold context does real embed + retrieval work, so allow more time.
-    render_async(view, 2_000)
+    generate(view)
 
     assert_push_event(view, "set_composer", %{text: text})
     assert is_binary(text) and String.trim(text) != ""
@@ -85,7 +85,7 @@ defmodule PolyphonyWeb.PlayComposeLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/play/#{scene}?as=mira")
     view |> element("#say-input") |> render_hook("compose", %{"text" => "greet them"})
-    render_async(view)
+    generate(view)
 
     # The rate-limit reason is surfaced through Suggest → compose_error, not swallowed.
     assert render(view) =~ "rate-limited"

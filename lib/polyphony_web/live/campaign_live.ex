@@ -14,11 +14,9 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
 
   alias Polyphony.Authoring.{
-    Autofill,
     CharacterSheet,
     Effective,
     SceneGate,
-    StubGen,
     WorldBible
   }
 
@@ -26,6 +24,7 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Events.SceneOpened
   alias Polyphony.Groups
   alias Polyphony.Builds
+  alias Polyphony.Generations
   alias Polyphony.Jobs.QuickBuild, as: BuildJob
   alias Polyphony.ReadModels.BuildRun
   alias Polyphony.Campaigns
@@ -87,6 +86,7 @@ defmodule PolyphonyWeb.CampaignLive do
          tab: "settings"
        )
        |> subscribe_build(entry)
+       |> restore_generations(entry)
        |> load()}
     else
       redirect_missing(socket, entry)
@@ -294,7 +294,7 @@ defmodule PolyphonyWeb.CampaignLive do
       {:noreply,
        socket
        |> assign(expanding_premise: true)
-       |> start_async(:premise, fn -> Autofill.generate_campaign_premise(opts) end)}
+       |> request_generation("premise", "autofill.premise", %{opts: opts})}
     end)
   end
 
@@ -467,47 +467,57 @@ defmodule PolyphonyWeb.CampaignLive do
           {:noreply, socket}
 
         stubs ->
-          user = socket.assigns.current_user
+          uid = socket.assigns.current_user && socket.assigns.current_user.id
 
           {:noreply,
            socket
            |> assign(generating: true)
-           |> start_async(:generate_pending, fn -> generate_stubs(stubs, user) end)}
+           |> request_generation("stubs", "campaign.stubs", %{
+             ids: Enum.map(stubs, & &1.id),
+             user_id: uid
+           })}
       end
     end)
   end
 
-  def handle_async(:generate_pending, {:ok, {done, failed}}, socket) do
+  def handle_info({:generation, "stubs", {:ok, {done, failed}}}, socket) do
     detail = if failed > 0, do: " #{failed} failed — open those to retry.", else: ""
 
     {:noreply,
      socket
+     |> forget_generation("stubs")
      |> assign(generating: false, entry: Library.get(socket.assigns.entry.id))
      |> put_flash(:info, "Generated #{done} character(s).#{detail}")
      |> load()}
   end
 
-  def handle_async(:generate_pending, result, socket) do
+  def handle_info({:generation, "premise", {:ok, text}}, socket) do
+    payload = Map.put(socket.assigns.payload, :premise, text)
+    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+
+    {:noreply,
+     socket
+     |> forget_generation("premise")
+     |> assign(entry: entry, expanding_premise: false)
+     |> load()}
+  end
+
+  def handle_info({:generation, "stubs", result}, socket) do
     Logger.warning("[authoring] bulk stub generation failed: #{inspect(result)}")
 
     {:noreply,
      socket
+     |> forget_generation("stubs")
      |> assign(generating: false)
      |> put_flash(:error, "Bulk generation failed — try again.")}
   end
 
-  def handle_async(:premise, {:ok, {:ok, text}}, socket) do
-    payload = Map.put(socket.assigns.payload, :premise, text)
-    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
-
-    {:noreply, socket |> assign(entry: entry, expanding_premise: false) |> load()}
-  end
-
-  def handle_async(:premise, result, socket) do
+  def handle_info({:generation, "premise", result}, socket) do
     Logger.warning("[campaign] premise generation failed: #{inspect(result)}")
 
     {:noreply,
      socket
+     |> forget_generation("premise")
      |> assign(expanding_premise: false)
      |> put_flash(:error, "Premise generation failed: #{inspect(reason(result))}")}
   end
@@ -1514,6 +1524,41 @@ defmodule PolyphonyWeb.CampaignLive do
       end
   end
 
+  # Generation on this screen is two independent buttons with a boolean each, rather
+  # than the editors' set of in-flight keys, so it talks to `Generations` directly. The
+  # durability is the same and the reason is the same: expanding a premise takes seconds,
+  # and the answer must not belong to whichever tab happened to ask.
+  defp request_generation(socket, key, op, request) do
+    Generations.request(socket.assigns.entry.id, key, op, request)
+    socket
+  end
+
+  # Applying a result consumes it, so a live delivery can't be replayed on the next mount.
+  defp forget_generation(socket, key) do
+    Generations.forget(socket.assigns.entry.id, key)
+    socket
+  end
+
+  # A reconnect can't see either of those booleans, so they come back from the rows —
+  # and anything that finished while the page was closed is re-delivered as the ordinary
+  # message the handlers below already take.
+  defp restore_generations(socket, entry) do
+    if connected?(socket) do
+      Generations.subscribe(entry.id)
+      running = Generations.running(entry.id)
+
+      for {key, result} <- Generations.take(entry.id),
+          do: send(self(), {:generation, key, result})
+
+      assign(socket,
+        expanding_premise: "premise" in running,
+        generating: "stubs" in running
+      )
+    else
+      socket
+    end
+  end
+
   # A view of the row, not a flag of its own — `building?` is only ever asked of what
   # the database says, so a socket that reconnects mid-build gets the right answer.
   defp building?(%{build: %BuildRun{status: "running"}}), do: true
@@ -1646,18 +1691,6 @@ defmodule PolyphonyWeb.CampaignLive do
 
   defp pending?(char) do
     match?(%CharacterSheet{status: s} when s != :full, Library.payload(char))
-  end
-
-  # Best-effort per stub: one that can't be filled leaves the rest alone and says so.
-  defp generate_stubs(stubs, user) do
-    uid = user && user.id
-
-    Enum.reduce(stubs, {0, 0}, fn entry, {ok, bad} ->
-      case StubGen.finalize(entry, uid) do
-        :ok -> {ok + 1, bad}
-        :error -> {ok, bad + 1}
-      end
-    end)
   end
 
   defp pending_count(cast), do: Enum.count(cast, &pending?/1)

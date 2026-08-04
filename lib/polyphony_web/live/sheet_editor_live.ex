@@ -54,11 +54,11 @@ defmodule PolyphonyWeb.SheetEditorLive do
   import PolyphonyWeb.BlockField
 
   alias Polyphony.{Characters, Groups, Library, Owner, Repo}
-  alias Polyphony.Authoring.{Audience, Autofill, CharacterSheet, Cover, Stub, WorldBible}
+  alias Polyphony.Authoring.{Audience, CharacterSheet, Stub, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.{Boundary, Fact, Relationship}
   alias Polyphony.ReadModels.Membership
   alias Polyphony.Permissions
-  alias PolyphonyWeb.{AudiencePicker, Autosave, Guard, Kit, Layouts, Voice}
+  alias PolyphonyWeb.{AudiencePicker, Autosave, Generating, Guard, Kit, Layouts, Voice}
 
   # Prose fields are edited as blocks; name stays a single-line scalar.
   @field_specs [
@@ -110,6 +110,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
          tier: sheet.tier || :main,
          cover: sheet.cover,
          blocks: blocks_from_sheet(sheet),
+         gen_subject: entry.id,
          generating: MapSet.new(),
          saved: false,
          dirty: false,
@@ -131,6 +132,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
          groups: Groups.for_character(Owner.of(socket.assigns.current_user), entry.id),
          all_groups: Groups.list(Owner.of(socket.assigns.current_user))
        )
+       |> Generating.restore()
        |> assign_audience_sources()
        |> assign_knows()
        |> assign_characters(other_characters(socket.assigns.current_user, entry.id))}
@@ -262,7 +264,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
       {:noreply,
        socket
        |> mark("all", true)
-       |> start_async(:gen_all, fn -> Autofill.generate_all(:character, brief, current, opts) end)}
+       |> Generating.request("all", "autofill.all", %{
+         kind: :character,
+         brief: brief,
+         current: current,
+         opts: opts
+       })}
     end)
   end
 
@@ -273,10 +280,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
       {:noreply,
        socket
-       |> mark(f, true)
-       |> start_async({:gen_field, f}, fn ->
-         Autofill.generate_field(:character, f, current, opts)
-       end)}
+       |> Generating.request(f, "autofill.field", %{
+         kind: :character,
+         field: f,
+         current: current,
+         opts: opts
+       })}
     end)
   end
 
@@ -286,8 +295,11 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
       {:noreply,
        socket
-       |> mark("#{f}:expand", true)
-       |> start_async({:expand, f}, fn -> Autofill.generate_paragraph(:character, f, opts) end)}
+       |> Generating.request("#{f}:expand", "autofill.paragraph", %{
+         kind: :character,
+         field: f,
+         opts: opts
+       })}
     end)
   end
 
@@ -300,10 +312,11 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
       {:noreply,
        socket
-       |> mark("#{f}:#{idx}", true)
-       |> start_async({:gen_block, f, idx}, fn ->
-         Autofill.generate_paragraph(:character, f, opts)
-       end)}
+       |> Generating.request("#{f}:#{idx}", "autofill.paragraph", %{
+         kind: :character,
+         field: f,
+         opts: opts
+       })}
     end)
   end
 
@@ -424,8 +437,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
       {:noreply,
        socket
-       |> mark("facts", true)
-       |> start_async(:suggest_facts, fn -> Autofill.suggest_facts(current, opts) end)}
+       |> Generating.request("facts", "autofill.facts", %{current: current, opts: opts})}
     end)
   end
 
@@ -467,8 +479,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
       {:noreply,
        socket
-       |> mark("cover", true)
-       |> start_async(:cover, fn -> Cover.generate(sheet, opts) end)}
+       |> Generating.request("cover", "cover", %{subject: sheet, opts: opts})}
     end)
   end
 
@@ -553,8 +564,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
     opts = [existing: socket.assigns.relationships] ++ gen_opts(socket)
 
     socket
-    |> mark("relationships", true)
-    |> start_async(:suggest_rel, fn -> Autofill.suggest_relationships(current, opts) end)
+    |> Generating.request("relationships", "autofill.relationships", %{
+      current: current,
+      opts: opts
+    })
   end
 
   defp suggest_boundaries(socket) do
@@ -562,8 +575,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
     opts = [existing: socket.assigns.boundaries] ++ gen_opts(socket)
 
     socket
-    |> mark("boundaries", true)
-    |> start_async(:suggest_bnd, fn -> Autofill.suggest_boundaries(current, opts) end)
+    |> Generating.request("boundaries", "autofill.boundaries", %{current: current, opts: opts})
   end
 
   # Auto-suggest on generate-all only when the card is empty — never clobber authored ones.
@@ -595,9 +607,15 @@ defmodule PolyphonyWeb.SheetEditorLive do
     if facts == [], do: socket, else: assign(socket, facts: facts)
   end
 
-  # ── Async generation results ──────────────────────────────────────────────────
+  # ── Generation results ────────────────────────────────────────────────────────
+  #
+  # The same bodies the `handle_async` clauses had. The screen still decides what a
+  # result *means* — Generate-all fills only empty cards, a suggestion appends, a leaked
+  # cover is refused — because that is the part worth having in one place. What moved is
+  # where the provider call ran (`Polyphony.Generations`), so an answer that arrives
+  # after the tab closed is applied on the next mount instead of thrown away.
 
-  def handle_async(:gen_all, {:ok, {:ok, values}}, socket) do
+  def handle_info({:generation, "all", {:ok, values}}, socket) do
     blocks =
       Enum.reduce(values, socket.assigns.blocks, fn {f, v}, acc ->
         if f in @block_fields, do: Map.put(acc, f, to_blocks(v)), else: acc
@@ -618,32 +636,24 @@ defmodule PolyphonyWeb.SheetEditorLive do
      |> maybe_suggest_boundaries()}
   end
 
-  def handle_async(:gen_all, result, socket), do: {:noreply, gen_failed(socket, "all", result)}
-
-  def handle_async({:gen_field, f}, {:ok, {:ok, value}}, socket) do
-    {:noreply, socket |> put_blocks(f, to_blocks(value)) |> mark(f, false) |> touch()}
+  def handle_info({:generation, "cover", {:ok, cover}}, socket) do
+    {:noreply, socket |> assign(cover: cover) |> mark("cover", false) |> touch()}
   end
 
-  def handle_async({:gen_field, f}, result, socket),
-    do: {:noreply, gen_failed(socket, f, result)}
-
-  def handle_async({:expand, f}, {:ok, {:ok, para}}, socket) do
-    blocks = append_paragraph(socket.assigns.blocks[f], para)
-    {:noreply, socket |> put_blocks(f, blocks) |> mark("#{f}:expand", false) |> touch()}
+  # The leak refusal gets its own message. "Generation failed: :leaked" would read as
+  # a broken feature; what actually happened is that the cover kept quoting a secret
+  # and was thrown away on purpose.
+  def handle_info({:generation, "cover", {:error, :leaked}}, socket) do
+    {:noreply,
+     socket
+     |> mark("cover", false)
+     |> put_flash(
+       :error,
+       "The cover kept giving away a secret, so it wasn't kept. Try again, or write it yourself."
+     )}
   end
 
-  def handle_async({:expand, f}, result, socket),
-    do: {:noreply, gen_failed(socket, "#{f}:expand", result)}
-
-  def handle_async({:gen_block, f, idx}, {:ok, {:ok, para}}, socket) do
-    blocks = List.replace_at(socket.assigns.blocks[f], idx, para)
-    {:noreply, socket |> put_blocks(f, blocks) |> mark("#{f}:#{idx}", false) |> touch()}
-  end
-
-  def handle_async({:gen_block, f, idx}, result, socket),
-    do: {:noreply, gen_failed(socket, "#{f}:#{idx}", result)}
-
-  def handle_async(:suggest_bnd, {:ok, {:ok, suggestions}}, socket) do
+  def handle_info({:generation, "boundaries", {:ok, suggestions}}, socket) do
     socket = mark(socket, "boundaries", false)
 
     case suggestions do
@@ -664,10 +674,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end
   end
 
-  def handle_async(:suggest_bnd, result, socket),
-    do: {:noreply, gen_failed(socket, "boundaries", result)}
-
-  def handle_async(:suggest_rel, {:ok, {:ok, suggestions}}, socket) do
+  def handle_info({:generation, "relationships", {:ok, suggestions}}, socket) do
     socket = mark(socket, "relationships", false)
 
     case suggestions do
@@ -688,10 +695,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end
   end
 
-  def handle_async(:suggest_rel, result, socket),
-    do: {:noreply, gen_failed(socket, "relationships", result)}
-
-  def handle_async(:suggest_facts, {:ok, {:ok, suggestions}}, socket) do
+  def handle_info({:generation, "facts", {:ok, suggestions}}, socket) do
     socket = mark(socket, "facts", false)
 
     case suggestions do
@@ -712,120 +716,49 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end
   end
 
-  def handle_async(:suggest_facts, result, socket),
-    do: {:noreply, gen_failed(socket, "facts", result)}
-
-  def handle_async(:cover, {:ok, {:ok, cover}}, socket) do
-    {:noreply, socket |> assign(cover: cover) |> mark("cover", false) |> touch()}
-  end
-
-  # The leak refusal gets its own message. "Generation failed: :leaked" would read as
-  # a broken feature; what actually happened is that the cover kept quoting a secret
-  # and was thrown away on purpose.
-  def handle_async(:cover, {:ok, {:error, :leaked}}, socket) do
-    {:noreply,
-     socket
-     |> mark("cover", false)
-     |> put_flash(
-       :error,
-       "The cover kept giving away a secret, so it wasn't kept. Try again, or write it yourself."
-     )}
-  end
-
-  def handle_async(:cover, result, socket), do: {:noreply, gen_failed(socket, "cover", result)}
-
   # Reciprocal generation is best-effort background enrichment of the just-created
   # stubs — never surfaced as an error. On success, patch each stub's regard toward
   # this character; on failure, the placeholder descriptor stands.
-  def handle_async(:reciprocals, {:ok, {stubs, self_name, self_id, {:ok, reciprocals}}}, socket) do
+  def handle_info(
+        {:generation, "reciprocals", {:ok, {stubs, self_name, self_id, reciprocals}}},
+        socket
+      ) do
     for %{id: id, target: target} <- stubs, r = reciprocals[target], present_string?(r) do
       patch_stub_reciprocal(id, self_name, self_id, r)
     end
 
-    {:noreply, socket}
+    {:noreply, mark(socket, "reciprocals", false)}
   end
 
-  def handle_async(:reciprocals, result, socket) do
+  def handle_info({:generation, "reciprocals", result}, socket) do
     Logger.warning("[authoring] reciprocal generation skipped: #{inspect(result)}")
-    {:noreply, socket}
+    {:noreply, mark(socket, "reciprocals", false)}
   end
 
-  defp toggle(audience, "group", id), do: Audience.toggle_group(Audience.from(audience), id)
-
-  defp toggle(audience, _character, id),
-    do: Audience.toggle_character(Audience.from(audience), id)
-
-  # Everyone this author has written, for the picker. The character the sheet is about
-  # is excluded from the list and passed as the owner instead — they always know their
-  # own secrets, so it is never a choice.
-  defp assign_audience_sources(socket) do
-    owner = Owner.of(socket.assigns.current_user)
-    self_id = to_string(socket.assigns.entry.id)
-    characters = Enum.reject(Characters.list(owner), &(to_string(&1.id) == self_id))
-    groups = Groups.list(owner)
-
-    people =
-      Enum.map(characters, fn c ->
-        {to_string(c.id), char_name(c) || "Unnamed", Characters.tier_of(c),
-         AudiencePicker.colour(Library.payload(c))}
-      end)
-
-    assign(socket,
-      picker_groups: Enum.map(groups, &{to_string(&1.id), group_name(&1), group_note(&1)}),
-      picker_people: people,
-      picker_labels:
-        Map.new(
-          Enum.map(groups, &{to_string(&1.id), group_name(&1)}) ++
-            Enum.map(characters, &{to_string(&1.id), char_name(&1) || "Unnamed"})
-        )
-    )
+  def handle_info({:generation, f, {:ok, value}}, socket) when f in @block_fields do
+    {:noreply, socket |> put_blocks(f, to_blocks(value)) |> mark(f, false) |> touch()}
   end
 
-  defp group_note(entry) do
-    case length(Groups.member_ids(entry.id)) do
-      0 -> {:empty, 0}
-      n -> {:count, n}
-    end
-  end
+  # A paragraph: appended to a field (`"voice:expand"`) or replacing one block of it
+  # (`"voice:2"`). One operation, two keys — they differ only in where it goes.
+  def handle_info({:generation, key, {:ok, para}}, socket) do
+    case String.split(key, ":", parts: 2) do
+      [f, "expand"] when f in @block_fields ->
+        blocks = append_paragraph(socket.assigns.blocks[f], para)
+        {:noreply, socket |> put_blocks(f, blocks) |> mark(key, false) |> touch()}
 
-  # The other direction (§04): what *this* character starts out knowing, gathered from
-  # everyone else's secrets and every world they're written against.
-  #
-  # A **read-only projection**, derived on each load rather than stored — one fact, one
-  # home, so the two directions cannot drift. To change who knows something you change
-  # it where the secret lives, which is why each line offers a way there.
-  defp assign_knows(socket) do
-    owner = Owner.of(socket.assigns.current_user)
-    me = to_string(socket.assigns.entry.id)
-
-    sources =
-      for entry <- Library.list_for_owner(owner),
-          entry.kind in ["character", "world_bible"],
-          to_string(entry.id) != me,
-          source = knowledge_source(entry),
-          do: source
-
-    assign(socket, knows: Audience.known_by(me, sources))
-  end
-
-  defp knowledge_source(entry) do
-    case Library.payload(entry) do
-      %CharacterSheet{name: name, facts: facts} ->
-        {name || "Someone", entry.id, facts || []}
-
-      %WorldBible{name: name} = bible ->
-        {name || "A world", nil,
-         WorldBible.entries(bible.rules) ++ WorldBible.entries(bible.starting_canon)}
+      [f, index] when f in @block_fields ->
+        blocks = List.replace_at(socket.assigns.blocks[f], String.to_integer(index), para)
+        {:noreply, socket |> put_blocks(f, blocks) |> mark(key, false) |> touch()}
 
       _ ->
-        nil
+        {:noreply, mark(socket, key, false)}
     end
   end
 
-  # ── Assign / block helpers ────────────────────────────────────────────────────
+  def handle_info({:generation, key, result}, socket),
+    do: {:noreply, gen_failed(socket, key, result)}
 
-  # Mark the form as having unsaved edits (hides the ✓ indicator, arms the
-  # leave-confirmation on navigation links).
   # The quiet write: the sheet exactly as it stands, and nothing more. Deliberately
   # narrower than Save — see the note there.
   def handle_info(:autosave, socket), do: {:noreply, persist(socket, [])}
@@ -946,11 +879,83 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end
   end
 
-  defp mark(socket, key, true),
-    do: assign(socket, :generating, MapSet.put(socket.assigns.generating, key))
+  defp toggle(audience, "group", id), do: Audience.toggle_group(Audience.from(audience), id)
 
-  defp mark(socket, key, false),
-    do: assign(socket, :generating, MapSet.delete(socket.assigns.generating, key))
+  defp toggle(audience, _character, id),
+    do: Audience.toggle_character(Audience.from(audience), id)
+
+  # Everyone this author has written, for the picker. The character the sheet is about
+  # is excluded from the list and passed as the owner instead — they always know their
+  # own secrets, so it is never a choice.
+  defp assign_audience_sources(socket) do
+    owner = Owner.of(socket.assigns.current_user)
+    self_id = to_string(socket.assigns.entry.id)
+    characters = Enum.reject(Characters.list(owner), &(to_string(&1.id) == self_id))
+    groups = Groups.list(owner)
+
+    people =
+      Enum.map(characters, fn c ->
+        {to_string(c.id), char_name(c) || "Unnamed", Characters.tier_of(c),
+         AudiencePicker.colour(Library.payload(c))}
+      end)
+
+    assign(socket,
+      picker_groups: Enum.map(groups, &{to_string(&1.id), group_name(&1), group_note(&1)}),
+      picker_people: people,
+      picker_labels:
+        Map.new(
+          Enum.map(groups, &{to_string(&1.id), group_name(&1)}) ++
+            Enum.map(characters, &{to_string(&1.id), char_name(&1) || "Unnamed"})
+        )
+    )
+  end
+
+  defp group_note(entry) do
+    case length(Groups.member_ids(entry.id)) do
+      0 -> {:empty, 0}
+      n -> {:count, n}
+    end
+  end
+
+  # The other direction (§04): what *this* character starts out knowing, gathered from
+  # everyone else's secrets and every world they're written against.
+  #
+  # A **read-only projection**, derived on each load rather than stored — one fact, one
+  # home, so the two directions cannot drift. To change who knows something you change
+  # it where the secret lives, which is why each line offers a way there.
+  defp assign_knows(socket) do
+    owner = Owner.of(socket.assigns.current_user)
+    me = to_string(socket.assigns.entry.id)
+
+    sources =
+      for entry <- Library.list_for_owner(owner),
+          entry.kind in ["character", "world_bible"],
+          to_string(entry.id) != me,
+          source = knowledge_source(entry),
+          do: source
+
+    assign(socket, knows: Audience.known_by(me, sources))
+  end
+
+  defp knowledge_source(entry) do
+    case Library.payload(entry) do
+      %CharacterSheet{name: name, facts: facts} ->
+        {name || "Someone", entry.id, facts || []}
+
+      %WorldBible{name: name} = bible ->
+        {name || "A world", nil,
+         WorldBible.entries(bible.rules) ++ WorldBible.entries(bible.starting_canon)}
+
+      _ ->
+        nil
+    end
+  end
+
+  # ── Assign / block helpers ────────────────────────────────────────────────────
+
+  # Mark the form as having unsaved edits (hides the ✓ indicator, arms the
+  # leave-confirmation on navigation links).
+  defp mark(socket, key, on?), do: Generating.mark(socket, key, on?)
 
   defp gen_failed(socket, key, result) do
     Logger.warning("[authoring] generation failed (#{key}): #{inspect(result)}")
@@ -1076,9 +1081,14 @@ defmodule PolyphonyWeb.SheetEditorLive do
     pairs = Enum.map(stubs, &%{"target" => &1.target, "descriptor" => &1.descriptor})
     opts = gen_opts(socket)
 
-    start_async(socket, :reciprocals, fn ->
-      {stubs, self_name, self_id, Autofill.reciprocal_roles(source, pairs, opts)}
-    end)
+    Generating.request(socket, "reciprocals", "autofill.reciprocals", %{
+      source: source,
+      pairs: pairs,
+      stubs: stubs,
+      self_name: self_name,
+      self_id: self_id,
+      opts: opts
+    })
   end
 
   defp maybe_flash_stubs(socket, []), do: socket

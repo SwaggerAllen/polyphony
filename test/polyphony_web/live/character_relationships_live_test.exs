@@ -67,7 +67,7 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
 
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
     # Drain the background reciprocal-generation before inspecting the stub.
-    render_async(view)
+    generate(view)
 
     # Mira now references Ghost as she described them...
     assert [%{target: "Ghost", descriptor: "estranged mentor"}] =
@@ -108,7 +108,7 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     |> render_submit()
 
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
-    render_async(view)
+    generate(view)
 
     rels = Library.payload(Library.get(mira.id)).relationships
     assert Enum.find(rels, &(&1.target == "Bram")).target_id == bram.id
@@ -155,7 +155,7 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     |> render_submit()
 
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
-    render_async(view)
+    generate(view)
 
     ghost = find(user, "Ghost")
     assert ghost, "expected a stub character named Ghost"
@@ -172,9 +172,9 @@ defmodule PolyphonyWeb.CharacterRelationshipsLiveTest do
     |> render_submit()
 
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
-    render_async(view)
+    generate(view)
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
-    render_async(view)
+    generate(view)
 
     assert Enum.count(characters(user), &(Library.payload(&1).name == "Ghost")) == 1
   end

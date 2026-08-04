@@ -114,6 +114,17 @@ components.
     survives a reconnect and shows on a second device, and the job associates each
     entry to the campaign *as it writes it* — an interrupted build leaves a half-built
     campaign rather than orphans in the library.
+  - **So is every ✦ control**, for the same reason at smaller scale: the calls take
+    seconds, which is exactly long enough to switch apps. `Polyphony.Generations` parks
+    the **raw result** and `PolyphonyWeb.Generating` hands it to the screen — live over
+    PubSub, or on the next mount if nobody was watching, with the spinners restored for
+    whatever is still running. The job deliberately does *not* write the value onto the
+    entry: how a result merges is the interesting part (✦ Suggest appends, Generate-all
+    fills only blanks, a leaked cover is refused), and a second copy of that in a worker
+    would drift toward overwriting an author's work. `Polyphony.Jobs.Generate` holds the
+    operations as a literal `case` rather than an MFA in job args. The reroll stays a
+    plain task — it only supersedes and enqueues `Jobs.GeneratePacket`, which was always
+    a job.
 - **Ownership through `Owner`.** Library screens scope every read/write through
   `Polyphony.Owner.of(current_user)` — never a raw user id — so org support later is a
   bolt-on, not a rewrite (decisions §P2/§P8).

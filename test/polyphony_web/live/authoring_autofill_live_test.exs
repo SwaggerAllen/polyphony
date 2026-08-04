@@ -44,7 +44,7 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       |> form("form[phx-submit=generate_all]", %{brief: "a jaded harbor detective"})
       |> render_submit()
 
-      html = render_async(view)
+      html = generate(view)
       # The name field, empty at mount, now carries generated content...
       assert Regex.match?(~r/name="name" value="[^"]+"/, html)
       # ...and the premise block is no longer empty.
@@ -60,7 +60,7 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       |> element("button[phx-click=generate_field][phx-value-field=premise]")
       |> render_click()
 
-      html = render_async(view)
+      html = generate(view)
       # The premise block (empty at mount) now has content; the name is untouched.
       refute html =~ ~r/name="b_premise\[\]"[^>]*>\s*<\/textarea>/
       assert html =~ ~s(value="Mara")
@@ -74,7 +74,7 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       |> form("form[phx-submit=generate_all]", %{brief: "a smuggler"})
       |> render_submit()
 
-      render_async(view)
+      generate(view)
       # Not persisted yet — generation only populates the form.
       assert Library.payload(Library.get(entry.id)).premise in [nil, ""]
 
@@ -206,7 +206,7 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
 
       view |> element("button[phx-click=suggest_boundaries]") |> render_click()
-      html = render_async(view)
+      html = generate(view)
 
       # The Mock returns one of each direction, both conditional — so both lists fill,
       # which is the point of asking for both.
@@ -257,8 +257,8 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
 
       # First await settles the fields task, whose completion *chains* the relationship
       # and boundary suggestions; the second await settles those.
-      render_async(view)
-      html = render_async(view)
+      generate(view)
+      html = generate(view)
 
       refute html =~ "No relationships yet."
       refute html =~ "No boundaries yet."
@@ -275,7 +275,7 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       |> form("form[phx-submit=generate_all]", %{brief: "a drowned neon city"})
       |> render_submit()
 
-      html = render_async(view)
+      html = generate(view)
       # A prose field (setting) and a list field (rules) both fill as blocks.
       refute html =~ ~r/name="b_setting\[\]"[^>]*>\s*<\/textarea>/
       refute html =~ ~r/name="b_rules\[\]"[^>]*>\s*<\/textarea>/

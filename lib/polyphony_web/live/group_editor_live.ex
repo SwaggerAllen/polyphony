@@ -35,11 +35,11 @@ defmodule PolyphonyWeb.GroupEditorLive do
   import PolyphonyWeb.BlockField
 
   alias Polyphony.{Groups, Library, Owner}
-  alias Polyphony.Authoring.{ArcEntry, Autofill, Group, GroupArc}
+  alias Polyphony.Authoring.{ArcEntry, Group, GroupArc}
   alias Polyphony.Authoring.CharacterSheet.Fact
   alias Polyphony.Permissions
   alias Polyphony.Permissions
-  alias PolyphonyWeb.{Autosave, Guard, Kit, Layouts, Voice}
+  alias PolyphonyWeb.{Autosave, Generating, Guard, Kit, Layouts, Voice}
 
   @prose_specs [
     {"premise", "What they are"},
@@ -78,6 +78,7 @@ defmodule PolyphonyWeb.GroupEditorLive do
          name: group.name || "",
          blocks: blocks_from_group(group),
          facts: group.facts || [],
+         gen_subject: entry.id,
          generating: MapSet.new(),
          saved: false,
          dirty: false,
@@ -85,6 +86,7 @@ defmodule PolyphonyWeb.GroupEditorLive do
          panel: nil,
          telling: nil
        )
+       |> Generating.restore()
        |> load_members()}
     else
       Guard.refuse(socket, entry, "Group", socket.assigns.current_user)
@@ -237,16 +239,18 @@ defmodule PolyphonyWeb.GroupEditorLive do
     safe(socket, fn ->
       {:noreply,
        socket
-       |> mark("all", true)
-       |> start_async(:gen_all, fn ->
-         # A group is character-shaped, so it generates down the character path and
-         # keeps the fields it has a home for. `name` here is the collective's.
-         Autofill.generate_all(:character, group_brief(brief), %{}, [])
-       end)}
+       # A group is character-shaped, so it generates down the character path and
+       # keeps the fields it has a home for. `name` here is the collective's.
+       |> Generating.request("all", "autofill.all", %{
+         kind: :character,
+         brief: group_brief(brief),
+         current: %{},
+         opts: []
+       })}
     end)
   end
 
-  def handle_async(:gen_all, {:ok, {:ok, values}}, socket) do
+  def handle_info({:generation, "all", {:ok, values}}, socket) do
     blocks =
       Enum.reduce(values, socket.assigns.blocks, fn {f, v}, acc ->
         if f in @prose_fields, do: Map.put(acc, f, to_blocks(v)), else: acc
@@ -257,12 +261,17 @@ defmodule PolyphonyWeb.GroupEditorLive do
     {:noreply, socket |> assign(name: name, blocks: blocks) |> mark("all", false) |> touch()}
   end
 
-  def handle_async(:gen_all, result, socket) do
-    Logger.warning("[group] generate-all failed: #{inspect(result)}")
+  def handle_info({:generation, key, result}, socket) do
+    Logger.warning("[group] generation failed (#{key}): #{inspect(result)}")
 
-    {:noreply,
-     socket |> mark("all", false) |> put_flash(:error, "Couldn't write that. Try again.")}
+    {:noreply, socket |> mark(key, false) |> put_flash(:error, "Couldn't write that. Try again.")}
   end
+
+  # A group has no gate on any of its fields, so the quiet write and the deliberate one
+  # are the same write — Save only differs in flushing now and reloading the roster.
+  def handle_info(:autosave, socket), do: {:noreply, persist(socket)}
+
+  def terminate(_reason, socket), do: Autosave.flush(socket, &persist/1)
 
   # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -301,12 +310,6 @@ defmodule PolyphonyWeb.GroupEditorLive do
       socket
       |> assign(blocks: Map.update!(socket.assigns.blocks, field, fun))
       |> touch()
-
-  # A group has no gate on any of its fields, so the quiet write and the deliberate one
-  # are the same write — Save only differs in flushing now and reloading the roster.
-  def handle_info(:autosave, socket), do: {:noreply, persist(socket)}
-
-  def terminate(_reason, socket), do: Autosave.flush(socket, &persist/1)
 
   defp persist(socket) do
     %{name: name, blocks: blocks, facts: facts, entry: entry} = socket.assigns

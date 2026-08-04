@@ -110,7 +110,7 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
     {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
 
     view |> element("button[phx-click=expand_field][phx-value-field=backstory]") |> render_click()
-    html = render_async(view)
+    html = generate(view)
 
     # Original stays; a second block now exists.
     assert html =~ "Only para."
@@ -129,7 +129,7 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
     )
     |> render_click()
 
-    html = render_async(view)
+    html = generate(view)
     refute html =~ ">Placeholder.</textarea>"
     assert length(Regex.scan(~r/name="b_backstory\[\]"/, html)) == 1
   end
@@ -142,13 +142,13 @@ defmodule PolyphonyWeb.CharacterBlocksLiveTest do
 
     # Suggest adds directly to the list — no confirmation step.
     view |> element("button[phx-click=suggest_relationships]") |> render_click()
-    html = render_async(view)
+    html = generate(view)
     assert html =~ "Added"
     assert html =~ "Remove"
 
     view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
     # Drain the background reciprocal-generation the stubs trigger.
-    render_async(view)
+    generate(view)
 
     after_count = Enum.count(Library.list_for_owner(Owner.of(user)), &(&1.kind == "character"))
     assert after_count > before

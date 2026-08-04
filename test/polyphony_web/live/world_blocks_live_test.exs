@@ -64,7 +64,7 @@ defmodule PolyphonyWeb.WorldBlocksLiveTest do
       {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
 
       view |> element("button[phx-click=expand_field][phx-value-field=setting]") |> render_click()
-      html = render_async(view)
+      html = generate(view)
 
       assert html =~ "A drowned port."
       assert length(Regex.scan(~r/name="b_setting\[\]"/, html)) == 2
@@ -80,7 +80,7 @@ defmodule PolyphonyWeb.WorldBlocksLiveTest do
       )
       |> render_click()
 
-      html = render_async(view)
+      html = generate(view)
       refute html =~ ">placeholder</textarea>"
       assert length(Regex.scan(~r/name="b_setting\[\]"/, html)) == 1
     end
@@ -243,7 +243,7 @@ defmodule PolyphonyWeb.WorldBlocksLiveTest do
       |> element("button[phx-click=suggest_items][phx-value-field=rules]")
       |> render_click()
 
-      render_async(view)
+      generate(view)
       view |> form("form[phx-submit=save]", %{name: "W"}) |> render_submit()
 
       statements = WorldBible.statements(bible_of(entry).rules)

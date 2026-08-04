@@ -147,7 +147,7 @@ defmodule PolyphonyWeb.WorldScreenLiveTest do
       {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
 
       view |> element("button[phx-click=generate_cover]") |> render_click()
-      html = render_async(view)
+      html = generate(view)
 
       assert html =~ "Checked against your 1 secret"
     end

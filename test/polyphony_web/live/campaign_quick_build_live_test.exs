@@ -331,7 +331,8 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=premise")
 
     view |> element("button[phx-click=expand_premise]") |> render_click()
-    render_async(view)
+    drain()
+    render(view)
 
     # The premise was regenerated (Mock lorem replaces the seed).
     assert Library.payload(Library.get(camp.id))[:premise] != "A heist."
