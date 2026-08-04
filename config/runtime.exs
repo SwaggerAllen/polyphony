@@ -233,32 +233,49 @@ if config_env() == :prod do
       ]
     ]
 
-    config :polyphony, Polyphony.Mailer,
-      adapter: Swoosh.Adapters.SMTP,
-      relay: smtp_host,
-      port: smtp_port,
-      username: System.get_env("SMTP_USERNAME"),
-      password: System.get_env("SMTP_PASSWORD"),
-      ssl: smtp_ssl,
-      # `:always` demands a STARTTLS upgrade — but a socket that is *already* TLS never
-      # advertises STARTTLS, and gen_smtp answers that with `{:missing_requirement,
-      # :tls}`. So the two modes are mutually exclusive, not additive.
-      tls: if(smtp_ssl, do: :never, else: :always),
-      tls_options: smtp_tls_options,
-      # The same options again, through the other door. gen_smtp applies `tls_options`
-      # **only** to the STARTTLS upgrade; an implicit-TLS connection is handed
-      # `sockopts` instead, merged over defaults that carry no CA store and `depth: 0`.
-      # On OTP 27 that is not "unverified but working" — the client default is now
-      # `verify_peer`, so `ssl:connect/4` refuses the options outright with
-      # `{:options, :incompatible, [verify: :verify_peer, cacerts: :undefined]}` and
-      # port 465 cannot connect at all without this line.
-      sockopts: if(smtp_ssl, do: smtp_tls_options, else: []),
-      retries: 2,
-      # A submission relay is connected to directly. Looking up MX records for it asks
-      # "who accepts mail *for* this domain", which is a different question and the
-      # wrong one — it costs a DNS round trip per send and, for a host that does
-      # publish MX records, would send the mail somewhere else entirely.
-      no_mx_lookups: true
+    # Omitted rather than set to nil when absent: Swoosh type-checks these two and
+    # **raises** on a non-binary, so an unset SMTP_USERNAME would turn every send into
+    # an ArgumentError out of the LiveView rather than a delivery error the sign-in
+    # screen can report.
+    smtp_credentials =
+      for key <- [:username, :password],
+          value = System.get_env("SMTP_#{String.upcase(to_string(key))}"),
+          value != "",
+          do: {key, value}
+
+    config :polyphony,
+           Polyphony.Mailer,
+           [
+             adapter: Swoosh.Adapters.SMTP,
+             relay: smtp_host,
+             port: smtp_port,
+             ssl: smtp_ssl,
+             # `:always` demands a STARTTLS upgrade — but a socket that is *already*
+             # TLS never advertises STARTTLS, and gen_smtp answers that with
+             # `{:missing_requirement, :tls}`. The two modes are mutually exclusive,
+             # not additive.
+             tls: if(smtp_ssl, do: :never, else: :always),
+             tls_options: smtp_tls_options,
+             # The same options again, through the other door. gen_smtp applies
+             # `tls_options` **only** to the STARTTLS upgrade; an implicit-TLS
+             # connection is handed `sockopts` instead, merged over defaults that carry
+             # no CA store and `depth: 0`. On OTP 27 that is not "unverified but
+             # working" — the client default is now `verify_peer`, so `ssl:connect/4`
+             # refuses the options outright with `{:options, :incompatible, [verify:
+             # :verify_peer, cacerts: :undefined]}`, and port 465 cannot connect at all
+             # without this line.
+             sockopts: if(smtp_ssl, do: smtp_tls_options, else: []),
+             # Demanding AUTH we have no credentials for fails as `auth_failed`, which
+             # reads as "wrong password" rather than "no password".
+             auth: if(smtp_credentials == [], do: :never, else: :always),
+             retries: 2,
+             # A submission relay is connected to directly. Looking up MX records for it
+             # asks "who accepts mail *for* this domain", which is a different question
+             # and the wrong one — it costs a DNS round trip per send and, for a host
+             # that does publish MX records, would send the mail somewhere else
+             # entirely.
+             no_mx_lookups: true
+           ] ++ smtp_credentials
 
     # Postmark routes by **message stream**, and the header naming it is the difference
     # between a message landing on the transactional stream and landing somewhere you
@@ -285,6 +302,17 @@ if config_env() == :prod do
     # Honoured, but said out loud. Both halves of this fail as a dropped connection
     # rather than as anything about TLS: plaintext at 465 gets hung up on, and a TLS
     # handshake at 587 is answered with a plaintext banner the client can't read.
+    # The SMTP conversation, line by line, into the log — and so into the debug drawer,
+    # which is the only way to read it from a phone. Worth a switch because gen_smtp
+    # reports a refused send as one word: `:closed` before the banner means the relay
+    # is refusing *us*, and `:closed` after AUTH means it is refusing the *message*,
+    # and the error is identical either way. Off by default — it is a per-send log of a
+    # network conversation, not something to leave running.
+    if System.get_env("SMTP_TRACE", "false") in ~w(true 1) do
+      config :polyphony, Polyphony.Mailer, trace_fun: &Polyphony.Mailer.trace/2
+      IO.puts("[boot] mail SMTP tracing ON (SMTP_TRACE) — credentials are redacted")
+    end
+
     if smtp_ssl != (smtp_port == 465) do
       IO.puts(
         "[boot] mail WARNING SMTP_SSL=#{smtp_ssl} with port #{smtp_port}. Implicit TLS " <>

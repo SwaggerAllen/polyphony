@@ -118,6 +118,14 @@ the network:
 Every one arrives wrapped in `{:retries_exceeded, …}`, which just means all three
 attempts failed the same way.
 
+When the word alone isn't enough — `:closed` in particular, which means something
+different before the banner than after AUTH — set **`SMTP_TRACE=true`** and send
+again. gen_smtp then logs the conversation line by line (`[mail] smtp: connected to …
+banner was 220 …`), so you can see how far it got. It goes through the debug drawer
+like everything else, which is how you read it from a phone. Credentials are redacted
+— gen_smtp traces its entire options proplist on one branch, password included — but
+it is still a per-send log of a network conversation, so turn it off afterwards.
+
 ### Locally
 
 Dev needs no provider: it runs Swoosh's `Local` adapter behind the same

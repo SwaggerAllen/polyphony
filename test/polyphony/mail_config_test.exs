@@ -22,8 +22,9 @@ defmodule Polyphony.MailConfigTest do
     "PHX_HOST" => "example.com"
   }
 
-  @mail_vars ~w(SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_SSL MAIL_FROM
-               MAIL_FROM_NAME POSTMARK_MESSAGE_STREAM MAILBOX_USER MAILBOX_PASSWORD)
+  @mail_vars ~w(SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_SSL SMTP_TRACE
+               MAIL_FROM MAIL_FROM_NAME POSTMARK_MESSAGE_STREAM MAILBOX_USER
+               MAILBOX_PASSWORD)
 
   # Reads the real file with a **clean** mail environment each time: the vars are
   # process-global, so anything left behind by a previous case would arm a mailer the
@@ -256,6 +257,70 @@ defmodule Polyphony.MailConfigTest do
         end)
 
       assert boot =~ "tls=implicit"
+    end
+  end
+
+  describe "credentials" do
+    test "are omitted entirely when unset, rather than passed as nil" do
+      config = mailer_config(%{"SMTP_HOST" => "smtp.example.com", "MAIL_FROM" => "a@e.com"})
+
+      # Swoosh type-checks these two and **raises** on a non-binary. Passing nil turns
+      # every send into an ArgumentError out of the LiveView rather than a delivery
+      # error the sign-in screen can report.
+      refute Keyword.has_key?(config, :username)
+      refute Keyword.has_key?(config, :password)
+
+      # And there is nothing to authenticate with, so don't demand AUTH — `auth_failed`
+      # reads as "wrong password" rather than "no password".
+      assert config[:auth] == :never
+    end
+
+    test "an empty string counts as unset" do
+      config =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "MAIL_FROM" => "a@e.com",
+          "SMTP_USERNAME" => "",
+          "SMTP_PASSWORD" => ""
+        })
+
+      refute Keyword.has_key?(config, :username)
+    end
+
+    test "both present arms authentication" do
+      config =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.sendgrid.net",
+          "MAIL_FROM" => "a@e.com",
+          "SMTP_USERNAME" => "apikey",
+          "SMTP_PASSWORD" => "SG.secret"
+        })
+
+      assert config[:username] == "apikey"
+      assert config[:password] == "SG.secret"
+      assert config[:auth] == :always
+    end
+  end
+
+  describe "dialogue tracing" do
+    test "off unless asked for" do
+      config = mailer_config(%{"SMTP_HOST" => "smtp.example.com", "MAIL_FROM" => "a@e.com"})
+
+      refute config[:trace_fun]
+    end
+
+    test "SMTP_TRACE points gen_smtp at the redacting tracer" do
+      config =
+        mailer_config(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "MAIL_FROM" => "a@e.com",
+          "SMTP_TRACE" => "true"
+        })
+
+      # A named function rather than a closure on purpose: a release evaluates
+      # runtime.exs into a throwaway module, and an anonymous fun captured there does
+      # not survive being written out and read back.
+      assert config[:trace_fun] == (&Polyphony.Mailer.trace/2)
     end
   end
 
