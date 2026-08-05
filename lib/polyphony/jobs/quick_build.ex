@@ -50,7 +50,7 @@ defmodule Polyphony.Jobs.QuickBuild do
 
   require Logger
 
-  alias Polyphony.{Builds, Library, Owner}
+  alias Polyphony.{Builds, Campaigns, Library, Owner}
   alias Polyphony.Authoring.{QuickBuild, Stub}
 
   @doc """
@@ -217,13 +217,10 @@ defmodule Polyphony.Jobs.QuickBuild do
 
   # Cast and walk-ons join the same roster — `character_ids` is who is in this story, and
   # a stub invented by one of its characters is one of its people. Tier is what separates
-  # them on screen (`:incidental`), not membership.
-  defp associate(campaign_id, {kind, entry}) when kind in [:character, :stub] do
-    update(campaign_id, fn payload ->
-      ids = payload[:character_ids] || []
-      Map.put(payload, :character_ids, Enum.uniq(ids ++ [entry.id]))
-    end)
-  end
+  # them on screen (`:incidental`), not membership. Shared with the editor and play, which
+  # both invent people the same way.
+  defp associate(campaign_id, {kind, entry}) when kind in [:character, :stub],
+    do: Campaigns.cast(campaign_id, entry.id)
 
   defp attach_premise(_campaign_id, premise) when premise in [nil, ""], do: :ok
 

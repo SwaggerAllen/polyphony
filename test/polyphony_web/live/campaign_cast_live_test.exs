@@ -123,6 +123,63 @@ defmodule PolyphonyWeb.CampaignCastLiveTest do
     assert :binary.match(html, "Zeno") < :binary.match(html, "Alma")
   end
 
+  describe "everyone invented for a story joins it" do
+    test "a stub written from a relationship joins the author's campaign",
+         %{conn: conn, user: user} do
+      wren = character(user, %CharacterSheet{name: "Wren", status: :full})
+      camp = campaign(user, %{character_ids: [wren.id]})
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{wren.id}")
+
+      view
+      |> element(~s(button[phx-click="panel"][phx-value-panel="relationship"]))
+      |> render_click()
+
+      view
+      |> form("form[phx-submit=add_relationship]", %{
+        target: "The bellman",
+        descriptor: "owes her"
+      })
+      |> render_submit()
+
+      view |> form("#sheet-form", %{name: "Wren"}) |> render_submit()
+
+      # A person written out of somebody's relationship belongs to that somebody's
+      # story. Landing in the library alone made them invisible to the roster, to
+      # "fill them in", and to the library's own grouping by campaign.
+      ids = Library.payload(Library.get(camp.id))[:character_ids]
+      assert length(ids) == 2
+
+      stub = Enum.find(ids, &(&1 != wren.id))
+      assert Library.payload(Library.get(stub)).name == "The bellman"
+      assert Library.payload(Library.get(stub)).status == :stub
+    end
+
+    test "and appears under walk-ons rather than beside the cast",
+         %{conn: conn, user: user} do
+      wren = character(user, %CharacterSheet{name: "Wren", status: :full})
+      camp = campaign(user, %{character_ids: [wren.id]})
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{wren.id}")
+
+      view
+      |> element(~s(button[phx-click="panel"][phx-value-panel="relationship"]))
+      |> render_click()
+
+      view
+      |> form("form[phx-submit=add_relationship]", %{
+        target: "The bellman",
+        descriptor: "owes her"
+      })
+      |> render_submit()
+
+      view |> form("#sheet-form", %{name: "Wren"}) |> render_submit()
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+      assert html =~ "Walk-ons · 1"
+    end
+  end
+
   describe "walk-ons on the cast tab" do
     test "collapse behind a count instead of burying the people you came for",
          %{conn: conn, user: user} do

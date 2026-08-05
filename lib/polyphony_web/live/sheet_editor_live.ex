@@ -53,7 +53,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   import PolyphonyWeb.BlockField
 
-  alias Polyphony.{Characters, Groups, Library, Owner, Repo}
+  alias Polyphony.{Campaigns, Characters, Groups, Library, Owner, Repo}
   alias Polyphony.Authoring.{Audience, CharacterSheet, Stub, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.{Boundary, Fact, Relationship}
   alias Polyphony.ReadModels.Membership
@@ -1044,6 +1044,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
           kind: "character",
           payload: Stub.new(target, role, relationships: inbound, world_bible_id: world_bible_id)
         })
+
+      # Into the same campaign as the character who named them. A person written out of
+      # somebody's relationship belongs to that somebody's story — and a stub in no
+      # campaign is one the roster, the "fill them in" prompt and the library's own
+      # grouping all fail to see.
+      Campaigns.cast(Campaigns.of_character(owner, self_id), entry.id)
 
       %{id: entry.id, target: target, descriptor: role}
     end)

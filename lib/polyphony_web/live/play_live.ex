@@ -43,6 +43,7 @@ defmodule PolyphonyWeb.PlayLive do
 
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Director.BeatDriver
+  alias Polyphony.Campaigns
   alias Polyphony.Edit
   alias Polyphony.Generations
   alias Polyphony.Permissions
@@ -368,17 +369,22 @@ defmodule PolyphonyWeb.PlayLive do
 
     owner = Owner.of(socket.assigns.current_user)
     world_id = campaign_world_id(socket)
+    campaign_id = campaign_of(socket.assigns.scene_id)
 
     for name <- names,
         key = String.downcase(name),
         not Map.has_key?(known, key),
         not MapSet.member?(members, key) do
-      Library.put(%{
-        owner: owner,
-        kind: "character",
-        payload: Stub.new(name, "", world_bible_id: world_id)
-      })
+      entry =
+        Library.put(%{
+          owner: owner,
+          kind: "character",
+          payload: Stub.new(name, "", world_bible_id: world_id)
+        })
 
+      # A name the scene mentioned is one of this story's people, whatever else
+      # becomes of them.
+      Campaigns.cast(campaign_id, entry.id)
       name
     end
   end
@@ -408,11 +414,16 @@ defmodule PolyphonyWeb.PlayLive do
   defp ensure_character(socket, name) do
     case Map.get(owner_characters(socket.assigns.current_user), String.downcase(name)) do
       nil ->
-        Library.put(%{
-          owner: Owner.of(socket.assigns.current_user),
-          kind: "character",
-          payload: Stub.new(name, "", world_bible_id: campaign_world_id(socket))
-        })
+        entry =
+          Library.put(%{
+            owner: Owner.of(socket.assigns.current_user),
+            kind: "character",
+            payload: Stub.new(name, "", world_bible_id: campaign_world_id(socket))
+          })
+
+        # Somebody introduced mid-scene belongs to the story they walked into.
+        Campaigns.cast(campaign_of(socket.assigns.scene_id), entry.id)
+        entry
 
       entry ->
         entry

@@ -298,6 +298,16 @@ defmodule Polyphony.Authoring.Autofill do
   stop* doing is the same gate with the sign flipped and is usually the better story
   engine, so a suggester that only proposed refusals would quietly halve what the
   feature is for.
+
+  **Every other key flips with the direction**, and the prompt has to say so per
+  direction or half the results come out inverted. A refusal's `condition` is what makes
+  her *willing*; a compulsion's is what finally lets her *stop*. `on_pressure` is being
+  pushed to do it, versus someone trying to stop her — which is exactly how
+  `Context.boundary_line/1` renders the two (`"When pushed:"` / `"When someone tries to
+  stop you:"`). The domain and the renderer had the flip from the start; the prompt
+  described all three keys in refusal-only language, so a generated compulsion arrived
+  with a condition meaning *what would make her start* and was then rendered as *what
+  would make her stop*.
   """
   @spec suggest_boundaries(map(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def suggest_boundaries(current, opts \\ []) do
@@ -314,24 +324,36 @@ defmodule Polyphony.Authoring.Autofill do
             "pushed. These are played as scene beats, never as a content filter. Propose 2–4 " <>
             "**conditional** ones: things that hold FOR NOW but that the right story " <>
             "development could change — slow burns, not permanent absolutes. Mix the two " <>
-            "DIRECTIONS roughly evenly: a \"refusal\" is something they won't do; a " <>
-            "\"compulsion\" is something they can't stop doing (covering for someone, signing " <>
-            "whatever is put in front of them, going back to a place). A compulsion is often " <>
-            "the more dramatic of the two — propose at least one. Choose topics that " <>
-            "plausibly shift with the story (intimacy, trust, loyalty, opening up, using " <>
-            "violence, revealing a secret, protecting someone), NOT absolute taboos. TWO " <>
+            "DIRECTIONS roughly evenly; a compulsion is often the more dramatic of the two, " <>
+            "so propose at least one.\n\n" <>
+            "THE TWO DIRECTIONS ARE MIRRORS, AND EVERY OTHER FIELD FLIPS WITH THEM. Write " <>
+            "each one from its own side or it will read backwards:\n\n" <>
+            "* \"refusal\" — something they WON'T DO. The topic is the thing they hold back " <>
+            "from, as a noun phrase (\"Physical intimacy with Jack\", \"Naming her source\"). " <>
+            "\"condition\" is what would make them WILLING. \"on_pressure\" is how they react " <>
+            "when someone pushes them TO DO IT. \"after_release\" is what they are like once " <>
+            "they will.\n" <>
+            "* \"compulsion\" — something they CAN'T STOP DOING. The topic is the thing they " <>
+            "keep doing, as an action (\"Covering for her father\", \"Going back to the " <>
+            "quay\", \"Signing whatever is put in front of her\") — never a bare quality like " <>
+            "\"Trust\" or \"Loyalty\", which cannot be stopped doing. \"condition\" is what " <>
+            "would finally let them STOP — the opposite of a refusal's. \"on_pressure\" is " <>
+            "how they react when someone tries to STOP THEM. \"after_release\" is what they " <>
+            "are like once they have broken it.\n\n" <>
+            "Choose topics that plausibly shift with the story, NOT absolute taboos — for a " <>
+            "refusal, things like intimacy, trust, opening up, using violence, revealing a " <>
+            "secret; for a compulsion, the habits and loyalties they keep returning to. TWO " <>
             "RULES: (1) The topic and its condition must share the same scope. If it is about " <>
             "a SPECIFIC person, name them in the topic (e.g. \"Physical intimacy with Jack\") " <>
             "— never gate a broad, everyone topic on one person's arc. If the topic is " <>
             "general, keep the condition general too. (2) The condition must be ONE concrete " <>
             "development the story can clearly reach — a single checkable event, not several " <>
             "bundled together (avoid \"and\"/\"both\"), and not a vague mood. Return ONLY a " <>
-            "JSON array of objects, each with keys \"topic\" (what it is about), " <>
-            "\"direction\" (\"refusal\" or \"compulsion\"), \"condition\" (REQUIRED, " <>
-            "non-empty — the one thing that must happen first), \"on_pressure\" (how they " <>
-            "react when pushed against it, optional), \"after_release\" (what they are like " <>
-            "once it turns, optional), and \"category\" (\"sexual\", \"graphic_violence\", " <>
-            "\"other\", or \"\" for pure characterization). Do NOT repeat a topic already listed."
+            "JSON array of objects, each with keys \"topic\", \"direction\" (\"refusal\" or " <>
+            "\"compulsion\"), \"condition\" (REQUIRED, non-empty), \"on_pressure\" " <>
+            "(optional), \"after_release\" (optional), and \"category\" (\"sexual\", " <>
+            "\"graphic_violence\", \"other\", or \"\" for pure characterization). Do NOT " <>
+            "repeat a topic already listed."
       },
       %{
         role: "user",
