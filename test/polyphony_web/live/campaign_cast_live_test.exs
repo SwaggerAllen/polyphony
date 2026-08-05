@@ -123,6 +123,40 @@ defmodule PolyphonyWeb.CampaignCastLiveTest do
     assert :binary.match(html, "Zeno") < :binary.match(html, "Alma")
   end
 
+  describe "walk-ons on the cast tab" do
+    test "collapse behind a count instead of burying the people you came for",
+         %{conn: conn, user: user} do
+      lead = character(user, %CharacterSheet{name: "Wren", status: :full, tier: :main})
+
+      walk_ons =
+        for n <- ~w(Bellman Ferryman Clerk),
+            do: character(user, %CharacterSheet{name: n, status: :stub, tier: :incidental})
+
+      camp = campaign(user, %{character_ids: [lead.id | Enum.map(walk_ons, & &1.id)]})
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+
+      # `ux/polyphony-campaign.html` §06: "Main cast reads as the short list you authored;
+      # walk-ons collapse behind a count." A quick-built campaign arrives with the people
+      # you asked for and a dozen its cast introduced.
+      assert html =~ "Cast · 4"
+      assert html =~ "Walk-ons · 3"
+      assert html =~ "Only remembered in their own scenes"
+
+      # Tier is the split, not status — the count is still everyone.
+      assert :binary.match(html, "Wren") < :binary.match(html, "Walk-ons")
+    end
+
+    test "a cast with no walk-ons shows no collapse at all", %{conn: conn, user: user} do
+      lead = character(user, %CharacterSheet{name: "Wren", status: :full, tier: :main})
+      camp = campaign(user, %{character_ids: [lead.id]})
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+
+      refute html =~ "Walk-ons ·"
+    end
+  end
+
   describe "writing one, rather than adding one that exists" do
     test "an empty cast offers a way in — it had none", %{conn: conn, user: user} do
       camp = campaign(user, %{})

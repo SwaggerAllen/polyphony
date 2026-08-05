@@ -30,9 +30,12 @@ defmodule Polyphony.Authoring.QuickBuild do
   finish.
 
   Returns `{:ok, %{bible: entry, characters: [entry], premise: string, failed: [...]}}` —
-  `characters` is the **main cast** (stubs land in the library but aren't in the campaign
-  roster); `failed` is a list of `{seed, reason}` for any character seed the provider
-  couldn't generate. A single character failing does **not** abort the build — the world,
+  `characters` is the **main cast**. Off-screen stubs are reported through `:on_entry` as
+  `{:stub, entry}` and joined to the campaign there, but they stay out of this list: they
+  are not cross-linked, not given covers, and not counted as cast seeds.
+
+  `failed` is a list of `{seed, reason}` for any character seed the provider couldn't
+  generate. A single character failing does **not** abort the build — the world,
   the characters that succeeded, and the premise are kept, and the failures are surfaced
   so the author can retry just those. The build only errors outright if *every* character
   seed fails (or the world / premise call does). Provider and usage-attribution opts
@@ -54,8 +57,8 @@ defmodule Polyphony.Authoring.QuickBuild do
     * `:progress` — an optional 1-arg fn called with `%{done, total, label}` before each
       phase (world → each character → linking → premise → covers), for a UI progress bar.
     * `:on_entry` — an optional 1-arg fn called with `{:world, entry}` / `{:character,
-      entry}` the moment each is persisted, *before* the phases that follow it. The
-      caller uses it to associate as the build goes. This is not an optimisation: the
+      entry}` / `{:stub, entry}` the moment each is persisted, *before* the phases that
+      follow it. The caller uses it to associate as the build goes. This is not an optimisation: the
       build writes to the library long before it returns, so a caller that associates
       only from the return value leaves a world and a cast attached to nothing whenever
       the build doesn't finish — and it doesn't have to crash to not finish, it only has
@@ -300,7 +303,17 @@ defmodule Polyphony.Authoring.QuickBuild do
               seed_done.(i)
 
               {entry, stubs} =
-                maybe_stub_offscreen(entry, sheet, built, suggest?, bible_id, owner, meter, stubs)
+                maybe_stub_offscreen(
+                  entry,
+                  sheet,
+                  built,
+                  suggest?,
+                  bible_id,
+                  owner,
+                  meter,
+                  stubs,
+                  announce
+                )
 
               {built ++ [{entry, sheet}], stubs, failed}
 
@@ -320,14 +333,14 @@ defmodule Polyphony.Authoring.QuickBuild do
   # later characters see them. Prior main cast are excluded from suggestions (they're real
   # characters, not off-screen stubs). Returns the (possibly-updated) entry + the grown
   # stub registry.
-  defp maybe_stub_offscreen(entry, _sheet, _built, false, _bible_id, _owner, _meter, stubs),
+  defp maybe_stub_offscreen(entry, _sheet, _b, false, _bid, _owner, _meter, stubs, _announce),
     do: {entry, stubs}
 
-  defp maybe_stub_offscreen(entry, sheet, built, true, bible_id, owner, meter, stubs) do
+  defp maybe_stub_offscreen(entry, sheet, built, true, bible_id, owner, meter, stubs, announce) do
     prior_names = MapSet.new(for {_e, s} <- built, present?(s.name), do: norm(s.name))
 
     {offscreen, stubs} =
-      suggest_and_stub(entry.id, sheet, [], prior_names, bible_id, owner, meter, stubs)
+      suggest_and_stub(entry.id, sheet, [], prior_names, bible_id, owner, meter, stubs, announce)
 
     entry =
       case offscreen do
@@ -446,7 +459,17 @@ defmodule Polyphony.Authoring.QuickBuild do
   # excluded (passed as `existing`, and belt-and-suspenders filtered by name), so this
   # only ever creates genuinely new stubs. Returns `{outbound_rels, stubs}` — the
   # updated registry so later characters reuse a stub already created for the same name.
-  defp suggest_and_stub(self_id, sheet, cast_rels, cast_names, bible_id, owner, meter, stubs) do
+  defp suggest_and_stub(
+         self_id,
+         sheet,
+         cast_rels,
+         cast_names,
+         bible_id,
+         owner,
+         meter,
+         stubs,
+         announce
+       ) do
     current = %{
       "name" => sheet.name,
       "premise" => sheet.premise,
@@ -461,7 +484,8 @@ defmodule Polyphony.Authoring.QuickBuild do
           &(norm(&1["target"]) == "" or MapSet.member?(cast_names, norm(&1["target"])))
         )
         |> Enum.reduce({[], stubs}, fn s, {rels, stubs} ->
-          {stub_id, stubs} = resolve_stub(s, self_id, sheet.name, bible_id, owner, stubs)
+          {stub_id, stubs} =
+            resolve_stub(s, self_id, sheet.name, bible_id, owner, stubs, announce)
 
           rel = %Relationship{
             target: s["target"],
@@ -481,7 +505,7 @@ defmodule Polyphony.Authoring.QuickBuild do
   # one. Each stub carries the inbound relationship back toward the introducing
   # character, seeded with the source's regard as a placeholder — the same pre-reciprocal
   # state the editor produces before its async reciprocal pass.
-  defp resolve_stub(s, self_id, self_name, bible_id, owner, stubs) do
+  defp resolve_stub(s, self_id, self_name, bible_id, owner, stubs, announce) do
     inbound = %Relationship{
       target: self_name,
       target_id: self_id,
@@ -500,6 +524,12 @@ defmodule Polyphony.Authoring.QuickBuild do
               world_bible_id: bible_id
             )
           )
+
+        # Reported like the cast is, so the caller can put them in the campaign. They
+        # are *this story's* walk-ons — invented for it, by its people — and a person
+        # who belongs to no campaign is one the roster, the "fill them in" prompt and
+        # the library's own grouping all fail to see.
+        announce.({:stub, stub})
 
         entry = %{id: stub.id, name: s["target"], role: s["descriptor"]}
         {stub.id, Map.put(stubs, norm(s["target"]), entry)}

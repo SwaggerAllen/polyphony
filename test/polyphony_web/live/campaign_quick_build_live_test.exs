@@ -67,16 +67,26 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     payload = Library.payload(Library.get(camp.id))
     # A world and two characters are attached, and a premise was drafted.
     assert payload[:bible_id]
-    assert length(payload[:character_ids]) == 2
     assert payload[:premise] not in [nil, ""]
 
-    # The world is a real bible; the cast are :full characters linked to it.
+    sheets = Enum.map(payload[:character_ids], &Library.payload(Library.get(&1)))
+    {cast, walk_ons} = Enum.split_with(sheets, &(&1.status == :full))
+
+    assert length(cast) == 2
+
+    # The off-screen people the cast introduced are on the roster too. They are this
+    # story's walk-ons — invented for it, by its people — and one that belongs to no
+    # campaign is invisible to the roster, to "fill them in", and to the library's own
+    # grouping by campaign.
+    assert walk_ons != []
+    assert Enum.all?(walk_ons, &(&1.status == :stub))
+    assert Enum.all?(walk_ons, &(&1.tier == :incidental))
+
+    # The world is a real bible; everyone on the roster is linked to it.
     assert %WorldBible{} = Library.payload(Library.get(payload[:bible_id]))
 
-    for id <- payload[:character_ids] do
-      assert %CharacterSheet{status: :full, world_bible_id: wid} =
-               Library.payload(Library.get(id))
-
+    for sheet <- sheets do
+      assert %CharacterSheet{world_bible_id: wid} = sheet
       assert wid == payload[:bible_id]
     end
 
