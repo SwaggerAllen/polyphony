@@ -138,6 +138,10 @@ defmodule PolyphonyWeb.SignupLive do
     <Kit.frame class="flex flex-col min-h-[100dvh] items-center justify-center p-4">
       <Kit.sheet class="w-full max-w-sm">
         <Kit.row class="px-5 py-4" style="background:var(--b2)">
+          <%!-- Same wordmark-goes-home convention as the sign-in screen. Somebody
+                handed an invite code has more reason than anyone to want to read what
+                they're joining before they fill this in. --%>
+          <.link navigate={~p"/"} class="lbl dim mb-1 block">Polyphony</.link>
           <div class="ttl text-[17px] font-semibold">Make an account</div>
           <p :if={@first?} class="text-[11px] leading-relaxed dim mt-1">
             You're the first — this account runs the place.

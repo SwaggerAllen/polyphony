@@ -100,7 +100,10 @@ defmodule PolyphonyWeb.LoginLive do
   defp form_state(assigns) do
     ~H"""
     <div class="px-5 py-6 text-center row">
-      <div class="ttl text-[22px] font-semibold mb-1">Polyphony</div>
+      <%!-- The wordmark is the way back to the landing page, which is the convention
+            every site has and the only route out of here for someone who arrived on a
+            bookmark or a link and wants to know what they're signing into. --%>
+      <.link navigate={~p"/"} class="ttl text-[22px] font-semibold mb-1 block">Polyphony</.link>
       <p class="text-[13px] leading-relaxed dim">
         Write a world, cast some people, and find out what they do.
       </p>

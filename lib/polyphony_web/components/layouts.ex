@@ -85,16 +85,38 @@ defmodule PolyphonyWeb.Layouts do
 
   Lives here rather than in each screen so the set of destinations is defined once;
   a screen decides *whether* to show a menu, not what's in it.
+
+  **A visitor gets one too.** This used to render nothing at all when signed out,
+  which left the public screens — `/browse`, a shared story at `/s/:token` — with a
+  header carrying no way to anywhere: not to the landing page that explains what
+  they are looking at, not to signing in, not to making an account. Someone who
+  arrives on a shared link is the person with the most reason to be offered all
+  three, and they were the one person offered none of them.
   """
   attr(:current_user, :map, default: nil)
 
+  def nav_menu(%{current_user: nil} = assigns) do
+    ~H"""
+    <Kit.menu>
+      <:item navigate={~p"/"}>What Polyphony is</:item>
+      <:item navigate={~p"/browse"}>Browse published</:item>
+      <:item navigate={~p"/login"}>Sign in</:item>
+      <:item navigate={~p"/signup"}>Create an account</:item>
+    </Kit.menu>
+    """
+  end
+
   def nav_menu(assigns) do
     ~H"""
-    <Kit.menu :if={@current_user}>
+    <Kit.menu>
       <:item navigate={~p"/library"}>Your stuff</:item>
       <:item navigate={~p"/browse"}>Browse published</:item>
       <:item navigate={~p"/settings"}>Settings</:item>
       <:item :if={@current_user.role in ["admin", "superadmin"]} navigate={~p"/admin"}>Admin</:item>
+      <%!-- Last of the destinations and before the door, because it is the one thing
+            here you don't need — until you want to send somebody the link, or read
+            what the thing you're using actually claims to do. --%>
+      <:item navigate={~p"/"}>What Polyphony is</:item>
       <:item href={~p"/logout"}>Sign out, @<%= @current_user.username %></:item>
     </Kit.menu>
     """
