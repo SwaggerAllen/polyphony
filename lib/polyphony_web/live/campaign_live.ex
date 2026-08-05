@@ -370,16 +370,27 @@ defmodule PolyphonyWeb.CampaignLive do
   end
 
   # ✨ Expand the premise: deepen whatever's saved, grounded in the world + cast.
+  # One button, two shapes. With a title already typed this deepens the premise and
+  # nothing else; with the title still blank it asks for both at once — the same call
+  # Quick Build makes, for the same reason: a title is a *read* on the premise, and
+  # asked for on its own it has only the world to go on and hands back the setting's
+  # name. An untitled campaign is the common case, and making the author press a
+  # second button for the obvious consequence of the first is the kind of step nobody
+  # takes.
   def handle_event("expand_premise", _params, socket) do
     safe(socket, fn ->
-      opts =
-        [current: socket.assigns.payload[:premise] || ""] ++
-          premise_context(socket) ++ meter_attribution(socket)
+      current = socket.assigns.payload[:premise] || ""
+      context = premise_context(socket) ++ meter_attribution(socket)
+
+      {op, opts} =
+        if blank?(socket.assigns.payload[:name]),
+          do: {"autofill.campaign_opening", context},
+          else: {"autofill.premise", [current: current] ++ context}
 
       {:noreply,
        socket
        |> assign(expanding_premise: true)
-       |> request_generation("premise", "autofill.premise", %{opts: opts})}
+       |> request_generation("premise", op, %{opts: opts})}
     end)
   end
 
@@ -616,16 +627,21 @@ defmodule PolyphonyWeb.CampaignLive do
      |> put_flash(:error, "Couldn't suggest a scene: #{inspect(reason(result))}")}
   end
 
-  def handle_info({:generation, "premise", {:ok, text}}, socket) do
-    payload = Map.put(socket.assigns.payload, :premise, text)
-    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+  # A map when the campaign had no title, a string when it did. The name is only ever
+  # written into a blank — the same rule Quick Build follows, and for the same reason.
+  def handle_info({:generation, "premise", {:ok, %{"premise" => text} = data}}, socket) do
+    payload = socket.assigns.payload
 
-    {:noreply,
-     socket
-     |> forget_generation("premise")
-     |> assign(entry: entry, expanding_premise: false)
-     |> load()}
+    payload =
+      if blank?(payload[:name]) and not blank?(data["name"]),
+        do: Map.put(payload, :name, data["name"]),
+        else: payload
+
+    {:noreply, apply_premise(socket, payload, text)}
   end
+
+  def handle_info({:generation, "premise", {:ok, text}}, socket),
+    do: {:noreply, apply_premise(socket, socket.assigns.payload, text)}
 
   def handle_info({:generation, "stubs", result}, socket) do
     Logger.warning("[authoring] bulk stub generation failed: #{inspect(result)}")
@@ -934,19 +950,6 @@ defmodule PolyphonyWeb.CampaignLive do
 
       <.quick_build :if={quick_build_open?(assigns)} {assigns} />
       <.build_card :if={@build} build={@build} />
-
-      <form id="campaign-details" phx-change="update_details">
-        <label for="campaign-name" class="lbl dim">Campaign name</label>
-        <input
-          id="campaign-name"
-          type="text"
-          name="name"
-          value={@payload[:name]}
-          placeholder="Name this campaign…"
-          phx-debounce="blur"
-          class="field px-3 py-2.5 text-[14px] w-full mt-1.5"
-        />
-      </form>
 
       <form id="campaign-content" phx-change="update_content">
         <div class="lbl dim mb-2">What this campaign can contain</div>
@@ -1535,16 +1538,33 @@ defmodule PolyphonyWeb.CampaignLive do
     ~H"""
     <div class="px-4 py-4">
       <%!-- Premise comes after Cast in the tab order because the pitch is written
-            *from* the cast — which is also what Expand reads. --%>
-      <div class="flex items-center justify-between gap-2 mb-2">
-        <span class="lbl dim">What this story is about</span>
-        <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="expand_premise" disabled={@expanding_premise}>
-          <%= if @expanding_premise, do: "✦ …", else: "✦ Expand" %>
-        </Kit.btn>
-      </div>
+            *from* the cast — which is also what Expand reads.
 
+            The **title lives here**, not in Settings. It was filed with the content
+            switches and the model pickers, which is where a campaign's configuration
+            goes — but a title isn't configuration, it's the first line of the pitch,
+            and it is written in the same sitting and out of the same material. Naming
+            it in one place and pitching it in another meant nothing on either screen
+            could see the other. --%>
       <form id="campaign-premise" phx-change="update_details">
-        <label for="premise-input" class="sr-only">Premise</label>
+        <label for="campaign-name" class="lbl dim">What it's called</label>
+        <input
+          id="campaign-name"
+          type="text"
+          name="name"
+          value={@payload[:name]}
+          placeholder="Name this campaign…"
+          phx-debounce="blur"
+          class="field px-3 py-2.5 text-[14px] w-full mt-1.5 mb-4"
+        />
+
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <label for="premise-input" class="lbl dim">What this story is about</label>
+          <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="expand_premise" disabled={@expanding_premise}>
+            <%= if @expanding_premise, do: "✦ …", else: "✦ Expand" %>
+          </Kit.btn>
+        </div>
+
         <textarea
           id="premise-input"
           name="premise"
@@ -1557,7 +1577,8 @@ defmodule PolyphonyWeb.CampaignLive do
 
       <p class="text-[11px] leading-relaxed dim mt-2">
         Expand deepens whatever's saved, grounded in the world and the cast — so it reads best
-        once both exist.
+        once both exist.<span :if={blank?(@payload[:name])}>
+          With no title yet, it writes one too.</span>
       </p>
     </div>
     """
@@ -1773,6 +1794,16 @@ defmodule PolyphonyWeb.CampaignLive do
   # than the editors' set of in-flight keys, so it talks to `Generations` directly. The
   # durability is the same and the reason is the same: expanding a premise takes seconds,
   # and the answer must not belong to whichever tab happened to ask.
+  defp apply_premise(socket, payload, text) do
+    payload = Map.put(payload, :premise, text)
+    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+
+    socket
+    |> forget_generation("premise")
+    |> assign(entry: entry, expanding_premise: false)
+    |> load()
+  end
+
   defp request_generation(socket, key, op, request) do
     Generations.request(socket.assigns.entry.id, key, op, request)
     socket
@@ -1844,6 +1875,8 @@ defmodule PolyphonyWeb.CampaignLive do
 
   # The scenes already played, for "don't open on the same quay again".
   defp scene_lines(assigns), do: Enum.map(Enum.reverse(assigns.scenes), &scene_label/1)
+
+  defp blank?(value), do: String.trim(to_string(value || "")) == ""
 
   defp blank_to(value, fallback) do
     case String.trim(to_string(value || "")) do

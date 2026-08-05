@@ -73,6 +73,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # The jump bar's stops, in the order the sheet runs. Cover leads because it is
   # what a stranger reads first, which is the only ordering argument it has.
   @stops [
+    {"name", "Name"},
     {"cover", "Cover"},
     {"premise", "Premise"},
     {"appearance", "Appearance"},
@@ -1333,6 +1334,38 @@ defmodule PolyphonyWeb.SheetEditorLive do
               puts adding in its own sheet anyway (§02, §04). --%>
         <form id="sheet-form" phx-submit="save" phx-change="sync">
         <Kit.sheet class="m-4">
+          <%!-- ── Name and pronouns ───────────────────────────────────────── --%>
+          <%!-- First, because it is the only field on the sheet that is *identity*
+                rather than description — everything below it is written about the
+                person these two name. It used to sit at the very bottom, under groups,
+                filed with the Save button it happened to share a row with, so on a
+                blank character the first thing you were asked for was their cover. --%>
+          <div class="row px-4 py-3" id="name">
+            <label for="sheet-name" class="lbl dim">Name</label>
+            <input
+              id="sheet-name"
+              type="text"
+              name="name"
+              value={@name}
+              phx-debounce="600"
+              placeholder="Their name"
+              class="field px-3 py-2.5 text-[14px] w-full mt-1.5"
+            />
+
+            <%!-- Free text, never a menu: the set isn't closed, and a fixed list would
+                  be a decision about people rather than about data. --%>
+            <label for="sheet-pronouns" class="lbl dim mt-3 block">Pronouns</label>
+            <input
+              id="sheet-pronouns"
+              type="text"
+              name="pronouns"
+              value={@pronouns}
+              phx-debounce="600"
+              placeholder="she / her"
+              class="field px-3 py-2.5 text-[14px] w-full mt-1.5"
+            />
+          </div>
+
           <%!-- ── Cover ───────────────────────────────────────────────────── --%>
           <div class="row px-4 py-3" id="cover">
             <div class="flex items-center justify-between gap-2 mb-2">
@@ -1622,35 +1655,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
             />
           </div>
 
-          <%!-- ── Name, pronouns, save ────────────────────────────────────── --%>
-          <div class="px-4 py-3 flex items-center gap-2 flex-wrap" style="background:var(--b2)">
-            <label for="sheet-name" class="sr-only">Name</label>
-            <input
-              id="sheet-name"
-              type="text"
-              name="name"
-              value={@name}
-              phx-debounce="600"
-              placeholder="Their name"
-              class="field px-3 py-2 text-[13px] flex-1 min-w-0"
-            />
-            <%!-- Free text, never a menu: the set isn't closed, and a fixed list would
-                  be a decision about people rather than about data. --%>
-            <label for="sheet-pronouns" class="sr-only">Pronouns</label>
-            <input
-              id="sheet-pronouns"
-              type="text"
-              name="pronouns"
-              value={@pronouns}
-              phx-debounce="600"
-              placeholder="she / her"
-              class="field px-3 py-2 text-[13px] w-28 shrink-0"
-            />
-            <Kit.btn kind={:primary} type="submit">Save</Kit.btn>
-            <span :if={@saved} class="text-[12px] shrink-0" style="color:var(--ok)" role="status">
-              ✓ Saved
-            </span>
-          </div>
         </Kit.sheet>
         </form>
 
@@ -1757,6 +1761,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
         </Kit.sheet>
       </div>
+
+      <.save_bar {assigns} />
     </Kit.frame>
     """
   end
@@ -2210,6 +2216,56 @@ defmodule PolyphonyWeb.SheetEditorLive do
         </div>
       </div>
     </Kit.sheet>
+    """
+  end
+
+  # The bar that doesn't scroll away. A sibling of the scroll container rather than
+  # something inside it, so it holds the bottom of the viewport the way play's say-bar
+  # does — no new kit primitive, and no `position:fixed` to fight the layout.
+  #
+  # It exists because of what Save actually *does* that autosave deliberately doesn't.
+  # The prose is already safe: every edit and every generation calls `touch/1`, which
+  # writes a beat later. What only a deliberate Save does is **promote a stub to
+  # `:full`** — and `SceneControl` refuses anything that isn't, so a sheet written
+  # entirely by "✦ Write every field" is complete, saved, and still uncastable. That
+  # was invisible: the one control that changed it was the last thing on a very long
+  # page, behind five prose fields, the facts, the relationships and the groups.
+  #
+  # So the bar says which of the two situations you are in rather than "unsaved
+  # changes", which would be a lie most of the time.
+  defp save_bar(assigns) do
+    ~H"""
+    <div
+      class="shrink-0 px-4 py-3 flex items-center gap-2"
+      style="background:var(--b2);border-top:1px solid var(--rule)"
+    >
+      <div class="min-w-0 flex-1">
+        <div :if={@sheet.status != :full} class="text-[12.5px] leading-snug" style="color:var(--lamp)">
+          Not finished yet — saving is what makes them castable.
+        </div>
+        <div :if={@sheet.status == :full and @dirty} class="text-[12px] dim" role="status">
+          Saving…
+        </div>
+        <div
+          :if={@sheet.status == :full and not @dirty and @saved}
+          class="text-[12px]"
+          style="color:var(--ok)"
+          role="status"
+        >
+          ✓ Saved
+        </div>
+        <div :if={@sheet.status == :full and not @dirty and not @saved} class="text-[12px] dim">
+          Everything here is saved as you write.
+        </div>
+      </div>
+
+      <%!-- Outside the form, submitting it by id. The alternative is a second form or
+            a duplicate button inside the sheet, and both mean two Saves that can
+            disagree. --%>
+      <Kit.btn kind={:primary} type="submit" form="sheet-form" class="shrink-0">
+        <%= if @sheet.status == :full, do: "Save", else: "Save & finish" %>
+      </Kit.btn>
+    </div>
     """
   end
 

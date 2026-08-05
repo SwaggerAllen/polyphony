@@ -21,21 +21,25 @@ defmodule PolyphonyWeb.CampaignCastLiveTest do
     Library.put(%{owner: Owner.of(user), kind: "campaign", payload: payload})
   end
 
-  test "a blank campaign can be named from its settings", %{conn: conn, user: user} do
+  test "a blank campaign is named where it is pitched", %{conn: conn, user: user} do
     camp = campaign(user, %{name: ""})
 
-    {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=settings")
+    # The title lives with the premise, not in Settings. It was filed with the content
+    # switches and the model pickers — but a title isn't configuration, it's the first
+    # line of the pitch, written in the same sitting out of the same material.
+    {:ok, settings_view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=settings")
     assert html =~ "Untitled campaign"
+    refute has_element?(settings_view, "#campaign-name")
 
-    view |> form("#campaign-details", %{name: "The Long Con"}) |> render_change()
+    {:ok, view, _} = live(conn, ~p"/campaigns/#{camp.id}?tab=premise")
+    view |> form("#campaign-premise", %{name: "The Long Con"}) |> render_change()
 
     assert Library.payload(Library.get(camp.id))[:name] == "The Long Con"
 
-    # The premise is its own tab, and saving it must not blank the name. The screen
-    # used to be one form, so every field was written on every change; with the tabs
-    # each form carries only its own, and a key that isn't submitted is left alone.
-    {:ok, premise_view, _} = live(conn, ~p"/campaigns/#{camp.id}?tab=premise")
-    premise_view |> form("#campaign-premise", %{premise: "a heist"}) |> render_change()
+    # Both fields are on the one form now, and a key that isn't submitted is still left
+    # alone — the screen used to write every field on every change, which blanked the
+    # name each time the premise moved.
+    view |> form("#campaign-premise", %{premise: "a heist"}) |> render_change()
 
     payload = Library.payload(Library.get(camp.id))
     assert payload[:premise] == "a heist"
