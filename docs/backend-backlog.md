@@ -163,30 +163,45 @@ generated *turn* is a `PacketDraft` you accept or discard (§A2 / §1.5). A gene
 *paragraph* is just applied. That asymmetry isn't a decision anyone made; it is where the two
 halves happened to land.
 
-**The shape, if it's wanted.** `Polyphony.Generations` already parks the raw result and hands
-it to the screen — it is one hop from a proposal store. What would change:
+**Two things, and they are independent — this is the part worth getting right.** The review
+*surface* and the review *gate* are separable, and conflating them is what makes this look
+like a choice between friction and nothing:
 
-- A result gains a status rather than being consumed on read. `Generations.take/1` deletes
-  today precisely because the result has no reviewer; give it one and it persists until
-  accepted or rejected.
-- Each operation supplies its **"Because"** — the model is already told what it is writing
-  from, so the reason is available and currently thrown away. Without it this is just a
-  confirmation dialog, which nobody wants.
-- The editors render a proposal **in place**, the way the design shows a suggested field:
-  the old text and the new one, with accept / reject / edit-then-accept. `edit/3` on
-  `ArcEntry` is the precedent — correcting a proposal before taking it is the common case,
-  not an edge one.
-- Rejected proposals are kept long enough to be undone and then purged, like the trash
-  (§2.13). A rejected suggestion is not an event; it is a decision that expires.
+1. **The surface** — see what came back, say what's wrong with it, regenerate with that as
+   steer. Worth having on **every** generation, including the ones nobody needs to approve.
+   "Fill this empty field" is not a decision to confirm, but "shorter, and less wry" is
+   exactly the thing an author wants to say to it, and today there is nowhere to say it: the
+   only reply available is to press ✦ again and hope, or rewrite by hand.
+2. **The gate** — must this be accepted before it counts? Only where the generation
+   *overwrites* something authored. Filling a blank applies immediately; replacing three
+   written paragraphs waits.
 
-**Where it should *not* apply, and this is the part that makes it worth doing well.**
-Review is friction, and friction is right in proportion to how much the generation
-overwrites. Filling an empty field is not a decision anyone needs to confirm; replacing three
-paragraphs somebody wrote is. A blanket "review everything" would make Quick Build unusable
-and would train the author to accept without reading, which is worse than no gate at all. The
-natural line is **destructive vs additive**: Rewrite and Generate-all-over-existing propose;
-Suggest, Expand and filling a blank apply. Worth settling before building, because it decides
-whether this is a small feature or an argument with the author on every click.
+Splitting them removes the objection to gating everything. There is no "click through to
+continue" to train anyone into, because in the common case there is nothing to click — the
+content is already in, and the panel is there to talk back to rather than to approve.
+
+**The steering half already exists in play and not in authoring**, which is the same
+asymmetry again. `Suggest.variants/1` takes `:steer` and renders it as a `Steer: …` message;
+`PlayLive.compose_steer/1` feeds it whatever the player half-typed. `Autofill` has no
+equivalent — it takes `brief`, `current`, `world`, `existing`, but nothing that says *what
+was wrong with the last answer*. Threading one `:steer` opt through its prompt builders,
+shaped like `Suggest.steer_message/1`, is most of this half.
+
+**The gating half** is a status on `Generations`, which is one hop from where it already is:
+it parks the raw result and hands it to the screen, and `take/1` only deletes because nothing
+reviews it. Give it a reviewer and it persists until accepted or rejected. `ArcEntry.edit/3`
+is the precedent for the common case — correcting a proposal before taking it, rather than
+accepting or rejecting whole. Rejected proposals want a short life and then a purge, like the
+trash (§2.13): a rejection is a decision that expires, not an event.
+
+**The affordance trap, stated so it isn't re-litigated.** When there is nothing to approve,
+the accept control must not read as *blocked*. A greyed-out button conventionally means "you
+can't do this yet" and invites the author to hunt for what's stopping them; the truth is
+"this is already in, there is nothing to confirm". The kit has `.btn-off` ("disabled-looking")
+for an inert control, so the two candidate treatments are an inert **Applied** in the button's
+place, or a `Kit.pill` reading **Applied** so nothing in that slot looks like a control at
+all. Either keeps the panel the same panel in both modes — which is the whole reason to show
+it either way. Worth deciding in the mocks rather than in the template.
 
 **Not blocking anything.** The durable-generation work (`Generations` / `Jobs.Generate`) shipped
 without it and the editors are usable as they are. This is a quality-of-authoring change, and

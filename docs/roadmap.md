@@ -72,17 +72,22 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   rendered into what both the Director and characters are told). Layers 2 and 3 stay
   conceptually separate: a boundary's optional `:category` is only the link that lets the
   ceiling cap it — a `nil`-category boundary is pure characterization the register never touches.
-- **A6 — Authoring generations propose instead of applying.** **Planned, not urgent**
-  (`backend-backlog.md` §2.18). Every ✦ control writes straight into the field and autosave
-  keeps it, so there is no moment where the author reads what came back and decides. Play
-  already works the other way — a generated *turn* is a draft you accept or discard (A2) —
-  and arc has carried the whole pattern since §3.0: a proposal, a "Because" line, and an
-  accept / reject / edit gate. The asymmetry between the two halves isn't a decision anyone
-  made. `Polyphony.Generations` already parks the raw result, so it is one hop from a
-  proposal store; the work is mostly in the screens. The question to settle first is **where
-  review does not apply** — filling a blank needs no confirmation, replacing three authored
-  paragraphs does, and a blanket gate would make Quick Build unusable and train the author to
-  click through it.
+- **A6 — Authoring generations get a review panel; some of them get a gate.**
+  **Planned, not urgent** (`backend-backlog.md` §2.18). Every ✦ control writes straight into
+  the field and autosave keeps it, so there is no moment where the author reads what came
+  back and either steers it or refuses it. Play already works the other way twice over — a
+  generated *turn* is a draft you accept or discard (A2), and the composer's Expand takes a
+  **steer** (`Suggest.variants/1`) — while `Autofill` has no way to say what was wrong with
+  the last answer. Arc has carried the full pattern since §3.0: a proposal, a "Because" line,
+  and an accept / reject / edit gate. None of that asymmetry is a decision anyone made.
+  - The **panel is unconditional** — seeing the result and regenerating with a comment is
+    worth having on every generation, including the ones nobody needs to approve.
+  - The **gate is conditional** on the generation overwriting authored work: filling a blank
+    applies immediately, replacing three written paragraphs waits. Splitting the two is what
+    stops this becoming a confirm-dialog the author learns to click through.
+  - Where nothing needs approving, the accept control must read as *already applied* rather
+    than *blocked* — the kit's `.btn-off` exists for the inert state, but the wording is the
+    part that matters. Decide it in the mocks.
 
 ---
 
@@ -444,8 +449,10 @@ The current LiveView is the first-cut UI; the redesign is speced in `ux/` (mocks
 7. **Deployment** — ✅ OTP release + Dockerfile + DO App Platform, persistent event
    store (`docs/deployment.md`).
 8. **A6** — generation review. Deliberately last of the amendments: it changes a flow that
-   works today, its value is quality-of-authoring rather than capability, and the scoping
-   question (what *doesn't* get a gate) is worth answering with real use behind it.
+   works today, and its value is quality-of-authoring rather than capability. The panel half
+   (steer and regenerate) stands alone and could ship first; the gate half wants real use
+   behind it, since which generations overwrite enough to be worth stopping is a judgement
+   nobody can make from the outside.
 
 ---
 
