@@ -1650,6 +1650,26 @@ video {
   flex-shrink:0;
 }
 
+/* The same dot, breathing — "this is happening right now" rather than "this is
+   the colour for now". Only ever on lamp: the kit reserves that hue for the live
+   turn, and a second thing on screen that moves would take the meaning off it.
+   The halo is a box-shadow so the dot's own 7px box never changes and nothing
+   beside it reflows on every frame. */
+
+.dot-live {
+  animation:dot-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes dot-breathe {
+  0%, 100% {
+    box-shadow:0 0 0 0 color-mix(in srgb, var(--lamp) 45%, transparent);
+  }
+
+  50%      {
+    box-shadow:0 0 0 4px color-mix(in srgb, var(--lamp) 0%, transparent);
+  }
+}
+
 /* One boolean pattern, everywhere. Colour by meaning:
    --sc:var(--lamp) for "always in mind", --sc:var(--secret) for "secret". */
 
@@ -1845,6 +1865,19 @@ video {
   background:color-mix(in srgb, var(--vc) 7%, transparent);
   border-radius:0 8px 8px 0;
   padding:.5rem .7rem;
+}
+
+/* A turn being written, drawn where it will land. The transcript is the only
+   place the answer can appear, so it is the only place the waiting belongs — a
+   spinner somewhere else says "something is happening", this says "*they* are
+   about to speak, here". Same voice-coloured rule as .m-thought, because it is
+   about to become one of these. */
+
+.m-writing {
+  border-left:2px solid var(--vc);
+  border-radius:0 8px 8px 0;
+  padding:.5rem .7rem;
+  background:color-mix(in srgb, var(--vc) 5%, transparent);
 }
 
 /* A generation that failed, rendered where it happened. */
@@ -2232,10 +2265,51 @@ video {
   border-radius:10px;
 }
 
+/* A line that hasn't been written yet. It sweeps, because a row of static grey
+   bars reads as a layout bug rather than as work in progress — and the wait here
+   is seconds of a model writing, not milliseconds of a fetch. The sweep is a
+   background-position animation on a gradient: no extra element, no layout, and
+   it composes onto anything using .skel today. */
+
 .skel  {
   height:12px;
   border-radius:4px;
   background:var(--b3);
+  background-image:linear-gradient(90deg,
+           transparent 0%,
+           color-mix(in srgb, var(--bc) 9%, transparent) 45%,
+           color-mix(in srgb, var(--bc) 9%, transparent) 55%,
+           transparent 100%);
+  background-size:220% 100%;
+  background-repeat:no-repeat;
+  animation:skel-sweep 1.5s linear infinite;
+}
+
+@keyframes skel-sweep {
+  from {
+    background-position:-110% 0;
+  }
+
+  to   {
+    background-position: 110% 0;
+  }
+}
+
+/* Motion is an enhancement and never the only signal: every waiting state above
+   still reads as waiting with this on — the skeleton is still a placeholder, the
+   dot is still lamp, and the copy beside them still says what is being waited on.
+   Honouring the preference is not optional for repeating animation. */
+
+@media (prefers-reduced-motion: reduce) {
+  .skel     {
+    animation:none;
+    background-image:none;
+  }
+
+  .dot-live {
+    animation:none;
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--lamp) 22%, transparent);
+  }
 }
 
 /* ============================================================================

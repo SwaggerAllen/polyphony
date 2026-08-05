@@ -29,6 +29,15 @@ defmodule Storybook.Kit.Dot do
           %Variation{id: :secret, attributes: %{colour: "var(--secret)"}},
           %Variation{id: :a_voice, attributes: %{colour: "var(--v1)"}}
         ]
+      },
+      %VariationGroup{
+        id: :happening_now,
+        description:
+          "Breathing means it is happening this second, not merely that it is coloured as now. Only ever on lamp, for the same reason lamp is only ever now: one moving thing on screen, so motion means one thing. It stops under prefers-reduced-motion and keeps a static halo, because the dot is never the only signal.",
+        variations: [
+          %Variation{id: :live, attributes: %{colour: "var(--lamp)", live: true}},
+          %Variation{id: :still, attributes: %{colour: "var(--lamp)"}}
+        ]
       }
     ]
   end

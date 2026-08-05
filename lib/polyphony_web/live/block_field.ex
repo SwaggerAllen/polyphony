@@ -16,6 +16,8 @@ defmodule PolyphonyWeb.BlockField do
   """
   use Phoenix.Component
 
+  alias PolyphonyWeb.Kit
+
   @doc "Split a stored field string into paragraph blocks (always at least one)."
   def to_blocks(nil), do: [""]
 
@@ -91,6 +93,25 @@ defmodule PolyphonyWeb.BlockField do
   def busy?(generating, key), do: MapSet.member?(generating, key)
 
   @doc """
+  Is this field being written right now — by its own ✦, or by the whole-sheet one?
+
+  `"all"` is the case that made the difference: "✦ Write every field" is the longest
+  wait in the product and the only feedback it had was its own button going grey, so
+  five fields sat empty and identical for the better part of a minute.
+  """
+  def writing?(generating, field), do: busy?(generating, field) or busy?(generating, "all")
+
+  defp blank?(blocks), do: Enum.all?(blocks, &(String.trim(to_string(&1)) == ""))
+
+  # Uneven on purpose: prose doesn't come in equal lines, and three identical bars read
+  # as a table. Seeded off the field name so a field's placeholder is stable across
+  # re-renders rather than reshuffling every time the socket patches.
+  defp skel_widths(field) do
+    [["100%", "94%", "61%"], ["97%", "88%", "72%"], ["100%", "83%", "55%"]]
+    |> Enum.at(rem(:erlang.phash2(field), 3))
+  end
+
+  @doc """
   One prose field, as the character sheet and world bible draw it.
 
   Ported from `ux/polyphony-character.html` §01: a mono label on the left, **✦
@@ -137,7 +158,23 @@ defmodule PolyphonyWeb.BlockField do
         </div>
       </div>
 
-      <div :for={{b, i} <- Enum.with_index(@blocks)} class="flex items-start gap-1.5 mb-1.5">
+      <%!-- Nothing written yet and something is writing it: the field *is* the loading
+            state. Skeletons stand in for the empty textareas rather than sitting beside
+            them, because an empty textarea is exactly what "nothing happened" looks
+            like — which is the complaint. No content can be lost here; the branch only
+            runs when every block is blank. --%>
+      <Kit.skel_lines
+        :if={writing?(@generating, @field) and blank?(@blocks)}
+        class="mb-2"
+        lines={skel_widths(@field)}
+        label={"Writing #{@label}"}
+      />
+
+      <div
+        :for={{b, i} <- Enum.with_index(@blocks)}
+        :if={not (writing?(@generating, @field) and blank?(@blocks))}
+        class="flex items-start gap-1.5 mb-1.5"
+      >
         <textarea
           id={"ta-#{@field}-#{i}"}
           name={"b_#{@field}[]"}
@@ -171,6 +208,20 @@ defmodule PolyphonyWeb.BlockField do
           </button>
         </div>
       </div>
+
+      <%!-- A paragraph on its way to the end of the field, drawn at the end of the
+            field. Also covers a rewrite of a field that already has text: the current
+            paragraphs stay put — replacing prose with grey bars reads as having lost
+            it — and the new one is shown arriving underneath. --%>
+      <Kit.skel_lines
+        :if={
+          busy?(@generating, "#{@field}:expand") or
+            (writing?(@generating, @field) and not blank?(@blocks))
+        }
+        class="mb-2"
+        lines={["96%", "68%"]}
+        label={"Writing another #{@unit} for #{@label}"}
+      />
 
       <button
         type="button"

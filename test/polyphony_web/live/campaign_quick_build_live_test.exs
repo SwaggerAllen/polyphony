@@ -267,15 +267,36 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
       refute html =~ ">Rules<"
     end
 
-    test "with nothing attached the tab is the picker, and doesn't pretend otherwise",
+    test "with nothing attached and nothing to attach, the tab offers writing one",
          %{conn: conn, user: user} do
       camp = campaign(user)
       {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=world")
 
       assert html =~ "The world"
       refute html =~ "This campaign&#39;s copy"
-      # Swapping or detaching stays possible either way — the picker is not replaced.
+
+      # A `<select>` whose only option is "— none —" is not a picker, and the advice it
+      # used to carry was to go to the library — which has no world-create button
+      # either. Nothing in the app wrote a world at all.
+      refute html =~ ~s(id="bible-select")
+      assert html =~ "No world yet."
+      assert html =~ ~s(phx-click="new_world")
+    end
+
+    test "with a world to pick from, the picker is there and so is the other way",
+         %{conn: conn, user: user} do
+      Library.put(%{
+        owner: Owner.of(user),
+        kind: "world_bible",
+        payload: %WorldBible{name: "Saltmarch"}
+      })
+
+      camp = campaign(user)
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=world")
+
+      # Taking one you already have is the cheaper move, so it stays first.
       assert html =~ ~s(id="bible-select")
+      assert html =~ "Write a new one instead"
     end
 
     test "the picker survives an attachment, so a world can still be swapped",

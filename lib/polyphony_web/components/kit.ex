@@ -319,13 +319,20 @@ defmodule PolyphonyWeb.Kit do
     """
   end
 
-  @doc "A small coloured dot. Carries a semantic colour, never decoration."
+  @doc """
+  A small coloured dot. Carries a semantic colour, never decoration.
+
+  `live` makes it breathe — for something happening *right now*, not merely
+  coloured as now. The kit reserves motion for that the way it reserves lamp for
+  it: one moving thing on screen, so it means one thing.
+  """
   attr(:colour, :string, required: true)
+  attr(:live, :boolean, default: false)
   attr(:class, :string, default: nil)
 
   def dot(assigns) do
     ~H"""
-    <span class={["dot", @class]} style={"background:#{@colour}"}></span>
+    <span class={["dot", @live && "dot-live", @class]} style={"background:#{@colour}"}></span>
     """
   end
 
@@ -797,18 +804,78 @@ defmodule PolyphonyWeb.Kit do
   def waiting_line(assigns) do
     ~H"""
     <div class={["flex items-center gap-2 py-1.5", @class]} role="status">
-      <span class="dot" style="background:var(--lamp)"></span>
+      <.dot colour="var(--lamp)" live />
       <span class="text-[13px]" style="color:var(--lamp)"><%= @label %></span>
     </div>
     """
   end
 
-  @doc "A loading placeholder line. `width` is a CSS length."
+  @doc """
+  A loading placeholder line. `width` is a CSS length.
+
+  It sweeps: the waits here are seconds of a model writing, and a row of static
+  grey bars reads as a layout bug rather than as work in progress.
+  """
   attr(:width, :string, default: "100%")
+  attr(:class, :string, default: nil)
 
   def skel(assigns) do
     ~H"""
-    <div class="skel" style={"width:#{@width}"}></div>
+    <div class={["skel", @class]} style={"width:#{@width}"}></div>
+    """
+  end
+
+  @doc """
+  Text that is being written right now, drawn where it will land.
+
+  A few skeleton lines of uneven length, so the shape reads as prose rather than
+  as a table. `lines` is a list of CSS widths — the caller varies them, because
+  the same three widths repeated down a screen is its own kind of wrong.
+
+  Reach for this instead of putting a spinner somewhere else on the page: the
+  place the answer will appear is the only place the waiting means anything.
+  """
+  attr(:lines, :list, default: ["100%", "92%", "64%"])
+  attr(:class, :string, default: nil)
+  attr(:label, :string, default: nil, doc: "accessible name — what is being written")
+
+  def skel_lines(assigns) do
+    ~H"""
+    <div class={["flex flex-col gap-1.5", @class]} role="status" aria-label={@label}>
+      <.skel :for={w <- @lines} width={w} />
+    </div>
+    """
+  end
+
+  @doc """
+  A turn being written, in the transcript, at the place it will appear.
+
+  The same voice-coloured rule as `thought/1`, because that is what it is about to
+  become — the placeholder and the line that replaces it are the same shape in the
+  same colour, so the transcript doesn't jump when the words arrive.
+
+  `note` is the kit's attribution line, and it does the same work here as it does
+  on a finished move: it says whose turn this is while there is nothing else to go
+  on. A spinner in a status bar can't say that.
+  """
+  attr(:colour, :string, required: true)
+  attr(:note, :string, default: nil)
+  attr(:lines, :list, default: ["100%", "88%", "55%"])
+  attr(:class, :string, default: nil)
+
+  def writing(assigns) do
+    ~H"""
+    <div
+      class={["m-writing", @class]}
+      style={Voice.var("--vc", @colour)}
+      role="status"
+      aria-label={@note}
+    >
+      <.skel_lines lines={@lines} />
+      <div :if={@note} class="lbl mt-2 flex items-center gap-1.5" style={"color:#{@colour}"}>
+        <.dot colour={@colour} live /><%= @note %>
+      </div>
+    </div>
     """
   end
 

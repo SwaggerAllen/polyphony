@@ -1350,7 +1350,17 @@ defmodule PolyphonyWeb.SheetEditorLive do
               </Kit.btn>
             </div>
             <label for="cover-text" class="sr-only">Cover</label>
+            <%!-- Written from everything below it, so it is the slowest ✦ on the screen
+                  and the one most worth drawing. An existing cover stays on the page
+                  while the new one is written — it is still the true cover until the
+                  replacement lands. --%>
+            <Kit.skel_lines
+              :if={busy?(@generating, "cover") and blank_cover?(@cover)}
+              lines={["100%", "95%", "48%"]}
+              label="Writing the cover"
+            />
             <textarea
+              :if={not (busy?(@generating, "cover") and blank_cover?(@cover))}
               id="cover-text"
               name="cover"
               rows="3"
@@ -1358,6 +1368,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
               class="field px-3 py-2.5 text-[13px] leading-relaxed w-full"
               placeholder="The only part strangers see."
             ><%= @cover %></textarea>
+            <Kit.skel_lines
+              :if={busy?(@generating, "cover") and not blank_cover?(@cover)}
+              class="mt-1.5"
+              lines={["92%", "56%"]}
+              label="Writing a new cover"
+            />
             <p class="text-[11px] dim mt-1.5">The only part strangers see.</p>
           </div>
 
@@ -1400,9 +1416,18 @@ defmodule PolyphonyWeb.SheetEditorLive do
               </Kit.btn>
             </div>
 
-            <p :if={@facts == []} class="text-[13px] dim">
+            <p :if={@facts == [] and not suggesting_facts?(assigns)} class="text-[13px] dim">
               Nothing yet. Facts are the flat statements they'd never contradict.
             </p>
+
+            <%!-- Suggestions arrive as a batch of rows, so the wait is drawn as rows.
+                  "✦ Write every field" writes facts too, which is why "all" counts. --%>
+            <Kit.skel_lines
+              :if={suggesting_facts?(assigns)}
+              class="mb-2"
+              lines={["86%", "70%", "78%"]}
+              label="Suggesting facts"
+            />
 
             <.fact_row
               :for={{f, i} <- Enum.with_index(@facts)}
@@ -1464,9 +1489,19 @@ defmodule PolyphonyWeb.SheetEditorLive do
               </Kit.btn>
             </div>
 
-            <p :if={@relationships == []} class="text-[13px] dim">
+            <p
+              :if={@relationships == [] and not busy?(@generating, "relationships")}
+              class="text-[13px] dim"
+            >
               Nobody yet. A name that doesn't exist becomes a walk-on when you save.
             </p>
+
+            <Kit.skel_lines
+              :if={busy?(@generating, "relationships")}
+              class="mb-2"
+              lines={["74%", "88%", "66%"]}
+              label="Suggesting who they know"
+            />
 
             <div :for={{r, i, colour} <- rel_rows(@relationships, @char_hues)} class="py-2.5">
               <div class="flex items-center gap-2.5 mb-1">
@@ -2073,7 +2108,20 @@ defmodule PolyphonyWeb.SheetEditorLive do
         </Kit.btn>
       </div>
 
-      <p :if={@items == []} class="text-[13px] dim"><%= empty_pressure(@direction) %></p>
+      <p
+        :if={@items == [] and not busy?(@generating, "boundaries")}
+        class="text-[13px] dim"
+      ><%= empty_pressure(@direction) %></p>
+
+      <%!-- One ✦ writes both directions in a single call, so both panes wait together
+            and both say so. Silence in one of them would read as that half having
+            failed. --%>
+      <Kit.skel_lines
+        :if={busy?(@generating, "boundaries")}
+        class="mb-2"
+        lines={["58%", "90%", "72%"]}
+        label="Suggesting what they will and won't do"
+      />
 
       <div :for={{b, i} <- @items} class="py-2">
         <Kit.marked mark={if(@direction == :compulsion, do: :compel, else: :bound)}>
@@ -2164,6 +2212,14 @@ defmodule PolyphonyWeb.SheetEditorLive do
     </Kit.sheet>
     """
   end
+
+  # `@cover` is nil on a sheet that has never had one.
+  defp blank_cover?(cover), do: String.trim(to_string(cover)) == ""
+
+  # Facts arrive from their own ✦ and from "✦ Write every field", which writes them
+  # too — a wait the facts section had no way to show.
+  defp suggesting_facts?(assigns),
+    do: busy?(assigns.generating, "facts") or busy?(assigns.generating, "all")
 
   # ── Render helpers ────────────────────────────────────────────────────────────
 

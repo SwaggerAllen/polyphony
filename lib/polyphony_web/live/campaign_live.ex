@@ -121,11 +121,11 @@ defmodule PolyphonyWeb.CampaignLive do
     owner = Owner.of(socket.assigns.current_user)
     owned = Library.list_for_owner(owner)
     owned_chars = Enum.filter(owned, &(&1.kind == "character"))
-    bibles = Enum.filter(owned, &(&1.kind == "world_bible"))
 
     # bible_id may be stored as a string (setup) or integer (select_world); normalize
     # so it matches integer entry ids for selection and the world roster filter.
     world_id = normalize_id(payload[:bible_id])
+    bibles = selectable_worlds(owner, owned, world_id)
 
     # The cast references characters by their stable library id — never by name, so a
     # rename can't drop anyone. Names are resolved for display only.
@@ -204,6 +204,32 @@ defmodule PolyphonyWeb.CampaignLive do
       {:ok, _} = Library.update_payload(socket.assigns.entry.id, payload)
 
       {:noreply, push_navigate(socket, to: ~p"/authoring/character/#{entry.id}")}
+    end)
+  end
+
+  # The third of the same gap. Worlds could only ever be *picked* from a list the app
+  # had no way to add to: nothing anywhere created one, so Quick Build was the only
+  # route to a world, and a campaign that skipped it had a dropdown reading "— none —"
+  # and no way out of that.
+  #
+  # Written straight into this campaign rather than into the library and then attached,
+  # because a world written *here* is already this campaign's own copy — the copy-on-
+  # attach step (§2.5b) exists to stop two campaigns sharing a bible, and there is
+  # nothing to copy from. Named blank on purpose: a blank name can't clash, and
+  # "Untitled world" reads as unfinished, which it is.
+  def handle_event("new_world", _params, socket) do
+    safe(socket, fn ->
+      entry =
+        Library.put(%{
+          owner: socket.assigns.owner,
+          kind: "world_bible",
+          payload: %WorldBible{name: ""}
+        })
+
+      payload = Map.put(socket.assigns.payload, :bible_id, entry.id)
+      {:ok, _} = Library.update_payload(socket.assigns.entry.id, payload)
+
+      {:noreply, push_navigate(socket, to: ~p"/authoring/bible/#{entry.id}")}
     end)
   end
 
@@ -1118,7 +1144,7 @@ defmodule PolyphonyWeb.CampaignLive do
         <span class="lbl dim">The world</span>
       </Kit.row>
 
-      <div class="px-4 py-3.5">
+      <div :if={@bibles != []} class="px-4 py-3.5">
         <p class="text-[13px] leading-relaxed dim mb-3">
           The world bible grounds the setting for this campaign's scenes and its published
           snapshot. Attaching one copies it — a campaign accumulates its own world arc, so two
@@ -1133,12 +1159,25 @@ defmodule PolyphonyWeb.CampaignLive do
             </option>
           </select>
         </form>
+
+        <%!-- Under the picker, not beside it: taking one you already have is the cheaper
+              move and it should be the one you see first. --%>
+        <Kit.btn :if={is_nil(@world)} size={:sm} type="button" phx-click="new_world" class="mt-2">
+          Write a new one instead
+        </Kit.btn>
       </div>
 
-      <Kit.empty :if={@bibles == []} headline="No worlds written yet.">
-        A campaign can play without one, but the Director has less to go on.
+      <%!-- The picker was the whole tab, and **nothing in the app wrote a world** — so a
+            campaign that skipped Quick Build faced a list it had no way to add to, and
+            the only advice on offer was to go to the library, which has no world-create
+            button either. --%>
+      <Kit.empty :if={@bibles == [] and is_nil(@world)} headline="No world yet.">
+        A campaign can play without one, but the Director has much less to go on — the
+        setting, the tone and the rules all come from here.
         <:action>
-          <.link navigate={~p"/library"} class="btn btn-pri btn-sm">Go to your stuff</.link>
+          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="new_world">
+            Write a world
+          </Kit.btn>
         </:action>
       </Kit.empty>
     </div>
@@ -1951,6 +1990,34 @@ defmodule PolyphonyWeb.CampaignLive do
 
   defp pending_line(1), do: "1 pending character"
   defp pending_line(n), do: "#{n} pending characters"
+
+  # What this campaign may attach: the **templates**, plus its own copy.
+  #
+  # Attaching copies (§2.5b), so every campaign's working copy lives in the same
+  # library under the same name as the thing it came from. The library's Worlds tab has
+  # always filtered those out; this picker never did, so a second campaign offered
+  # "Saltmarch" twice with nothing to tell them apart — and picking the wrong one takes
+  # a copy of another campaign's *played* world, arc and all.
+  #
+  # The reason this reads as a trash bug is the second line. The attached set has to be
+  # computed over campaigns **including the deleted and archived ones**, because a
+  # trashed campaign is invisible to `list_for_owner` while its copy is not: the copy
+  # stops looking attached the moment its campaign goes in the bin, and reappears here
+  # as a template. Filing or binning a campaign is exactly when its world should stop
+  # being offered, not when it starts.
+  defp selectable_worlds(owner, owned, world_id) do
+    all = Library.list_for_owner(owner, include_deleted: true, include_archived: true)
+
+    attached =
+      for entry <- all,
+          Campaigns.campaign?(entry),
+          id = normalize_id(Map.get(Library.payload(entry) || %{}, :bible_id)),
+          id != world_id,
+          into: MapSet.new(),
+          do: id
+
+    for e <- owned, e.kind == "world_bible", not MapSet.member?(attached, e.id), do: e
+  end
 
   defp bible_label(_bibles, nil), do: nil
 

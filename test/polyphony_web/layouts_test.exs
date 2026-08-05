@@ -32,14 +32,37 @@ defmodule PolyphonyWeb.LayoutsTest do
       refute html =~ "nav-links"
     end
 
-    test "a signed-out visitor is offered the way in, and no menu", %{conn: conn} do
+    test "a signed-out visitor is offered the way in", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
       assert html =~ "Sign in"
       assert html =~ "Create an account"
-      # The nav menu is for a signed-in user's own things; there's nothing in it for a
-      # visitor, so it isn't drawn at all.
       refute html =~ "Sign out"
+    end
+
+    test "a visitor on a public screen can still get somewhere", %{conn: conn} do
+      # `/browse` and a shared story are reachable signed out, and their header used to
+      # carry no menu at all — no way to the page that explains what you're reading, no
+      # way to sign in, no way to make an account. Somebody who arrived on a shared link
+      # is the person with the most reason to be offered all three.
+      {:ok, _view, html} = live(conn, ~p"/browse")
+
+      assert html =~ ~s(aria-label="Menu")
+      assert html =~ "What Polyphony is"
+      assert html =~ ~s(href="/login")
+      assert html =~ ~s(href="/signup")
+      refute html =~ "Sign out"
+    end
+
+    test "the landing page is reachable from the sign-in and sign-up screens",
+         %{conn: conn} do
+      # The wordmark goes home, which is the convention every site has — and the only
+      # route out for someone who arrived on a bookmark or an invite and wants to read
+      # what they're signing into.
+      for path <- [~p"/login", ~p"/signup"] do
+        {:ok, _view, html} = live(conn, path)
+        assert html =~ ~s(href="/" data-phx-link), "no way home from #{path}"
+      end
     end
   end
 
@@ -69,6 +92,16 @@ defmodule PolyphonyWeb.LayoutsTest do
       # picker. The margin is the same point in space.
       assert html =~ ~s(aria-label="Menu">☰</summary>)
       assert html =~ ~s(<details class="relative ml-2)
+    end
+
+    test "it carries the landing page too, which nothing else linked to", %{conn: conn} do
+      scene = open_scene()
+
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+      # There was a landing page and no way to navigate to it from anywhere in the app.
+      assert html =~ "What Polyphony is"
+      assert html =~ ~s(href="/" data-phx-link)
     end
 
     test "admin is offered only to an admin", %{conn: conn} do
