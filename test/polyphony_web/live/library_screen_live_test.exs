@@ -27,6 +27,12 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
     Library.put(%{owner: Owner.of(user), kind: "campaign", payload: payload})
   end
 
+  defp open_menu(view, entry) do
+    view
+    |> element(~s(button[phx-click="row_menu"][phx-value-id="#{entry.id}"]))
+    |> render_click()
+  end
+
   defp character(user, name, attrs \\ %{}) do
     sheet = struct(%CharacterSheet{name: name, status: :full}, attrs)
     Library.put(%{owner: Owner.of(user), kind: "character", payload: sheet})
@@ -99,6 +105,10 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
       entry = campaign(user, %{name: "The Salt Line"})
       {:ok, view, _html} = live(conn, ~p"/library")
 
+      # The row's menu is an overlay, so its contents don't exist until it is opened —
+      # which is the point: opening it used to push every row below it down the page.
+      open_menu(view, entry)
+
       # `Library.archive/2` had no caller anywhere, so the Archive shelf this screen is
       # the front door for could only ever be empty.
       view
@@ -114,14 +124,53 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
       entry = campaign(user, %{name: "The Salt Line"})
       {:ok, view, html} = live(conn, ~p"/library")
 
+      # Nothing about the menu is on the page until it is asked for.
+      refute html =~ "Recoverable until it expires."
+
       # No confirmation here on purpose: the irreversible button lives on the trash
       # shelf, where the clock is visible.
-      assert html =~ "Recoverable until it expires."
+      assert open_menu(view, entry) =~ "Recoverable until it expires."
 
       view |> element(~s(button[phx-click="trash"][phx-value-id="#{entry.id}"])) |> render_click()
 
       assert [%{id: id}] = Library.trash(Owner.of(user))
       assert id == entry.id
+    end
+
+    test "the row's menu is an overlay, so opening it displaces nothing", %{
+      conn: conn,
+      user: user
+    } do
+      entry = campaign(user, %{name: "The Salt Line"})
+      {:ok, view, _html} = live(conn, ~p"/library")
+
+      html = open_menu(view, entry)
+
+      # In the flow, this panel pushed every row below it down the page — so the
+      # campaign you were reading moved out from under you at the moment you touched
+      # its menu. `.scrim` + `.overlay` are `position:fixed` and cost the page no
+      # layout, and the scrim and Escape are two of the three ways back out.
+      assert html =~ ~s(class="scrim")
+      assert html =~ ~s(phx-click="close_row_menu")
+      assert html =~ ~s(phx-key="Escape")
+
+      # And it closes, leaving the screen as it was.
+      assert render_click(view, "close_row_menu", %{}) =~ "The Salt Line"
+      refute render(view) =~ ~s(class="scrim")
+    end
+
+    test "only the row you asked for opens", %{conn: conn, user: user} do
+      salt = campaign(user, %{name: "The Salt Line"})
+      _low = campaign(user, %{name: "Low Water"})
+
+      {:ok, view, _html} = live(conn, ~p"/library")
+      html = open_menu(view, salt)
+
+      # One menu at a time, held by id rather than by a `<details>` per row — two open
+      # overlays would stack on top of each other.
+      assert [_] = Regex.scan(~r|class="scrim"|, html)
+      assert html =~ ~s(aria-label="Change The Salt Line")
+      refute html =~ ~s(aria-modal="true" aria-label="Change Low Water")
     end
 
     test "a finished campaign stays on the shelf — it's a statement, not filing", %{

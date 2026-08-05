@@ -15,7 +15,8 @@ defmodule Polyphony.Authoring.QuickBuild do
        can reuse one instead of inventing a duplicate,
     4. cross-links the cast — every character gets a directional regard toward each other
        one (`Autofill.regard_map`, asymmetrical), and
-    5. drafts a **campaign premise** grounded in the world and cast, and
+    5. **names the campaign** and drafts its **premise** — one call, because a title is a
+       read on the premise (`Autofill.generate_campaign_opening/1`), and
     6. writes a **cover** for the world and for each character — last, because a cover
        is written *from* everything else and is the only part a stranger reads before
        taking either (§2.12).
@@ -29,7 +30,8 @@ defmodule Polyphony.Authoring.QuickBuild do
   associates only from the return value strands everything built by a run that doesn't
   finish.
 
-  Returns `{:ok, %{bible: entry, characters: [entry], premise: string, failed: [...]}}` —
+  Returns
+  `{:ok, %{bible: entry, characters: [entry], name: string, premise: string, failed: [...]}}`.
   `characters` is the **main cast**. Off-screen stubs are reported through `:on_entry` as
   `{:stub, entry}` and joined to the campaign there, but they stay out of this list: they
   are not cross-linked, not given covers, and not counted as cast seeds.
@@ -128,7 +130,7 @@ defmodule Polyphony.Authoring.QuickBuild do
         char_entries = interlink_cast(char_entries, meter)
 
         report.(length(seeds) + 2, "Framing the premise")
-        premise = build_premise(world_ctx, char_entries, meter)
+        %{name: name, premise: premise} = build_opening(world_ctx, char_entries, meter)
 
         # Last, because a cover is written *from* everything else — a world's rules and
         # canon, a character's facts — and is the only part a stranger reads before
@@ -140,7 +142,15 @@ defmodule Polyphony.Authoring.QuickBuild do
         char_entries = Enum.map(char_entries, &write_cover(&1, meter))
 
         report.(length(seeds) + 4, "Done")
-        {:ok, %{bible: bible_entry, characters: char_entries, premise: premise, failed: failed}}
+
+        {:ok,
+         %{
+           bible: bible_entry,
+           characters: char_entries,
+           name: name,
+           premise: premise,
+           failed: failed
+         }}
     end
   end
 
@@ -207,14 +217,16 @@ defmodule Polyphony.Authoring.QuickBuild do
     end
   end
 
-  # Best-effort premise: a provider failure falls back to blank rather than sinking the
-  # whole build (the author can ✨ Expand it on the campaign screen afterward).
-  defp build_premise(world_ctx, char_entries, meter) do
-    case Autofill.generate_campaign_premise(
+  # Best-effort title and premise: a provider failure falls back to blank rather than
+  # sinking the whole build (the author can ✨ Expand it on the campaign screen
+  # afterward, and rename it there). Blank is also what a caller reads as "don't
+  # attach", so a failure here leaves whatever the campaign already had.
+  defp build_opening(world_ctx, char_entries, meter) do
+    case Autofill.generate_campaign_opening(
            [world: world_ctx, cast: cast_summaries(char_entries)] ++ meter
          ) do
-      {:ok, premise} -> premise
-      {:error, _} -> ""
+      {:ok, %{"name" => name, "premise" => premise}} -> %{name: name, premise: premise}
+      {:error, _} -> %{name: "", premise: ""}
     end
   end
 

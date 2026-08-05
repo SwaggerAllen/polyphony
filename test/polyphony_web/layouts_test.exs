@@ -7,8 +7,8 @@ defmodule PolyphonyWeb.LayoutsTest do
   own frame has tokens at all — remove it and every page renders on browser-default
   white with the kit's colours resolving to nothing. And there is no global nav bar:
   the design gives a screen the whole viewport and puts everywhere-else behind the
-  header's overflow menu, so a nav bar creeping back would cost a row on every
-  screen and break the play view's viewport-height layout.
+  header's `☰`, so a nav bar creeping back would cost a row on every screen and break
+  the play view's viewport-height layout.
   """
   use PolyphonyWeb.ConnCase, async: true
 
@@ -37,13 +37,13 @@ defmodule PolyphonyWeb.LayoutsTest do
 
       assert html =~ "Sign in"
       assert html =~ "Create an account"
-      # The overflow menu is for a signed-in user's own things; there's nothing in it
-      # for a visitor, so it isn't drawn at all.
+      # The nav menu is for a signed-in user's own things; there's nothing in it for a
+      # visitor, so it isn't drawn at all.
       refute html =~ "Sign out"
     end
   end
 
-  describe "the overflow menu" do
+  describe "the nav menu" do
     setup :register_and_log_in_user
 
     test "carries everywhere that isn't this screen", %{conn: conn} do
@@ -57,6 +57,18 @@ defmodule PolyphonyWeb.LayoutsTest do
       # It opens without JavaScript: a menu holding sign-out shouldn't need a live
       # connection to work.
       assert html =~ "<details"
+    end
+
+    test "it is a hamburger, and set apart from the controls beside it", %{conn: conn} do
+      scene = open_scene()
+
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+      # `⋯` means "the overflow of the thing I'm next to". Used for global navigation,
+      # in a header that also carries a viewer picker, it reads as belonging to that
+      # picker. The margin is the same point in space.
+      assert html =~ ~s(aria-label="Menu">☰</summary>)
+      assert html =~ ~s(<details class="relative ml-2)
     end
 
     test "admin is offered only to an admin", %{conn: conn} do

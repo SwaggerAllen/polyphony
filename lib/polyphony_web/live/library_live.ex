@@ -53,7 +53,7 @@ defmodule PolyphonyWeb.LibraryLive do
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(page_title: "Library", query: "", tier: "all")
+     |> assign(page_title: "Library", query: "", tier: "all", menu_for: nil)
      |> assign(owner: Owner.of(socket.assigns.current_user))
      |> load()}
   end
@@ -342,12 +342,20 @@ defmodule PolyphonyWeb.LibraryLive do
 
       if Permissions.can_edit?(entry, socket.assigns.current_user) do
         fun.(id)
-        {:noreply, socket |> put_flash(:info, note) |> load()}
+        {:noreply, socket |> assign(menu_for: nil) |> put_flash(:info, note) |> load()}
       else
-        {:noreply, put_flash(socket, :error, "Not found.")}
+        {:noreply, socket |> assign(menu_for: nil) |> put_flash(:error, "Not found.")}
       end
     end)
   end
+
+  # One row's menu at a time, held by id rather than by a `<details>` per row: the panel
+  # is an overlay now, and two open at once would stack.
+  def handle_event("row_menu", %{"id" => id}, socket),
+    do: {:noreply, assign(socket, menu_for: to_string(id))}
+
+  def handle_event("close_row_menu", _params, socket),
+    do: {:noreply, assign(socket, menu_for: nil)}
 
   def handle_event("new_campaign", _params, socket) do
     safe(socket, fn ->
@@ -445,6 +453,8 @@ defmodule PolyphonyWeb.LibraryLive do
         <.groups :if={@tab == "groups"} {assigns} />
         <.shelves :if={@tab == "shelves"} {assigns} />
       </div>
+
+      <.row_menu_overlay :if={@menu_for && menu_row(assigns)} c={menu_row(assigns)} />
     </Kit.frame>
     """
   end
@@ -453,43 +463,70 @@ defmodule PolyphonyWeb.LibraryLive do
   # moduledoc) and which the rows themselves had no way to reach: `Library.archive/2`
   # had no caller anywhere, so the Archive shelf could only ever be empty.
   #
-  # In the flow rather than floating, like every other row menu — the kit's `.sheet` is
-  # `overflow:hidden`, so an absolutely-positioned panel is clipped by the sheet edge
-  # and the last row's menu is the one you can't read.
+  # **An overlay, not an in-flow panel.** It was in the flow because the kit's `.sheet`
+  # is `overflow:hidden`, which clips an absolutely-positioned dropdown — but the cost
+  # of opening in the flow is that every row below jumps down the page, so the campaign
+  # you were reading moves out from under you at the moment you touch its menu. The kit
+  # already answers this (`Kit.overlay`, §"opened *from* a control rather than being
+  # part of the page"): it is `position:fixed`, so the sheet's clipping never applies,
+  # and it costs the page no layout at all.
   attr(:c, :map, required: true)
 
   defp row_menu(assigns) do
     ~H"""
-    <details class="min-w-0">
-      <summary class="pill list-none cursor-pointer" aria-label={"Change #{@c.name}"}>⋯</summary>
-      <nav class="sheet mt-1.5" style="background:var(--b2)">
-        <.link navigate={~p"/campaigns/#{@c.id}"} class="row block px-4 py-2.5 text-[13px]">
-          Open
-        </.link>
-        <button
-          type="button"
-          class="row w-full px-4 py-2.5 text-[13px] text-left"
-          phx-click="archive"
-          phx-value-id={@c.id}
-        >
-          Archive
-          <span class="block text-[11px] dim">Out of the way, and nothing is at risk.</span>
-        </button>
-        <%!-- Trash is on a clock rather than immediate, so this needs no confirmation —
-              the irreversible button lives on the trash shelf, where it says so. --%>
-        <button
-          type="button"
-          class="w-full px-4 py-2.5 text-[13px] text-left"
-          style="color:var(--pencil)"
-          phx-click="trash"
-          phx-value-id={@c.id}
-        >
-          Move to trash
-          <span class="block text-[11px] dim">Recoverable until it expires.</span>
-        </button>
-      </nav>
-    </details>
+    <button
+      type="button"
+      class="pill"
+      aria-label={"Change #{@c.name}"}
+      phx-click="row_menu"
+      phx-value-id={@c.id}
+    >
+      ⋯
+    </button>
     """
+  end
+
+  # The open one. Rendered once at the screen level rather than per row, so the markup
+  # doesn't exist until something is open.
+  attr(:c, :map, required: true)
+
+  defp row_menu_overlay(assigns) do
+    ~H"""
+    <Kit.overlay label={"Change #{@c.name}"} on_close="close_row_menu">
+      <div class="px-4 py-3 row flex items-center justify-between gap-2" style="background:var(--b2)">
+        <span class="ttl text-[15px] font-semibold min-w-0 truncate"><%= @c.name %></span>
+        <Kit.btn size={:sm} type="button" phx-click="close_row_menu">✕</Kit.btn>
+      </div>
+      <.link navigate={~p"/campaigns/#{@c.id}"} class="row block px-4 py-3 text-[13px]">
+        Open
+      </.link>
+      <button
+        type="button"
+        class="row w-full px-4 py-3 text-[13px] text-left"
+        phx-click="archive"
+        phx-value-id={@c.id}
+      >
+        Archive
+        <span class="block text-[11px] dim">Out of the way, and nothing is at risk.</span>
+      </button>
+      <%!-- Trash is on a clock rather than immediate, so this needs no confirmation —
+            the irreversible button lives on the trash shelf, where it says so. --%>
+      <button
+        type="button"
+        class="w-full px-4 py-3 text-[13px] text-left"
+        style="color:var(--pencil)"
+        phx-click="trash"
+        phx-value-id={@c.id}
+      >
+        Move to trash
+        <span class="block text-[11px] dim">Recoverable until it expires.</span>
+      </button>
+    </Kit.overlay>
+    """
+  end
+
+  defp menu_row(assigns) do
+    Enum.find(assigns.campaigns, &(to_string(&1.id) == assigns.menu_for))
   end
 
   # ── Campaigns ────────────────────────────────────────────────────────────────

@@ -579,6 +579,58 @@ defmodule Polyphony.Authoring.Autofill do
   end
 
   @doc """
+  Name the campaign and write its premise, in one call.
+
+  Quick Build's, and the reason it isn't two: a title is a *read* on the premise — the
+  phrase that says what the story is about once you know what it's about. Asked for on
+  its own it has only the world seed to go on and returns the setting's name back; asked
+  for beside the premise it can name the tension. Everything else Quick Build writes it
+  writes for you, and a campaign called "Untitled campaign" in the library is the one
+  gap the author has to close by hand before anything reads as theirs.
+
+  Same grounding as `generate_campaign_premise/1` — `opts[:world]` display map,
+  `opts[:cast]` a list of `%{"name","premise"}`. Returns
+  `{:ok, %{"name" => String.t(), "premise" => String.t()}}`; the caller decides whether
+  the name is wanted, and Quick Build only takes it when the author left theirs blank.
+  """
+  @spec generate_campaign_opening(keyword()) :: {:ok, map()} | {:error, term()}
+  def generate_campaign_opening(opts \\ []) do
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author frame a role-play campaign. Give it a **name** and a " <>
+            "**premise**, grounded in the world and cast below.\n\n" <>
+            "The name is a title for this story — two to four words, the kind of phrase that " <>
+            "sits on a spine. It names the tension, not the setting: the world already has a " <>
+            "name and repeating it says nothing. No subtitle, no colon, no quotes, no article " <>
+            "unless it earns one.\n\n" <>
+            "The premise is one vivid paragraph naming the central tension and what is at " <>
+            "stake for this cast. It says what the story is *about*; it does not decide how " <>
+            "it ends.\n\n" <>
+            "Return ONLY a JSON object with exactly these keys: name, premise."
+      },
+      %{
+        role: "user",
+        content: world_block(opts[:world]) <> campaign_cast_block(opts[:cast] || [])
+      }
+    ]
+
+    with {:ok, text} <-
+           Polyphony.LLM.call(
+             messages,
+             [response: :autofill, fields: ["name", "premise"]] ++ meter_opts(opts)
+           ),
+         {:ok, data} <- decode_object(text) do
+      {:ok,
+       %{
+         "name" => String.trim(to_string(Map.get(data, "name") || "")),
+         "premise" => String.trim(to_string(Map.get(data, "premise") || ""))
+       }}
+    end
+  end
+
+  @doc """
   Propose where the next scene happens and what is at stake in it.
 
   **One call for both**, because they are one creative act: a location is only worth

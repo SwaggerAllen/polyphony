@@ -128,17 +128,24 @@ defmodule PolyphonyWeb.Kit do
   end
 
   @doc """
-  The overflow menu — the `⋯` at the end of a header.
+  The nav menu — the `☰` at the end of a header.
 
   Where everything that isn't this screen lives, since the design has no standing
   navigation. Built on `<details>` so it opens without JavaScript and closes with
   Escape for free; a menu that needs a live connection to open would be the wrong
   thing to put a sign-out link in.
 
+  **A hamburger, not a `⋯`.** They mean different things and this is the one that
+  means "the app": `⋯` is the overflow of the thing it sits beside — the row's menu,
+  this item's menu — and used for global navigation it reads as being about whatever
+  control it happens to be next to. In a header that already carries a viewer picker
+  and a status pill, that is most of the time. The extra left margin is the same
+  point made in space: the gap says this one isn't part of that group.
+
   The kit draws the closed affordance (a `.pill`) but not the open state, so the
   panel below is the kit's own sheet-and-rows applied to it rather than a new idea.
   """
-  attr(:label, :string, default: "More")
+  attr(:label, :string, default: "Menu")
   attr(:class, :string, default: nil)
 
   slot :item, doc: "one destination" do
@@ -149,8 +156,8 @@ defmodule PolyphonyWeb.Kit do
 
   def menu(assigns) do
     ~H"""
-    <details class={["relative", @class]}>
-      <summary class="pill list-none cursor-pointer" aria-label={@label}>⋯</summary>
+    <details class={["relative ml-2", @class]}>
+      <summary class="pill list-none cursor-pointer" aria-label={@label}>☰</summary>
       <nav
         class="sheet absolute right-0 top-full mt-1 z-20 min-w-[11rem] overflow-hidden"
         style="background:var(--b2)"
