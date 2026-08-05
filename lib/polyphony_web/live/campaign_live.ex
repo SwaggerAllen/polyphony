@@ -82,6 +82,7 @@ defmodule PolyphonyWeb.CampaignLive do
          qb_world: "",
          qb_seeds: [""],
          qb_suggest: true,
+         qb_groups: false,
          quick_build_open: false,
          scene_location: "",
          scene_premise: "",
@@ -401,7 +402,8 @@ defmodule PolyphonyWeb.CampaignLive do
      assign(socket,
        qb_world: params["world_seed"] || socket.assigns.qb_world,
        qb_seeds: seeds_param(params["char_seed"], socket.assigns.qb_seeds),
-       qb_suggest: params["suggest_offscreen"] == "true"
+       qb_suggest: params["suggest_offscreen"] == "true",
+       qb_groups: params["groups"] == "true"
      )}
   end
 
@@ -435,6 +437,7 @@ defmodule PolyphonyWeb.CampaignLive do
           world_seed: params["world_seed"] || "",
           character_seeds: seeds,
           suggest_offscreen: params["suggest_offscreen"] == "true",
+          groups: params["groups"] == "true",
           campaign_id: socket.assigns.entry.id
         ] ++ meter_attribution(socket)
 
@@ -681,7 +684,13 @@ defmodule PolyphonyWeb.CampaignLive do
        # move is to change a seed and go again — and taking it away would leave the
        # author looking at the card that opens it.
        socket
-       |> assign(quick_build_open: false, qb_world: "", qb_seeds: [""], qb_suggest: true)
+       |> assign(
+         quick_build_open: false,
+         qb_world: "",
+         qb_seeds: [""],
+         qb_suggest: true,
+         qb_groups: false
+       )
        |> load()
      else
        load(socket)
@@ -832,7 +841,13 @@ defmodule PolyphonyWeb.CampaignLive do
       "name" => Map.get(wb, :name) || "",
       "setting" => Map.get(wb, :setting) || "",
       "tone" => Map.get(wb, :tone) || "",
-      "rules" => Enum.join(Map.get(wb, :rules) || [], "\n"),
+      # Both list fields go through `public/1`, and both have to. They are lists of
+      # `WorldBible.Entry` structs, not strings — joining the raw list raises
+      # `String.Chars`, which is how this was found: every ✦ on this screen that
+      # grounds itself in the world (the premise, the scene opening) died on any bible
+      # with a rule in it. And a concealed rule is a secret law of the world, so the
+      # character-facing read is also the correct one, not merely the one that compiles.
+      "rules" => Enum.join(WorldBible.public(Map.get(wb, :rules) || []), "\n"),
       "starting_canon" => Enum.join(WorldBible.public(Map.get(wb, :starting_canon) || []), "\n")
     }
   end
@@ -1067,6 +1082,22 @@ defmodule PolyphonyWeb.CampaignLive do
           </span>
           <input type="checkbox" name="suggest_offscreen" value="true" checked={@qb_suggest} class="sr-only" />
           <Kit.sw on={@qb_suggest} />
+        </label>
+
+        <%!-- Off by default like the one above: it is a provider call, and a two-hander
+              needs no order or watch. Where a world does name one, this is what makes
+              belonging mean something — the cast written into a group start out holding
+              its facts, secrets included, which is what `Group.seed/2` is for. --%>
+        <label class="flex items-center justify-between gap-3 mt-3 cursor-pointer">
+          <span class="text-[13px]">
+            Also write the groups this world names
+            <span class="text-[11px] dim block">
+              A crew, a household, an order — and the cast in them start out knowing what
+              it knows
+            </span>
+          </span>
+          <input type="checkbox" name="groups" value="true" checked={@qb_groups} class="sr-only" />
+          <Kit.sw on={@qb_groups} />
         </label>
 
         <div class="mt-3">

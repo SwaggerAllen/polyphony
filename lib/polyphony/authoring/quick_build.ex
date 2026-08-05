@@ -44,8 +44,8 @@ defmodule Polyphony.Authoring.QuickBuild do
   (`:provider`, `:user_id`, `:campaign_id`) pass straight through to the metered LLM calls.
   """
 
-  alias Polyphony.Library
-  alias Polyphony.Authoring.{Autofill, CharacterSheet, Cover, Stub, WorldBible}
+  alias Polyphony.{Groups, Library}
+  alias Polyphony.Authoring.{Autofill, CharacterSheet, Cover, Group, Stub, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.{Boundary, Fact, Relationship}
 
   @doc """
@@ -56,6 +56,8 @@ defmodule Polyphony.Authoring.QuickBuild do
     * `:character_seeds` — a list of free-text briefs, one per character.
     * `:suggest_offscreen` — also stub AI-suggested off-screen people per character
       (default `false`).
+    * `:groups` — also write the **collectives this world names** and put the cast in
+      them (default `false`). See `write_groups/4`.
     * `:progress` — an optional 1-arg fn called with `%{done, total, label}` before each
       phase (world → each character → linking → premise → covers), for a UI progress bar.
     * `:on_entry` — an optional 1-arg fn called with `{:world, entry}` / `{:character,
@@ -89,6 +91,7 @@ defmodule Polyphony.Authoring.QuickBuild do
     # freely from the world rather than dropping the row.
     seeds = opts[:character_seeds] |> List.wrap() |> Enum.map(&to_string/1)
     suggest? = Keyword.get(opts, :suggest_offscreen, false)
+    groups? = Keyword.get(opts, :groups, false)
     meter = Keyword.take(opts, [:provider, :user_id, :campaign_id])
 
     # Phases: the world, one per character, linking the cast, the premise, the covers.
@@ -112,6 +115,14 @@ defmodule Polyphony.Authoring.QuickBuild do
         {:error, {:world_failed, reason}}
 
       {:ok, bible_entry, world_ctx} ->
+        # Before the cast, because a group is a *starting point* — written after them it
+        # would have nobody to seed. Skipped entirely when the option is off, and a
+        # resumed build reuses the ones it already wrote rather than paying twice.
+        groups =
+          if groups?,
+            do: write_groups(owner, seeds, bible_entry.id, world_ctx, meter, announce, resume),
+            else: []
+
         {char_entries, failed} =
           generate_cast(
             owner,
@@ -123,7 +134,8 @@ defmodule Polyphony.Authoring.QuickBuild do
             report,
             announce,
             seed_done,
-            resume
+            resume,
+            groups
           )
 
         report.(length(seeds) + 1, "Connecting the cast")
@@ -146,6 +158,7 @@ defmodule Polyphony.Authoring.QuickBuild do
         {:ok,
          %{
            bible: bible_entry,
+           groups: groups,
            characters: char_entries,
            name: name,
            premise: premise,
@@ -217,6 +230,94 @@ defmodule Polyphony.Authoring.QuickBuild do
     end
   end
 
+  # ── Groups ────────────────────────────────────────────────────────────────────
+
+  @doc """
+  Write the collectives this world names, and record who is in each.
+
+  Optional (`:groups`) because it is a provider call and a shape not every story
+  wants — a two-hander needs no order or watch. Best-effort like every phase after
+  the world: a failure here returns no groups and the cast is written without them,
+  rather than sinking a build that has already produced a world.
+
+  Groups are **persisted before the cast**, and reported through `:on_entry` as
+  `{:group, entry}` at the write, for the same reason everything else is: a build
+  that stops half-way must leave a campaign you can open rather than orphans in a
+  library. `members` are indexes into the seed list, resolved as each character is
+  written.
+  """
+  @spec write_groups(term(), [String.t()], term(), map(), keyword(), fun(), map()) :: [map()]
+  def write_groups(owner, seeds, bible_id, world_ctx, meter, announce, resume \\ %{}) do
+    case resume[:groups] do
+      [_ | _] = existing ->
+        for %{entry: entry, members: members} <- existing,
+            do: %{entry: entry, group: Library.payload(entry), members: members}
+
+      _ ->
+        case Autofill.suggest_groups([world: world_ctx, cast_seeds: seeds] ++ meter) do
+          {:ok, proposed} -> for p <- proposed, do: persist_group(owner, bible_id, p, announce)
+          {:error, _} -> []
+        end
+    end
+  end
+
+  defp persist_group(owner, bible_id, proposed, announce) do
+    group = %Group{
+      name: proposed["name"],
+      premise: blank_to_nil(proposed["premise"]),
+      appearance: blank_to_nil(proposed["appearance"]),
+      temperament: blank_to_nil(proposed["temperament"]),
+      backstory: blank_to_nil(proposed["backstory"]),
+      facts:
+        for f <- proposed["facts"] || [] do
+          %Fact{statement: f["statement"], concealed: f["concealed"] == true}
+        end,
+      world_bible_id: bible_id
+    }
+
+    entry = Groups.create(owner, group)
+    announce.({:group, entry})
+    %{entry: entry, group: group, members: proposed["members"] || []}
+  end
+
+  defp group_for(groups, index), do: Enum.find(groups, &(index in (&1.members || [])))
+
+  # Named in the prompt so the person is *written* as one of them, not merely filed as
+  # one afterwards. The group's own secrets are deliberately not sent: they arrive on
+  # the sheet through `Group.seed/2`, and a fact the character holds is not the same
+  # thing as a brief to write around.
+  defp group_opt(nil), do: []
+
+  defp group_opt(%{group: %Group{} = group}),
+    do: [
+      relations: [
+        %{
+          "name" => group.name,
+          "descriptor" => "belongs to them",
+          "premise" => group.premise,
+          "temperament" => group.temperament,
+          "backstory" => group.backstory
+        }
+      ]
+    ]
+
+  defp seed_from_group(sheet, nil), do: sheet
+  defp seed_from_group(sheet, %{group: %Group{} = group}), do: Group.seed(group, sheet)
+
+  defp join_group(nil, _entry), do: :ok
+
+  defp join_group(%{entry: %{id: id}}, entry) do
+    _ = Groups.add_member(id, entry.id)
+    :ok
+  end
+
+  defp blank_to_nil(value) do
+    case String.trim(to_string(value || "")) do
+      "" -> nil
+      text -> text
+    end
+  end
+
   # Best-effort title and premise: a provider failure falls back to blank rather than
   # sinking the whole build (the author can ✨ Expand it on the campaign screen
   # afterward, and rename it there). Blank is also what a caller reads as "don't
@@ -277,7 +378,8 @@ defmodule Polyphony.Authoring.QuickBuild do
          report,
          announce,
          seed_done,
-         resume
+         resume,
+         groups
        ) do
     n = length(seeds)
     done = MapSet.new(resume[:done] || [])
@@ -300,7 +402,11 @@ defmodule Polyphony.Authoring.QuickBuild do
           # this character is connected to — and `relations` says "keep them consistent
           # with these people", which for a blank slot was the only substantial thing in
           # the prompt. Two blank slots produced two of the same person.
-          opts = [world: world_ctx, ensemble: cast_relations(built, stubs)] ++ meter
+          group = group_for(groups, i)
+
+          opts =
+            [world: world_ctx, ensemble: cast_relations(built, stubs)] ++
+              group_opt(group) ++ meter
 
           case Autofill.generate_all(:character, brief, %{}, opts) do
             {:ok, fields} when map_size(fields) > 0 ->
@@ -309,7 +415,14 @@ defmodule Polyphony.Authoring.QuickBuild do
                 | boundaries: gen_boundaries(fields, world_ctx, meter)
               }
 
+              # Seeded from their group *after* generation, so the sheet's own prose
+              # wins (`Group.seed/2` fills only what is missing) and what actually
+              # arrives is the group's **facts** — the secrets belonging is defined to
+              # grant. That is the whole point of the phase: a Tidewatch member who
+              # starts out knowing what the Tidewatch knows.
+              sheet = seed_from_group(sheet, group)
               entry = put(owner, "character", sheet)
+              join_group(group, entry)
 
               # Both callbacks fire here, at the write, and that placement is the thing
               # that makes a retry safe: a crash on either side of this line resolves

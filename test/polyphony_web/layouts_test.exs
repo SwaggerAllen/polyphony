@@ -121,4 +121,37 @@ defmodule PolyphonyWeb.LayoutsTest do
     :ok = Polyphony.App.dispatch(%Polyphony.Commands.OpenScene{scene_id: scene, opened_beat: 0})
     scene
   end
+
+  describe "a flash you can get out of" do
+    setup :register_and_log_in_user
+
+    test "carries a visible dismiss, and is bounded", %{conn: conn} do
+      scene = open_scene()
+      {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+
+      html = render_click(view, "add_to_scene", %{"id" => "nobody"})
+      assert html =~ "aren&#39;t available to bring in"
+
+      # "Click it anywhere" is a real gesture and an invisible one. An error somebody
+      # has to read is exactly the one they will look at for a control and not find.
+      assert html =~ ~s(aria-label="Dismiss")
+      assert html =~ "✕"
+
+      # And the region can't grow over the screen it is reporting on: a bring-up build
+      # with `:show_error_details` on can put a long message here, and a `fixed top-0`
+      # box with no ceiling covers the controls you would use to get out.
+      assert html =~ "max-h-[50dvh]"
+      assert html =~ "overflow-y-auto"
+    end
+
+    test "and the dismiss actually clears it", %{conn: conn} do
+      scene = open_scene()
+      {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
+
+      render_click(view, "add_to_scene", %{"id" => "nobody"})
+      cleared = render_click(view, "lv:clear-flash", %{"key" => "error"})
+
+      refute cleared =~ "aren&#39;t available to bring in"
+    end
+  end
 end

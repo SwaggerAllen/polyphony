@@ -631,6 +631,123 @@ defmodule Polyphony.Authoring.Autofill do
   end
 
   @doc """
+  The **collectives this world already names**, and who in the cast belongs to them.
+
+  A world bible full of crews, households and orders is a world where half the cast
+  should start out sharing what that crew knows — and the group is exactly the thing
+  the design provides for it: *written like a character, used as a starting point for
+  others, and somewhere for a secret to point* (`Group`). Written by hand it is a
+  chore nobody does; and a cast written without them each invents their own private
+  version of the same institution.
+
+  **One call, groups and membership together**, because the model naming "the
+  Tidewatch" is the one best placed to say which of these seeds are in it — it has both
+  in front of it. A second call would be asked to re-derive the reasoning that produced
+  the first.
+
+  `opts[:world]` is the world display map; `opts[:cast_seeds]` the character briefs, in
+  order — `members` comes back as **indexes into that list**, so a blank seed can be
+  placed as easily as a described one.
+
+  Facts carry `concealed`, unlike the flat lists elsewhere. A group with no secrets is
+  a group with nothing to point at: `Group.secrets/1` exists, the design's own row
+  reads *"6 members · 2 secrets"*, and knowing them is what belonging is defined to
+  mean. Marking one secret is also the safe direction under default-deny — an
+  over-marked fact makes a character know too little, never too much.
+
+  Returns `{:ok, [%{"name", "premise", "appearance", "temperament", "backstory",
+  "facts" => [%{"statement", "concealed"}], "members" => [index]}]}`.
+  """
+  @spec suggest_groups(keyword()) :: {:ok, [map()]} | {:error, term()}
+  def suggest_groups(opts \\ []) do
+    seeds = opts[:cast_seeds] |> List.wrap() |> Enum.map(&to_string/1)
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author set up a role-play campaign. Find the **collectives** " <>
+            "this world names or clearly implies — a crew, a household, an order, a watch, a " <>
+            "firm — and write each one as a shared starting point for the people in it.\n\n" <>
+            "Propose 1–3. Only ones this world actually supports; two good ones beat four " <>
+            "invented to fill a list, and none at all is a valid answer for a world that " <>
+            "names no institutions.\n\n" <>
+            "A group is character-shaped but collective: `premise` is what it is and what it " <>
+            "wants, `appearance` how its people are recognised, `temperament` how it behaves " <>
+            "under pressure, `backstory` where it came from.\n\n" <>
+            "`facts` are what belonging *gets you*: 2–4 flat statements a member would take " <>
+            "as given. Mark `concealed` true on the ones outsiders do not know — a group " <>
+            "whose facts are all public is a label rather than a membership, and the secrets " <>
+            "are the reason it is worth writing.\n\n" <>
+            "`members` lists the indexes of the cast briefs below that plainly belong to it. " <>
+            "Leave it empty rather than forcing a fit; a character can be in no group, and a " <>
+            "group can exist with nobody in it yet. Nobody belongs to two.\n\n" <>
+            "Return ONLY a JSON array of objects with keys: name, premise, appearance, " <>
+            "temperament, backstory, facts (array of {statement, concealed}), members " <>
+            "(array of integers)."
+      },
+      %{
+        role: "user",
+        content: world_block(opts[:world]) <> seed_index_block(seeds)
+      }
+    ]
+
+    with {:ok, text} <- Polyphony.LLM.call(messages, [response: :facts] ++ meter_opts(opts)),
+         {:ok, list} <- decode_array(text) do
+      {:ok, for(item <- list, is_map(item), g = normalize_group(item, length(seeds)), g, do: g)}
+    end
+  end
+
+  defp seed_index_block([]), do: "There is no cast yet — return groups with empty members.\n\n"
+
+  defp seed_index_block(seeds) do
+    lines =
+      seeds
+      |> Enum.with_index()
+      |> Enum.map_join("\n", fn {seed, i} ->
+        "#{i}: #{if String.trim(seed) == "", do: "(no brief — anyone this story needs)", else: seed}"
+      end)
+
+    "The cast about to be written, by index:\n" <> lines <> "\n\n"
+  end
+
+  # A group with no name is not a group. Everything else may be blank, and `members` is
+  # clamped to real indexes — a hallucinated index would otherwise seed a character who
+  # does not exist, or crash the walk.
+  defp normalize_group(item, seed_count) do
+    name = String.trim(to_string(item["name"] || ""))
+
+    if name == "" do
+      nil
+    else
+      %{
+        "name" => name,
+        "premise" => trimmed(item["premise"]),
+        "appearance" => trimmed(item["appearance"]),
+        "temperament" => trimmed(item["temperament"]),
+        "backstory" => trimmed(item["backstory"]),
+        "facts" => group_facts(item["facts"]),
+        "members" =>
+          item["members"]
+          |> List.wrap()
+          |> Enum.filter(&is_integer/1)
+          |> Enum.filter(&(&1 >= 0 and &1 < seed_count))
+          |> Enum.uniq()
+      }
+    end
+  end
+
+  defp group_facts(list) do
+    for f <- List.wrap(list),
+        is_map(f),
+        statement = String.trim(to_string(f["statement"] || "")),
+        statement != "",
+        do: %{"statement" => statement, "concealed" => truthy?(f["concealed"])}
+  end
+
+  defp trimmed(value), do: String.trim(to_string(value || ""))
+
+  @doc """
   Propose where the next scene happens and what is at stake in it.
 
   **One call for both**, because they are one creative act: a location is only worth

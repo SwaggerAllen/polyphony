@@ -231,6 +231,10 @@
   height: 2.75rem;
 }
 
+.max-h-\[50dvh\] {
+  max-height: 50dvh;
+}
+
 .min-h-0 {
   min-height: 0px;
 }
