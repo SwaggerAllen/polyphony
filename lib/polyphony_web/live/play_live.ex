@@ -1610,6 +1610,40 @@ defmodule PolyphonyWeb.PlayLive do
 
   defp progress_label(_, _cast), do: "Working…"
 
+  # The two things the loop can be doing, each drawn as the move it is about to become:
+  # the Director's is `m-world`'s rules-above-and-below, a character's is the
+  # voice-coloured rule they will speak inside. Getting this wrong — one generic
+  # placeholder for both — would make the transcript reflow the moment the real move
+  # arrived, which is the jump the placeholder exists to prevent.
+  attr(:progress, :map, required: true)
+  attr(:cast, :any, required: true)
+  attr(:voices, :map, required: true)
+
+  defp writing_move(%{progress: %{phase: :director}} = assigns) do
+    ~H"""
+    <Kit.world_move class="my-3">
+      <Kit.skel_lines lines={["96%", "72%"]} label="The Director is setting the scene" />
+    </Kit.world_move>
+    """
+  end
+
+  defp writing_move(assigns) do
+    assigns =
+      assign(assigns,
+        subject: generating_now(assigns.progress),
+        label: progress_label(assigns.progress, assigns.cast)
+      )
+
+    ~H"""
+    <Kit.writing
+      class="my-3"
+      colour={Voice.of(@voices, @subject)}
+      note={@label}
+      lines={["100%", "88%", "55%"]}
+    />
+    """
+  end
+
   # A short, human reason for a failure line — the model's reason if any, else the kind.
   defp failure_reason(%{reason: r}) when is_binary(r) and r != "", do: r
   defp failure_reason(%{kind: k}) when is_binary(k) and k != "", do: String.replace(k, "_", " ")
@@ -1729,9 +1763,27 @@ defmodule PolyphonyWeb.PlayLive do
                 </Kit.fail_move>
             <% end %>
           <% end %>
-          <Kit.empty :if={@messages == [] and @failures == []} headline={empty_headline(@viewer)}>
+          <Kit.empty
+            :if={@messages == [] and @failures == [] and not beat_busy?(@progress)}
+            headline={empty_headline(@viewer)}
+          >
             Nothing has happened here yet.
           </Kit.empty>
+
+          <%!-- The turn being written, where it will land. The strip's waiting line
+                says *that* something is happening; this says who, and puts it at the
+                bottom of the transcript the reader is already looking at — which is
+                also where the words will appear, so nothing jumps when they do.
+
+                A first beat used to be the worst case: an empty scene, an empty-state
+                headline saying nothing has happened here yet, and the only sign of
+                life a sentence in a bar below the fold. --%>
+          <.writing_move
+            :if={beat_busy?(@progress)}
+            progress={@progress}
+            cast={@cast}
+            voices={@voices}
+          />
         <% end %>
       </div>
 
