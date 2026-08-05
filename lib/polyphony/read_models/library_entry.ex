@@ -95,6 +95,25 @@ defmodule Polyphony.ReadModels.LibraryEntry do
   end
 
   @doc """
+  Every entry of a `kind`, across all owners — a maintenance read, not a screen read.
+
+  Deliberately unscoped and deliberately including archived/deleted rows by default:
+  the one question it exists to answer is "is this character on anybody's roster", and a
+  campaign that is filed away or in the trash still holds its cast. Narrowing that would
+  make the answer wrong in the direction that destroys data.
+  """
+  @spec list_kind(Ecto.Repo.t(), term(), keyword()) :: [t()]
+  def list_kind(repo, kind, opts \\ []) do
+    k = to_string(kind)
+
+    from(e in __MODULE__, where: e.kind == ^k, order_by: [asc: e.id])
+    |> visible(
+      Keyword.merge([include_deleted: true, include_archived: true, include_hidden: true], opts)
+    )
+    |> repo.all()
+  end
+
+  @doc """
   Public, browsable entries of a `kind` — never soft-deleted, archived, or **hidden**.
 
   Hidden is the moderation axis (§B3) and it is checked here rather than by callers,
