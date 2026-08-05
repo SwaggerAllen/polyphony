@@ -529,6 +529,42 @@ defmodule PolyphonyWeb.CampaignLive do
     {:noreply, socket |> assign(pub_perspectives: next) |> preflight()}
   end
 
+  # ── Archive, trash, restart ──────────────────────────────────────────────────
+  #
+  # The three ways a campaign ends, and they are genuinely different things rather
+  # than one control with a severity dial. They live here rather than only on the
+  # library row because this is the screen you are on when you decide — and two of
+  # them had no reachable control at all from inside a campaign.
+
+  def handle_event("archive_campaign", _params, socket) do
+    owned(socket, fn ->
+      {:ok, _} = Library.archive(socket.assigns.entry.id)
+      {:noreply, push_navigate(socket, to: ~p"/library?tab=shelves")}
+    end)
+  end
+
+  def handle_event("trash_campaign", _params, socket) do
+    owned(socket, fn ->
+      {:ok, _} = Library.soft_delete(socket.assigns.entry.id)
+      {:noreply, push_navigate(socket, to: ~p"/library?tab=shelves")}
+    end)
+  end
+
+  # Not "delete the scenes". The arc queue goes with them, and that is the point: a
+  # proposal about something that never happened is a review item you cannot answer.
+  def handle_event("restart_campaign", _params, socket) do
+    owned(socket, fn ->
+      {:ok, %{scenes: n, rows: rows}} = Campaigns.restart(socket.assigns.entry.id)
+      arcs = Map.get(rows, "arc_entries", 0)
+
+      {:noreply,
+       socket
+       |> assign(entry: Library.get(socket.assigns.entry.id))
+       |> put_flash(:info, restart_note(n, arcs))
+       |> load()}
+    end)
+  end
+
   def handle_event("publish", _params, socket) do
     safe(socket, fn ->
       %{entry: entry, payload: payload, cast: cast, owner: owner} = socket.assigns
@@ -1041,8 +1077,93 @@ defmodule PolyphonyWeb.CampaignLive do
           </Kit.sheet>
         </form>
       </details>
+
+      <.ending_panel {assigns} />
     </div>
     """
+  end
+
+  # The three ways a campaign ends. Filing, throwing away and starting over are
+  # genuinely different acts, not one control with a severity dial, so they are three
+  # controls with the copy that tells them apart — and none of them was reachable from
+  # inside a campaign at all. The library's row menu could file and bin one; nothing
+  # anywhere could restart one.
+  defp ending_panel(assigns) do
+    ~H"""
+    <Kit.sheet>
+      <Kit.row class="px-4 py-3" style="background:var(--b2)">
+        <span class="lbl dim">Ending it</span>
+      </Kit.row>
+
+      <Kit.row class="px-4 py-3 flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="text-[13px] font-semibold">Archive</div>
+          <p class="text-[11px] leading-relaxed dim">
+            Out of the way, on the archive shelf. Nothing is at risk and it comes back
+            with one button.
+          </p>
+        </div>
+        <Kit.btn size={:sm} type="button" phx-click="archive_campaign" class="shrink-0">
+          Archive
+        </Kit.btn>
+      </Kit.row>
+
+      <%!-- Deliberately *not* wrapped in a confirm: trash is on a clock and the trash
+            shelf carries the one irreversible button, where the countdown is visible.
+            The library row menu says the same thing in the same words. --%>
+      <Kit.row class="px-4 py-3 flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="text-[13px] font-semibold">Move to trash</div>
+          <p class="text-[11px] leading-relaxed dim">
+            Recoverable until it expires. The world and the cast go with it.
+          </p>
+        </div>
+        <Kit.btn size={:sm} kind={:pen} type="button" phx-click="trash_campaign" class="shrink-0">
+          Trash
+        </Kit.btn>
+      </Kit.row>
+
+      <%!-- This one *does* confirm, and it is the only one here that has to: archive
+            and trash are both reversible, and this is not. --%>
+      <Kit.row class="px-4 py-3 flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="text-[13px] font-semibold">Start over</div>
+          <p class="text-[11px] leading-relaxed dim">
+            Lets go of <%= played_line(assigns) %> and everything play raised about these
+            people — the arc proposals go with the scenes that made them. The world, the
+            cast and the premise are untouched.
+          </p>
+        </div>
+        <Kit.btn
+          size={:sm}
+          kind={if @scenes == [], do: :off, else: :pen}
+          type="button"
+          phx-click="restart_campaign"
+          disabled={@scenes == []}
+          data-confirm={@scenes != [] && restart_confirm(assigns)}
+          class="shrink-0"
+        >
+          Start over
+        </Kit.btn>
+      </Kit.row>
+    </Kit.sheet>
+    """
+  end
+
+  defp played_line(%{scenes: []}), do: "nothing yet"
+  defp played_line(%{scenes: scenes}), do: count_label(length(scenes), "scene", "scenes")
+
+  defp restart_confirm(assigns) do
+    "Start #{campaign_label(assigns)} over? " <>
+      "#{played_line(assigns)} and any arc proposals from them are let go of. " <>
+      "This can't be undone."
+  end
+
+  defp campaign_label(assigns) do
+    case String.trim(to_string(assigns.payload[:name] || "")) do
+      "" -> "this campaign"
+      name -> name
+    end
   end
 
   defp quick_build(assigns) do
@@ -1802,6 +1923,28 @@ defmodule PolyphonyWeb.CampaignLive do
       |> Enum.reject(&is_nil/1)
 
     if parts == [], do: "Nothing built yet", else: Enum.join(parts, " · ")
+  end
+
+  defp restart_note(0, _arcs), do: "Nothing had been played yet."
+
+  defp restart_note(scenes, arcs) do
+    "Back to the start — #{count_label(scenes, "scene", "scenes")} let go of" <>
+      if(arcs > 0,
+        do: ", and #{count_label(arcs, "arc proposal", "arc proposals")} with them.",
+        else: "."
+      )
+  end
+
+  # Owner-only, and refused rather than silently ignored: these three are the
+  # irreversible-ish ones, and `Permissions.can_edit?` is the same gate the editors use.
+  defp owned(socket, fun) do
+    safe(socket, fn ->
+      if Permissions.can_edit?(socket.assigns.entry, socket.assigns.current_user) do
+        fun.()
+      else
+        {:noreply, put_flash(socket, :error, "Not found.")}
+      end
+    end)
   end
 
   defp count_label(0, _one, _many), do: nil
