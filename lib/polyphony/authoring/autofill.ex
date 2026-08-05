@@ -63,6 +63,13 @@ defmodule Polyphony.Authoring.Autofill do
   `opts[:world]` — an optional map of world-bible display fields (`name`, `setting`,
   `tone`, `rules`, `starting_canon`) used to ground the character in a setting.
 
+  `opts[:ensemble]` — the people **already written into this story**, as
+  `%{"name","premise","voice","temperament"}` maps. Distinct from `opts[:relations]`,
+  which is who a character is *connected to* and asks for consistency with them; this
+  one asks for continuity of world detail and **distinctness of person**. A blank brief
+  makes the difference load-bearing — with nothing else in the prompt, "be consistent
+  with these people" writes them again.
+
   `opts[:cast_seeds]` — one-line seeds for characters *about to be written* into what
   is being generated. Quick Build writes the world first, so without these it writes
   it blind: a world that needs a harbour-master invents and names one, and the cast
@@ -843,6 +850,7 @@ defmodule Polyphony.Authoring.Autofill do
     do: %{
       world: opts[:world],
       relations: opts[:relations],
+      ensemble: opts[:ensemble],
       role: opts[:role],
       cast_seeds: opts[:cast_seeds]
     }
@@ -851,7 +859,47 @@ defmodule Polyphony.Authoring.Autofill do
     do:
       role_block(ctx[:role]) <>
         world_block(ctx[:world]) <>
-        relations_block(ctx[:relations]) <> cast_seeds_block(ctx[:cast_seeds])
+        relations_block(ctx[:relations]) <>
+        ensemble_block(ctx[:ensemble]) <> cast_seeds_block(ctx[:cast_seeds])
+
+  # The people **already written into this story**, as opposed to `relations` — which is
+  # who a character is connected to, and says "keep them consistent with these people".
+  #
+  # Quick Build was passing its cast-so-far through `relations`, and the wording did the
+  # damage. For a slot with a blank brief the only substantial content in the prompt was
+  # another character's whole sheet under an instruction to be *consistent with* it, so
+  # the model did the reasonable thing and wrote them again. Two blank slots produced two
+  # of the same person.
+  #
+  # Both jobs are real and they pull opposite ways: continuity of *world* detail (so the
+  # cast doesn't each invent a different landlord for the same building) and distinctness
+  # of *person*. Saying both explicitly is the only way to get both.
+  defp ensemble_block(cast) when is_list(cast) and cast != [] do
+    lines =
+      Enum.map_join(cast, "\n", fn c ->
+        facets =
+          [
+            kv("premise", c["premise"]),
+            kv("voice", c["voice"]),
+            kv("temperament", c["temperament"])
+          ]
+          |> Enum.reject(&is_nil/1)
+          |> Enum.join(" | ")
+
+        "- #{c["name"]}: #{facets}"
+      end)
+
+    "Already written into this story — this character is somebody ELSE:\n" <>
+      lines <>
+      "\n\nUse them for CONTINUITY: shared places, institutions, events and world " <>
+      "detail should line up with what these people establish. Do NOT reuse a name, a " <>
+      "role, a premise, a voice or a backstory that is already on that list — this is a " <>
+      "different person with a different function in the story. If the author's brief " <>
+      "above is blank, the gap in this ensemble *is* the brief: write the person this " <>
+      "story still needs and does not yet have.\n\n"
+  end
+
+  defp ensemble_block(_), do: ""
 
   # People who are **about to be written into this world** — the character seeds a
   # Quick Build is holding while it generates the world first.

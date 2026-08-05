@@ -284,7 +284,11 @@ defmodule Polyphony.Authoring.QuickBuild do
         else
           report.(1 + i, "Writing character #{i + 1} of #{n}")
           brief = brief_with_roster(seed, seeds, i)
-          opts = [world: world_ctx, relations: cast_relations(built, stubs)] ++ meter
+          # `ensemble`, not `relations`. The cast so far is who *already exists*, not who
+          # this character is connected to — and `relations` says "keep them consistent
+          # with these people", which for a blank slot was the only substantial thing in
+          # the prompt. Two blank slots produced two of the same person.
+          opts = [world: world_ctx, ensemble: cast_relations(built, stubs)] ++ meter
 
           case Autofill.generate_all(:character, brief, %{}, opts) do
             {:ok, fields} when map_size(fields) > 0 ->
@@ -356,7 +360,8 @@ defmodule Polyphony.Authoring.QuickBuild do
 
   # The cast context handed to each new character's generation: the earlier characters'
   # sheets (so shared world detail stays consistent) and the off-screen stubs introduced
-  # so far (name + role), as the `relations` maps `Autofill` grounds generation in.
+  # so far (name + role). Passed as `:ensemble` — *these people already exist, be someone
+  # else* — rather than `:relations`, which means the opposite.
   defp cast_relations(built, stubs) do
     mains =
       for {_e, s} <- built, present?(s.name) do
