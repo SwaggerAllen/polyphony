@@ -28,6 +28,7 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Jobs.QuickBuild, as: BuildJob
   alias Polyphony.ReadModels.BuildRun
   alias Polyphony.Campaigns
+  alias Polyphony.Characters
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Publication
   alias Polyphony.Publication.Preflight
@@ -1315,16 +1316,27 @@ defmodule PolyphonyWeb.CampaignLive do
         </Kit.btn>
       </Kit.row>
 
-      <Kit.row :for={c <- @cast} class="px-4 py-2.5 flex items-center gap-2.5">
-        <span class="av shrink-0" style={"background:#{Voice.of_sheet(Library.payload(c))}"}></span>
-        <div class="min-w-0 flex-1">
-          <div class="text-[13.5px] font-semibold"><%= char_name(c) %></div>
-          <div class="text-[11px] dim truncate"><%= char_blurb(c) %></div>
-        </div>
-        <Kit.pill :if={pending?(c)} colour="var(--lamp)">Pending</Kit.pill>
-        <.link navigate={~p"/authoring/character/#{c.id}"} class="btn btn-gh btn-sm shrink-0">Edit</.link>
-        <Kit.btn kind={:pen} size={:sm} phx-click="remove_character" phx-value-id={c.id}>Remove</Kit.btn>
-      </Kit.row>
+      <.cast_row :for={c <- named_cast(@cast)} entry={c} />
+
+      <%!-- Walk-ons collapse behind a count (`ux/polyphony-campaign.html` §06: "Main cast
+            reads as the short list you authored; walk-ons collapse behind a count"). A
+            quick-built campaign arrives with three people you asked for and a dozen the
+            cast introduced — a flat list buries the ones you came for. --%>
+      <details :if={walk_ons(@cast) != []}>
+        <summary
+          class="row px-4 py-3 flex items-center justify-between gap-2 cursor-pointer list-none"
+          style="background:var(--b2)"
+        >
+          <div>
+            <span class="lbl dim">Walk-ons · <%= length(walk_ons(@cast)) %></span>
+            <div class="text-[11px] dim mt-0.5">
+              Written around the cast. Only remembered in their own scenes.
+            </div>
+          </div>
+          <span class="dim text-[14px] shrink-0">⌄</span>
+        </summary>
+        <.cast_row :for={c <- walk_ons(@cast)} entry={c} />
+      </details>
 
       <Kit.empty :if={@cast == []} headline="Nobody is in this story yet.">
         A campaign needs at least one character before a scene can open.
@@ -1361,6 +1373,35 @@ defmodule PolyphonyWeb.CampaignLive do
     </div>
     """
   end
+
+  attr(:entry, :any, required: true)
+
+  defp cast_row(assigns) do
+    ~H"""
+    <Kit.row class="px-4 py-2.5 flex items-center gap-2.5">
+      <span class="av shrink-0" style={"background:#{Voice.of_sheet(Library.payload(@entry))}"}></span>
+      <div class="min-w-0 flex-1">
+        <div class="text-[13.5px] font-semibold"><%= char_name(@entry) %></div>
+        <div class="text-[11px] dim truncate"><%= char_blurb(@entry) %></div>
+      </div>
+      <Kit.pill :if={pending?(@entry)} colour="var(--lamp)">Pending</Kit.pill>
+      <.link navigate={~p"/authoring/character/#{@entry.id}"} class="btn btn-gh btn-sm shrink-0">
+        Edit
+      </.link>
+      <Kit.btn kind={:pen} size={:sm} phx-click="remove_character" phx-value-id={@entry.id}>
+        Remove
+      </Kit.btn>
+    </Kit.row>
+    """
+  end
+
+  # Tier, not status, is what separates the short list you authored from the people it
+  # produced (§2.5) — a main-cast member can be a half-written stub and still be one of
+  # the two people you came for.
+  defp named_cast(cast), do: Enum.reject(cast, &walk_on?/1)
+  defp walk_ons(cast), do: Enum.filter(cast, &walk_on?/1)
+
+  defp walk_on?(entry), do: Characters.tier_of(entry) == :incidental
 
   # ── Premise ───────────────────────────────────────────────────────────────────
 

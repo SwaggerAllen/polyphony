@@ -50,8 +50,8 @@ defmodule Polyphony.Jobs.QuickBuild do
 
   require Logger
 
-  alias Polyphony.{Builds, Library, Owner}
-  alias Polyphony.Authoring.QuickBuild
+  alias Polyphony.{Builds, Campaigns, Library, Owner}
+  alias Polyphony.Authoring.{QuickBuild, Stub}
 
   @doc """
   Enqueue a build for `campaign_id`. Returns `{:ok, run}`, or `:taken` when one is
@@ -183,11 +183,17 @@ defmodule Polyphony.Jobs.QuickBuild do
     %{
       bible: payload[:bible_id] && Library.get(payload[:bible_id]),
       done: (run && run.done) || [],
+      # **Cast only.** The roster now also holds the off-screen stubs this build wrote,
+      # and handing those back as built cast would have the resume treat them as seeds
+      # already done — miscounting the walk, cross-linking walk-ons into the main cast,
+      # and writing them covers they are not meant to have. `:full` is the discriminator
+      # the build itself sets: a generated cast member is full, a stub is not.
       characters:
         (payload[:character_ids] || [])
         |> Enum.reject(&MapSet.member?(baseline, &1))
         |> Enum.map(&Library.get/1)
         |> Enum.reject(&is_nil/1)
+        |> Enum.filter(&Stub.full?(Library.payload(&1)))
     }
   end
 
@@ -209,12 +215,12 @@ defmodule Polyphony.Jobs.QuickBuild do
     update(campaign_id, fn payload -> Map.put(payload, :bible_id, entry.id) end)
   end
 
-  defp associate(campaign_id, {:character, entry}) do
-    update(campaign_id, fn payload ->
-      ids = payload[:character_ids] || []
-      Map.put(payload, :character_ids, Enum.uniq(ids ++ [entry.id]))
-    end)
-  end
+  # Cast and walk-ons join the same roster — `character_ids` is who is in this story, and
+  # a stub invented by one of its characters is one of its people. Tier is what separates
+  # them on screen (`:incidental`), not membership. Shared with the editor and play, which
+  # both invent people the same way.
+  defp associate(campaign_id, {kind, entry}) when kind in [:character, :stub],
+    do: Campaigns.cast(campaign_id, entry.id)
 
   defp attach_premise(_campaign_id, premise) when premise in [nil, ""], do: :ok
 

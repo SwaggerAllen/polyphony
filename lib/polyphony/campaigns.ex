@@ -28,6 +28,7 @@ defmodule Polyphony.Campaigns do
   """
 
   alias Polyphony.Library
+  alias Polyphony.ReadModels.LibraryEntry
   alias Polyphony.ReadModels.ArcEntry
   alias Polyphony.Repo
 
@@ -169,6 +170,64 @@ defmodule Polyphony.Campaigns do
         into: %{},
         do: {to_string(id), campaign}
   end
+
+  @doc """
+  Put a character on a campaign's roster. Idempotent; a nil campaign or character is a
+  no-op.
+
+  Everything that invents a person invents them *for a story*, and until this existed
+  each path had to remember to say so — so none of them did. A stub written from a
+  relationship, a walk-on Quick Build's cast introduced, a name the Director mentioned
+  mid-scene: all landed in the library owned by nobody's campaign, which meant
+  `by_character/2` filed them under "Not in a campaign", the cast tab's *fill them in*
+  prompt could never see them, and §2.7's "characters do not cross campaigns" described
+  a rule about people who belonged to none.
+
+  Tier is what keeps the roster readable (§2.5) — a walk-on collapses behind a count —
+  so joining it costs nothing and being absent from it costs the screens above.
+  """
+  @spec cast(term() | nil, term() | nil, keyword()) :: :ok
+  def cast(campaign, character_id, opts \\ [])
+  def cast(nil, _character_id, _opts), do: :ok
+  def cast(_campaign, nil, _opts), do: :ok
+
+  # An entry or an id, because `by_character/2` and `of_character/3` hand back entries
+  # while the build job has only an id. Matching the struct explicitly rather than
+  # letting it fall through to `Library.get/2`, which answers nil for one and would turn
+  # a wrong argument into a silent no-op.
+  def cast(%LibraryEntry{} = campaign, character_id, opts),
+    do: cast(campaign.id, character_id, opts)
+
+  def cast(campaign_id, character_id, opts) do
+    case Library.get(campaign_id, opts) do
+      nil ->
+        :ok
+
+      entry ->
+        payload = Library.payload(entry) || %{}
+        ids = Map.get(payload, :character_ids) || []
+
+        if character_id in ids do
+          :ok
+        else
+          Library.update_payload(
+            entry.id,
+            Map.put(payload, :character_ids, ids ++ [character_id]),
+            opts
+          )
+
+          :ok
+        end
+    end
+  end
+
+  @doc """
+  The campaign a character belongs to, or nil — the inverse of `by_character/2` for
+  when you have the person and not the map.
+  """
+  @spec of_character(term(), term(), keyword()) :: term() | nil
+  def of_character(owner, character_id, opts \\ []),
+    do: owner |> by_character(opts) |> Map.get(to_string(character_id))
 
   @doc """
   A campaign's name, or the placeholder the library shows for an unnamed one.

@@ -167,6 +167,88 @@ defmodule Polyphony.Library do
     end
   end
 
+  # ── Orphans ───────────────────────────────────────────────────────────────────
+
+  @doc """
+  Characters nobody's story has on its roster.
+
+  Every path that invents a person now puts them on a campaign — Quick Build's cast and
+  its walk-ons, a stub written from a relationship, a name mentioned mid-scene — but they
+  didn't always, and what they left behind is a character reachable from nothing. The
+  library files them under *Not in a campaign*, the cast tab's "fill them in" prompt can't
+  see them, and §2.7's "characters do not cross campaigns" says nothing at all about
+  someone who is in none.
+
+  **The roster scan is deliberately wide and the character scan deliberately narrow**,
+  because the two errors are not symmetrical. A campaign that is archived, trashed or
+  hidden still holds its cast, and a published snapshot pins the characters it froze by
+  `source_id` — miss any of those and this deletes something a story needs. On the other
+  side, an **archived** character is an explicit *keep this, out of the way*, and
+  overriding that is not what "clean up the orphans" means.
+  """
+  @spec orphaned_characters(keyword()) :: [LibraryEntry.t()]
+  def orphaned_characters(opts \\ []) do
+    repo = repo(opts)
+    rostered = rostered_character_ids(repo)
+
+    repo
+    |> LibraryEntry.list_kind("character")
+    |> Enum.filter(&(is_nil(&1.archived_at) and is_nil(&1.deleted_at)))
+    |> Enum.reject(&MapSet.member?(rostered, &1.id))
+  end
+
+  @doc """
+  Move every orphaned character to the trash. Returns the entries it moved.
+
+  Soft, not a purge: `soft_delete/2` puts them on the trash shelf with the ordinary
+  recovery window (`retention_days/0`), so a character this catches that somebody
+  actually wanted is one Restore away — and `Jobs.PurgeTrash` finishes the job on the
+  usual clock rather than this doing it irreversibly in one pass.
+  """
+  @spec trash_orphaned_characters(keyword()) :: [LibraryEntry.t()]
+  def trash_orphaned_characters(opts \\ []) do
+    orphans = orphaned_characters(opts)
+    Enum.each(orphans, &soft_delete(&1.id, opts))
+    orphans
+  end
+
+  # Every character id any campaign refers to — live rosters plus the `source_id`s a
+  # published snapshot pinned, since a snapshot outlives the campaign it froze.
+  #
+  # Nothing is rescued here on purpose. A payload that won't decode is a roster whose
+  # contents are *unknown*, and treating unknown as empty is how a cleanup deletes the
+  # cast of the one campaign it couldn't read. Better to raise and delete nothing.
+  defp rostered_character_ids(repo) do
+    repo
+    |> LibraryEntry.list_kind("campaign")
+    |> Enum.flat_map(&character_refs/1)
+    |> MapSet.new()
+  end
+
+  defp character_refs(entry) do
+    case payload(entry) do
+      %Snapshot{characters: pinned} when is_list(pinned) ->
+        for %{source_id: id} <- pinned, id != nil, do: normalize_ref(id)
+
+      %{} = payload ->
+        for id <- Map.get(payload, :character_ids) || [], do: normalize_ref(id)
+
+      _ ->
+        []
+    end
+  end
+
+  defp normalize_ref(id) when is_integer(id), do: id
+
+  defp normalize_ref(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {n, ""} -> n
+      _ -> id
+    end
+  end
+
+  defp normalize_ref(id), do: id
+
   # ── Soft-delete (§B9) ─────────────────────────────────────────────────────────
 
   @doc "Archive an entry — hidden from default lists, fully recoverable."

@@ -18,10 +18,19 @@ defmodule PolyphonyWeb.PlayMentionsLiveTest do
     :ok
   end
 
+  defp campaign(user) do
+    Library.put(%{
+      owner: Owner.of(user),
+      kind: "campaign",
+      payload: %{kind: :campaign, name: "Camp", character_ids: [], bible_id: nil, scenes: []}
+    })
+  end
+
   test "scanning stubs characters mentioned in the scene but not yet created",
        %{conn: conn, user: user} do
+    camp = campaign(user)
     scene = "ment-" <> Integer.to_string(System.unique_integer([:positive]))
-    :ok = App.dispatch(%OpenScene{scene_id: scene, opened_beat: 0})
+    :ok = App.dispatch(%OpenScene{scene_id: scene, campaign_id: camp.id, opened_beat: 0})
     :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: "mira", beat: 1})
 
     # Mira mentions someone off-stage.
@@ -52,5 +61,13 @@ defmodule PolyphonyWeb.PlayMentionsLiveTest do
     assert Enum.count(chars) > before
     assert Enum.all?(chars, &match?(%CharacterSheet{}, Library.payload(&1)))
     assert Enum.any?(chars, &(Library.payload(&1).status == :stub))
+
+    # And they join the story that mentioned them. A stub in no campaign is one the
+    # roster, the cast tab's "fill them in" prompt, and the library's own grouping by
+    # campaign all fail to see.
+    roster = Library.payload(Library.get(camp.id))[:character_ids]
+    assert roster != []
+
+    assert Enum.all?(roster, fn id -> Library.payload(Library.get(id)).status == :stub end)
   end
 end

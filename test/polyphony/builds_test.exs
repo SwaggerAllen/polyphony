@@ -351,6 +351,40 @@ defmodule Polyphony.BuildsTest do
       assert Enum.count(Library.list_for_owner(owner), &(&1.kind == "world_bible")) == 1
     end
 
+    test "walk-ons join the roster, and a resume doesn't mistake one for cast",
+         %{owner: owner, user: user} do
+      camp = campaign(owner)
+
+      assert {:ok, _} =
+               BuildJob.enqueue(
+                 owner: owner,
+                 campaign_id: camp.id,
+                 world_seed: "a rain-drowned harbour",
+                 character_seeds: ["a harbour-master"],
+                 suggest_offscreen: true,
+                 user_id: user.id
+               )
+
+      assert %{success: 1} = Oban.drain_queue(queue: :generation)
+
+      roster = payload_of(camp.id)[:character_ids]
+      sheets = Enum.map(roster, &payload_of/1)
+      {cast, walk_ons} = Enum.split_with(sheets, &(&1.status == :full))
+
+      assert length(cast) == 1
+      assert walk_ons != [], "the people the cast introduced weren't put in the campaign"
+
+      # The reason `resume_state` filters to `:full`. Handing the walk-ons back as built
+      # cast would have the next attempt count them as seeds already done, cross-link
+      # them into the main cast, and write them covers they aren't meant to have.
+      assert {:ok, _} = BuildJob.retry(camp.id)
+      assert %{success: 1} = Oban.drain_queue(queue: :generation)
+
+      after_retry = Enum.map(payload_of(camp.id)[:character_ids], &payload_of/1)
+      assert Enum.count(after_retry, &(&1.status == :full)) == 1
+      assert Enum.all?(walk_ons, &(&1.cover in [nil, ""]))
+    end
+
     test "refuses a second build for the same campaign", %{owner: owner} do
       camp = campaign(owner)
 
