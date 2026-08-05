@@ -145,6 +145,53 @@ Deliberately **not** the same axis as world-arc reach: `scope` answers *where a 
 `concealed` answers *who knows it*. Folding them together would make a local fact secret and a
 global secret impossible. **Who else** knows one is still §3.3.
 
+### 2.18 A generation can be proposed rather than applied · **new** — *not urgent*
+Every ✦ control writes straight into the field. Rewrite replaces the paragraph, Suggest
+appends to the list, Generate-all fills the blanks — and then autosave persists it. There is
+no moment where the author looks at what came back and decides. Undo is "notice, select,
+delete, retype", which is not undo.
+
+Arc already has the shape this wants, and has since §3.0: `arc_entries` holds **proposals**
+with a `status` (`proposed` → `canon` / `retracted`), a **"Because" line** saying why the
+change is being suggested, and provenance (`beat`, `source_scene_id`) so the author can see
+what produced it. `ArcReviewLive` is the screen. Accepting is a deliberate act, and refusing
+one is how you write the person who didn't go along with it — the review gate is a feature of
+the fiction, not a safety rail.
+
+The thing worth noticing is that **play already works this way and authoring doesn't**. A
+generated *turn* is a `PacketDraft` you accept or discard (§A2 / §1.5). A generated
+*paragraph* is just applied. That asymmetry isn't a decision anyone made; it is where the two
+halves happened to land.
+
+**The shape, if it's wanted.** `Polyphony.Generations` already parks the raw result and hands
+it to the screen — it is one hop from a proposal store. What would change:
+
+- A result gains a status rather than being consumed on read. `Generations.take/1` deletes
+  today precisely because the result has no reviewer; give it one and it persists until
+  accepted or rejected.
+- Each operation supplies its **"Because"** — the model is already told what it is writing
+  from, so the reason is available and currently thrown away. Without it this is just a
+  confirmation dialog, which nobody wants.
+- The editors render a proposal **in place**, the way the design shows a suggested field:
+  the old text and the new one, with accept / reject / edit-then-accept. `edit/3` on
+  `ArcEntry` is the precedent — correcting a proposal before taking it is the common case,
+  not an edge one.
+- Rejected proposals are kept long enough to be undone and then purged, like the trash
+  (§2.13). A rejected suggestion is not an event; it is a decision that expires.
+
+**Where it should *not* apply, and this is the part that makes it worth doing well.**
+Review is friction, and friction is right in proportion to how much the generation
+overwrites. Filling an empty field is not a decision anyone needs to confirm; replacing three
+paragraphs somebody wrote is. A blanket "review everything" would make Quick Build unusable
+and would train the author to accept without reading, which is worse than no gate at all. The
+natural line is **destructive vs additive**: Rewrite and Generate-all-over-existing propose;
+Suggest, Expand and filling a blank apply. Worth settling before building, because it decides
+whether this is a small feature or an argument with the author on every click.
+
+**Not blocking anything.** The durable-generation work (`Generations` / `Jobs.Generate`) shipped
+without it and the editors are usable as they are. This is a quality-of-authoring change, and
+its cost is mostly in the screens rather than the backend.
+
 ### 2.1 Concealed and partial presence · **new**
 There is currently no way for a character to be in a scene but hidden, or known to only
 some of the people present. `Membership` is a half-open interval and `visible_to?/3` judges
