@@ -4,6 +4,7 @@ defmodule PolyphonyWeb.CampaignCastLiveTest do
 
   alias Polyphony.{Library, Owner}
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
+  alias Polyphony.Authoring.CharacterSheet.Relationship
 
   setup :register_and_log_in_user
 
@@ -121,6 +122,89 @@ defmodule PolyphonyWeb.CampaignCastLiveTest do
     {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
 
     assert :binary.match(html, "Zeno") < :binary.match(html, "Alma")
+  end
+
+  describe "removing somebody cuts the ties" do
+    test "both ways, and only within this campaign", %{conn: conn, user: user} do
+      wren = character(user, %CharacterSheet{name: "Wren", status: :full})
+      bram = character(user, %CharacterSheet{name: "Bram", status: :full})
+      outsider = character(user, %CharacterSheet{name: "Ilias", status: :full})
+
+      # Wren regards both; Bram regards Wren back.
+      Library.update_payload(wren.id, %CharacterSheet{
+        name: "Wren",
+        status: :full,
+        relationships: [
+          %Relationship{target: "Bram", target_id: bram.id, descriptor: "owes him"},
+          %Relationship{target: "Ilias", target_id: outsider.id, descriptor: "avoids him"}
+        ]
+      })
+
+      Library.update_payload(bram.id, %CharacterSheet{
+        name: "Bram",
+        status: :full,
+        relationships: [
+          %Relationship{target: "Wren", target_id: wren.id, descriptor: "trusts her"}
+        ]
+      })
+
+      camp = campaign(user, %{character_ids: [wren.id, bram.id]})
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+
+      view
+      |> element(~s(button[phx-click="remove_character"][phx-value-id="#{wren.id}"]))
+      |> render_click()
+
+      # The cast forgets the leaver. Leaving the link behind means Bram's sheet — and
+      # Bram's prompt, since `Context` renders relationships — keeps describing somebody
+      # nobody in this story can meet.
+      assert Library.payload(Library.get(bram.id)).relationships == []
+
+      # And the leaver forgets the cast. Neither half of a link survives one of them
+      # leaving.
+      wren_rels = Library.payload(Library.get(wren.id)).relationships
+      refute Enum.any?(wren_rels, &(&1.target_id == bram.id))
+
+      # But not the tie to somebody outside it — that was never this campaign's to cut.
+      assert Enum.any?(wren_rels, &(&1.target_id == outsider.id))
+    end
+
+    test "including a link written before ids were resolved", %{conn: conn, user: user} do
+      wren = character(user, %CharacterSheet{name: "Wren", status: :full})
+
+      bram =
+        character(user, %CharacterSheet{
+          name: "Bram",
+          status: :full,
+          # No `target_id` — the shape a relationship has before a save resolves it.
+          relationships: [%Relationship{target: "wren", descriptor: "trusts her"}]
+        })
+
+      camp = campaign(user, %{character_ids: [wren.id, bram.id]})
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+
+      view
+      |> element(~s(button[phx-click="remove_character"][phx-value-id="#{wren.id}"]))
+      |> render_click()
+
+      # A name-only link is the kind that would otherwise dangle invisibly.
+      assert Library.payload(Library.get(bram.id)).relationships == []
+    end
+
+    test "and the roster still loses them", %{conn: conn, user: user} do
+      wren = character(user, %CharacterSheet{name: "Wren", status: :full})
+      camp = campaign(user, %{character_ids: [wren.id]})
+
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+
+      view
+      |> element(~s(button[phx-click="remove_character"][phx-value-id="#{wren.id}"]))
+      |> render_click()
+
+      assert Library.payload(Library.get(camp.id))[:character_ids] == []
+      # Removed from the story, not deleted — they are still in the library.
+      assert Library.live?(Library.get(wren.id))
+    end
   end
 
   describe "everyone invented for a story joins it" do

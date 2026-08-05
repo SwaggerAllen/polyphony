@@ -27,6 +27,7 @@ defmodule Polyphony.Campaigns do
   because "this story is over" is the one thing the data cannot work out for itself.
   """
 
+  alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Library
   alias Polyphony.ReadModels.LibraryEntry
   alias Polyphony.ReadModels.ArcEntry
@@ -220,6 +221,95 @@ defmodule Polyphony.Campaigns do
         end
     end
   end
+
+  @doc """
+  Take a character off a campaign's roster, and **cut the ties both ways**.
+
+  Removing somebody used to drop an id from a list and leave every sentence about them
+  where it was: the cast still regarded them, their sheet still regarded the cast, and
+  every one of those `target_id`s now pointed at a person no longer in the story. It
+  reads as a bug on the remaining sheets, and it feeds the prompt — `Context` renders
+  relationships, so the character who left keeps being described to people who can no
+  longer meet them.
+
+  **Both directions**, because a relationship is a link between two people who share a
+  story and neither half survives one of them leaving. Ties to characters *outside* this
+  campaign are untouched: they were never this campaign's to sever.
+
+  Matching by id and, for the ones written before ids were resolved, by name — a
+  legacy name-only link is exactly the kind that would otherwise be left dangling and
+  invisible.
+  """
+  @spec uncast(term() | nil, term() | nil, keyword()) :: :ok
+  def uncast(campaign, character_id, opts \\ [])
+  def uncast(nil, _character_id, _opts), do: :ok
+  def uncast(_campaign, nil, _opts), do: :ok
+
+  def uncast(%LibraryEntry{} = campaign, character_id, opts),
+    do: uncast(campaign.id, character_id, opts)
+
+  def uncast(campaign_id, character_id, opts) do
+    case Library.get(campaign_id, opts) do
+      nil ->
+        :ok
+
+      entry ->
+        payload = Library.payload(entry) || %{}
+        ids = Map.get(payload, :character_ids) || []
+        remaining = Enum.reject(ids, &same_ref?(&1, character_id))
+
+        Library.update_payload(entry.id, Map.put(payload, :character_ids, remaining), opts)
+        sever(character_id, remaining, opts)
+        :ok
+    end
+  end
+
+  # The leaver forgets the cast, and the cast forgets the leaver.
+  defp sever(left_id, remaining, opts) do
+    leaver = Library.get(left_id, opts)
+    left_names = names_of([leaver])
+    remaining_entries = remaining |> Enum.map(&Library.get(&1, opts)) |> Enum.reject(&is_nil/1)
+
+    Enum.each(remaining_entries, &drop_links(&1, [left_id], left_names, opts))
+    drop_links(leaver, remaining, names_of(remaining_entries), opts)
+  end
+
+  defp drop_links(nil, _ids, _names, _opts), do: :ok
+
+  defp drop_links(entry, ids, names, opts) do
+    case Library.payload(entry) do
+      %CharacterSheet{relationships: rels} = sheet when is_list(rels) ->
+        kept = Enum.reject(rels, &links_to?(&1, ids, names))
+
+        if length(kept) != length(rels),
+          do: Library.update_payload(entry.id, %CharacterSheet{sheet | relationships: kept}, opts)
+
+        :ok
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp links_to?(rel, ids, names) do
+    Enum.any?(ids, &same_ref?(rel.target_id, &1)) or
+      (rel.target_id in [nil, ""] and MapSet.member?(names, normalize_name(rel.target)))
+  end
+
+  defp names_of(entries) do
+    for e <- entries,
+        e != nil,
+        %CharacterSheet{name: n} <- [Library.payload(e)],
+        is_binary(n),
+        normalize_name(n) != "",
+        into: MapSet.new(),
+        do: normalize_name(n)
+  end
+
+  defp normalize_name(n), do: n |> to_string() |> String.trim() |> String.downcase()
+
+  # Ids have been written as both integers and strings over the years.
+  defp same_ref?(a, b), do: to_string(a) == to_string(b)
 
   @doc """
   The campaign a character belongs to, or nil — the inverse of `by_character/2` for

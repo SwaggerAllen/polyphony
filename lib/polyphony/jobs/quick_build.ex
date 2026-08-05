@@ -152,6 +152,7 @@ defmodule Polyphony.Jobs.QuickBuild do
     case QuickBuild.build(opts) do
       {:ok, result} ->
         attach_premise(campaign_id, result[:premise])
+        attach_name(campaign_id, result[:name])
         Builds.finish(campaign_id, summary(result))
         :ok
 
@@ -226,6 +227,19 @@ defmodule Polyphony.Jobs.QuickBuild do
 
   defp attach_premise(campaign_id, premise),
     do: update(campaign_id, &Map.put(&1, :premise, premise))
+
+  # **Only into a blank.** A campaign the author already titled keeps its title — Quick
+  # Build fills the gaps it was asked to fill, and renaming somebody's story out from
+  # under them is not one of them. Everything else here is additive for the same reason.
+  defp attach_name(_campaign_id, name) when name in [nil, ""], do: :ok
+
+  defp attach_name(campaign_id, name) do
+    update(campaign_id, fn payload ->
+      if String.trim(to_string(payload[:name] || "")) == "",
+        do: Map.put(payload, :name, name),
+        else: payload
+    end)
+  end
 
   defp update(campaign_id, fun) do
     case Library.get(campaign_id) do

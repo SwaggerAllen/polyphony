@@ -84,6 +84,13 @@ defmodule PolyphonyWeb.CampaignLive do
          qb_suggest: true,
          quick_build_open: false,
          scene_location: "",
+         scene_premise: "",
+         scene_suggesting: false,
+         # Who is in the *next* scene. Nil means "everyone who's ready", which is what
+         # this always did — a set only exists once the author has said otherwise, so
+         # a cast that grows between scenes is included by default rather than silently
+         # left out of the selection made three scenes ago.
+         scene_cast: nil,
          tab: "settings"
        )
        |> subscribe_build(entry)
@@ -200,8 +207,49 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
-  def handle_event("set_scene_location", %{"location" => where}, socket),
-    do: {:noreply, assign(socket, scene_location: where)}
+  def handle_event("set_scene_location", params, socket),
+    do:
+      {:noreply,
+       assign(socket,
+         scene_location: params["location"] || socket.assigns.scene_location,
+         scene_premise: params["premise"] || socket.assigns.scene_premise
+       )}
+
+  # A chip per ready character. The first tap materialises the set from "everyone",
+  # so turning one person off doesn't read as turning everyone else off.
+  def handle_event("toggle_scene_cast", %{"id" => id}, socket) do
+    cid = normalize_id(id)
+    current = scene_cast_ids(socket.assigns)
+
+    chosen =
+      if MapSet.member?(current, cid),
+        do: MapSet.delete(current, cid),
+        else: MapSet.put(current, cid)
+
+    {:noreply, assign(socket, scene_cast: chosen)}
+  end
+
+  # Where and what's at stake, in one call — see `Autofill.generate_scene_opening/1`
+  # for why they aren't two buttons.
+  def handle_event("suggest_scene", _params, socket) do
+    safe(socket, fn ->
+      opts =
+        [
+          world: scene_world(socket),
+          cast: scene_cast_summaries(socket.assigns),
+          so_far: scene_lines(socket.assigns),
+          current: %{
+            "location" => socket.assigns.scene_location,
+            "premise" => socket.assigns.scene_premise
+          }
+        ] ++ meter_attribution(socket)
+
+      {:noreply,
+       socket
+       |> assign(scene_suggesting: true)
+       |> request_generation("scene", "autofill.scene_opening", %{opts: opts})}
+    end)
+  end
 
   def handle_event("toggle_quick_build", _params, socket),
     do: {:noreply, assign(socket, quick_build_open: not socket.assigns.quick_build_open)}
@@ -241,11 +289,21 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
+  # Removing somebody cuts their ties to the rest of the cast, both ways — a
+  # relationship is a link between two people who share a story, and leaving a dangling
+  # `target_id` behind means the remaining sheets keep describing a person nobody can
+  # meet, in their prompts as well as on screen (`Campaigns.uncast/3`).
   def handle_event("remove_character", %{"id" => id}, socket) do
     safe(socket, fn ->
       cid = normalize_id(id)
-      ids = Enum.reject(cast_ids(socket.assigns.payload), &(&1 == cid))
-      {:noreply, update_cast(socket, ids, "Removed #{display_name(cid)} from the cast.")}
+      name = display_name(cid)
+      :ok = Campaigns.uncast(socket.assigns.entry.id, cid)
+
+      {:noreply,
+       socket
+       |> assign(entry: Library.get(socket.assigns.entry.id))
+       |> load()
+       |> put_flash(:info, "Removed #{name} from the cast.")}
     end)
   end
 
@@ -388,7 +446,9 @@ defmodule PolyphonyWeb.CampaignLive do
       %{entry: entry, cast: cast} = socket.assigns
       # Only finalized characters enter the scene; pending stubs are skipped (they
       # aren't castable until generated — bulk-generate them from the library first).
-      {ready, pending} = Enum.split_with(cast, &full?/1)
+      # Of those, the ones the author picked for *this* scene.
+      {_all_ready, pending} = Enum.split_with(cast, &full?/1)
+      ready = scene_cast_entries(socket.assigns)
 
       cond do
         ready == [] ->
@@ -509,6 +569,27 @@ defmodule PolyphonyWeb.CampaignLive do
      |> load()}
   end
 
+  def handle_info({:generation, "scene", {:ok, %{"location" => l, "premise" => p}}}, socket) do
+    {:noreply,
+     socket
+     |> forget_generation("scene")
+     |> assign(
+       scene_suggesting: false,
+       scene_location: blank_to(l, socket.assigns.scene_location),
+       scene_premise: blank_to(p, socket.assigns.scene_premise)
+     )}
+  end
+
+  def handle_info({:generation, "scene", result}, socket) do
+    Logger.warning("[campaign] scene opening failed: #{inspect(result)}")
+
+    {:noreply,
+     socket
+     |> forget_generation("scene")
+     |> assign(scene_suggesting: false)
+     |> put_flash(:error, "Couldn't suggest a scene: #{inspect(reason(result))}")}
+  end
+
   def handle_info({:generation, "premise", {:ok, text}}, socket) do
     payload = Map.put(socket.assigns.payload, :premise, text)
     {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
@@ -573,7 +654,9 @@ defmodule PolyphonyWeb.CampaignLive do
     %{entry: entry, payload: payload} = socket.assigns
 
     scene_id = "sc-" <> Integer.to_string(System.unique_integer([:positive]))
-    premise = payload[:premise] || ""
+    # The scene's own premise, falling back to the campaign's. Every scene used to open
+    # on the campaign pitch, which describes the whole story and nothing about now.
+    premise = blank_to(socket.assigns.scene_premise, payload[:premise] || "")
     bible = payload[:bible_id] && Library.get(payload[:bible_id]) |> maybe_payload()
 
     :ok =
@@ -610,7 +693,11 @@ defmodule PolyphonyWeb.CampaignLive do
 
     Library.update_payload(entry.id, %{payload | scenes: [scene_id | socket.assigns.scenes]})
 
-    {:noreply, socket |> maybe_flash_pending(pending) |> redirect(to: ~p"/play/#{scene_id}")}
+    {:noreply,
+     socket
+     |> assign(scene_location: "", scene_premise: "", scene_cast: nil)
+     |> maybe_flash_pending(pending)
+     |> redirect(to: ~p"/play/#{scene_id}")}
   end
 
   defp seed_context(
@@ -1296,7 +1383,7 @@ defmodule PolyphonyWeb.CampaignLive do
         <span class="lbl dim">Cast · <%= length(@cast) %></span>
         <div class="flex gap-1.5">
           <Kit.btn size={:sm} type="button" phx-click="new_character">✦ Write one</Kit.btn>
-          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={@cast == []}>
+          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={scene_cast_entries(assigns) == []}>
             Set a scene
           </Kit.btn>
         </div>
@@ -1495,18 +1582,59 @@ defmodule PolyphonyWeb.CampaignLive do
     <div>
       <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
         <span class="lbl dim"><%= length(@scenes) %> <%= if length(@scenes) == 1, do: "scene", else: "scenes" %></span>
-        <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={@cast == []}>
+        <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={scene_cast_entries(assigns) == []}>
           Set a scene
         </Kit.btn>
+      </Kit.row>
+
+      <%!-- Who is in it. Not every scene is the whole cast, and opening one with
+            everybody present is how a two-hander becomes a crowd — the roster is what
+            turn order walks, so it is also a cost. Everyone ready is the default, so
+            an author who never touches this gets exactly what they got before. --%>
+      <Kit.row :if={scene_ready(@cast) != []} class="px-4 py-3">
+        <div class="flex items-center justify-between gap-2">
+          <span class="lbl dim">Who's in it</span>
+          <span class="text-[11px] dim"><%= length(scene_cast_entries(assigns)) %> of <%= length(scene_ready(@cast)) %></span>
+        </div>
+        <div class="flex flex-wrap gap-1.5 mt-1.5">
+          <button
+            :for={c <- scene_ready(@cast)}
+            type="button"
+            class={["pill", not MapSet.member?(scene_cast_ids(assigns), c.id) && "dim"]}
+            style={MapSet.member?(scene_cast_ids(assigns), c.id) && "background:var(--b3)"}
+            aria-pressed={to_string(MapSet.member?(scene_cast_ids(assigns), c.id))}
+            phx-click="toggle_scene_cast"
+            phx-value-id={c.id}
+          >
+            <%= char_name(c) %>
+          </button>
+        </div>
+        <p :if={scene_cast_entries(assigns) == []} class="text-[11px] leading-relaxed mt-1.5" style="color:var(--pencil)">
+          Nobody is in it. Pick at least one.
+        </p>
       </Kit.row>
 
       <%!-- `OpenScene` has carried `location_id` since §2.3 and nothing ever passed
             one, so every scene opened nowhere. It is a reference field on purpose — a
             string today, a location entity later without changing the event — which is
-            why this is a line of text rather than a picker. --%>
+            why this is a line of text rather than a picker.
+
+            The premise is the scene's, not the campaign's. Every scene used to open on
+            the campaign premise, which is the pitch for the whole story and says
+            nothing about what is happening *now*. Blank still falls back to it. --%>
       <Kit.row class="px-4 py-3">
         <form id="scene-where" phx-change="set_scene_location">
-          <label for="scene-location" class="lbl dim">Where the next scene happens</label>
+          <div class="flex items-center justify-between gap-2">
+            <label for="scene-location" class="lbl dim">Where the next scene happens</label>
+            <Kit.btn
+              size={:sm}
+              type="button"
+              phx-click="suggest_scene"
+              disabled={@scene_suggesting}
+            >
+              <%= if @scene_suggesting, do: "✦ …", else: "✦ Suggest" %>
+            </Kit.btn>
+          </div>
           <input
             id="scene-location"
             type="text"
@@ -1518,6 +1646,19 @@ defmodule PolyphonyWeb.CampaignLive do
           />
           <p class="text-[11px] leading-relaxed dim mt-1.5">
             The Director opens there, and it grounds what everyone can see.
+          </p>
+
+          <label for="scene-premise" class="lbl dim mt-3 block">What's already true when it opens</label>
+          <textarea
+            id="scene-premise"
+            name="premise"
+            rows="2"
+            phx-debounce="blur"
+            placeholder="The ledger is due at the office by dawn and only one of them knows it."
+            class="field px-3 py-2.5 text-[13px] leading-relaxed w-full mt-1.5"
+          ><%= @scene_premise %></textarea>
+          <p class="text-[11px] leading-relaxed dim mt-1.5">
+            The pressure this scene opens under. Left blank, the campaign's premise stands in.
           </p>
         </form>
       </Kit.row>
@@ -1532,7 +1673,7 @@ defmodule PolyphonyWeb.CampaignLive do
       <Kit.empty :if={@scenes == []} headline="Nothing has happened yet.">
         Set a scene and the Director will open it.
         <:action>
-          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={@cast == []}>
+          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={scene_cast_entries(assigns) == []}>
             Set a scene
           </Kit.btn>
         </:action>
@@ -1617,10 +1758,58 @@ defmodule PolyphonyWeb.CampaignLive do
 
       assign(socket,
         expanding_premise: "premise" in running,
-        generating: "stubs" in running
+        generating: "stubs" in running,
+        scene_suggesting: "scene" in running
       )
     else
       socket
+    end
+  end
+
+  defp scene_ready(cast), do: Enum.filter(cast, &full?/1)
+
+  # Who is in the next scene: the author's selection, or everyone ready if they haven't
+  # made one. Always intersected with who is *currently* ready — a selection made before
+  # somebody was removed or generated must not resurrect them or hold a stub.
+  defp scene_cast_ids(assigns) do
+    ready = for c <- assigns.cast, full?(c), into: MapSet.new(), do: c.id
+
+    case assigns.scene_cast do
+      nil -> ready
+      chosen -> MapSet.intersection(chosen, ready)
+    end
+  end
+
+  defp scene_cast_entries(assigns) do
+    chosen = scene_cast_ids(assigns)
+    Enum.filter(assigns.cast, &MapSet.member?(chosen, &1.id))
+  end
+
+  defp scene_cast_summaries(assigns) do
+    for e <- scene_cast_entries(assigns) do
+      sheet = Library.payload(e)
+      %{"name" => Map.get(sheet, :name), "premise" => Map.get(sheet, :premise)}
+    end
+  end
+
+  # `world_display/1` filters `starting_canon` through `WorldBible.public/1`, which
+  # matters here: a scene premise is read by every character in the scene, so a secret
+  # that reached it would be a leak with no symptom but a character who mysteriously
+  # knows something.
+  defp scene_world(socket) do
+    case socket.assigns.bible_id && Library.get(socket.assigns.bible_id) do
+      %{} = entry -> world_display(Library.payload(entry))
+      _ -> nil
+    end
+  end
+
+  # The scenes already played, for "don't open on the same quay again".
+  defp scene_lines(assigns), do: Enum.map(Enum.reverse(assigns.scenes), &scene_label/1)
+
+  defp blank_to(value, fallback) do
+    case String.trim(to_string(value || "")) do
+      "" -> fallback
+      text -> text
     end
   end
 

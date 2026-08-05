@@ -63,6 +63,13 @@ defmodule Polyphony.Authoring.Autofill do
   `opts[:world]` — an optional map of world-bible display fields (`name`, `setting`,
   `tone`, `rules`, `starting_canon`) used to ground the character in a setting.
 
+  `opts[:ensemble]` — the people **already written into this story**, as
+  `%{"name","premise","voice","temperament"}` maps. Distinct from `opts[:relations]`,
+  which is who a character is *connected to* and asks for consistency with them; this
+  one asks for continuity of world detail and **distinctness of person**. A blank brief
+  makes the difference load-bearing — with nothing else in the prompt, "be consistent
+  with these people" writes them again.
+
   `opts[:cast_seeds]` — one-line seeds for characters *about to be written* into what
   is being generated. Quick Build writes the world first, so without these it writes
   it blind: a world that needs a harbour-master invents and names one, and the cast
@@ -571,6 +578,138 @@ defmodule Polyphony.Authoring.Autofill do
     end
   end
 
+  @doc """
+  Name the campaign and write its premise, in one call.
+
+  Quick Build's, and the reason it isn't two: a title is a *read* on the premise — the
+  phrase that says what the story is about once you know what it's about. Asked for on
+  its own it has only the world seed to go on and returns the setting's name back; asked
+  for beside the premise it can name the tension. Everything else Quick Build writes it
+  writes for you, and a campaign called "Untitled campaign" in the library is the one
+  gap the author has to close by hand before anything reads as theirs.
+
+  Same grounding as `generate_campaign_premise/1` — `opts[:world]` display map,
+  `opts[:cast]` a list of `%{"name","premise"}`. Returns
+  `{:ok, %{"name" => String.t(), "premise" => String.t()}}`; the caller decides whether
+  the name is wanted, and Quick Build only takes it when the author left theirs blank.
+  """
+  @spec generate_campaign_opening(keyword()) :: {:ok, map()} | {:error, term()}
+  def generate_campaign_opening(opts \\ []) do
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author frame a role-play campaign. Give it a **name** and a " <>
+            "**premise**, grounded in the world and cast below.\n\n" <>
+            "The name is a title for this story — two to four words, the kind of phrase that " <>
+            "sits on a spine. It names the tension, not the setting: the world already has a " <>
+            "name and repeating it says nothing. No subtitle, no colon, no quotes, no article " <>
+            "unless it earns one.\n\n" <>
+            "The premise is one vivid paragraph naming the central tension and what is at " <>
+            "stake for this cast. It says what the story is *about*; it does not decide how " <>
+            "it ends.\n\n" <>
+            "Return ONLY a JSON object with exactly these keys: name, premise."
+      },
+      %{
+        role: "user",
+        content: world_block(opts[:world]) <> campaign_cast_block(opts[:cast] || [])
+      }
+    ]
+
+    with {:ok, text} <-
+           Polyphony.LLM.call(
+             messages,
+             [response: :autofill, fields: ["name", "premise"]] ++ meter_opts(opts)
+           ),
+         {:ok, data} <- decode_object(text) do
+      {:ok,
+       %{
+         "name" => String.trim(to_string(Map.get(data, "name") || "")),
+         "premise" => String.trim(to_string(Map.get(data, "premise") || ""))
+       }}
+    end
+  end
+
+  @doc """
+  Propose where the next scene happens and what is at stake in it.
+
+  **One call for both**, because they are one creative act: a location is only worth
+  choosing if it puts these people somewhere something can happen, and a premise written
+  without knowing where nobody is standing is a mood. Splitting them into two buttons
+  would let an author keep a quay and a premise set in a counting-house.
+
+  Grounded in the world, the cast who will actually be *in* this scene, and what has
+  already happened — `opts[:so_far]` is a list of earlier scene lines, so the fifth
+  scene doesn't open on the same quay as the first. `opts[:current]` deepens what is
+  already typed rather than replacing it, the way ✦ Expand does everywhere else.
+
+  Returns `{:ok, %{"location" => String.t(), "premise" => String.t()}}`.
+  """
+  @spec generate_scene_opening(keyword()) :: {:ok, map()} | {:error, term()}
+  def generate_scene_opening(opts \\ []) do
+    current = stringify(opts[:current] || %{})
+
+    instruction =
+      case {current["location"], current["premise"]} do
+        {l, p} when l in [nil, ""] and p in [nil, ""] ->
+          "Propose the opening: somewhere concrete in this world, and the situation " <>
+            "waiting there for these people."
+
+        {l, p} ->
+          "The author has started:\n" <>
+            "location: #{blank_to_dash(l)}\npremise: #{blank_to_dash(p)}\n\n" <>
+            "Sharpen what is there and fill what isn't, without contradicting it."
+      end
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author open the next scene of a role-play campaign. Give " <>
+            "it a **place** and a **situation**.\n\n" <>
+            "The location is a specific spot with a time or a condition attached — \"The " <>
+            "quay, after the second bell\", not \"the harbour\" — because the Director " <>
+            "opens there and it grounds what everyone can see.\n\n" <>
+            "The premise is what is *already true and unresolved* as the scene opens: one " <>
+            "or two sentences naming the pressure on these particular people. It is not a " <>
+            "summary of the campaign and it must not decide what happens — a scene that " <>
+            "arrives with its ending written leaves the cast nothing to do. Do not name " <>
+            "an outcome, a revelation or a resolution.\n\n" <>
+            "Return ONLY a JSON object with exactly these keys: location, premise."
+      },
+      %{
+        role: "user",
+        content:
+          world_block(opts[:world]) <>
+            campaign_cast_block(opts[:cast] || []) <>
+            so_far_block(opts[:so_far] || []) <> instruction
+      }
+    ]
+
+    with {:ok, text} <-
+           Polyphony.LLM.call(
+             messages,
+             [response: :autofill, fields: ["location", "premise"]] ++ meter_opts(opts)
+           ),
+         {:ok, data} <- decode_object(text) do
+      {:ok,
+       %{
+         "location" => String.trim(to_string(Map.get(data, "location") || "")),
+         "premise" => String.trim(to_string(Map.get(data, "premise") || ""))
+       }}
+    end
+  end
+
+  # What has already happened, so the next scene isn't the last one again.
+  defp so_far_block([]), do: ""
+
+  defp so_far_block(lines) do
+    "Scenes so far, oldest first:\n" <>
+      Enum.map_join(lines, "\n", &"- #{&1}") <>
+      "\n\nOpen somewhere this story has not " <>
+      "already been, unless returning is the point.\n\n"
+  end
+
   defp campaign_cast_block([]), do: ""
 
   defp campaign_cast_block(cast) do
@@ -843,6 +982,7 @@ defmodule Polyphony.Authoring.Autofill do
     do: %{
       world: opts[:world],
       relations: opts[:relations],
+      ensemble: opts[:ensemble],
       role: opts[:role],
       cast_seeds: opts[:cast_seeds]
     }
@@ -851,7 +991,47 @@ defmodule Polyphony.Authoring.Autofill do
     do:
       role_block(ctx[:role]) <>
         world_block(ctx[:world]) <>
-        relations_block(ctx[:relations]) <> cast_seeds_block(ctx[:cast_seeds])
+        relations_block(ctx[:relations]) <>
+        ensemble_block(ctx[:ensemble]) <> cast_seeds_block(ctx[:cast_seeds])
+
+  # The people **already written into this story**, as opposed to `relations` — which is
+  # who a character is connected to, and says "keep them consistent with these people".
+  #
+  # Quick Build was passing its cast-so-far through `relations`, and the wording did the
+  # damage. For a slot with a blank brief the only substantial content in the prompt was
+  # another character's whole sheet under an instruction to be *consistent with* it, so
+  # the model did the reasonable thing and wrote them again. Two blank slots produced two
+  # of the same person.
+  #
+  # Both jobs are real and they pull opposite ways: continuity of *world* detail (so the
+  # cast doesn't each invent a different landlord for the same building) and distinctness
+  # of *person*. Saying both explicitly is the only way to get both.
+  defp ensemble_block(cast) when is_list(cast) and cast != [] do
+    lines =
+      Enum.map_join(cast, "\n", fn c ->
+        facets =
+          [
+            kv("premise", c["premise"]),
+            kv("voice", c["voice"]),
+            kv("temperament", c["temperament"])
+          ]
+          |> Enum.reject(&is_nil/1)
+          |> Enum.join(" | ")
+
+        "- #{c["name"]}: #{facets}"
+      end)
+
+    "Already written into this story — this character is somebody ELSE:\n" <>
+      lines <>
+      "\n\nUse them for CONTINUITY: shared places, institutions, events and world " <>
+      "detail should line up with what these people establish. Do NOT reuse a name, a " <>
+      "role, a premise, a voice or a backstory that is already on that list — this is a " <>
+      "different person with a different function in the story. If the author's brief " <>
+      "above is blank, the gap in this ensemble *is* the brief: write the person this " <>
+      "story still needs and does not yet have.\n\n"
+  end
+
+  defp ensemble_block(_), do: ""
 
   # People who are **about to be written into this world** — the character seeds a
   # Quick Build is holding while it generates the world first.

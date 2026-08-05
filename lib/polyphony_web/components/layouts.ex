@@ -6,7 +6,7 @@ defmodule PolyphonyWeb.Layouts do
 
   The design has **no persistent global chrome** (`ux/`): a screen fills the
   viewport and carries its own header, and going elsewhere is that header's back
-  chevron or its overflow menu (`Kit.header/1`, `Kit.menu/1`). A standing nav bar
+  chevron or its `☰` (`Kit.header/1`, `Kit.menu/1`). A standing nav bar
   would cost a row of vertical space on every screen of a product whose main
   surface is a transcript — and on the play screen it would sit above a layout
   that already accounts for the full viewport.
@@ -81,7 +81,7 @@ defmodule PolyphonyWeb.Layouts do
   end
 
   @doc """
-  The overflow menu's contents — everywhere that isn't this screen.
+  The nav menu's contents — everywhere that isn't this screen.
 
   Lives here rather than in each screen so the set of destinations is defined once;
   a screen decides *whether* to show a menu, not what's in it.

@@ -155,6 +155,14 @@
   margin-bottom: 1.25rem;
 }
 
+.mb-6 {
+  margin-bottom: 1.5rem;
+}
+
+.ml-2 {
+  margin-left: 0.5rem;
+}
+
 .ml-auto {
   margin-left: auto;
 }
@@ -469,6 +477,11 @@
   padding: 1.25rem;
 }
 
+.px-1 {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
 .px-2 {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
@@ -680,6 +693,10 @@
   font-size: 22px;
 }
 
+.text-\[28px\] {
+  font-size: 28px;
+}
+
 .font-medium {
   font-weight: 500;
 }
@@ -690,6 +707,10 @@
 
 .capitalize {
   text-transform: capitalize;
+}
+
+.leading-\[1\.15\] {
+  line-height: 1.15;
 }
 
 .leading-\[1\.55\] {
