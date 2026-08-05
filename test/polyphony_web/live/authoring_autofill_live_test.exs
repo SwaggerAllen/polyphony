@@ -307,4 +307,40 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       refute html =~ ~r/name="b_rules\[\]"[^>]*>\s*<\/textarea>/
     end
   end
+
+  describe "the cover is part of \"every field\"" do
+    test "generate-all writes it too, after everything it is written from",
+         %{conn: conn, user: user} do
+      entry = character(user, %CharacterSheet{name: "", status: :full})
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      view
+      |> form("#sheet-generate-all", %{brief: "a harbour-master with a debt"})
+      |> render_submit()
+
+      generate(view)
+      # The cover is a second call, chained once the fields it describes exist — the
+      # same order Quick Build writes in.
+      generate(view)
+
+      view |> form("#sheet-form") |> render_submit()
+
+      # It used to write every field except the one a stranger actually reads.
+      assert Library.payload(Library.get(entry.id)).cover not in [nil, ""]
+    end
+
+    test "a cover somebody already approved is left alone", %{conn: conn, user: user} do
+      entry =
+        character(user, %CharacterSheet{name: "Rell", status: :full, cover: "Mine, thanks."})
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+      view |> form("#sheet-generate-all", %{brief: "a harbour-master"}) |> render_submit()
+      generate(view)
+      generate(view)
+
+      # Same rule as the facts and the two suggestion passes: a redraft of prose
+      # somebody has already approved is a second author, not a first.
+      assert render(view) =~ "Mine, thanks."
+    end
+  end
 end

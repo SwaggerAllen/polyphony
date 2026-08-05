@@ -587,6 +587,26 @@ defmodule PolyphonyWeb.SheetEditorLive do
     if socket.assigns.boundaries == [], do: suggest_boundaries(socket), else: socket
   end
 
+  # The cover, last and separately — the same order Quick Build writes in, and for the
+  # same reason: a cover is written *from* everything else, so asking for it in the one
+  # call that produces "everything else" would be asking it to describe fields that do
+  # not exist yet.
+  #
+  # It is chained here rather than left for the author because the alternative is what
+  # we had: "✦ Write every field" wrote every field except the one a stranger actually
+  # reads. Only onto an empty cover, like the facts and the two suggestion passes —
+  # a redraft of prose somebody has already approved is a second author, not a first.
+  defp maybe_generate_cover(socket) do
+    if blank_cover?(socket.assigns.cover) do
+      Generating.request(socket, "cover", "cover", %{
+        subject: draft_sheet(socket),
+        opts: gen_opts(socket)
+      })
+    else
+      socket
+    end
+  end
+
   # Only onto an empty list, like the two above: generate-all drafts a fresh sheet, and
   # appending to facts somebody has already written and marked would be a second author
   # rather than a first draft. Everything arrives public — concealment is the author's
@@ -633,7 +653,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
      |> mark("all", false)
      |> touch()
      |> maybe_suggest_relationships()
-     |> maybe_suggest_boundaries()}
+     |> maybe_suggest_boundaries()
+     |> maybe_generate_cover()}
   end
 
   def handle_info({:generation, "cover", {:ok, cover}}, socket) do
