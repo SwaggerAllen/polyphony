@@ -40,7 +40,11 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
 
   # Oban runs `testing: :manual`, so the enqueued build executes when the test says so.
   # That separation is the point: the form submit and the work are no longer one act.
-  defp drain, do: Oban.drain_queue(queue: :generation)
+  defp drain, do: Oban.drain_queue(queue: :generation, with_scheduled: true)
+
+  # A build retries (`max_attempts: 3`) and resumes rather than restarting, so getting to
+  # a *failed* run means exhausting the attempts.
+  defp drain_to_failure, do: Enum.each(1..3, fn _ -> drain() end)
 
   test "quick build scaffolds a world, cast, and premise onto the campaign",
        %{conn: conn, user: user} do
@@ -149,7 +153,7 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     |> form("#quick-build", %{"world_seed" => "", "char_seed" => [""]})
     |> render_submit()
 
-    drain()
+    drain_to_failure()
     html = render(view)
 
     # Nothing was built, so the campaign is still first-run — and taking the form away

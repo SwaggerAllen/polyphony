@@ -358,6 +358,23 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
+  # Resume, not restart: the run keeps its `done` list, so this pays only for the world
+  # and the characters that aren't written yet.
+  def handle_event("retry_build", _params, socket) do
+    safe(socket, fn ->
+      case BuildJob.retry(socket.assigns.entry.id) do
+        {:ok, run} ->
+          {:noreply, assign(socket, build: run)}
+
+        :taken ->
+          {:noreply, assign(socket, build: Builds.get(socket.assigns.entry.id))}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Couldn't start it again: #{inspect(reason)}")}
+      end
+    end)
+  end
+
   # The author has read the outcome. Dismissing forgets the row rather than hiding it,
   # because the next build needs the campaign unclaimed.
   def handle_event("dismiss_build", _params, socket) do
@@ -979,7 +996,14 @@ defmodule PolyphonyWeb.CampaignLive do
           written so far are already attached to this campaign.
         </p>
 
-        <div :if={@build.status != "running"} class="mt-2.5">
+        <div :if={@build.status != "running"} class="mt-2.5 flex gap-1.5">
+          <%!-- A failed build has already attached its world, so the campaign is no
+                longer first-run and the card that offers Quick Build is gone. Without
+                this there is no way back to it — and this resumes rather than restarts,
+                so it costs only what is left to do. --%>
+          <Kit.btn :if={@build.status == "failed"} kind={:primary} size={:sm} type="button" phx-click="retry_build">
+            ✦ Pick up where it stopped
+          </Kit.btn>
           <Kit.btn size={:sm} type="button" phx-click="dismiss_build">Dismiss</Kit.btn>
         </div>
       </div>

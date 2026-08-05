@@ -113,7 +113,14 @@ components.
     see `Polyphony.Builds` and `Polyphony.Jobs.QuickBuild`. Progress is a row, so it
     survives a reconnect and shows on a second device, and the job associates each
     entry to the campaign *as it writes it* — an interrupted build leaves a half-built
-    campaign rather than orphans in the library.
+    campaign rather than orphans in the library — and because it associates as it goes,
+    it can also **resume**, so `max_attempts: 3` is safe. A retry uses the world it
+    already wrote and skips the seeds whose characters exist (recorded at the write, so
+    a crash either side of it resolves correctly), which is what makes never duplicating
+    the property that holds. A run that exhausts its attempts keeps its arguments, so
+    the screen can offer to pick it up where it stopped — otherwise a failed build
+    leaves a campaign that is no longer first-run, with the card that offers Quick Build
+    gone.
   - **So is every ✦ control**, for the same reason at smaller scale: the calls take
     seconds, which is exactly long enough to switch apps. `Polyphony.Generations` parks
     the **raw result** and `PolyphonyWeb.Generating` hands it to the screen — live over

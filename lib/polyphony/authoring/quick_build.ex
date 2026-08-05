@@ -61,12 +61,24 @@ defmodule Polyphony.Authoring.QuickBuild do
       the build doesn't finish — and it doesn't have to crash to not finish, it only has
       to be interrupted. Reporting is best-effort; a raising callback doesn't sink the
       build.
+    * `:resume` — `%{bible: entry | nil, done: [seed_index], characters: [entry]}`, for a
+      retry. A build that is picked up again uses the world it already wrote, skips the
+      seeds whose characters exist, and carries those characters into the linking,
+      premise and cover phases as if it had just written them. Without it a retry would
+      re-run every provider call, charge for them again, and leave the campaign with two
+      worlds and two casts — which is why the job used to refuse to retry at all.
+    * `:on_seed_done` — a 1-arg fn called with the seed index the moment that character
+      is **persisted**, so a resume knows exactly which seeds not to repeat. Recorded at
+      the write rather than at the end of the seed, because that is the boundary a crash
+      can fall either side of.
     * `:provider` / `:user_id` / `:campaign_id` — metering passthrough.
   """
   @spec build(keyword()) :: {:ok, map()} | {:error, term()}
   def build(opts) do
     owner = Keyword.fetch!(opts, :owner)
     announce = announcer(opts[:on_entry])
+    seed_done = announcer(opts[:on_seed_done])
+    resume = opts[:resume] || %{}
     world_seed = to_string(opts[:world_seed] || "")
     # One character per provided seed — a blank seed is kept, generating a character
     # freely from the world rather than dropping the row.
@@ -90,15 +102,11 @@ defmodule Polyphony.Authoring.QuickBuild do
     # one and names her into `starting_canon` — and the very next phase generates that
     # same seed as a character with a different name. The campaign opens with two of
     # her, and the author's first job is a rename nobody asked for.
-    case Autofill.generate_all(:world_bible, world_seed, %{}, [cast_seeds: seeds] ++ meter) do
+    case world(owner, world_seed, seeds, meter, resume[:bible], announce) do
       {:error, reason} ->
         {:error, {:world_failed, reason}}
 
-      {:ok, world_fields} ->
-        bible_entry = put(owner, "world_bible", to_world_bible(world_fields))
-        announce.({:world, bible_entry})
-        world_ctx = world_context(world_fields)
-
+      {:ok, bible_entry, world_ctx} ->
         {char_entries, failed} =
           generate_cast(
             owner,
@@ -108,7 +116,9 @@ defmodule Polyphony.Authoring.QuickBuild do
             suggest?,
             meter,
             report,
-            announce
+            announce,
+            seed_done,
+            resume
           )
 
         report.(length(seeds) + 1, "Connecting the cast")
@@ -131,6 +141,40 @@ defmodule Polyphony.Authoring.QuickBuild do
     end
   end
 
+  # The world, written or already written. A resumed build has one — it was associated
+  # the moment it existed — so the context it grounds everything else in is rebuilt from
+  # the stored bible rather than paid for a second time.
+  defp world(_owner, _seed, _seeds, _meter, %{} = existing, _announce) when is_map(existing) do
+    bible = Library.payload(existing)
+    {:ok, existing, world_context(from_bible(bible))}
+  end
+
+  defp world(owner, world_seed, seeds, meter, _none, announce) do
+    case Autofill.generate_all(:world_bible, world_seed, %{}, [cast_seeds: seeds] ++ meter) do
+      {:error, reason} ->
+        {:error, reason}
+
+      {:ok, world_fields} ->
+        entry = put(owner, "world_bible", to_world_bible(world_fields))
+        announce.({:world, entry})
+        {:ok, entry, world_context(world_fields)}
+    end
+  end
+
+  # A stored bible back into the flat `%{"field" => text}` shape generation grounds on.
+  defp from_bible(%WorldBible{} = bible) do
+    %{
+      "name" => bible.name,
+      "setting" => bible.setting,
+      "tone" => bible.tone,
+      "rules" => Enum.map_join(WorldBible.entries(bible.rules), "\n", & &1.statement),
+      "starting_canon" =>
+        Enum.map_join(WorldBible.entries(bible.starting_canon), "\n", & &1.statement)
+    }
+  end
+
+  defp from_bible(other), do: %{"name" => Map.get(other || %{}, :name) || ""}
+
   # Best-effort, one entry at a time: a cover is the last thing written and the least
   # load-bearing, so a provider failure — or `{:error, :leaked}`, which is `Cover`
   # refusing to ship a blurb that quoted a secret — leaves the entry exactly as it was.
@@ -138,6 +182,16 @@ defmodule Polyphony.Authoring.QuickBuild do
   defp write_cover(entry, meter) do
     subject = Library.payload(entry)
 
+    # A resumed build reaches this phase with some covers already written; they're the
+    # most expensive thing here per unit of value, so an existing one stands.
+    if present?(Map.get(subject, :cover)) do
+      entry
+    else
+      regenerate_cover(entry, subject, meter)
+    end
+  end
+
+  defp regenerate_cover(entry, subject, meter) do
     case Cover.generate(subject, meter) do
       {:ok, prose} ->
         case Library.update_payload(entry.id, %{subject | cover: prose}) do
@@ -198,37 +252,64 @@ defmodule Polyphony.Authoring.QuickBuild do
   # Keeps the ones that succeed and collects `{seed, reason}` for the ones that don't (a
   # blank result counts as a failure). Always returns `{entries, failed}` — even a fully
   # failed cast still leaves the world built and associated.
-  defp generate_cast(owner, seeds, bible_id, world_ctx, suggest?, meter, report, announce) do
+  defp generate_cast(
+         owner,
+         seeds,
+         bible_id,
+         world_ctx,
+         suggest?,
+         meter,
+         report,
+         announce,
+         seed_done,
+         resume
+       ) do
     n = length(seeds)
+    done = MapSet.new(resume[:done] || [])
+
+    # A resumed build carries the characters it already wrote into the walk, so the next
+    # one is still grounded in the ensemble — the whole reason the cast is generated in
+    # order rather than in parallel.
+    start = for e <- resume[:characters] || [], do: {e, Library.payload(e)}
 
     {built, _stubs, failed} =
       seeds
       |> Enum.with_index()
-      |> Enum.reduce({[], %{}, []}, fn {seed, i}, {built, stubs, failed} ->
-        report.(1 + i, "Writing character #{i + 1} of #{n}")
-        brief = brief_with_roster(seed, seeds, i)
-        opts = [world: world_ctx, relations: cast_relations(built, stubs)] ++ meter
+      |> Enum.reduce({start, %{}, []}, fn {seed, i}, {built, stubs, failed} ->
+        if MapSet.member?(done, i) do
+          {built, stubs, failed}
+        else
+          report.(1 + i, "Writing character #{i + 1} of #{n}")
+          brief = brief_with_roster(seed, seeds, i)
+          opts = [world: world_ctx, relations: cast_relations(built, stubs)] ++ meter
 
-        case Autofill.generate_all(:character, brief, %{}, opts) do
-          {:ok, fields} when map_size(fields) > 0 ->
-            sheet = %CharacterSheet{
-              to_character_sheet(fields, bible_id)
-              | boundaries: gen_boundaries(fields, world_ctx, meter)
-            }
+          case Autofill.generate_all(:character, brief, %{}, opts) do
+            {:ok, fields} when map_size(fields) > 0 ->
+              sheet = %CharacterSheet{
+                to_character_sheet(fields, bible_id)
+                | boundaries: gen_boundaries(fields, world_ctx, meter)
+              }
 
-            entry = put(owner, "character", sheet)
-            announce.({:character, entry})
+              entry = put(owner, "character", sheet)
 
-            {entry, stubs} =
-              maybe_stub_offscreen(entry, sheet, built, suggest?, bible_id, owner, meter, stubs)
+              # Both callbacks fire here, at the write, and that placement is the thing
+              # that makes a retry safe: a crash on either side of this line resolves
+              # correctly — after it the seed is skipped, before it the seed is redone,
+              # and neither produces two of the same character.
+              announce.({:character, entry})
+              seed_done.(i)
 
-            {built ++ [{entry, sheet}], stubs, failed}
+              {entry, stubs} =
+                maybe_stub_offscreen(entry, sheet, built, suggest?, bible_id, owner, meter, stubs)
 
-          {:ok, _empty} ->
-            {built, stubs, failed ++ [{seed, :blank_generation}]}
+              {built ++ [{entry, sheet}], stubs, failed}
 
-          {:error, reason} ->
-            {built, stubs, failed ++ [{seed, reason}]}
+            {:ok, _empty} ->
+              {built, stubs, failed ++ [{seed, :blank_generation}]}
+
+            {:error, reason} ->
+              {built, stubs, failed ++ [{seed, reason}]}
+          end
         end
       end)
 
