@@ -118,6 +118,7 @@ defmodule PolyphonyWeb.PlayLive do
        scene_id: scene_id,
        page_title: "Play",
        topic: nil,
+       joinable: [],
        cast: %Cast{},
        waiting: :you,
        progress: %{phase: :idle, subject: nil},
@@ -209,6 +210,7 @@ defmodule PolyphonyWeb.PlayLive do
       raw_events: events,
       traces: traces,
       roster: roster,
+      joinable: joinable(socket, roster),
       cast: cast,
       voices: voices,
       strip:
@@ -539,6 +541,31 @@ defmodule PolyphonyWeb.PlayLive do
     assign(socket, composing: "compose" in Generations.running(scene_id))
   end
 
+  # The campaign's cast who aren't in this scene: castable (`:full` — `SceneControl`
+  # refuses anything else) and not already on the roster. Scoped to the campaign rather
+  # than the whole library, because §2.7 means a character belongs to one story and the
+  # picker for *this* scene should not offer somebody else's people.
+  defp joinable(socket, roster) do
+    present = MapSet.new(roster, &to_string/1)
+
+    for id <- campaign_character_ids(socket),
+        entry = Library.get(id),
+        entry != nil,
+        not MapSet.member?(present, to_string(entry.id)),
+        match?(%CharacterSheet{status: :full}, Library.payload(entry)),
+        do: entry
+  end
+
+  defp campaign_character_ids(socket) do
+    with cid when not is_nil(cid) <- campaign_of(socket.assigns.scene_id),
+         entry when not is_nil(entry) <- Library.get(cid),
+         %{} = payload <- Library.payload(entry) do
+      Map.get(payload, :character_ids) || []
+    else
+      _ -> []
+    end
+  end
+
   defp campaign_of(scene_id) do
     case scene_opened(scene_id) do
       %SceneOpened{campaign_id: cid} -> cid
@@ -787,6 +814,21 @@ defmodule PolyphonyWeb.PlayLive do
   # drawers would push the transcript off the screen on a phone.
   def handle_event("toggle_cast", _params, socket),
     do: {:noreply, assign(socket, panel: toggle(socket.assigns.panel, :cast), narrating: false)}
+
+  # Somebody from the campaign who isn't in this scene yet.
+  def handle_event("add_to_scene", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      entry = Enum.find(socket.assigns.joinable, &(to_string(&1.id) == to_string(id)))
+
+      cond do
+        is_nil(entry) ->
+          {:noreply, put_flash(socket, :error, "They aren't available to bring in.")}
+
+        true ->
+          {:noreply, admit(socket, entry, Library.payload(entry))}
+      end
+    end)
+  end
 
   def handle_event("toggle_intros", _params, socket),
     do: {:noreply, assign(socket, panel: toggle(socket.assigns.panel, :intros), narrating: false)}
@@ -1853,6 +1895,29 @@ defmodule PolyphonyWeb.PlayLive do
             </select>
           </form>
         </div>
+        <%!-- Bring somebody else in. A scene opens with the cast the author picked for
+              it, so the rest of the campaign has to be reachable from here or the only
+              way to add a latecomer is to start the scene again. `admit/3` is the same
+              path an accepted introduction takes — enter, seed their context, and note
+              them in the Director's brief — so a character walked in by hand and one
+              the Director asked for arrive identically. --%>
+        <div :if={@joinable != []} class="mt-3">
+          <form id="scene-add-cast" phx-submit="add_to_scene" class="flex gap-1.5">
+            <label for="scene-add-select" class="sr-only">Bring someone into the scene</label>
+            <select id="scene-add-select" name="id" class="field px-2 py-1 text-[12px] flex-1 min-w-0">
+              <option :for={c <- @joinable} value={c.id}><%= char_name(c) %></option>
+            </select>
+            <Kit.btn kind={:ghost} size={:sm} type="submit">Bring in</Kit.btn>
+          </form>
+          <p class="text-[11px] leading-relaxed dim mt-1.5">
+            They enter at this beat, knowing only what the scene has shown since.
+          </p>
+        </div>
+
+        <p :if={@joinable == [] and @roster != []} class="text-[11px] leading-relaxed dim mt-3">
+          Everyone this campaign has written is already here.
+        </p>
+
         <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="find_mentions" class="mt-2">
           Find mentioned characters
         </Kit.btn>

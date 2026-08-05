@@ -578,6 +578,86 @@ defmodule Polyphony.Authoring.Autofill do
     end
   end
 
+  @doc """
+  Propose where the next scene happens and what is at stake in it.
+
+  **One call for both**, because they are one creative act: a location is only worth
+  choosing if it puts these people somewhere something can happen, and a premise written
+  without knowing where nobody is standing is a mood. Splitting them into two buttons
+  would let an author keep a quay and a premise set in a counting-house.
+
+  Grounded in the world, the cast who will actually be *in* this scene, and what has
+  already happened — `opts[:so_far]` is a list of earlier scene lines, so the fifth
+  scene doesn't open on the same quay as the first. `opts[:current]` deepens what is
+  already typed rather than replacing it, the way ✦ Expand does everywhere else.
+
+  Returns `{:ok, %{"location" => String.t(), "premise" => String.t()}}`.
+  """
+  @spec generate_scene_opening(keyword()) :: {:ok, map()} | {:error, term()}
+  def generate_scene_opening(opts \\ []) do
+    current = stringify(opts[:current] || %{})
+
+    instruction =
+      case {current["location"], current["premise"]} do
+        {l, p} when l in [nil, ""] and p in [nil, ""] ->
+          "Propose the opening: somewhere concrete in this world, and the situation " <>
+            "waiting there for these people."
+
+        {l, p} ->
+          "The author has started:\n" <>
+            "location: #{blank_to_dash(l)}\npremise: #{blank_to_dash(p)}\n\n" <>
+            "Sharpen what is there and fill what isn't, without contradicting it."
+      end
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are helping an author open the next scene of a role-play campaign. Give " <>
+            "it a **place** and a **situation**.\n\n" <>
+            "The location is a specific spot with a time or a condition attached — \"The " <>
+            "quay, after the second bell\", not \"the harbour\" — because the Director " <>
+            "opens there and it grounds what everyone can see.\n\n" <>
+            "The premise is what is *already true and unresolved* as the scene opens: one " <>
+            "or two sentences naming the pressure on these particular people. It is not a " <>
+            "summary of the campaign and it must not decide what happens — a scene that " <>
+            "arrives with its ending written leaves the cast nothing to do. Do not name " <>
+            "an outcome, a revelation or a resolution.\n\n" <>
+            "Return ONLY a JSON object with exactly these keys: location, premise."
+      },
+      %{
+        role: "user",
+        content:
+          world_block(opts[:world]) <>
+            campaign_cast_block(opts[:cast] || []) <>
+            so_far_block(opts[:so_far] || []) <> instruction
+      }
+    ]
+
+    with {:ok, text} <-
+           Polyphony.LLM.call(
+             messages,
+             [response: :autofill, fields: ["location", "premise"]] ++ meter_opts(opts)
+           ),
+         {:ok, data} <- decode_object(text) do
+      {:ok,
+       %{
+         "location" => String.trim(to_string(Map.get(data, "location") || "")),
+         "premise" => String.trim(to_string(Map.get(data, "premise") || ""))
+       }}
+    end
+  end
+
+  # What has already happened, so the next scene isn't the last one again.
+  defp so_far_block([]), do: ""
+
+  defp so_far_block(lines) do
+    "Scenes so far, oldest first:\n" <>
+      Enum.map_join(lines, "\n", &"- #{&1}") <>
+      "\n\nOpen somewhere this story has not " <>
+      "already been, unless returning is the point.\n\n"
+  end
+
   defp campaign_cast_block([]), do: ""
 
   defp campaign_cast_block(cast) do

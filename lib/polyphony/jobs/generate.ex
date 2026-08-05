@@ -93,6 +93,9 @@ defmodule Polyphony.Jobs.Generate do
   defp apply_op("autofill.premise", %{opts: opts}),
     do: Autofill.generate_campaign_premise(opts)
 
+  defp apply_op("autofill.scene_opening", %{opts: opts}),
+    do: Autofill.generate_scene_opening(opts)
+
   # The stub's regard back toward the character who introduced them. The screen needs
   # to know which stubs it asked about to patch the answer in, so they ride along.
   defp apply_op("autofill.reciprocals", %{
