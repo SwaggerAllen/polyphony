@@ -21,6 +21,10 @@ defmodule Polyphony.ReadModels.BuildRun do
     field(:total, :integer, default: 1)
     field(:label, :string)
     field(:detail, :string)
+    # The seed indexes already written, and the arguments the build was started with —
+    # see the migration. Both exist so a retry resumes rather than restarts.
+    field(:done, {:array, :integer}, default: [])
+    field(:request, :binary)
     timestamps(type: :naive_datetime_usec)
   end
 
@@ -37,8 +41,8 @@ defmodule Polyphony.ReadModels.BuildRun do
   together, and only the one whose `ON CONFLICT` clause matched a non-running row
   comes back with a claim.
   """
-  @spec claim(Ecto.Repo.t(), term(), pos_integer()) :: {:ok, t()} | :taken
-  def claim(repo, campaign_id, total) do
+  @spec claim(Ecto.Repo.t(), term(), pos_integer(), binary() | nil) :: {:ok, t()} | :taken
+  def claim(repo, campaign_id, total, request \\ nil) do
     now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:microsecond)
 
     row = %{
@@ -48,6 +52,8 @@ defmodule Polyphony.ReadModels.BuildRun do
       total: total,
       label: "Starting",
       detail: nil,
+      done: [],
+      request: request,
       inserted_at: now,
       updated_at: now
     }
@@ -66,6 +72,8 @@ defmodule Polyphony.ReadModels.BuildRun do
                 total: ^total,
                 label: "Starting",
                 detail: nil,
+                done: [],
+                request: ^request,
                 updated_at: ^now
               ]
             ]
@@ -92,6 +100,24 @@ defmodule Polyphony.ReadModels.BuildRun do
       )
 
     List.first(returned)
+  end
+
+  @doc """
+  Record that a seed's character has been written.
+
+  Appended in the database rather than read-modify-written in the job, so the record
+  survives the crash it exists to survive.
+  """
+  @spec mark_done(Ecto.Repo.t(), term(), non_neg_integer()) :: :ok
+  def mark_done(repo, campaign_id, index) do
+    cid = to_string(campaign_id)
+
+    repo.update_all(
+      from(r in __MODULE__, where: r.campaign_id == ^cid),
+      push: [done: index]
+    )
+
+    :ok
   end
 
   @spec delete(Ecto.Repo.t(), term()) :: :ok

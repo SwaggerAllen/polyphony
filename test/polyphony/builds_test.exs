@@ -186,6 +186,116 @@ defmodule Polyphony.BuildsTest do
     end
   end
 
+  describe "resuming" do
+    test "a second attempt keeps the world it already wrote", %{owner: owner} do
+      camp = campaign(owner)
+
+      # Attempt one gets as far as the world and stops.
+      catch_throw(
+        QuickBuild.build(
+          owner: owner,
+          world_seed: "a rain-drowned harbour",
+          character_seeds: ["a harbour-master", "the collector"],
+          on_entry: fn
+            {:world, entry} ->
+              associate(camp.id, {:world, entry})
+              throw(:interrupted)
+
+            _ ->
+              :ok
+          end
+        )
+      )
+
+      bible_id = payload_of(camp.id)[:bible_id]
+      before = payload_of(bible_id)
+
+      # Attempt two, handed what exists. The world is not written again — which is the
+      # difference between a retry that costs the remaining work and one that costs
+      # everything twice and leaves two worlds behind.
+      {:ok, result} =
+        QuickBuild.build(
+          owner: owner,
+          world_seed: "a rain-drowned harbour",
+          character_seeds: ["a harbour-master", "the collector"],
+          resume: %{bible: Library.get(bible_id), done: [], characters: []}
+        )
+
+      assert result.bible.id == bible_id
+      assert payload_of(bible_id).setting == before.setting
+
+      assert Enum.count(Library.list_for_owner(owner), &(&1.kind == "world_bible")) == 1
+    end
+
+    test "a seed already written is not written twice", %{owner: owner} do
+      camp = campaign(owner)
+      seeds = ["a harbour-master", "the collector", "the bellman"]
+
+      # Stop after the first character — the seed is recorded at the write, so the
+      # resume knows about it.
+      done = :ets.new(:done, [:public, :set])
+
+      catch_throw(
+        QuickBuild.build(
+          owner: owner,
+          world_seed: "a rain-drowned harbour",
+          character_seeds: seeds,
+          on_entry: &associate(camp.id, &1),
+          on_seed_done: fn i ->
+            :ets.insert(done, {i, true})
+            throw(:interrupted)
+          end
+        )
+      )
+
+      first_pass = payload_of(camp.id)[:character_ids]
+      assert length(first_pass) == 1
+      assert :ets.lookup(done, 0) == [{0, true}]
+
+      {:ok, result} =
+        QuickBuild.build(
+          owner: owner,
+          world_seed: "a rain-drowned harbour",
+          character_seeds: seeds,
+          resume: %{
+            bible: Library.get(payload_of(camp.id)[:bible_id]),
+            done: [0],
+            characters: Enum.map(first_pass, &Library.get/1)
+          },
+          on_entry: &associate(camp.id, &1)
+        )
+
+      # Three seeds, three characters — the first carried over rather than regenerated.
+      # Never duplicating is worth more than finishing: a second Wren is a mess the
+      # author has to notice and unpick, a missing one is a button away.
+      assert length(result.characters) == 3
+      assert hd(first_pass) in Enum.map(result.characters, & &1.id)
+      assert length(payload_of(camp.id)[:character_ids]) == 3
+    end
+
+    test "a cover already written isn't paid for again", %{owner: owner} do
+      entry =
+        Library.put(%{
+          owner: owner,
+          kind: "world_bible",
+          payload: %WorldBible{name: "Saltmarch", cover: "Already written."}
+        })
+
+      camp = campaign(owner, %{bible_id: entry.id})
+
+      {:ok, _} =
+        QuickBuild.build(
+          owner: owner,
+          world_seed: "",
+          character_seeds: [],
+          resume: %{bible: Library.get(entry.id), done: [], characters: []}
+        )
+
+      _ = camp
+      assert payload_of(entry.id).cover == "Already written."
+    end
+  end
+
   describe "the job" do
     test "builds, associates, and reports done", %{owner: owner, user: user} do
       camp = campaign(owner)
@@ -214,6 +324,33 @@ defmodule Polyphony.BuildsTest do
       assert detail =~ "2 character(s)"
     end
 
+    test "an attempt that dies mid-flight is picked up where it stopped",
+         %{owner: owner, user: user} do
+      camp = campaign(owner)
+
+      assert {:ok, _} =
+               BuildJob.enqueue(
+                 owner: owner,
+                 campaign_id: camp.id,
+                 world_seed: "a rain-drowned harbour",
+                 character_seeds: ["a harbour-master", "the collector"],
+                 user_id: user.id
+               )
+
+      assert %{success: 1} = Oban.drain_queue(queue: :generation)
+      built = payload_of(camp.id)[:character_ids]
+      assert length(built) == 2
+
+      # Start it again as a resume, the way the screen's "pick up where it stopped" does.
+      # Everything is already written, so the second run adds nothing rather than a
+      # second world and a second cast.
+      assert {:ok, _} = BuildJob.retry(camp.id)
+      assert %{success: 1} = Oban.drain_queue(queue: :generation)
+
+      assert payload_of(camp.id)[:character_ids] == built
+      assert Enum.count(Library.list_for_owner(owner), &(&1.kind == "world_bible")) == 1
+    end
+
     test "refuses a second build for the same campaign", %{owner: owner} do
       camp = campaign(owner)
 
@@ -234,11 +371,21 @@ defmodule Polyphony.BuildsTest do
       assert {:ok, _} =
                BuildJob.enqueue(owner: owner, campaign_id: camp.id, character_seeds: [""])
 
-      # Discarded, not retried: `max_attempts: 1`, because a retry would re-run every
-      # provider call and charge for a second world on top of the one the first attempt
-      # already attached. Oban's retry makes transient failures invisible; this failure
-      # is neither transient nor something to hide.
-      assert %{discard: 1, success: 0} = Oban.drain_queue(queue: :generation)
+      # Retried, then given up on. `max_attempts: 3` — a build is minutes of work and a
+      # real bill, and a 502 four characters in is exactly what a retry is for.
+      drain = fn -> Oban.drain_queue(queue: :generation, with_scheduled: true) end
+
+      assert %{failure: 1} = drain.()
+      # Still *running* between attempts: telling the author it failed and then quietly
+      # starting again is worse than saying nothing.
+      assert %{status: "running"} = Builds.get(camp.id)
+
+      assert %{failure: 1} = drain.()
+      assert %{status: "running"} = Builds.get(camp.id)
+
+      # The last attempt records the failure and returns `:ok`, so the queue doesn't also
+      # carry a discarded job for something the run row already explains.
+      assert %{success: 1} = drain.()
       assert %{status: "failed"} = Builds.get(camp.id)
       assert payload_of(camp.id)[:bible_id] == nil
     end

@@ -9,15 +9,14 @@ defmodule PolyphonyWeb.CampaignLive do
   require Logger
 
   alias Polyphony.{Library, Owner, Context, App}
+  alias Polyphony.Permissions
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
 
   alias Polyphony.Authoring.{
-    Autofill,
     CharacterSheet,
     Effective,
     SceneGate,
-    StubGen,
     WorldBible
   }
 
@@ -25,12 +24,14 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Events.SceneOpened
   alias Polyphony.Groups
   alias Polyphony.Builds
+  alias Polyphony.Generations
   alias Polyphony.Jobs.QuickBuild, as: BuildJob
   alias Polyphony.ReadModels.BuildRun
   alias Polyphony.Campaigns
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Publication
   alias Polyphony.Publication.Preflight
+  alias PolyphonyWeb.Guard
   alias PolyphonyWeb.Kit
   alias PolyphonyWeb.Layouts
   alias PolyphonyWeb.Voice
@@ -58,7 +59,8 @@ defmodule PolyphonyWeb.CampaignLive do
     # editor on one would try to read a cast and a premise off a `Library.Snapshot`.
     # It's a readable thing, so it goes where reading happens. A taken-down one is
     # gone, and says so in its own words.
-    if entry && Campaigns.campaign?(entry) && not Library.hidden?(entry) do
+    if entry && Campaigns.campaign?(entry) &&
+         Permissions.can_edit?(entry, socket.assigns.current_user) do
       {:ok,
        socket
        |> assign(
@@ -84,6 +86,7 @@ defmodule PolyphonyWeb.CampaignLive do
          tab: "settings"
        )
        |> subscribe_build(entry)
+       |> restore_generations(entry)
        |> load()}
     else
       redirect_missing(socket, entry)
@@ -92,22 +95,8 @@ defmodule PolyphonyWeb.CampaignLive do
 
   # A take-down removes the thing, not its listing — so this is the deleted experience
   # with the one difference that matters: they're told why, and where the rest of it is.
-  defp redirect_missing(socket, %{hidden_at: at} = _entry) when not is_nil(at),
-    do:
-      {:ok,
-       socket
-       |> put_flash(:error, "That was taken down after a report. Check your email.")
-       |> redirect(to: ~p"/library")}
-
-  defp redirect_missing(socket, %{frozen: true} = entry),
-    do:
-      {:ok,
-       socket
-       |> put_flash(:info, "That's a published copy — here's how it reads.")
-       |> redirect(to: ~p"/browse?#{[story: entry.id]}")}
-
-  defp redirect_missing(socket, _entry),
-    do: {:ok, socket |> put_flash(:error, "Campaign not found.") |> redirect(to: ~p"/library")}
+  defp redirect_missing(socket, entry),
+    do: Guard.refuse(socket, entry, "Campaign", socket.assigns.current_user)
 
   # The tab lives in the URL, so it's linkable, survives a reload, and back works
   # between sections of a screen that used to be one long scroll.
@@ -238,8 +227,15 @@ defmodule PolyphonyWeb.CampaignLive do
           {:noreply, socket}
 
         cid ->
-          ids = Enum.uniq(cast_ids(socket.assigns.payload) ++ [cid])
-          {:noreply, update_cast(socket, ids, "Added #{display_name(cid)} to the cast.")}
+          # The picker only ever offers this user's own people, but the id arrives in a
+          # form and the cast is what feeds every character's context — an unchecked id
+          # here casts a stranger's private sheet into your scenes and renders it back.
+          if Permissions.can_edit?(Library.get(cid), socket.assigns.current_user) do
+            ids = Enum.uniq(cast_ids(socket.assigns.payload) ++ [cid])
+            {:noreply, update_cast(socket, ids, "Added #{display_name(cid)} to the cast.")}
+          else
+            {:noreply, put_flash(socket, :error, "That character isn't yours to cast.")}
+          end
       end
     end)
   end
@@ -298,7 +294,7 @@ defmodule PolyphonyWeb.CampaignLive do
       {:noreply,
        socket
        |> assign(expanding_premise: true)
-       |> start_async(:premise, fn -> Autofill.generate_campaign_premise(opts) end)}
+       |> request_generation("premise", "autofill.premise", %{opts: opts})}
     end)
   end
 
@@ -358,6 +354,23 @@ defmodule PolyphonyWeb.CampaignLive do
 
         {:error, reason} ->
           {:noreply, put_flash(socket, :error, "Couldn't start the build: #{inspect(reason)}")}
+      end
+    end)
+  end
+
+  # Resume, not restart: the run keeps its `done` list, so this pays only for the world
+  # and the characters that aren't written yet.
+  def handle_event("retry_build", _params, socket) do
+    safe(socket, fn ->
+      case BuildJob.retry(socket.assigns.entry.id) do
+        {:ok, run} ->
+          {:noreply, assign(socket, build: run)}
+
+        :taken ->
+          {:noreply, assign(socket, build: Builds.get(socket.assigns.entry.id))}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Couldn't start it again: #{inspect(reason)}")}
       end
     end)
   end
@@ -471,47 +484,57 @@ defmodule PolyphonyWeb.CampaignLive do
           {:noreply, socket}
 
         stubs ->
-          user = socket.assigns.current_user
+          uid = socket.assigns.current_user && socket.assigns.current_user.id
 
           {:noreply,
            socket
            |> assign(generating: true)
-           |> start_async(:generate_pending, fn -> generate_stubs(stubs, user) end)}
+           |> request_generation("stubs", "campaign.stubs", %{
+             ids: Enum.map(stubs, & &1.id),
+             user_id: uid
+           })}
       end
     end)
   end
 
-  def handle_async(:generate_pending, {:ok, {done, failed}}, socket) do
+  def handle_info({:generation, "stubs", {:ok, {done, failed}}}, socket) do
     detail = if failed > 0, do: " #{failed} failed — open those to retry.", else: ""
 
     {:noreply,
      socket
+     |> forget_generation("stubs")
      |> assign(generating: false, entry: Library.get(socket.assigns.entry.id))
      |> put_flash(:info, "Generated #{done} character(s).#{detail}")
      |> load()}
   end
 
-  def handle_async(:generate_pending, result, socket) do
+  def handle_info({:generation, "premise", {:ok, text}}, socket) do
+    payload = Map.put(socket.assigns.payload, :premise, text)
+    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+
+    {:noreply,
+     socket
+     |> forget_generation("premise")
+     |> assign(entry: entry, expanding_premise: false)
+     |> load()}
+  end
+
+  def handle_info({:generation, "stubs", result}, socket) do
     Logger.warning("[authoring] bulk stub generation failed: #{inspect(result)}")
 
     {:noreply,
      socket
+     |> forget_generation("stubs")
      |> assign(generating: false)
      |> put_flash(:error, "Bulk generation failed — try again.")}
   end
 
-  def handle_async(:premise, {:ok, {:ok, text}}, socket) do
-    payload = Map.put(socket.assigns.payload, :premise, text)
-    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
-
-    {:noreply, socket |> assign(entry: entry, expanding_premise: false) |> load()}
-  end
-
-  def handle_async(:premise, result, socket) do
+  def handle_info({:generation, "premise", result}, socket) do
     Logger.warning("[campaign] premise generation failed: #{inspect(result)}")
 
     {:noreply,
      socket
+     |> forget_generation("premise")
      |> assign(expanding_premise: false)
      |> put_flash(:error, "Premise generation failed: #{inspect(reason(result))}")}
   end
@@ -973,7 +996,14 @@ defmodule PolyphonyWeb.CampaignLive do
           written so far are already attached to this campaign.
         </p>
 
-        <div :if={@build.status != "running"} class="mt-2.5">
+        <div :if={@build.status != "running"} class="mt-2.5 flex gap-1.5">
+          <%!-- A failed build has already attached its world, so the campaign is no
+                longer first-run and the card that offers Quick Build is gone. Without
+                this there is no way back to it — and this resumes rather than restarts,
+                so it costs only what is left to do. --%>
+          <Kit.btn :if={@build.status == "failed"} kind={:primary} size={:sm} type="button" phx-click="retry_build">
+            ✦ Pick up where it stopped
+          </Kit.btn>
           <Kit.btn size={:sm} type="button" phx-click="dismiss_build">Dismiss</Kit.btn>
         </div>
       </div>
@@ -1518,6 +1548,41 @@ defmodule PolyphonyWeb.CampaignLive do
       end
   end
 
+  # Generation on this screen is two independent buttons with a boolean each, rather
+  # than the editors' set of in-flight keys, so it talks to `Generations` directly. The
+  # durability is the same and the reason is the same: expanding a premise takes seconds,
+  # and the answer must not belong to whichever tab happened to ask.
+  defp request_generation(socket, key, op, request) do
+    Generations.request(socket.assigns.entry.id, key, op, request)
+    socket
+  end
+
+  # Applying a result consumes it, so a live delivery can't be replayed on the next mount.
+  defp forget_generation(socket, key) do
+    Generations.forget(socket.assigns.entry.id, key)
+    socket
+  end
+
+  # A reconnect can't see either of those booleans, so they come back from the rows —
+  # and anything that finished while the page was closed is re-delivered as the ordinary
+  # message the handlers below already take.
+  defp restore_generations(socket, entry) do
+    if connected?(socket) do
+      Generations.subscribe(entry.id)
+      running = Generations.running(entry.id)
+
+      for {key, result} <- Generations.take(entry.id),
+          do: send(self(), {:generation, key, result})
+
+      assign(socket,
+        expanding_premise: "premise" in running,
+        generating: "stubs" in running
+      )
+    else
+      socket
+    end
+  end
+
   # A view of the row, not a flag of its own — `building?` is only ever asked of what
   # the database says, so a socket that reconnects mid-build gets the right answer.
   defp building?(%{build: %BuildRun{status: "running"}}), do: true
@@ -1605,6 +1670,13 @@ defmodule PolyphonyWeb.CampaignLive do
       is_nil(source) ->
         {nil, "That world is gone."}
 
+      # Attaching *copies*, so an unchecked id is a way to take a private bible —
+      # secrets included — out of somebody else's library. Taking a published world is
+      # a real flow, but it belongs to Browse, which strips what was kept back
+      # (`WorldBible.stripped/1`); this path would copy it whole.
+      not Permissions.can_edit?(source, socket.assigns.current_user) ->
+        {socket.assigns.payload[:bible_id], "That world isn't yours to attach."}
+
       # Already this campaign's own copy — re-selecting it must not copy the copy.
       source.id == socket.assigns.payload[:bible_id] ->
         {source.id, "World updated."}
@@ -1643,18 +1715,6 @@ defmodule PolyphonyWeb.CampaignLive do
 
   defp pending?(char) do
     match?(%CharacterSheet{status: s} when s != :full, Library.payload(char))
-  end
-
-  # Best-effort per stub: one that can't be filled leaves the rest alone and says so.
-  defp generate_stubs(stubs, user) do
-    uid = user && user.id
-
-    Enum.reduce(stubs, {0, 0}, fn entry, {ok, bad} ->
-      case StubGen.finalize(entry, uid) do
-        :ok -> {ok + 1, bad}
-        :error -> {ok, bad + 1}
-      end
-    end)
   end
 
   defp pending_count(cast), do: Enum.count(cast, &pending?/1)

@@ -31,6 +31,7 @@ defmodule Polyphony.Builds do
   reconnecting work at all.
   """
 
+  alias Polyphony.Blob
   alias Polyphony.ReadModels.BuildRun
   alias Polyphony.Repo
 
@@ -64,13 +65,53 @@ defmodule Polyphony.Builds do
   same build — it is taken in the database rather than in the socket, because the
   socket is exactly the thing that can't be trusted to still be there.
   """
-  @spec claim(term(), pos_integer(), keyword()) :: {:ok, t()} | :taken
-  def claim(campaign_id, total, opts \\ []) do
-    case BuildRun.claim(repo(opts), campaign_id, total) do
+  @spec claim(term(), pos_integer(), map() | nil, keyword()) :: {:ok, t()} | :taken
+  def claim(campaign_id, total, args \\ nil, opts \\ []) do
+    case BuildRun.claim(repo(opts), campaign_id, total, Blob.encode(args)) do
       {:ok, run} -> {:ok, announce(campaign_id, run)}
       :taken -> :taken
     end
   end
+
+  @doc """
+  Put a failed run back into flight, **keeping what it already did**.
+
+  The difference from `claim/4` is the whole point: this does not reset `done`, so the
+  attempt that follows resumes rather than paying for the world and the cast twice.
+  """
+  @spec resume(term(), keyword()) :: {:ok, t()} | :taken
+  def resume(campaign_id, opts \\ []) do
+    case get(campaign_id, opts) do
+      %BuildRun{status: "running"} ->
+        :taken
+
+      %BuildRun{} ->
+        {:ok, put(campaign_id, %{status: "running", label: "Starting", detail: nil}, opts)}
+
+      nil ->
+        :taken
+    end
+  end
+
+  @doc "The arguments a run was started with, for starting it again."
+  @spec args(term(), keyword()) :: map() | nil
+  def args(campaign_id, opts \\ []) do
+    case get(campaign_id, opts) do
+      %BuildRun{request: bin} when is_binary(bin) -> Blob.decode(bin)
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Record that a seed's character has been written.
+
+  Written at the moment the entry is persisted rather than when the seed finishes, so a
+  crash on either side of that line resolves correctly: after it the seed is skipped on
+  the next attempt, before it the seed is redone, and neither way is a duplicate.
+  """
+  @spec seed_done(term(), non_neg_integer(), keyword()) :: :ok
+  def seed_done(campaign_id, index, opts \\ []),
+    do: BuildRun.mark_done(repo(opts), campaign_id, index)
 
   @doc "Record a phase, as `QuickBuild`'s `:progress` callback shape."
   @spec progress(term(), map(), keyword()) :: :ok

@@ -23,21 +23,30 @@ defmodule Polyphony.Jobs.QuickBuild do
       can open, look at, and finish — instead of loose parts in a library with no clue
       where they came from.
 
-  ## No retries
+  ## Retries, and why they had to be earned
 
-  `max_attempts: 1`, which is deliberate and is not the usual answer for a job. A retry
-  would re-run the whole generation: dozens of provider calls, charged again, producing
-  a second world and a second cast on top of the ones the first attempt already
-  associated. Oban's retry exists to make transient failures invisible, and this
-  failure is neither transient nor invisible — the campaign keeps whatever got built,
-  the run row says what went wrong, and starting again is the author's call because
-  they are the one paying for it.
+  This shipped with `max_attempts: 1`. The reasoning was that a retry would re-run every
+  provider call, charge for them again, and leave the campaign with two worlds and two
+  casts — all true of the job as it was then. But that is an argument for fixing the
+  retry, not for abandoning the longest and most expensive operation in the app to its
+  first transient failure. A build is minutes of work and a real bill; a 502 four
+  characters in is exactly the thing retries exist for.
+
+  So the build **resumes**. Everything it writes is associated to the campaign the moment
+  it exists, and the run row records which seeds have been written — recorded at the
+  write, not at the end of the seed, so a crash on either side of it resolves correctly.
+  An attempt picks up with the world it already has, the seeds it hasn't done, and the
+  covers it hasn't written. `max_attempts: 3` on Oban's default backoff.
+
+  What a retry never does is duplicate. That is worth more than finishing: a second
+  Wren in the cast is a mess an author has to notice and unpick, while a missing one is
+  a button away.
 
   Uniqueness is enforced twice on purpose: Oban refuses a duplicate job while one is
   enqueued or running, and `Builds.claim/2` refuses a duplicate run in the database.
   The second is the one that holds, because it is the one a node restart can't forget.
   """
-  use Oban.Worker, queue: :generation, max_attempts: 1
+  use Oban.Worker, queue: :generation, max_attempts: 3
 
   require Logger
 
@@ -57,23 +66,31 @@ defmodule Polyphony.Jobs.QuickBuild do
     campaign_id = Keyword.fetch!(opts, :campaign_id)
     seeds = opts |> Keyword.get(:character_seeds, []) |> List.wrap()
 
+    args = %{
+      "campaign_id" => to_string(campaign_id),
+      "owner" => Owner.key(Owner.coerce(Keyword.fetch!(opts, :owner))),
+      "world_seed" => to_string(Keyword.get(opts, :world_seed, "")),
+      "character_seeds" => Enum.map(seeds, &to_string/1),
+      "suggest_offscreen" => !!Keyword.get(opts, :suggest_offscreen, false),
+      "user_id" => opts[:user_id] && to_string(opts[:user_id]),
+      "provider" => opts[:provider] && to_string(opts[:provider]),
+      # Who was in the cast *before* this build, so a resumed attempt can tell its own
+      # characters from ones that were already there. Quick Build is first-run only
+      # today, so this is normally empty — recording it anyway means the resume logic
+      # doesn't quietly depend on that staying true.
+      "baseline_characters" => baseline_characters(campaign_id)
+    }
+
     # The phases `Authoring.QuickBuild` reports: world, one per character, linking,
-    # premise, covers, done.
-    case Builds.claim(campaign_id, length(seeds) + 4) do
+    # premise, covers, done. The args are stored on the run so a build that exhausts its
+    # attempts can be started again from the screen — a failed build leaves a campaign
+    # that is no longer first-run, so the card offering Quick Build is gone and there
+    # would otherwise be no way back to it.
+    case Builds.claim(campaign_id, length(seeds) + 4, args) do
       :taken ->
         :taken
 
       {:ok, run} ->
-        args = %{
-          "campaign_id" => to_string(campaign_id),
-          "owner" => Owner.key(Owner.coerce(Keyword.fetch!(opts, :owner))),
-          "world_seed" => to_string(Keyword.get(opts, :world_seed, "")),
-          "character_seeds" => Enum.map(seeds, &to_string/1),
-          "suggest_offscreen" => !!Keyword.get(opts, :suggest_offscreen, false),
-          "user_id" => opts[:user_id] && to_string(opts[:user_id]),
-          "provider" => opts[:provider] && to_string(opts[:provider])
-        }
-
         case Oban.insert(new(args)) do
           {:ok, _job} ->
             {:ok, run}
@@ -87,8 +104,35 @@ defmodule Polyphony.Jobs.QuickBuild do
     end
   end
 
+  @doc """
+  Start a failed build again, from the arguments it was started with.
+
+  Not a fresh build: the claim keeps the campaign's existing `done` list, so this picks
+  up where the attempts left off rather than paying for the world and cast twice.
+  """
+  @spec retry(term()) :: {:ok, Builds.t()} | :taken | {:error, term()}
+  def retry(campaign_id) do
+    case Builds.args(campaign_id) do
+      nil ->
+        {:error, :no_run}
+
+      args ->
+        case Builds.resume(campaign_id) do
+          :taken -> :taken
+          {:ok, run} -> with {:ok, _} <- Oban.insert(new(args)), do: {:ok, run}
+        end
+    end
+  end
+
+  defp baseline_characters(campaign_id) do
+    case Library.get(campaign_id) do
+      nil -> []
+      entry -> (Library.payload(entry) || %{})[:character_ids] || []
+    end
+  end
+
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args, attempt: attempt, max_attempts: max}) do
     %{"campaign_id" => campaign_id} = args
     owner = Owner.parse(args["owner"])
 
@@ -100,7 +144,9 @@ defmodule Polyphony.Jobs.QuickBuild do
         suggest_offscreen: args["suggest_offscreen"] == true,
         campaign_id: campaign_id,
         progress: &Builds.progress(campaign_id, &1),
-        on_entry: &associate(campaign_id, &1)
+        on_entry: &associate(campaign_id, &1),
+        on_seed_done: &Builds.seed_done(campaign_id, &1),
+        resume: resume_state(campaign_id, args)
       ] ++ meter(args)
 
     case QuickBuild.build(opts) do
@@ -110,9 +156,45 @@ defmodule Polyphony.Jobs.QuickBuild do
         :ok
 
       {:error, reason} ->
-        Logger.warning("[quick_build] campaign=#{campaign_id} failed: #{inspect(reason)}")
-        Builds.fail(campaign_id, reason)
-        {:error, reason}
+        Logger.warning(
+          "[quick_build] campaign=#{campaign_id} attempt #{attempt}/#{max} failed: " <>
+            inspect(reason)
+        )
+
+        if attempt < max do
+          # Leave the run *running*: another attempt is coming, and telling the author it
+          # failed only to start again is worse than saying nothing.
+          {:error, reason}
+        else
+          Builds.fail(campaign_id, reason)
+          :ok
+        end
+    end
+  end
+
+  # What this campaign already has from earlier attempts. Read from the campaign and the
+  # run rather than carried in the job args, because args are fixed at enqueue and the
+  # question is what happened *since*.
+  defp resume_state(campaign_id, args) do
+    run = Builds.get(campaign_id)
+    payload = campaign_payload(campaign_id)
+    baseline = MapSet.new(args["baseline_characters"] || [])
+
+    %{
+      bible: payload[:bible_id] && Library.get(payload[:bible_id]),
+      done: (run && run.done) || [],
+      characters:
+        (payload[:character_ids] || [])
+        |> Enum.reject(&MapSet.member?(baseline, &1))
+        |> Enum.map(&Library.get/1)
+        |> Enum.reject(&is_nil/1)
+    }
+  end
+
+  defp campaign_payload(campaign_id) do
+    case Library.get(campaign_id) do
+      nil -> %{}
+      entry -> Library.payload(entry) || %{}
     end
   end
 

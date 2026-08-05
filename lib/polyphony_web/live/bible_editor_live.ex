@@ -45,9 +45,10 @@ defmodule PolyphonyWeb.BibleEditorLive do
   import PolyphonyWeb.BlockField
 
   alias Polyphony.{Characters, Groups, Library, Owner}
-  alias Polyphony.Authoring.{Audience, Autofill, Cover, WorldBible}
+  alias Polyphony.Permissions
+  alias Polyphony.Authoring.{Audience, WorldBible}
   alias Polyphony.Authoring.WorldBible.Entry
-  alias PolyphonyWeb.{AudiencePicker, Autosave, Kit, Layouts}
+  alias PolyphonyWeb.{AudiencePicker, Autosave, Generating, Guard, Kit, Layouts}
 
   # Prose, edited as paragraph blocks.
   @prose_specs [{"setting", "Setting"}, {"tone", "Tone"}]
@@ -78,7 +79,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
   def mount(%{"id" => id}, _session, socket) do
     entry = Library.get(id)
 
-    if entry && entry.kind == "world_bible" && not Library.hidden?(entry) do
+    if entry && entry.kind == "world_bible" &&
+         Permissions.can_edit?(entry, socket.assigns.current_user) do
       bible = struct(WorldBible, Map.from_struct(Library.payload(entry)))
 
       {:ok,
@@ -93,6 +95,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
          cover: bible.cover,
          blocks: blocks_from_bible(bible),
          items: items_from_bible(bible),
+         gen_subject: entry.id,
          generating: MapSet.new(),
          saved: false,
          dirty: false,
@@ -104,13 +107,14 @@ defmodule PolyphonyWeb.BibleEditorLive do
          # {field, index} of the item whose audience is open, or nil.
          audience_at: nil
        )
+       |> Generating.restore()
        |> assign_lineage()
        |> assign_audience_sources()}
     else
-      # A take-down removes the thing rather than its listing, so this is the deleted
-      # experience — with the one difference that matters: they're told why.
-      {:ok,
-       socket |> put_flash(:error, gone_note(entry, "World bible")) |> redirect(to: ~p"/library")}
+      # Missing, moderated, or somebody else's — `Guard` decides which of those it is
+      # safe to say. Editing what you don't own was never an affordance here; it was
+      # reachable because the mount asked whether the entry existed and stopped there.
+      Guard.refuse(socket, entry, "World bible", socket.assigns.current_user)
     end
   end
 
@@ -265,10 +269,12 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
       {:noreply,
        socket
-       |> mark("all", true)
-       |> start_async(:gen_all, fn ->
-         Autofill.generate_all(:world_bible, brief, current, opts)
-       end)}
+       |> Generating.request("all", "autofill.all", %{
+         kind: :world_bible,
+         brief: brief,
+         current: current,
+         opts: opts
+       })}
     end)
   end
 
@@ -279,10 +285,12 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
       {:noreply,
        socket
-       |> mark(f, true)
-       |> start_async({:gen_field, f}, fn ->
-         Autofill.generate_field(:world_bible, f, current, opts)
-       end)}
+       |> Generating.request(f, "autofill.field", %{
+         kind: :world_bible,
+         field: f,
+         current: current,
+         opts: opts
+       })}
     end)
   end
 
@@ -292,8 +300,11 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
       {:noreply,
        socket
-       |> mark("#{f}:expand", true)
-       |> start_async({:expand, f}, fn -> Autofill.generate_paragraph(:world_bible, f, opts) end)}
+       |> Generating.request("#{f}:expand", "autofill.paragraph", %{
+         kind: :world_bible,
+         field: f,
+         opts: opts
+       })}
     end)
   end
 
@@ -306,10 +317,11 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
       {:noreply,
        socket
-       |> mark("#{f}:#{idx}", true)
-       |> start_async({:gen_block, f, idx}, fn ->
-         Autofill.generate_paragraph(:world_bible, f, opts)
-       end)}
+       |> Generating.request("#{f}:#{idx}", "autofill.paragraph", %{
+         kind: :world_bible,
+         field: f,
+         opts: opts
+       })}
     end)
   end
 
@@ -323,10 +335,12 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
       {:noreply,
        socket
-       |> mark(f, true)
-       |> start_async({:suggest, f}, fn ->
-         Autofill.generate_field(:world_bible, f, current, opts)
-       end)}
+       |> Generating.request(f, "autofill.field", %{
+         kind: :world_bible,
+         field: f,
+         current: current,
+         opts: opts
+       })}
     end)
   end
 
@@ -339,8 +353,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
       {:noreply,
        socket
-       |> mark("cover", true)
-       |> start_async(:cover, fn -> Cover.generate(bible, opts) end)}
+       |> Generating.request("cover", "cover", %{subject: bible, opts: opts})}
     end)
   end
 
@@ -430,7 +443,16 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   # ── Async results ─────────────────────────────────────────────────────────────
 
-  def handle_async(:gen_all, {:ok, {:ok, values}}, socket) do
+  # ── Results ───────────────────────────────────────────────────────────────────
+  #
+  # Same bodies as the `handle_async` clauses they replace: the screen is still the only
+  # thing that decides what a result means, which is the part worth keeping in one place
+  # (Suggest appends, Generate-all fills only blanks, a leaked cover is refused). What
+  # changed is where the work ran — see `Polyphony.Generations`. A result that arrived
+  # while the page was closed comes back through here on the next mount, so there is one
+  # code path either way.
+
+  def handle_info({:generation, "all", {:ok, values}}, socket) do
     blocks =
       Enum.reduce(@prose_fields, socket.assigns.blocks, fn f, acc ->
         if values[f] in [nil, ""], do: acc, else: Map.put(acc, f, to_blocks(values[f]))
@@ -451,35 +473,32 @@ defmodule PolyphonyWeb.BibleEditorLive do
      socket |> assign(name: name, blocks: blocks, items: items) |> mark("all", false) |> touch()}
   end
 
-  def handle_async(:gen_all, result, socket), do: {:noreply, gen_failed(socket, "all", result)}
+  def handle_info({:generation, "cover", {:ok, cover}}, socket) do
+    {:noreply, socket |> assign(cover: cover) |> mark("cover", false) |> touch()}
+  end
 
-  def handle_async({:gen_field, f}, {:ok, {:ok, value}}, socket) do
+  # The leak refusal gets its own message: what happened isn't a broken feature, it's
+  # a cover that kept quoting a secret and was thrown away on purpose.
+  def handle_info({:generation, "cover", {:error, :leaked}}, socket) do
+    {:noreply,
+     socket
+     |> mark("cover", false)
+     |> put_flash(
+       :error,
+       "The cover kept giving a secret away, so it wasn't kept. Try again, or write it yourself."
+     )}
+  end
+
+  # The quiet write. Nothing here is a decision the author hasn't already made by
+  # typing, which is the rule for anything that fires on a timer.
+  def handle_info({:generation, f, {:ok, value}}, socket) when f in @prose_fields do
     {:noreply, socket |> put_blocks(f, to_blocks(value)) |> mark(f, false) |> touch()}
   end
 
-  def handle_async({:gen_field, f}, result, socket),
-    do: {:noreply, gen_failed(socket, f, result)}
-
-  def handle_async({:expand, f}, {:ok, {:ok, para}}, socket) do
-    {:noreply,
-     socket
-     |> put_blocks(f, append_paragraph(socket.assigns.blocks[f], para))
-     |> mark("#{f}:expand", false)
-     |> touch()}
-  end
-
-  def handle_async({:expand, f}, result, socket),
-    do: {:noreply, gen_failed(socket, "#{f}:expand", result)}
-
-  def handle_async({:gen_block, f, idx}, {:ok, {:ok, para}}, socket) do
-    blocks = List.replace_at(socket.assigns.blocks[f], idx, para)
-    {:noreply, socket |> put_blocks(f, blocks) |> mark("#{f}:#{idx}", false) |> touch()}
-  end
-
-  def handle_async({:gen_block, f, idx}, result, socket),
-    do: {:noreply, gen_failed(socket, "#{f}:#{idx}", result)}
-
-  def handle_async({:suggest, f}, {:ok, {:ok, value}}, socket) do
+  # ✦ Suggest on a list **appends** what's new rather than replacing it. A list is
+  # authored — reordered, marked secret, argued over — and regenerating it whole would
+  # throw that away to make room for a suggestion.
+  def handle_info({:generation, f, {:ok, value}}, socket) when f in @list_fields do
     socket = mark(socket, f, false)
     held = MapSet.new(socket.assigns.items[f], &normalize(&1.statement))
     fresh = Enum.reject(entries_from_text(value), &MapSet.member?(held, normalize(&1.statement)))
@@ -496,25 +515,82 @@ defmodule PolyphonyWeb.BibleEditorLive do
     end
   end
 
-  def handle_async({:suggest, f}, result, socket), do: {:noreply, gen_failed(socket, f, result)}
+  # A paragraph: either appended to a field (`"tone:expand"`) or replacing one block of
+  # it (`"tone:2"`). One operation, two keys, because they differ only in where the
+  # answer goes.
+  def handle_info({:generation, key, {:ok, para}}, socket) do
+    case String.split(key, ":", parts: 2) do
+      [f, "expand"] when f in @prose_fields ->
+        {:noreply,
+         socket
+         |> put_blocks(f, append_paragraph(socket.assigns.blocks[f], para))
+         |> mark(key, false)
+         |> touch()}
 
-  def handle_async(:cover, {:ok, {:ok, cover}}, socket) do
-    {:noreply, socket |> assign(cover: cover) |> mark("cover", false) |> touch()}
+      [f, index] when f in @prose_fields ->
+        idx = String.to_integer(index)
+        blocks = List.replace_at(socket.assigns.blocks[f], idx, para)
+        {:noreply, socket |> put_blocks(f, blocks) |> mark(key, false) |> touch()}
+
+      _ ->
+        {:noreply, mark(socket, key, false)}
+    end
   end
 
-  # The leak refusal gets its own message: what happened isn't a broken feature, it's
-  # a cover that kept quoting a secret and was thrown away on purpose.
-  def handle_async(:cover, {:ok, {:error, :leaked}}, socket) do
-    {:noreply,
-     socket
-     |> mark("cover", false)
-     |> put_flash(
-       :error,
-       "The cover kept giving a secret away, so it wasn't kept. Try again, or write it yourself."
-     )}
+  def handle_info(:autosave, socket) do
+    {:noreply, elem(persist(socket), 1)}
   end
 
-  def handle_async(:cover, result, socket), do: {:noreply, gen_failed(socket, "cover", result)}
+  def handle_info({:generation, key, result}, socket),
+    do: {:noreply, gen_failed(socket, key, result)}
+
+  # The tab going away is the case this whole mechanism exists for, and the pending
+  # timer dies with the process.
+  def terminate(_reason, socket), do: Autosave.flush(socket, &persist/1)
+
+  # Write the bible as it currently stands, and answer whether the *name* went with it.
+  #
+  # The name is the one field with a gate on it (§03: two worlds called Saltmarch is a
+  # mistake heading somewhere confusing, and only the author can say which they meant),
+  # so a clash holds the name back and lets everything else through. Refusing the whole
+  # sheet over it would mean an autosave discarding the prose it exists to protect —
+  # and, on an explicit save, throwing away an afternoon's writing to enforce a label.
+  defp persist(socket) do
+    %{name: name, blocks: blocks, items: items, entry: entry} = socket.assigns
+
+    clash =
+      Library.name_clash(Owner.of(socket.assigns.current_user), "world_bible", name,
+        except: entry.id
+      )
+
+    bible = %WorldBible{
+      socket.assigns.bible
+      | name: if(clash, do: socket.assigns.bible.name, else: name),
+        cover: blank_to_nil(socket.assigns.cover),
+        setting: join_blocks(blocks["setting"]),
+        tone: join_blocks(blocks["tone"]),
+        rules: items["rules"],
+        starting_canon: items["starting_canon"]
+    }
+
+    {:ok, entry} = Library.update_payload(entry.id, bible)
+
+    socket =
+      socket
+      |> assign(
+        entry: entry,
+        bible: bible,
+        name_error: clash && "You already have a world called #{String.trim(name)}.",
+        name_clash: clash,
+        blocks: blocks_from_bible(bible),
+        items: items_from_bible(bible)
+      )
+      |> Autosave.saved()
+
+    # The name field keeps what was typed on a clash — retyping it is the author's job,
+    # and silently reverting the field would hide the very thing being complained about.
+    if clash, do: {:clash, socket}, else: {:ok, assign(socket, name: bible.name)}
+  end
 
   # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -648,70 +724,12 @@ defmodule PolyphonyWeb.BibleEditorLive do
       end
   end
 
-  # The quiet write. Nothing here is a decision the author hasn't already made by
-  # typing, which is the rule for anything that fires on a timer.
-  def handle_info(:autosave, socket) do
-    {:noreply, elem(persist(socket), 1)}
-  end
-
-  # The tab going away is the case this whole mechanism exists for, and the pending
-  # timer dies with the process.
-  def terminate(_reason, socket), do: Autosave.flush(socket, &persist/1)
-
-  # Write the bible as it currently stands, and answer whether the *name* went with it.
-  #
-  # The name is the one field with a gate on it (§03: two worlds called Saltmarch is a
-  # mistake heading somewhere confusing, and only the author can say which they meant),
-  # so a clash holds the name back and lets everything else through. Refusing the whole
-  # sheet over it would mean an autosave discarding the prose it exists to protect —
-  # and, on an explicit save, throwing away an afternoon's writing to enforce a label.
-  defp persist(socket) do
-    %{name: name, blocks: blocks, items: items, entry: entry} = socket.assigns
-
-    clash =
-      Library.name_clash(Owner.of(socket.assigns.current_user), "world_bible", name,
-        except: entry.id
-      )
-
-    bible = %WorldBible{
-      socket.assigns.bible
-      | name: if(clash, do: socket.assigns.bible.name, else: name),
-        cover: blank_to_nil(socket.assigns.cover),
-        setting: join_blocks(blocks["setting"]),
-        tone: join_blocks(blocks["tone"]),
-        rules: items["rules"],
-        starting_canon: items["starting_canon"]
-    }
-
-    {:ok, entry} = Library.update_payload(entry.id, bible)
-
-    socket =
-      socket
-      |> assign(
-        entry: entry,
-        bible: bible,
-        name_error: clash && "You already have a world called #{String.trim(name)}.",
-        name_clash: clash,
-        blocks: blocks_from_bible(bible),
-        items: items_from_bible(bible)
-      )
-      |> Autosave.saved()
-
-    # The name field keeps what was typed on a clash — retyping it is the author's job,
-    # and silently reverting the field would hide the very thing being complained about.
-    if clash, do: {:clash, socket}, else: {:ok, assign(socket, name: bible.name)}
-  end
-
   defp touch(socket), do: Autosave.touch(socket)
 
   defp leave_confirm(true), do: "You have unsaved changes. Leave without saving?"
   defp leave_confirm(false), do: nil
 
-  defp mark(socket, key, true),
-    do: assign(socket, :generating, MapSet.put(socket.assigns.generating, key))
-
-  defp mark(socket, key, false),
-    do: assign(socket, :generating, MapSet.delete(socket.assigns.generating, key))
+  defp mark(socket, key, on?), do: Generating.mark(socket, key, on?)
 
   defp gen_failed(socket, key, result) do
     Logger.warning("[authoring] world generation failed (#{key}): #{inspect(result)}")
@@ -1421,9 +1439,4 @@ defmodule PolyphonyWeb.BibleEditorLive do
       n -> "#{n} things are held back. They have no idea."
     end
   end
-
-  defp gone_note(%{hidden_at: at}, _noun) when not is_nil(at),
-    do: "That was taken down after a report. Check your email."
-
-  defp gone_note(_entry, noun), do: "#{noun} not found."
 end

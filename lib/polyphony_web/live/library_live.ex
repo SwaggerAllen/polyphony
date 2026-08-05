@@ -45,6 +45,7 @@ defmodule PolyphonyWeb.LibraryLive do
   alias Polyphony.{Campaigns, Characters, Groups, Library, Owner, Reading}
   alias Polyphony.Authoring.{CharacterSheet, Group}
   alias Polyphony.Reading.Session
+  alias Polyphony.Permissions
   alias PolyphonyWeb.{Kit, Layouts, Voice}
 
   @tabs ~w(campaigns reading worlds people groups shelves)
@@ -327,6 +328,27 @@ defmodule PolyphonyWeb.LibraryLive do
 
   # The only create action. A blank campaign, straight into its editor — no name is
   # required up front, and the campaign asks for the world and the people.
+  # Every destructive button on this screen goes through here, and the check is the
+  # reason it exists. The lists are scoped to the owner, so the buttons only ever appear
+  # on your own things — but the id comes back in the event, and `Library.purge/1` does
+  # not ask whose entry it is. Archiving, trashing and purging a stranger's campaign was
+  # a matter of knowing a small integer.
+  #
+  # Archived and trashed entries are out of the default lists, so the lookup has to see
+  # them or restoring your own work would refuse itself.
+  defp mutate(socket, id, note, fun) do
+    safe(socket, fn ->
+      entry = Library.get(id, include_archived: true, include_deleted: true)
+
+      if Permissions.can_edit?(entry, socket.assigns.current_user) do
+        fun.(id)
+        {:noreply, socket |> put_flash(:info, note) |> load()}
+      else
+        {:noreply, put_flash(socket, :error, "Not found.")}
+      end
+    end)
+  end
+
   def handle_event("new_campaign", _params, socket) do
     safe(socket, fn ->
       entry =
@@ -355,43 +377,23 @@ defmodule PolyphonyWeb.LibraryLive do
 
   # Archive is filing — un-filing it is one button and no confirmation, because
   # nothing was ever at risk.
-  def handle_event("unarchive", %{"id" => id}, socket) do
-    safe(socket, fn ->
-      Library.unarchive(id)
-      {:noreply, socket |> put_flash(:info, "Back on the shelf.") |> load()}
-    end)
-  end
+  def handle_event("unarchive", %{"id" => id}, socket),
+    do: mutate(socket, id, "Back on the shelf.", &Library.unarchive/1)
 
-  def handle_event("archive", %{"id" => id}, socket) do
-    safe(socket, fn ->
-      Library.archive(id)
-      {:noreply, socket |> put_flash(:info, "Filed. It's on the archive shelf.") |> load()}
-    end)
-  end
+  def handle_event("archive", %{"id" => id}, socket),
+    do: mutate(socket, id, "Filed. It's on the archive shelf.", &Library.archive/1)
 
   # Soft, and on a clock — `Library.purge_expired/1` is what finally removes it, and
   # the trash shelf carries the one irreversible button in the screen.
-  def handle_event("trash", %{"id" => id}, socket) do
-    safe(socket, fn ->
-      {:ok, _} = Library.soft_delete(id)
-      {:noreply, socket |> put_flash(:info, "In the trash. You can put it back.") |> load()}
-    end)
-  end
+  def handle_event("trash", %{"id" => id}, socket),
+    do: mutate(socket, id, "In the trash. You can put it back.", &Library.soft_delete/1)
 
-  def handle_event("restore", %{"id" => id}, socket) do
-    safe(socket, fn ->
-      Library.restore(id)
-      {:noreply, socket |> put_flash(:info, "Put back.") |> load()}
-    end)
-  end
+  def handle_event("restore", %{"id" => id}, socket),
+    do: mutate(socket, id, "Put back.", &Library.restore/1)
 
   # The one irreversible button in the screen, and the only one that confirms.
-  def handle_event("purge", %{"id" => id}, socket) do
-    safe(socket, fn ->
-      Library.purge(id)
-      {:noreply, socket |> put_flash(:info, "Gone for good.") |> load()}
-    end)
-  end
+  def handle_event("purge", %{"id" => id}, socket),
+    do: mutate(socket, id, "Gone for good.", &Library.purge/1)
 
   def handle_event("forget_reading", %{"id" => id}, socket) do
     safe(socket, fn ->

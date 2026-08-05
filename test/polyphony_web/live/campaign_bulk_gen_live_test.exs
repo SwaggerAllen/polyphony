@@ -48,7 +48,7 @@ defmodule PolyphonyWeb.CampaignBulkGenLiveTest do
     assert html =~ "2 pending characters"
 
     view |> element("button[phx-click=generate_pending]") |> render_click()
-    render_async(view)
+    generate(view)
 
     g = Library.payload(Library.get(ghost.id))
     b = Library.payload(Library.get(bram.id))

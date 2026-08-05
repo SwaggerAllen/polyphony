@@ -28,6 +28,7 @@ defmodule Polyphony.Library do
   """
 
   alias Polyphony.Repo
+  alias Polyphony.Blob
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.ReadModels.LibraryEntry
@@ -755,16 +756,10 @@ defmodule Polyphony.Library do
 
   defp repo(opts), do: Keyword.get(opts, :repo, Repo)
 
-  defp encode(payload), do: :erlang.term_to_binary(payload)
-  # `:safe` refuses to fabricate atoms/modules; every embedded struct
-  # (CharacterSheet, WorldBible, Snapshot, …) is already loaded.
-  # Sobelow flags every `binary_to_term`; `:safe` is the mitigation it asks for, and
-  # the binary is our own `encode/1` output read back from our own table.
-  # Registered because the attribute is read by Sobelow, not the compiler, which
-  # would otherwise warn it is set and never used (and CI compiles as errors).
-  Module.register_attribute(__MODULE__, :sobelow_skip, accumulate: true)
-  @sobelow_skip ["Misc.BinToTerm"]
-  defp decode(bin), do: :erlang.binary_to_term(bin, [:safe])
+  # Every embedded struct (CharacterSheet, WorldBible, Snapshot, …) is a term nobody
+  # queries, so it is stored whole — see `Polyphony.Blob`, which owns the `:safe` read.
+  defp encode(payload), do: Blob.encode(payload)
+  defp decode(bin), do: Blob.decode(bin)
 
   defp token_for("unlisted"), do: gen_token()
   defp token_for(_visibility), do: nil

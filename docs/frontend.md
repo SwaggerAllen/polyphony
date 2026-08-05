@@ -113,10 +113,38 @@ components.
     see `Polyphony.Builds` and `Polyphony.Jobs.QuickBuild`. Progress is a row, so it
     survives a reconnect and shows on a second device, and the job associates each
     entry to the campaign *as it writes it* — an interrupted build leaves a half-built
-    campaign rather than orphans in the library.
+    campaign rather than orphans in the library — and because it associates as it goes,
+    it can also **resume**, so `max_attempts: 3` is safe. A retry uses the world it
+    already wrote and skips the seeds whose characters exist (recorded at the write, so
+    a crash either side of it resolves correctly), which is what makes never duplicating
+    the property that holds. A run that exhausts its attempts keeps its arguments, so
+    the screen can offer to pick it up where it stopped — otherwise a failed build
+    leaves a campaign that is no longer first-run, with the card that offers Quick Build
+    gone.
+  - **So is every ✦ control**, for the same reason at smaller scale: the calls take
+    seconds, which is exactly long enough to switch apps. `Polyphony.Generations` parks
+    the **raw result** and `PolyphonyWeb.Generating` hands it to the screen — live over
+    PubSub, or on the next mount if nobody was watching, with the spinners restored for
+    whatever is still running. The job deliberately does *not* write the value onto the
+    entry: how a result merges is the interesting part (✦ Suggest appends, Generate-all
+    fills only blanks, a leaked cover is refused), and a second copy of that in a worker
+    would drift toward overwriting an author's work. `Polyphony.Jobs.Generate` holds the
+    operations as a literal `case` rather than an MFA in job args. The reroll stays a
+    plain task — it only supersedes and enqueues `Jobs.GeneratePacket`, which was always
+    a job.
 - **Ownership through `Owner`.** Library screens scope every read/write through
   `Polyphony.Owner.of(current_user)` — never a raw user id — so org support later is a
   bolt-on, not a rewrite (decisions §P2/§P8).
+- **Authorization is `Polyphony.Permissions`, and it is one function.** Scoped *lists*
+  were never the gate: the screens loaded whatever entry the URL named and asked only
+  whether it existed. `can_edit?/2` is now the single answer, and `editors_of/1` is the
+  whole seam for shared editing — empty today, so edit access means ownership, and
+  multiplayer is a change there plus a table rather than a sweep through the screens.
+  A scene has no owner of its own; `can_play?/2` asks its campaign, because taking a
+  turn writes fiction into somebody's story. `PolyphonyWeb.Guard` owns what a refusal
+  *says*: taken-down says so, published points at the copy, and everything else —
+  including private-and-not-yours — is "not found", because a distinct "not allowed"
+  confirms an id belongs to something.
 - **The Play view is the guarantee, visible.** It renders a scene as a
   viewer-parameterized projection (omniscient or as any character); a whisper the viewer
   wasn't part of is silently absent. That is `Polyphony.Visibility.project/2` — the same

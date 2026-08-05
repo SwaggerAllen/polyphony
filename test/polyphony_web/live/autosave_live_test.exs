@@ -194,6 +194,50 @@ defmodule PolyphonyWeb.AutosaveLiveTest do
     end
   end
 
+  describe "a generation you walked away from" do
+    test "is applied when you come back, not thrown away", %{conn: conn, user: user} do
+      entry = world(user, %WorldBible{name: "Saltmarch"})
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
+
+      view
+      |> element("button[phx-click=generate_field][phx-value-field=setting]")
+      |> render_click()
+
+      # Leave while it's running — the exact thing that used to kill the task and throw
+      # the answer away, having already paid for it.
+      Process.flag(:trap_exit, true)
+      ref = Process.monitor(view.pid)
+      GenServer.stop(view.pid, :shutdown)
+      assert_receive {:DOWN, ^ref, :process, _, _}, 2_000
+
+      Oban.drain_queue(queue: :generation)
+
+      # Come back. The answer was waiting, and lands in the field exactly as it would
+      # have if the tab had stayed open — then autosaves like any other edit.
+      {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
+      tick(view)
+
+      assert Library.payload(Library.get(entry.id)).setting not in [nil, ""]
+    end
+
+    test "still shows as running if it hasn't finished", %{conn: conn, user: user} do
+      entry = world(user, %WorldBible{name: "Saltmarch"})
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
+
+      view
+      |> element("button[phx-click=generate_field][phx-value-field=setting]")
+      |> render_click()
+
+      # A fresh mount with the job still enqueued: the spinner comes back from the row,
+      # because a control that looks idle while its work is in flight invites a second
+      # press and a second bill.
+      {:ok, _view, html} = live(conn, ~p"/authoring/bible/#{entry.id}")
+      assert html =~ "✦ …"
+    end
+  end
+
   defp eventually(fun, remaining \\ 3_000)
   defp eventually(_fun, remaining) when remaining <= 0, do: false
 

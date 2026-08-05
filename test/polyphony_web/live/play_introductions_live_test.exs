@@ -83,7 +83,7 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
     assert html =~ "Write &amp; admit"
 
     view |> element("button[phx-click=intro_generate][phx-value-name=Ghost]") |> render_click()
-    render_async(view)
+    generate(view)
 
     # A full character named Ghost now exists, owned by the author, and is in the scene.
     ghost =
