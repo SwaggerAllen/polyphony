@@ -161,6 +161,11 @@ defmodule PolyphonyWeb.CharacterSheetScreenLiveTest do
 
       other = character(user, written)
       {:ok, view, _html} = live(conn, ~p"/authoring/character/#{other.id}")
+
+      # The one-line card folds away once there is a sheet here — it leads on a blank
+      # character and would be clutter on a written one — so this reopens it.
+      view |> element("button[phx-click=toggle_brief]") |> render_click()
+
       view |> form("form[phx-submit=generate_all]", %{brief: "a clerk"}) |> render_submit()
       generate(view)
       view |> form("form[phx-submit=save]", %{name: "Ivo"}) |> render_submit()
@@ -169,6 +174,35 @@ defmodule PolyphonyWeb.CharacterSheetScreenLiveTest do
       # author rather than a first draft — and would quietly un-hide a secret's place
       # in a list the author ordered.
       assert [%Fact{statement: "He kept the ledger.", concealed: true}] = sheet_of(other).facts
+    end
+
+    test "the one-line brief leads on a blank character and folds away on a written one",
+         %{conn: conn, user: user} do
+      blank = character(user, %CharacterSheet{name: "New character", status: :stub})
+      {:ok, _view, html} = live(conn, ~p"/authoring/character/#{blank.id}")
+
+      # It used to sit several screens down, under the fields it fills — the wrong way
+      # round on a blank sheet, where not starting with the fields is the whole point.
+      # The world bible and the mock's own new-character flow both lead with it.
+      assert html =~ "Who are they, in a line"
+      assert :binary.match(html, "sheet-generate-all") < :binary.match(html, ~s(id="sheet-form"))
+
+      written =
+        character(user, %CharacterSheet{
+          name: "Wren",
+          status: :full,
+          premise: "The harbourmaster's daughter."
+        })
+
+      {:ok, view, html} = live(conn, ~p"/authoring/character/#{written.id}")
+
+      # Dead weight from this character's second day, so it folds — and says how to get
+      # it back rather than vanishing.
+      refute html =~ ~s(id="sheet-generate-all")
+      assert html =~ "✦ Write it from a line"
+
+      html = view |> element("button[phx-click=toggle_brief]") |> render_click()
+      assert html =~ ~s(id="sheet-generate-all")
     end
 
     test "a fact's menu opens in the flow, where a sheet cannot clip it",

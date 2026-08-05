@@ -115,6 +115,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
          saved: false,
          dirty: false,
          autosave_ref: nil,
+         brief_open: false,
          drawer: nil,
          panel: nil,
          # Index of the fact whose audience is open, or nil.
@@ -199,6 +200,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # Edit a pending stub's one-line role (how they fit / how the source regards them). It
   # seeds ✨ Generate and is persisted on Save, so authors can correct a stub the Director
   # or a relationship proposed with a wrong role before finalizing it.
+  def handle_event("toggle_brief", _params, socket),
+    do: {:noreply, assign(socket, brief_open: not socket.assigns.brief_open)}
+
   def handle_event("set_role", %{"role" => role}, socket) do
     {:noreply, socket |> assign(role: role) |> touch()}
   end
@@ -957,6 +961,14 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # leave-confirmation on navigation links).
   defp mark(socket, key, on?), do: Generating.mark(socket, key, on?)
 
+  # Blank enough that leading with the brief is the helpful thing rather than clutter.
+  # The prose is what "written" means here — a name alone is a stub somebody hasn't
+  # started, which is exactly when the one-line path should be open.
+  defp empty_sheet?(assigns) do
+    Enum.all?(@block_fields, &(join_blocks(assigns.blocks[&1]) == "")) and
+      assigns.facts == [] and assigns.relationships == []
+  end
+
   defp gen_failed(socket, key, result) do
     Logger.warning("[authoring] generation failed (#{key}): #{inspect(result)}")
 
@@ -1266,6 +1278,53 @@ defmodule PolyphonyWeb.SheetEditorLive do
             gets promoted; one who has served their purpose gets demoted rather than deleted.
           </:part>
         </.drawer>
+
+        <%!-- One brief writes everything, above the sheet rather than buried in it.
+              It was several screens down, under the fields it fills — which is the
+              wrong way round on a blank character: the whole point is that you don't
+              have to start with the fields. The world bible and the mock's own
+              new-character flow (§02, "✦ Write her sheet") both lead with it, and it
+              folds away once there is a sheet here, like the campaign's Quick Build. --%>
+        <Kit.sheet
+          :if={@brief_open or empty_sheet?(assigns)}
+          class="m-4"
+          style={empty_sheet?(assigns) && "border-color:var(--lamp)"}
+        >
+          <Kit.row class="px-4 py-3 flex items-center justify-between gap-2" style="background:var(--b2)">
+            <span class="ttl text-[15px] font-semibold">Who are they, in a line</span>
+            <button
+              :if={not empty_sheet?(assigns)}
+              type="button"
+              class="dim text-[17px] leading-none"
+              phx-click="toggle_brief"
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </Kit.row>
+          <div class="px-4 py-3">
+            <form id="sheet-generate-all" phx-submit="generate_all">
+              <label for="brief" class="sr-only">Describe the character</label>
+              <textarea
+                id="brief"
+                name="brief"
+                rows="2"
+                placeholder="A jaded harbour-town detective who used to be a priest and still prays out of habit."
+                class="field px-3 py-2.5 text-[13px] leading-relaxed w-full mb-2"
+              ></textarea>
+              <Kit.btn kind={:primary} type="submit" disabled={busy?(@generating, "all")}>
+                <%= if busy?(@generating, "all"), do: "✦ Writing…", else: "✦ Write every field" %>
+              </Kit.btn>
+            </form>
+            <p class="text-[11px] leading-relaxed dim mt-2">
+              Builds on anything already written rather than replacing it.
+            </p>
+          </div>
+        </Kit.sheet>
+
+        <div :if={not @brief_open and not empty_sheet?(assigns)} class="px-4 pt-4">
+          <Kit.btn size={:sm} type="button" phx-click="toggle_brief">✦ Write it from a line</Kit.btn>
+        </div>
 
         <%!-- One form owns everything the sheet stores: the cover, the five prose
               fields, and the name and pronouns in its footer. The list sections below
@@ -1637,25 +1696,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
               </select>
               <p class="text-[11px] leading-relaxed dim mt-1.5">
                 Grounds everything generated here in a setting.
-              </p>
-            </form>
-          </Kit.row>
-
-          <Kit.row class="px-4 py-3">
-            <form id="sheet-generate-all" phx-submit="generate_all">
-              <label for="brief" class="lbl dim">Write the whole sheet from a line</label>
-              <textarea
-                id="brief"
-                name="brief"
-                rows="2"
-                placeholder="e.g. A jaded harbour-town detective who used to be a priest and still prays out of habit."
-                class="field px-3 py-2.5 text-[13px] leading-relaxed w-full mt-1.5 mb-2"
-              ></textarea>
-              <Kit.btn kind={:primary} type="submit" disabled={busy?(@generating, "all")}>
-                <%= if busy?(@generating, "all"), do: "✦ Writing…", else: "✦ Write every field" %>
-              </Kit.btn>
-              <p class="text-[11px] leading-relaxed dim mt-2">
-                Builds on anything already written rather than replacing it.
               </p>
             </form>
           </Kit.row>

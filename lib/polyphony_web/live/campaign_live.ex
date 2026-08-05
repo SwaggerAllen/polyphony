@@ -241,11 +241,21 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
+  # Removing somebody cuts their ties to the rest of the cast, both ways — a
+  # relationship is a link between two people who share a story, and leaving a dangling
+  # `target_id` behind means the remaining sheets keep describing a person nobody can
+  # meet, in their prompts as well as on screen (`Campaigns.uncast/3`).
   def handle_event("remove_character", %{"id" => id}, socket) do
     safe(socket, fn ->
       cid = normalize_id(id)
-      ids = Enum.reject(cast_ids(socket.assigns.payload), &(&1 == cid))
-      {:noreply, update_cast(socket, ids, "Removed #{display_name(cid)} from the cast.")}
+      name = display_name(cid)
+      :ok = Campaigns.uncast(socket.assigns.entry.id, cid)
+
+      {:noreply,
+       socket
+       |> assign(entry: Library.get(socket.assigns.entry.id))
+       |> load()
+       |> put_flash(:info, "Removed #{name} from the cast.")}
     end)
   end
 
