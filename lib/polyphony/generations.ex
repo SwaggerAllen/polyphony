@@ -43,6 +43,7 @@ defmodule Polyphony.Generations do
 
   require Logger
 
+  alias Polyphony.Blob
   alias Polyphony.ReadModels.GenerationRun
   alias Polyphony.Repo
 
@@ -76,7 +77,7 @@ defmodule Polyphony.Generations do
         subject: to_string(subject),
         key: to_string(key),
         op: to_string(op),
-        request: encode(request)
+        request: Blob.encode(request)
       })
 
     case Oban.insert(Polyphony.Jobs.Generate.new(%{"id" => row.id})) do
@@ -102,7 +103,7 @@ defmodule Polyphony.Generations do
   def finish(id, result, opts \\ []) do
     status = if match?({:ok, _}, result), do: "done", else: "failed"
 
-    case GenerationRun.update(repo(opts), id, %{status: status, result: encode(result)}) do
+    case GenerationRun.update(repo(opts), id, %{status: status, result: Blob.encode(result)}) do
       nil ->
         Logger.debug("[generation] result for a run that is gone (id=#{inspect(id)})")
         :ok
@@ -122,7 +123,7 @@ defmodule Polyphony.Generations do
   def take(subject, opts \\ []) do
     repo(opts)
     |> GenerationRun.take_finished(subject)
-    |> Enum.map(&{&1.key, decode(&1.result)})
+    |> Enum.map(&{&1.key, Blob.decode(&1.result)})
   end
 
   @doc "The controls still generating for this subject — the spinners to restore."
@@ -140,7 +141,7 @@ defmodule Polyphony.Generations do
 
   @doc "The stored request for a run, decoded."
   @spec request_of(t()) :: term()
-  def request_of(%GenerationRun{request: bin}), do: decode(bin)
+  def request_of(%GenerationRun{request: bin}), do: Blob.decode(bin)
 
   defp announce(subject, message) do
     Phoenix.PubSub.broadcast(Polyphony.PubSub, topic(subject), message)
@@ -148,19 +149,6 @@ defmodule Polyphony.Generations do
   rescue
     _ -> :ok
   end
-
-  defp encode(term), do: :erlang.term_to_binary(term)
-
-  defp decode(nil), do: nil
-
-  # `:safe` refuses to fabricate atoms or modules; everything stored here is built from
-  # already-loaded structs and literal atoms this app compiled.
-  #
-  # Registered because the attribute is read by Sobelow, not the compiler, which would
-  # otherwise warn it is set and never used (and CI compiles as errors).
-  Module.register_attribute(__MODULE__, :sobelow_skip, accumulate: true)
-  @sobelow_skip ["Misc.BinToTerm"]
-  defp decode(bin) when is_binary(bin), do: :erlang.binary_to_term(bin, [:safe])
 
   defp repo(opts), do: Keyword.get(opts, :repo, Repo)
 end

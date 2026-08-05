@@ -31,6 +31,7 @@ defmodule Polyphony.Builds do
   reconnecting work at all.
   """
 
+  alias Polyphony.Blob
   alias Polyphony.ReadModels.BuildRun
   alias Polyphony.Repo
 
@@ -66,7 +67,7 @@ defmodule Polyphony.Builds do
   """
   @spec claim(term(), pos_integer(), map() | nil, keyword()) :: {:ok, t()} | :taken
   def claim(campaign_id, total, args \\ nil, opts \\ []) do
-    case BuildRun.claim(repo(opts), campaign_id, total, args && encode(args)) do
+    case BuildRun.claim(repo(opts), campaign_id, total, Blob.encode(args)) do
       {:ok, run} -> {:ok, announce(campaign_id, run)}
       :taken -> :taken
     end
@@ -96,7 +97,7 @@ defmodule Polyphony.Builds do
   @spec args(term(), keyword()) :: map() | nil
   def args(campaign_id, opts \\ []) do
     case get(campaign_id, opts) do
-      %BuildRun{request: bin} when is_binary(bin) -> decode(bin)
+      %BuildRun{request: bin} when is_binary(bin) -> Blob.decode(bin)
       _ -> nil
     end
   end
@@ -173,17 +174,6 @@ defmodule Polyphony.Builds do
   rescue
     _ -> run
   end
-
-  defp encode(term), do: :erlang.term_to_binary(term)
-
-  # `:safe` refuses to fabricate atoms or modules; the stored term is a map of strings
-  # this module wrote itself.
-  #
-  # Registered because the attribute is read by Sobelow, not the compiler, which would
-  # otherwise warn it is set and never used (and CI compiles as errors).
-  Module.register_attribute(__MODULE__, :sobelow_skip, accumulate: true)
-  @sobelow_skip ["Misc.BinToTerm"]
-  defp decode(bin), do: :erlang.binary_to_term(bin, [:safe])
 
   defp describe(reason) when is_binary(reason), do: reason
   defp describe({:world_failed, reason}), do: "The world couldn't be written: #{describe(reason)}"
