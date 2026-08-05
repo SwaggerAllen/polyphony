@@ -128,4 +128,66 @@ defmodule PolyphonyWeb.SheetLayoutLiveTest do
       assert html =~ "✓ Saved"
     end
   end
+
+  describe "\"Writing this sheet\"" do
+    test "is near the top, because it decides how the rest gets written",
+         %{conn: conn, user: user} do
+      entry = character(user)
+      {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      pane = at(html, "Writing this sheet")
+      cover = at(html, ~s(id="cover-text"))
+      facts = at(html, ~s(id="facts"))
+
+      assert pane && cover && facts
+      # Tier is what puts a character in every scene's context or only in the scenes
+      # they appear in. Answering that after writing the sheet is answering it too late.
+      assert pane < cover
+      assert pane < facts
+    end
+
+    test "the world picker is gone, and the world is still stated",
+         %{conn: conn, user: user} do
+      wb =
+        Library.put(%{
+          owner: Owner.of(user),
+          kind: "world_bible",
+          payload: %Polyphony.Authoring.WorldBible{name: "Saltmarch"}
+        })
+
+      entry = character(user)
+
+      Library.put(%{
+        owner: Owner.of(user),
+        kind: "campaign",
+        payload: %{
+          kind: :campaign,
+          name: "Camp",
+          character_ids: [entry.id],
+          bible_id: wb.id,
+          scenes: []
+        }
+      })
+
+      {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      refute html =~ ~s(id="world-select")
+      refute html =~ ~s(phx-change="select_world")
+      assert html =~ "Saltmarch"
+    end
+
+    test "what's left is the tier selector", %{conn: conn, user: user} do
+      entry = character(user)
+      {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      assert html =~ ~s(phx-click="set_tier")
+
+      view
+      |> element(~s(button[phx-click="set_tier"][phx-value-tier="incidental"]))
+      |> render_click()
+
+      # It saves on tap rather than with the form: a set of pills has no obvious apply.
+      assert Library.payload(Library.get(entry.id)).tier == :incidental
+    end
+  end
 end

@@ -34,6 +34,16 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
     Library.put(%{owner: Owner.of(user), kind: "world_bible", payload: bible})
   end
 
+  defp campaign(user, attrs) do
+    payload =
+      Map.merge(
+        %{kind: :campaign, name: "Camp", character_ids: [], bible_id: nil, scenes: []},
+        attrs
+      )
+
+    Library.put(%{owner: Owner.of(user), kind: "campaign", payload: payload})
+  end
+
   describe "character sheet editor" do
     test "the brief fills every field", %{conn: conn, user: user} do
       entry = character(user, %CharacterSheet{name: "", status: :full})
@@ -100,36 +110,52 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
     end
   end
 
-  describe "world seeding on the character editor" do
-    test "the world selector lists the author's world bibles", %{conn: conn, user: user} do
-      world(user, %WorldBible{name: "Neon Bay", setting: "a drowned port"})
-      entry = character(user, %CharacterSheet{name: "", status: :full})
+  describe "the world a character is written in" do
+    test "comes from their campaign, not from a picker", %{conn: conn, user: user} do
+      wb = world(user, %WorldBible{name: "Neon Bay", setting: "a drowned port"})
+      entry = character(user, %CharacterSheet{name: "Rell", status: :full})
+      campaign(user, %{bible_id: wb.id, character_ids: [entry.id]})
 
       {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      # A character belongs to one campaign (§2.7) and a campaign holds its own copy of
+      # a bible, so the setting is decided before this screen opens. The picker could
+      # only ever be used to ground a character in a world their campaign doesn't play
+      # in — and since attaching copies, most of what it listed was other campaigns'
+      # working copies.
+      refute html =~ ~s(id="world-select")
+      # Stated where the rest of the identity line is, instead.
       assert html =~ "Neon Bay"
     end
 
-    test "selecting a world persists the link on save", %{conn: conn, user: user} do
-      wb = world(user, %WorldBible{name: "Neon Bay", setting: "a drowned port"})
-      entry = character(user, %CharacterSheet{name: "", status: :full})
+    test "the campaign's world wins over a stale link on the sheet",
+         %{conn: conn, user: user} do
+      old_world = world(user, %WorldBible{name: "Old Harbour"})
+      new_world = world(user, %WorldBible{name: "Neon Bay"})
 
-      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+      entry =
+        character(user, %CharacterSheet{name: "Rell", status: :full, world_bible_id: old_world.id})
 
-      view
-      |> form("form[phx-change=select_world]", %{world_id: to_string(wb.id)})
-      |> render_change()
+      campaign(user, %{bible_id: new_world.id, character_ids: [entry.id]})
 
+      {:ok, view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
+
+      # A campaign that swaps its world would otherwise leave every character pointing
+      # at the old copy until each was opened and re-picked by hand.
+      assert html =~ "Neon Bay"
       view |> form("form[phx-submit=save]", %{name: "Rell"}) |> render_submit()
-
-      assert Library.payload(Library.get(entry.id)).world_bible_id == wb.id
+      assert Library.payload(Library.get(entry.id)).world_bible_id == new_world.id
     end
 
-    test "a persisted world link is preselected on mount", %{conn: conn, user: user} do
+    test "a character with no campaign keeps whatever it was given",
+         %{conn: conn, user: user} do
       wb = world(user, %WorldBible{name: "Neon Bay"})
       entry = character(user, %CharacterSheet{name: "Rell", status: :full, world_bible_id: wb.id})
 
-      {:ok, _view, html} = live(conn, ~p"/authoring/character/#{entry.id}")
-      assert html =~ ~r/<option value="#{wb.id}"[^>]*selected/
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
+      view |> form("form[phx-submit=save]", %{name: "Rell"}) |> render_submit()
+
+      assert Library.payload(Library.get(entry.id)).world_bible_id == wb.id
     end
   end
 

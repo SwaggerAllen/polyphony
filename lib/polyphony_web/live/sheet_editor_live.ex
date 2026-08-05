@@ -96,8 +96,10 @@ defmodule PolyphonyWeb.SheetEditorLive do
          Permissions.can_edit?(entry, socket.assigns.current_user) do
       # struct/2 fills any field the stored struct predates (e.g. world_bible_id).
       sheet = struct(CharacterSheet, Map.from_struct(Library.payload(entry)))
+      owner = Owner.of(socket.assigns.current_user)
+      campaign = Campaigns.of_character(owner, entry.id)
       worlds = load_worlds(socket.assigns.current_user)
-      world_id = if sheet.world_bible_id, do: to_string(sheet.world_bible_id), else: ""
+      world_id = world_of(campaign, sheet)
 
       {:ok,
        socket
@@ -121,8 +123,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
          panel: nil,
          # Index of the fact whose audience is open, or nil.
          audience_at: nil,
-         world_entries: worlds,
-         worlds: world_options(worlds),
+         campaign: campaign,
+         ensemble_context: ensemble_context(owner, campaign, entry.id),
          world_id: world_id,
          world_context: world_context_for(worlds, world_id),
          relationships: sheet.relationships || [],
@@ -250,13 +252,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
       when f in @block_fields do
     idx = String.to_integer(i)
     {:noreply, update_blocks(socket, f, &drop_block(&1, idx))}
-  end
-
-  def handle_event("select_world", %{"world_id" => id}, socket) do
-    {:noreply,
-     socket
-     |> assign(world_id: id, world_context: world_context_for(socket.assigns.world_entries, id))
-     |> touch()}
   end
 
   # ── Generation ──────────────────────────────────────────────────────────────
@@ -868,14 +863,23 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # "estranged mentor") grounds generation so the source character's framing survives
   # into the generated sheet; nil for a deliberately-created character.
   defp gen_opts(socket) do
+    named = for r <- socket.assigns.relations_context, into: MapSet.new(), do: down(r["name"])
+
     [
       world: socket.assigns.world_context,
       relations: socket.assigns.relations_context,
+      # See `ensemble_context/3`. Quick Build has passed this since two blank slots
+      # produced two of the same person; this screen makes the identical call with the
+      # identical blank brief and was passing nothing.
+      ensemble:
+        Enum.reject(socket.assigns.ensemble_context, &MapSet.member?(named, down(&1["name"]))),
       # The live, possibly-edited role (falls back to the stub's inherited one).
       role: blank_to_nil(socket.assigns.role) || socket.assigns.sheet.role,
       usage_kind: "authoring"
     ] ++ user_attribution(socket)
   end
+
+  defp down(name), do: name |> to_string() |> String.trim() |> String.downcase()
 
   defp user_attribution(socket) do
     case socket.assigns.current_user do
@@ -1193,12 +1197,49 @@ defmodule PolyphonyWeb.SheetEditorLive do
   defp load_worlds(user),
     do: user |> Library.list_for_owner() |> Enum.filter(&(&1.kind == "world_bible"))
 
-  defp world_options(entries), do: for(e <- entries, do: {to_string(e.id), world_name(e)})
+  # **The campaign's world, not a choice.** A character belongs to one campaign (§2.7)
+  # and a campaign holds its own copy of a bible, so the character's setting is already
+  # decided by the time this screen opens — a picker offering the other worlds in the
+  # library could only ever be used to ground a character in a setting their campaign
+  # doesn't play in, and (since attaching copies) most of the options were other
+  # campaigns' working copies anyway.
+  #
+  # Read from the campaign first so it stays right: a campaign that swaps its world
+  # would otherwise leave every character pointing at the old copy until each was opened
+  # and re-picked. `world_bible_id` on the sheet is still written on save, so the stored
+  # value converges on the campaign's, and a character with no campaign keeps whatever
+  # it was given.
+  defp world_of(campaign, sheet) do
+    from_campaign =
+      case campaign && Library.payload(campaign) do
+        %{bible_id: id} when not is_nil(id) -> to_string(id)
+        _ -> nil
+      end
 
-  defp world_name(entry) do
-    case Library.payload(entry) do
-      %WorldBible{name: n} when is_binary(n) and n != "" -> n
-      _ -> "Untitled world (##{entry.id})"
+    from_campaign || if(sheet.world_bible_id, do: to_string(sheet.world_bible_id), else: "")
+  end
+
+  # The rest of the campaign's cast — who **already exists in this story**, which is a
+  # different question from who this character is connected to (`relations`).
+  #
+  # Quick Build has passed this since two blank slots produced two of the same person;
+  # this screen's "✦ Write every field" is the same generation with the same blank
+  # brief, through the same `Autofill.generate_all/4`, and it was passing no ensemble at
+  # all — so it had the bug for the same reason, one screen over. Anyone already named
+  # in `relations` is left out rather than described twice under two headings that say
+  # different things about them.
+  defp ensemble_context(_owner, nil, _self_id), do: []
+
+  defp ensemble_context(_owner, campaign, self_id) do
+    ids = (Map.get(Library.payload(campaign) || %{}, :character_ids) || []) -- [self_id]
+
+    for id <- ids, entry = Library.get(id), entry != nil, sheet = Library.payload(entry) do
+      %{
+        "name" => sheet.name,
+        "premise" => sheet.premise,
+        "voice" => sheet.voice,
+        "temperament" => sheet.temperament
+      }
     end
   end
 
@@ -1326,6 +1367,69 @@ defmodule PolyphonyWeb.SheetEditorLive do
         <div :if={not @brief_open and not empty_sheet?(assigns)} class="px-4 pt-4">
           <Kit.btn size={:sm} type="button" phx-click="toggle_brief">✦ Write it from a line</Kit.btn>
         </div>
+
+        <%!-- ── Writing this sheet ──────────────────────────────────────── --%>
+        <%!-- Near the top, because both things in it decide how the rest is *written*
+              rather than being part of it: the tier is what puts a character in every
+              scene's context or only in the scenes they appear in, and a stub's "how
+              they fit" is the seed every ✦ on this page reads. Answering them after
+              writing the sheet is answering them too late.
+
+              The world picker is gone. A character belongs to one campaign (§2.7) and
+              a campaign holds its own copy of a bible, so the setting is decided before
+              this screen opens — the picker could only be used to ground a character in
+              a world their campaign doesn't play in, and since attaching copies, most
+              of what it listed was other campaigns' working copies. It is stated in the
+              header instead, where the rest of the identity line is. --%>
+        <Kit.sheet class="m-4">
+          <Kit.row class="px-4 py-3" style="background:var(--b2)">
+            <span class="lbl dim">Writing this sheet</span>
+          </Kit.row>
+
+          <Kit.row :if={@sheet.status != :full} class="px-4 py-3">
+            <p class="text-[13px] leading-relaxed dim mb-2">
+              They came out of someone else's relationships and haven't been written yet. Set
+              how they fit, fill the fields in — or write them — and save.
+            </p>
+            <form id="stub-role-form" phx-change="set_role">
+              <label for="stub-role" class="lbl dim">How they fit</label>
+              <input
+                id="stub-role"
+                type="text"
+                name="role"
+                value={@role}
+                autocomplete="off"
+                phx-debounce="blur"
+                placeholder="e.g. estranged mentor, harbour smuggler"
+                class="field px-3 py-2 text-[13px] w-full mt-1.5"
+              />
+            </form>
+          </Kit.row>
+
+          <%!-- Tier saves on tap rather than with the form: it's a property of the
+                campaign's shape rather than of the prose, and a set of pills has no
+                obvious "apply". --%>
+          <Kit.row class="px-4 py-3">
+            <span class="lbl dim">They're</span>
+            <div class="flex flex-wrap gap-1.5 mt-1.5">
+              <button
+                :for={t <- CharacterSheet.tiers()}
+                type="button"
+                class={["pill", t != @tier && "dim"]}
+                style={t == @tier && "background:var(--b3)"}
+                aria-pressed={to_string(t == @tier)}
+                phx-click="set_tier"
+                phx-value-tier={t}
+              >
+                <%= CharacterSheet.tier_label(t) %>
+              </button>
+            </div>
+            <p class="text-[11px] leading-relaxed dim mt-2">
+              Main cast and recurring are always in context; a walk-on is loaded only for
+              the scenes they're in.
+            </p>
+          </Kit.row>
+        </Kit.sheet>
 
         <%!-- One form owns everything the sheet stores: the cover, the five prose
               fields, and the name and pronouns in its footer. The list sections below
@@ -1694,72 +1798,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
           </:part>
         </.drawer>
 
-        <%!-- ── Where the sheet is written from, and saved ───────────────── --%>
-        <Kit.sheet class="m-4">
-          <Kit.row class="px-4 py-3" style="background:var(--b2)">
-            <span class="lbl dim">Writing this sheet</span>
-          </Kit.row>
-
-          <Kit.row :if={@sheet.status != :full} class="px-4 py-3">
-            <p class="text-[13px] leading-relaxed dim mb-2">
-              They came out of someone else's relationships and haven't been written yet. Set
-              how they fit, fill the fields in — or write them — and save.
-            </p>
-            <form id="stub-role-form" phx-change="set_role">
-              <label for="stub-role" class="lbl dim">How they fit</label>
-              <input
-                id="stub-role"
-                type="text"
-                name="role"
-                value={@role}
-                autocomplete="off"
-                phx-debounce="blur"
-                placeholder="e.g. estranged mentor, harbour smuggler"
-                class="field px-3 py-2 text-[13px] w-full mt-1.5"
-              />
-            </form>
-          </Kit.row>
-
-          <Kit.row class="px-4 py-3">
-            <form id="world-select-form" phx-change="select_world">
-              <label for="world-select" class="lbl dim">World</label>
-              <select
-                id="world-select"
-                name="world_id"
-                class="field px-3 py-2.5 text-[14px] w-full mt-1.5"
-              >
-                <option value="">— none —</option>
-                <option :for={{id, name} <- @worlds} value={id} selected={@world_id == id}>
-                  <%= name %>
-                </option>
-              </select>
-              <p class="text-[11px] leading-relaxed dim mt-1.5">
-                Grounds everything generated here in a setting.
-              </p>
-            </form>
-          </Kit.row>
-
-          <%!-- Tier saves on tap rather than with the form: it's a property of the
-                campaign's shape rather than of the prose, and a set of pills has no
-                obvious "apply". --%>
-          <Kit.row class="px-4 py-3">
-            <span class="lbl dim">They're</span>
-            <div class="flex flex-wrap gap-1.5 mt-1.5">
-              <button
-                :for={t <- CharacterSheet.tiers()}
-                type="button"
-                class={["pill", t != @tier && "dim"]}
-                style={t == @tier && "background:var(--b3)"}
-                aria-pressed={to_string(t == @tier)}
-                phx-click="set_tier"
-                phx-value-tier={t}
-              >
-                <%= CharacterSheet.tier_label(t) %>
-              </button>
-            </div>
-          </Kit.row>
-
-        </Kit.sheet>
       </div>
 
       <.save_bar {assigns} />
