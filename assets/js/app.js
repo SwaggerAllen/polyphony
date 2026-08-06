@@ -205,7 +205,6 @@ function initDebugDrawer(liveSocket) {
 
   const toggle = document.getElementById("debug-drawer-toggle")
   const closeBtn = document.getElementById("debug-drawer-close")
-  const tuckBtn = document.getElementById("debug-drawer-tuck")
   const copyBtn = document.getElementById("debug-copy")
 
   // Open/closed is a class on <body>, deliberately not an inline style on the panel.
@@ -216,29 +215,10 @@ function initDebugDrawer(liveSocket) {
   // LiveView patches, so the state survives.
   const setOpen = (open) => document.body.classList.toggle("dock-open", open)
 
-  // Tucked shrinks the closed tab to a sliver at the right edge, because the dock is
-  // pinned over an app with its own controls in that corner. Remembered across loads:
-  // a tab that un-tucks itself on the next page is back in the way, which is the whole
-  // point of tucking it. localStorage may throw (private mode, storage disabled), and
-  // failing to remember a preference must never take the drawer down with it.
-  const TUCK_KEY = "polyphony:dock-tucked"
-  const isTucked = () => document.body.classList.contains("dock-tucked")
-
-  const setTucked = (tucked) => {
-    document.body.classList.toggle("dock-tucked", tucked)
-    try {
-      if (tucked) { localStorage.setItem(TUCK_KEY, "1") } else { localStorage.removeItem(TUCK_KEY) }
-    } catch (_e) { /* preference not remembered; the class still applies */ }
-  }
-
-  try { if (localStorage.getItem(TUCK_KEY)) setTucked(true) } catch (_e) {}
-
-  // Un-tuck first, open second. A sliver on the screen edge is easy to hit by
-  // accident, and having that throw a full-height panel over the app would undo the
-  // reason it was tucked.
-  if (toggle) toggle.addEventListener("click", () => (isTucked() ? setTucked(false) : setOpen(true)))
+  // The tab is a sliver at the edge in CSS, permanently — there is no tucked state to
+  // remember and no preference to persist, so one tap opens the log rather than two.
+  if (toggle) toggle.addEventListener("click", () => setOpen(true))
   if (closeBtn) closeBtn.addEventListener("click", () => setOpen(false))
-  if (tuckBtn) tuckBtn.addEventListener("click", () => { setTucked(true); setOpen(false) })
   if (copyBtn) {
     copyBtn.addEventListener("click", () => {
       const list = document.getElementById("debug-log-list")

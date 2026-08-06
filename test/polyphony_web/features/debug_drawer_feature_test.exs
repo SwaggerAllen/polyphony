@@ -75,44 +75,63 @@ defmodule PolyphonyWeb.DebugDrawerFeatureTest do
     assert shown?(session, "#debug-drawer-body"), "the drawer would not reopen"
   end
 
-  feature "tucking it clears the corner, and it can be got back", %{session: session} do
-    session =
-      session
-      |> visit("/login")
-      |> click(css("#debug-drawer-toggle"))
-      |> click(css("#debug-drawer-tuck"))
+  feature "the tab is a sliver, and stays one", %{session: session} do
+    session = visit(session, "/login")
 
-    # Tucked shrinks the tab rather than hiding it: the state persists, and a control
-    # you cannot find again is worse than one that is in the way.
-    refute shown?(session, "#debug-drawer-body"), "tucking left the panel open"
+    # There is no expanded tab any more. The label read "⚙ log 12", which answers
+    # nothing you would open the log for, so tucked was the state it lived in — and a
+    # control that is always in one state does not need the other one.
     assert shown?(session, "#debug-drawer-toggle")
+    assert width_of(session, "#debug-drawer-toggle") < 60
 
-    assert width_of(session, "#debug-drawer-toggle") < 60,
-           "the tab is still full width — nothing was tucked"
-
-    # First tap restores the tab, second opens the drawer. A sliver on the screen edge
-    # is easy to hit by accident, and throwing a full-height panel over the app on that
-    # tap would undo the reason it was tucked.
-    session = click(session, css("#debug-drawer-toggle"))
-    refute shown?(session, "#debug-drawer-body"), "a tap on the sliver opened the panel"
-    assert width_of(session, "#debug-drawer-toggle") > 60
-
+    # One tap opens it, not two.
     session = click(session, css("#debug-drawer-toggle"))
     assert shown?(session, "#debug-drawer-body")
+
+    session = click(session, css("#debug-drawer-close"))
+    assert width_of(session, "#debug-drawer-toggle") < 60
   end
 
-  feature "it stays tucked on the next page, which is the point of tucking it",
-          %{session: session} do
-    session =
-      session
-      |> visit("/login")
-      |> click(css("#debug-drawer-toggle"))
-      |> click(css("#debug-drawer-tuck"))
-      |> visit("/signup")
+  feature "and it sits halfway up, clear of the corner the app uses", %{session: session} do
+    session = visit(session, "/login")
 
-    # A tab that un-tucks itself on the next navigation is back on top of whatever the
-    # app puts in that corner, which is the whole complaint.
-    assert width_of(session, "#debug-drawer-toggle") < 60
+    # The bottom-right corner is where the app puts its own primary controls — the
+    # whole bottom bar on the play screen — so a dock pinned there is on top of the
+    # thing you are trying to debug.
+    {top, height} = box_of(session, "#debug-drawer-toggle")
+    viewport = viewport_height(session)
+    middle = top + height / 2
+
+    assert middle > viewport * 0.3 and middle < viewport * 0.7,
+           "the tab is at #{round(middle)} of #{round(viewport)} — not halfway up"
+  end
+
+  defp box_of(session, selector) do
+    [top, height] =
+      script(
+        session,
+        "const r = el.getBoundingClientRect(); return [r.top, r.height]",
+        selector
+      )
+
+    {top, height}
+  end
+
+  defp viewport_height(session), do: script(session, "return window.innerHeight", "body")
+
+  defp script(session, body, selector) do
+    Wallaby.Browser.execute_script(
+      session,
+      "const el = document.querySelector(arguments[0]); #{body}",
+      [selector],
+      fn value -> send(self(), {:script, value}) end
+    )
+
+    receive do
+      {:script, value} -> value
+    after
+      5_000 -> flunk("no answer for #{selector}")
+    end
   end
 
   # The browser's own measurement, not a class: the assertion is that the thing takes
