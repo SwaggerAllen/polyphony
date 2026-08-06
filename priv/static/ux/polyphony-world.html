@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyphony — world bible editor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="polyphony-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="antialiased">
+
+<header class="max-w-6xl mx-auto px-5 pt-12 pb-8">
+  <div class="wall mb-3">Polyphony · step 7 · world bible</div>
+  <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">The world bible editor</h1>
+  <p class="mt-4 max-w-2xl text-[15px] leading-relaxed note">
+    Four fields, a cover, and a generation affordance on every one of them. The interesting
+    problems here aren't the form — they're what a stranger sees before they commit, and what
+    happens when two campaigns share the same world.
+  </p>
+</header>
+
+<!-- 00 · THE COVER -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">00 · The cover</div>
+    <h2 class="text-2xl font-bold mb-3">A blurb, not a subset</h2>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note mb-7">
+      <div><b style="color:var(--page-fg)">The existing fields are written for the Director.</b>
+        Setting and tone are instructions to a model. A person deciding whether to use this world
+        wants different prose entirely, so the cover is its own field rather than a
+        default-visible slice of the others.</div>
+      <div><b style="color:var(--page-fg)">Generating it is a good use of the engine.</b> Write a
+        blurb from everything here, including the secrets, that gives none of them away. The model
+        has the whole bible and an explicit instruction not to spoil it.</div>
+      <div><b style="color:var(--page-fg)">Anything can be marked secret.</b> One control, three
+        places — a rule, a canon entry, a character's fact. Secrets stay out of the cover, out of
+        browse, and out of any perspective that shouldn't have them.</div>
+      <div><b style="color:var(--page-fg)">You can take a world without reading it.</b> Save it off
+        the cover and find out what's in it while you play. For a solo writer who wants to be
+        surprised by their own campaign, that's the whole point.</div>
+    </div>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">What a stranger sees</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3.5 row">
+          <div class="lbl dim mb-1">World</div>
+          <div class="ttl text-[19px]" style="font-weight:600">Saltmarch</div>
+        </div>
+        <div class="px-4 py-3.5 row">
+          <p class="text-[15px] leading-[1.7]">A port town on a tidal flat, half of it underwater twice a day. Everything worth having comes in by sea and leaves by ledger, and nobody who lives there raises their voice.</p>
+          <p class="text-[15px] leading-[1.7] mt-2.5">There is no magic in Saltmarch. There are only debts, and the people who inherit them.</p>
+        </div>
+        <div class="px-4 py-3">
+          <div class="flex flex-wrap gap-1.5 mb-3">
+            <span class="pill dim">3 rules</span><span class="pill dim">Used in 2 campaigns</span>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <button class="btn btn-pri justify-center">Use this world</button>
+            <button class="btn btn-gh justify-center">Read the whole bible first</button>
+          </div>
+          <p class="text-[11px] leading-relaxed dim mt-2.5">Using it doesn't show it to you. If you'd rather be surprised by your own campaign, take it and start writing.</p>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Cover · empty</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="flex items-center gap-1.5"><span class="lbl dim">Cover</span><span class="info">i</span></span><button class="btn btn-pri btn-sm">✦ Write it</button></div>
+        <div class="cover px-3 py-6 text-center mb-2">
+          <p class="text-[13px] leading-relaxed dim">Nothing here yet. This is the only part strangers see before they take your world.</p>
+        </div>
+        <p class="text-[11px] leading-relaxed dim">It'll be written from everything below — secrets included — with instructions to give none of them away.</p>
+      </div></div>
+    <div><div class="wall mb-2">Cover · written</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="lbl dim">Cover</span>
+          <div class="flex gap-1.5"><button class="btn btn-gh btn-sm">✦ Rewrite</button><button class="btn btn-gh btn-sm">Preview</button></div></div>
+        <p class="text-[13.5px] leading-relaxed mb-2">A port town on a tidal flat, half of it underwater twice a day. Everything worth having comes in by sea and leaves by ledger, and nobody who lives there raises their voice.</p>
+        <div class="flex items-center gap-2 pt-2.5" style="border-top:1px solid var(--rule)">
+          <span class="dot" style="background:var(--secret)"></span>
+          <span class="text-[11px] leading-relaxed dim">Checked against your 2 secrets — neither is mentioned.</span>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 01 · EDITOR -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">01 · The editor</div>
+    <h2 class="text-2xl font-bold mb-2">Four fields, populated</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note">Prose fields get Generate and Expand; lists get add, reorder and a secret toggle per item. Same sticky jump bar as the character sheet — one navigation primitive for every long form, so it still works when this one grows.</p>
+  </div>
+  <div class="mt-7 grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr stage dark sheet"><div data-spec="editor"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr stage light sheet"><div data-spec="editor"></div></div></div>
+  </div>
+</section>
+
+<!-- 02 · EMPTY -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">02 · Empty</div>
+    <h2 class="text-2xl font-bold mb-2">A world with nothing in it</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">One brief writes everything. The field-by-field path stays visible underneath so it never feels like generation is the only way in.</p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Nothing written</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[16px]" style="font-weight:600">Untitled world</div></div>
+        <div class="px-4 py-4">
+          <div class="rounded-xl p-3.5 mb-4" style="background:color-mix(in srgb,var(--lamp) 10%,transparent);border:1px solid var(--lamp)">
+            <div class="ttl text-[15px] mb-1" style="font-weight:600">Describe it in a line</div>
+            <div class="field px-3 py-2.5 text-[13px] leading-relaxed dim mb-2.5" style="min-height:52px">A port town that runs on tides and debts…</div>
+            <button class="btn btn-pri btn-sm">✦ Write the whole bible</button>
+          </div>
+          <div class="lbl dim mb-2">Or fill it in yourself</div>
+          <div class="sheet">
+            <div class="px-3.5 py-2.5 row flex items-center justify-between"><span class="text-[13px]">Name</span><span class="dim text-[14px]">›</span></div>
+            <div class="px-3.5 py-2.5 row flex items-center justify-between"><span class="text-[13px]">Setting</span><span class="dim text-[14px]">›</span></div>
+            <div class="px-3.5 py-2.5 row flex items-center justify-between"><span class="text-[13px]">Tone</span><span class="dim text-[14px]">›</span></div>
+            <div class="px-3.5 py-2.5 row flex items-center justify-between"><span class="text-[13px]">Rules</span><span class="dim text-[14px]">›</span></div>
+            <div class="px-3.5 py-2.5 flex items-center justify-between"><span class="text-[13px]">What's already true</span><span class="dim text-[14px]">›</span></div>
+          </div>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Writing the whole bible</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[16px]" style="font-weight:600">Writing your world</div>
+          <div class="lbl dim mt-0.5">Half a minute</div></div>
+        <div class="px-4 py-4">
+          <div class="bar mb-3.5"><i style="width:62%"></i></div>
+          <div class="space-y-2 text-[13px]">
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--ok)"></span><span class="dim">Name — <span class="ttl">Saltmarch</span></span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--ok)"></span><span class="dim">Setting</span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--lamp)"></span><span>Tone</span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--b3)"></span><span class="dim">Rules</span></div>
+            <div class="flex items-center gap-2"><span class="dot" style="background:var(--b3)"></span><span class="dim">What's already true</span></div>
+          </div>
+          <button class="btn btn-gh btn-sm mt-3.5">Stop</button>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Field empty · in a filled bible</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="lbl dim">Tone</span><button class="btn btn-gh btn-sm">✦ Write it</button></div>
+        <div class="cover px-3 py-5 text-center">
+          <p class="text-[13px] leading-relaxed dim">How does it feel to be here? Write it, or let it be written from the setting.</p>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 03 · GENERATION STATES -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">03 · Generation</div>
+    <h2 class="text-2xl font-bold mb-2">Every field, four states</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      Generated text never overwrites silently — it arrives as a proposal against what's there,
+      and you keep or discard it. That matters most on a field you've already written.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Writing</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center justify-between mb-2.5"><span class="lbl dim">Setting</span><span class="pill" style="color:var(--lamp);border-color:var(--lamp)">Writing</span></div>
+        <div class="space-y-2"><div class="skel" style="width:96%"></div><div class="skel" style="width:88%"></div><div class="skel" style="width:93%"></div><div class="skel" style="width:41%"></div></div>
+        <button class="btn btn-gh btn-sm mt-3">Cancel</button>
+      </div></div>
+    <div><div class="wall mb-2">Proposed · nothing there before</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center justify-between mb-2.5"><span class="lbl dim">Setting</span><span class="pill" style="color:var(--lamp);border-color:var(--lamp)">New</span></div>
+        <p class="text-[13.5px] leading-relaxed mb-3">A port town on a tidal flat, half of it underwater twice a day. Everything worth having comes in by sea and leaves by ledger.</p>
+        <div class="flex flex-wrap gap-1.5"><button class="btn btn-pri btn-sm">Keep it</button><button class="btn btn-gh btn-sm">Try again</button><button class="btn btn-gh btn-sm">Discard</button></div>
+      </div></div>
+    <div><div class="wall mb-2">Proposed · replacing your words</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center justify-between mb-2.5"><span class="lbl dim">Setting</span><span class="pill" style="color:var(--lamp);border-color:var(--lamp)">Replacement</span></div>
+        <div class="rounded-lg px-3 py-2 mb-2" style="background:var(--b3)">
+          <div class="lbl dim mb-1">Yours</div>
+          <p class="text-[12.5px] leading-relaxed dim">A wet town on the coast where the tide matters a lot.</p>
+        </div>
+        <p class="text-[13.5px] leading-relaxed mb-3">A port town on a tidal flat, half of it underwater twice a day. Everything worth having comes in by sea and leaves by ledger.</p>
+        <div class="flex flex-wrap gap-1.5"><button class="btn btn-pri btn-sm">Use the new one</button><button class="btn btn-gh btn-sm">Keep mine</button><button class="btn btn-gh btn-sm">Try again</button></div>
+      </div></div>
+    <div><div class="wall mb-2">Failed</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center justify-between mb-2.5"><span class="lbl dim">Setting</span><span class="pill" style="color:var(--pencil);border-color:var(--pencil)">Didn't work</span></div>
+        <p class="text-[13px] leading-relaxed dim mb-3">Nothing came back. Your own text is untouched.</p>
+        <div class="flex flex-wrap gap-1.5"><button class="btn btn-pri btn-sm">Try again</button><button class="btn btn-gh btn-sm">Leave it</button></div>
+      </div></div>
+  </div>
+
+  <div class="mt-5 grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Expand · adds a paragraph</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-center justify-between mb-2.5"><span class="lbl dim">Setting</span>
+          <div class="flex gap-1.5"><button class="btn btn-gh btn-sm">✦ Rewrite</button><button class="btn btn-gh btn-sm">+ Expand</button></div></div>
+        <p class="text-[13.5px] leading-relaxed mb-2">A port town on a tidal flat, half of it underwater twice a day.</p>
+        <div class="rounded-lg px-3 py-2.5" style="background:color-mix(in srgb,var(--lamp) 9%,transparent);border-left:2px solid var(--lamp)">
+          <p class="text-[13.5px] leading-relaxed mb-2">The flats are walkable for four hours out of twelve, and everyone knows which four. Being caught out on them is never an accident.</p>
+          <div class="flex gap-1.5"><button class="btn btn-pri btn-sm">Keep</button><button class="btn btn-gh btn-sm">Again</button><button class="btn btn-gh btn-sm">Discard</button></div>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">One paragraph · rewrite</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="lbl dim mb-2.5">Setting</div>
+        <p class="text-[13.5px] leading-relaxed mb-2 dim">A port town on a tidal flat, half of it underwater twice a day.</p>
+        <div class="rounded-lg px-3 py-2.5" style="background:var(--b3)">
+          <p class="text-[13.5px] leading-relaxed mb-2">The flats are walkable for four hours out of twelve, and everyone knows which four.</p>
+          <div class="flex gap-1.5"><button class="btn btn-gh btn-sm">✦ Rewrite this bit</button><button class="btn btn-pen btn-sm">Delete</button></div>
+        </div>
+        <p class="text-[11px] dim mt-2">Tap any paragraph to work on it on its own.</p>
+      </div></div>
+    <div><div class="wall mb-2">Rejected by the server</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="lbl dim mb-1.5">Name</div>
+        <div class="field px-3 py-2.5 text-[14px] mb-1.5" style="border-color:var(--pencil)">Saltmarch</div>
+        <div class="flex items-start gap-1.5"><span class="dot mt-1.5 shrink-0" style="background:var(--pencil)"></span>
+          <span class="text-[12px] leading-relaxed" style="color:var(--pencil)">You already have a world called Saltmarch. Pick something else, or open that one.</span></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 04 · LISTS & SECRETS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">04 · Rules, canon, secrets</div>
+    <h2 class="text-2xl font-bold mb-2">One list component, one secret control</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      Rules and what's-already-true are the same component. So is a character's facts list, which
+      is why the secret toggle looks identical in all three places. What's shown here is how a
+      secret is <em>marked</em> and how it reads in the list — deciding <em>who knows it</em> is
+      the audience picker, which has its own file.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">List · editing</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+          <span class="flex items-center gap-1.5"><span class="lbl dim">What's already true</span><span class="info">i</span></span><button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5">
+          <span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <span class="text-[13.5px] leading-relaxed flex-1">The Kestrel has docked twice this month and appears in the register once.</span>
+          <span class="dim text-[14px] shrink-0">⋯</span>
+        </div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5 secret">
+          <span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <div class="flex-1">
+            <span class="text-[13.5px] leading-relaxed">The harbourmaster has been paid to lose paperwork since before his daughter was born.</span>
+            <div class="flex items-center gap-1.5 mt-1"><span class="dot" style="background:var(--secret)"></span><span class="lbl" style="color:var(--secret)">Secret</span></div>
+          </div>
+          <span class="dim text-[14px] shrink-0">⋯</span>
+        </div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5">
+          <span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <span class="text-[13.5px] leading-relaxed flex-1">Nobody in Saltmarch has seen a customs inspector in nine years.</span>
+          <span class="dim text-[14px] shrink-0">⋯</span>
+        </div>
+        <div class="px-4 py-2.5"><div class="field px-3 py-2 text-[13px] dim">Add something that's true…</div></div>
+      </div></div>
+    <div><div class="wall mb-2">Item menu</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <p class="text-[13px] leading-relaxed">The harbourmaster has been paid to lose paperwork since before his daughter was born.</p></div>
+        <div class="py-1.5">
+          <div class="px-4 py-2 text-[13px]">Edit</div>
+          <div class="px-4 py-2 text-[13px] flex items-center justify-between"><span>Secret</span><span class="dot" style="background:var(--secret)"></span></div>
+          <div class="px-4 py-2 text-[13px]">Who knows this <span class="dim">· 2</span></div>
+          <div class="px-4 py-2 text-[13px]">Move up</div>
+          <div class="px-4 py-2 text-[13px] dim">Delete</div>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Audience → its own file</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="lbl dim mb-1">Secret</div>
+          <p class="text-[13px] leading-relaxed">The harbourmaster has been paid to lose paperwork since before his daughter was born.</p></div>
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-2">
+          <span class="text-[13px] dim">Who starts out knowing</span>
+          <span class="pill" style="border-color:var(--secret);color:var(--secret)">Aldous, Sable</span></div>
+        <div class="px-4 py-3">
+          <p class="text-[12.5px] leading-relaxed dim mb-2">Opening that goes to the <b style="color:var(--bc)">audience picker</b>, which is drawn in full in its own file — every state, plus the group and location cases.</p>
+          <p class="text-[11px] leading-relaxed dim">It's the same component here, on a character's facts, and on locations when they exist. One implementation, three headers — so it isn't redrawn on each surface that uses it.</p>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">Deliberately not duplicated. Two copies of a shared component is how the two drift apart.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 05 · SHARED WORLD -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">05 · Reuse &amp; visibility</div>
+    <h2 class="text-2xl font-bold mb-2">A library world is a template</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      Attaching a world to a campaign <b style="color:var(--page-fg)">copies</b> it, because a
+      campaign writes its own history onto its world — two campaigns can't accumulate different
+      pasts on one bible. So editing here never reaches a campaign that already started, which
+      removes a whole class of hazard and adds one honest limitation.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Library copy · the template</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="ttl text-[16px]" style="font-weight:600">Saltmarch</div>
+          <div class="lbl dim mt-0.5">In your library · 2 campaigns started from it</div></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2">
+          <span class="dot mt-1.5 shrink-0" style="background:var(--bcm)"></span>
+          <p class="text-[12px] leading-relaxed dim">Changes here only affect campaigns you start from now on. <span class="ttl">The Salt Line</span> and <span class="ttl">Low Water</span> have their own copies.</p></div>
+        <div class="px-4 py-3"><div class="lbl dim mb-1.5">Setting</div>
+          <p class="text-[13px] leading-relaxed">A port town on a tidal flat, half of it underwater twice a day.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Campaign copy · the live one</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="ttl text-[16px]" style="font-weight:600">Saltmarch</div>
+          <div class="lbl dim mt-0.5">The Salt Line's copy</div></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2" style="background:color-mix(in srgb,var(--lamp) 9%,transparent)">
+          <span class="dot mt-1.5 shrink-0" style="background:var(--lamp)"></span>
+          <p class="text-[12px] leading-relaxed">This one has a history. Three things have become true here that weren't in the original.</p></div>
+        <div class="px-4 py-3"><div class="lbl dim mb-1.5">Setting</div>
+          <p class="text-[13px] leading-relaxed">A port town on a tidal flat, half of it underwater twice a day.</p></div>
+        <div class="px-4 py-2.5"><button class="btn btn-gh btn-sm">Save a copy to your library</button></div>
+      </div>
+      <p class="text-[12px] mt-2 note">The only way back to the library is deliberate — and it takes a snapshot, not a link.</p>
+    </div>
+    <div><div class="wall mb-2">Who can see it</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <span class="ttl text-[15px]" style="font-weight:600">Who can see Saltmarch</span></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5">
+          <span class="dot mt-1.5" style="background:var(--rule)"></span>
+          <div><div class="text-[13px] font-semibold">Just me</div><div class="text-[11px] dim">Nobody else can open it</div></div></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5" style="background:var(--b3)">
+          <span class="dot mt-1.5" style="background:var(--lamp)"></span>
+          <div><div class="text-[13px] font-semibold">Anyone with the link</div><div class="text-[11px] dim">Not listed, not searchable</div></div></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5">
+          <span class="dot mt-1.5" style="background:var(--rule)"></span>
+          <div><div class="text-[13px] font-semibold">Anyone</div><div class="text-[11px] dim">Listed in Browse for people to find</div></div></div>
+        <div class="px-4 py-3">
+          <div class="lbl dim mb-1.5">Share link</div>
+          <div class="field px-3 py-2.5 mono text-[12px] leading-relaxed mb-2" style="word-break:break-all">polyphony.app/s/7kQm2vT9xLbn</div>
+          <div class="flex gap-1.5"><button class="btn btn-pri btn-sm">Copy link</button><button class="btn btn-gh btn-sm">New link</button></div>
+          <p class="text-[11px] leading-relaxed dim mt-2">A new link breaks the old one.</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Unlisted mints a token today and shows it to nobody. Here it appears the moment you pick it.</p>
+    </div>
+    <div><div class="wall mb-2">Read-only · not yours</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between gap-2" style="background:var(--b2)">
+          <div class="min-w-0"><div class="ttl text-[16px] truncate" style="font-weight:600">The Ninth Gate</div>
+            <div class="lbl dim mt-0.5">Someone else's world</div></div>
+          <button class="btn btn-pri btn-sm shrink-0">Save it</button></div>
+        <div class="px-4 py-3 row"><div class="lbl dim mb-1.5">Setting</div>
+          <p class="text-[13px] leading-relaxed">A city with no sky, nine districts deep, and one staircase that everyone has heard of.</p></div>
+        <div class="px-4 py-2.5"><p class="text-[11px] leading-relaxed dim">Save it to your library to change any of this. Some of it isn't shown — the author kept a few things back.</p></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 06 · PREVIEW -->
+<section class="max-w-6xl mx-auto px-5 pb-24">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">06 · Preview as</div>
+    <h2 class="text-2xl font-bold mb-2">Authoring is omniscient; previewing is not</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      The rule that keeps view-as safe outside the play screen: you author omniscient and preview
+      read-only. Editing a bible while looking at a filtered version of it is how someone deletes
+      something they couldn't see.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Preview · as Wren</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-2 row flex items-center justify-between gap-2" style="background:color-mix(in srgb,var(--secret) 14%,transparent)">
+          <span class="text-[12.5px]">Previewing as <b>Wren Ashgrove</b> · read-only</span>
+          <span class="text-[12px] shrink-0" style="color:var(--secret)">Done</span>
+        </div>
+        <div class="px-4 py-3 row"><div class="lbl dim mb-1.5">What's already true</div>
+          <div class="space-y-1.5 text-[13px] leading-relaxed">
+            <div>The Kestrel has docked twice this month and appears in the register once.</div>
+            <div>Nobody in Saltmarch has seen a customs inspector in nine years.</div>
+          </div>
+        </div>
+        <div class="px-4 py-2.5"><p class="text-[11px] leading-relaxed dim">Her father's arrangement isn't here. She has no idea.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Preview · as Sable</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-2 row flex items-center justify-between gap-2" style="background:color-mix(in srgb,var(--secret) 14%,transparent)">
+          <span class="text-[12.5px]">Previewing as <b>Sable Quist</b> · read-only</span>
+          <span class="text-[12px] shrink-0" style="color:var(--secret)">Done</span>
+        </div>
+        <div class="px-4 py-3 row"><div class="lbl dim mb-1.5">What's already true</div>
+          <div class="space-y-1.5 text-[13px] leading-relaxed">
+            <div>The Kestrel has docked twice this month and appears in the register once.</div>
+            <div>The harbourmaster has been paid to lose paperwork since before his daughter was born.</div>
+            <div>Nobody in Saltmarch has seen a customs inspector in nine years.</div>
+          </div>
+        </div>
+        <div class="px-4 py-2.5"><p class="text-[11px] leading-relaxed dim">She's one of the two who know.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Picker</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Preview as</div></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5"><span class="dot" style="background:var(--bc)"></span><span class="text-[13px] font-semibold flex-1">Omniscient</span><span class="text-[11px] dim">editing</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5"><span class="w-6 h-6 rounded-md shrink-0" style="background:var(--b3)"></span><span class="text-[13px] flex-1">Wren Ashgrove</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5"><span class="w-6 h-6 rounded-md shrink-0" style="background:var(--b3)"></span><span class="text-[13px] flex-1">Ilias Vane</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5"><span class="w-6 h-6 rounded-md shrink-0" style="background:var(--b3)"></span><span class="text-[13px] flex-1">Sable Quist</span></div>
+        <div class="px-4 py-2.5 flex items-center gap-2.5"><span class="dot" style="background:var(--b3)"></span><span class="text-[13px] flex-1">Somebody with no part in this</span></div>
+        <div class="px-4 py-2.5" style="border-top:1px solid var(--rule)"><p class="text-[11px] leading-relaxed dim">The last one is what a stranger sees, and what a player sees before they're given a character.</p></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- ========== TEMPLATES ========== -->
+<template id="spec-editor">
+  <div>
+    <div class="px-4 py-3 row flex items-center justify-between gap-2" style="background:var(--b2)">
+      <div class="min-w-0"><div class="ttl text-[17px] truncate" style="font-weight:600">Saltmarch</div>
+        <div class="lbl dim mt-0.5">World · used in 2 campaigns</div></div>
+      <div class="flex items-center gap-1.5 shrink-0"><span class="viewas" style="--vc:var(--bc)"><i></i>Omniscient ▾</span><span class="pill dim">Private</span></div>
+    </div>
+
+    <div class="jump">
+      <span class="on">Cover</span><span>Name</span><span>Setting</span><span>Tone</span>
+      <span>Rules</span><span>What's true</span><span>Sharing</span>
+    </div>
+
+    <div class="scroller">
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between mb-2"><span class="lbl dim">Cover</span>
+        <button class="btn btn-gh btn-sm">✦ Rewrite</button></div>
+      <p class="text-[13px] leading-relaxed dim">A port town on a tidal flat, half of it underwater twice a day. Everything worth having comes in by sea and leaves by ledger, and nobody who lives there raises their voice.</p>
+      <p class="text-[11px] dim mt-1.5">The only part strangers see.</p>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="lbl dim mb-1.5">Name</div>
+      <div class="field px-3 py-2.5 text-[14px]">Saltmarch</div>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between mb-2"><span class="lbl dim">Setting</span>
+        <div class="flex gap-1.5"><button class="btn btn-gh btn-sm">✦ Rewrite</button><button class="btn btn-gh btn-sm">+ Expand</button></div></div>
+      <p class="text-[13.5px] leading-relaxed mb-2">A port town on a tidal flat, half of it underwater twice a day. Everything worth having comes in by sea and leaves by ledger.</p>
+      <p class="text-[13.5px] leading-relaxed">The flats are walkable for four hours out of twelve, and everyone knows which four. Being caught out on them is never an accident.</p>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between mb-2"><span class="lbl dim">Tone</span>
+        <div class="flex gap-1.5"><button class="btn btn-gh btn-sm">✦ Rewrite</button><button class="btn btn-gh btn-sm">+ Expand</button></div></div>
+      <p class="text-[13.5px] leading-relaxed">Damp, close, quietly criminal. Nobody raises their voice and nobody has to.</p>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between mb-2"><span class="lbl dim">Rules</span>
+        <button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+      <div class="space-y-1.5">
+        <div class="flex items-start gap-2.5"><span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <span class="text-[13.5px] leading-relaxed flex-1">The tide bell is never rung twice by accident.</span>
+          <span class="dim text-[14px] shrink-0">⋯</span></div>
+        <div class="flex items-start gap-2.5"><span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <span class="text-[13.5px] leading-relaxed flex-1">Debts outlive the people who owe them.</span>
+          <span class="dim text-[14px] shrink-0">⋯</span></div>
+        <div class="flex items-start gap-2.5"><span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <span class="text-[13.5px] leading-relaxed flex-1">No magic. What looks like it is a bribe.</span>
+          <span class="dim text-[14px] shrink-0">⋯</span></div>
+      </div>
+      <div class="field px-3 py-2 text-[13px] dim mt-2">Add a rule…</div>
+    </div>
+
+    <div class="px-4 py-3">
+      <div class="flex items-center justify-between mb-2"><span class="lbl dim">What's already true</span>
+        <button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+      <div class="space-y-1.5">
+        <div class="flex items-start gap-2.5"><span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <span class="text-[13.5px] leading-relaxed flex-1">The Kestrel has docked twice this month and appears in the register once.</span>
+          <span class="dim text-[14px] shrink-0">⋯</span></div>
+        <div class="flex items-start gap-2.5 secret pl-2 py-1"><span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <div class="flex-1"><span class="text-[13.5px] leading-relaxed">The harbourmaster has been paid to lose paperwork since before his daughter was born.</span>
+            <div class="flex items-center gap-1.5 mt-1"><span class="dot" style="background:var(--secret)"></span><span class="lbl" style="color:var(--secret)">Secret · 2 know</span></div></div>
+          <span class="dim text-[14px] shrink-0">⋯</span></div>
+        <div class="flex items-start gap-2.5"><span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <span class="text-[13.5px] leading-relaxed flex-1">Nobody in Saltmarch has seen a customs inspector in nine years.</span>
+          <span class="dim text-[14px] shrink-0">⋯</span></div>
+      </div>
+      <div class="field px-3 py-2 text-[13px] dim mt-2">Add something that's true…</div>
+    </div>
+    </div>
+  </div>
+</template>
+
+<script>
+  document.querySelectorAll('[data-spec]').forEach(function(slot){
+    var t = document.getElementById('spec-' + slot.getAttribute('data-spec'));
+    if (!t) { slot.innerHTML = '<div style="padding:1rem;font:12px monospace;color:#E0604A">missing template: ' + slot.getAttribute('data-spec') + '</div>'; return; }
+    slot.appendChild(t.content.cloneNode(true));
+  });
+</script>
+</body>
+</html>

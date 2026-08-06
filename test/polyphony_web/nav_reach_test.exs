@@ -105,7 +105,7 @@ defmodule PolyphonyWeb.NavReachTest do
     # The four with no header, plus the landing page. `/s/:token` is the one that
     # mattered most: somebody arriving on a link somebody sent them is the person with
     # the least idea what this is and the fewest ways to find out.
-    for path <- [~p"/", ~p"/login", ~p"/signup", ~p"/browse", ~p"/s/#{token}"],
+    for path <- [~p"/", ~p"/login", ~p"/signup", ~p"/browse", ~p"/docs", ~p"/s/#{token}"],
         do: assert_menu(out, path)
   end
 

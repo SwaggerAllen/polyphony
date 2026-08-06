@@ -4,7 +4,10 @@ defmodule PolyphonyWeb do
   / `:router` pull in the shared imports. Kept lean and hand-written (no generators).
   """
 
-  def static_paths, do: ~w(assets favicon.ico robots.txt)
+  # `docs` and `ux` are the design and architecture docs, copied under `priv/static` by
+  # `mix docs.publish` so a release carries them and the app serves them. Public and
+  # deliberately so — see that task.
+  def static_paths, do: ~w(assets docs ux favicon.ico robots.txt)
 
   def router do
     quote do

@@ -197,6 +197,12 @@ jobs:
             priv/static/assets/app.css priv/static/assets/app.js \
             priv/static/assets/storybook.css priv/static/assets/storybook.js
 
+      # Same guard for the served docs: `docs/` and `ux/` are copied under priv/static
+      # so a release carries them, and an edit that skips the copy ships the old text.
+      # `DocsServedTest` checks this too — it is here as well because the failure this
+      # catches is a *stale artefact*, which is exactly what an artefact job is for.
+      - run: mix docs.publish --check
+
   types:
     name: dialyzer
     runs-on: ubuntu-latest

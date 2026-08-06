@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyphony — library</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="polyphony-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="antialiased">
+
+<header class="max-w-6xl mx-auto px-5 pt-12 pb-8">
+  <div class="wall mb-3">Polyphony · step 10 · library</div>
+  <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">Your stuff</h1>
+  <p class="mt-4 max-w-2xl text-[15px] leading-relaxed note">
+    Not a create hub any more — that's the campaign's job. This is where you find what you already
+    have, and it's where the archive and trash finally get a front door.
+  </p>
+</header>
+
+<!-- 00 · IA -->
+<section class="max-w-6xl mx-auto px-5 pb-14">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">00 · What changed</div>
+    <h2 class="text-2xl font-bold mb-3">One create button, and characters live in campaigns</h2>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note">
+      <div><b style="color:var(--page-fg)">New campaign is the only create action.</b> Worlds and
+        characters are made inside a campaign, so the library has one button rather than three, and
+        the three-way "what do I make first" question disappears.</div>
+      <div><b style="color:var(--page-fg)">Characters are grouped by campaign, not listed flat.</b>
+        Since characters don't cross campaigns, every one belongs to exactly one — which makes the
+        grouping free and the list navigable even at forty walk-ons.</div>
+      <div><b style="color:var(--page-fg)">Library worlds are templates, not dependencies.</b>
+        Attaching one copies it, because a campaign writes its own history onto its world. So a row
+        says how many campaigns <em>started</em> from it — past tense, no live coupling, nothing to
+        break by editing it.</div>
+      <div><b style="color:var(--page-fg)">Archive and trash get a real view.</b> Archive and delete
+        exist in the backend with no way back; the recovery window has been a promise with no
+        screen behind it. Restore and purge live here.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 01 · POPULATED -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">01 · Populated</div>
+    <h2 class="text-2xl font-bold mb-2">Campaigns first</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note">The campaign row carries enough to pick up where you left off — the open scene, and what's waiting for review.</p>
+  </div>
+  <div class="mt-7 grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr stage dark sheet"><div data-spec="lib"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr stage light sheet"><div data-spec="lib"></div></div></div>
+  </div>
+</section>
+
+<!-- 02 · TABS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">02 · The other tabs</div>
+    <h2 class="text-2xl font-bold mb-2">Worlds, people, groups</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">People and groups are search surfaces more than browse surfaces — you come here knowing roughly who you want. Campaign grouping plus tier filters does the rest.</p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Worlds</div>
+      <div class="fr stage dark sheet">
+        <div class="tabs"><div class="tab">Campaigns</div><div class="tab">Reading</div><div class="tab tab-on">Worlds</div><div class="tab">People</div><div class="tab">Groups</div></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="ttl text-[15px]" style="font-weight:600">Saltmarch</div>
+            <span class="pill dim shrink-0">Private</span></div>
+          <p class="text-[12.5px] leading-relaxed dim mb-1.5">A port town that runs on tides and debts.</p>
+          <span class="text-[11px] dim">2 campaigns started from this</span>
+        </div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="ttl text-[15px]" style="font-weight:600">The Ninth Gate</div>
+            <span class="pill" style="border-color:var(--ok);color:var(--ok)">Public</span></div>
+          <p class="text-[12.5px] leading-relaxed dim mb-1.5">Sunless city, nine districts, one way out.</p>
+          <span class="text-[11px] dim">1 campaign started from this</span>
+        </div>
+        <div class="px-4 py-3">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="ttl text-[15px]" style="font-weight:600">Untitled world</div>
+            <span class="pill dim shrink-0">Private</span></div>
+          <p class="text-[12.5px] leading-relaxed dim mb-1.5">Nothing written past the name.</p>
+          <span class="text-[11px] dim">Never used</span>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">People</div>
+      <div class="fr stage dark sheet">
+        <div class="tabs"><div class="tab">Campaigns</div><div class="tab">Reading</div><div class="tab">Worlds</div><div class="tab tab-on">People</div><div class="tab">Groups</div></div>
+        <div class="px-4 py-2.5 row"><div class="field px-3 py-2 text-[13px] dim">Search people…</div>
+          <div class="flex flex-wrap gap-1.5 mt-2">
+            <span class="pill" style="background:var(--b3)">Everyone</span><span class="pill dim">Main cast</span>
+            <span class="pill dim">Recurring</span><span class="pill dim">Walk-ons</span></div></div>
+        <div class="px-4 py-2 row" style="background:var(--b2)"><span class="lbl dim">The Salt Line · 11</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="av" style="background:var(--v1)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Wren Ashgrove</div>
+            <div class="text-[11px] dim">The harbourmaster's daughter</div></div>
+          <span class="pill dim shrink-0">Main</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="av" style="background:var(--v2)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Ilias Vane</div>
+            <div class="text-[11px] dim">A customs inspector</div></div>
+          <span class="pill dim shrink-0">Main</span></div>
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-2">
+          <span class="text-[12px] dim">6 walk-ons</span><span class="dim text-[14px]">⌄</span></div>
+        <div class="px-4 py-2 row" style="background:var(--b2)"><span class="lbl dim">Low Water · 5</span></div>
+        <div class="px-4 py-2.5 flex items-center gap-2.5">
+          <span class="av" style="background:var(--v3)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Bellwether Rusk</div>
+            <div class="text-[11px] dim">Her mother's old clerk</div></div>
+          <span class="pill dim shrink-0">Recurring</span></div>
+      </div></div>
+    <div><div class="wall mb-2">Groups</div>
+      <div class="fr stage dark sheet">
+        <div class="tabs"><div class="tab">Campaigns</div><div class="tab">Reading</div><div class="tab">Worlds</div><div class="tab">People</div><div class="tab tab-on">Groups</div></div>
+        <div class="px-4 py-2 row" style="background:var(--b2)"><span class="lbl dim">The Salt Line</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="av" style="background:var(--secret)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">The Tidewatch</div>
+            <div class="text-[11px] dim">6 members · 2 secrets</div></div>
+          <span class="dim text-[14px] shrink-0">⋯</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="av" style="background:var(--v1)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">The harbour office</div>
+            <div class="text-[11px] dim">3 members</div></div>
+          <span class="dim text-[14px] shrink-0">⋯</span></div>
+        <div class="px-4 py-6 text-center">
+          <p class="text-[12.5px] leading-relaxed dim">Groups are written in a campaign, like characters. They seed new people and give secrets somewhere to point.</p></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 03 · EMPTY -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">03 · Empty</div>
+    <h2 class="text-2xl font-bold mb-2">Nothing made yet</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">First-run has one button and no explanation of the three entity types, because you don't need to know about worlds and characters to start — the campaign will ask.</p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Brand new</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[17px]" style="font-weight:600">Your stuff</div></div>
+        <div class="px-4 py-10 text-center">
+          <div class="ttl text-[17px] mb-1.5" style="font-weight:500">Nothing here yet.</div>
+          <p class="text-[13px] leading-relaxed dim mb-4">A campaign is a world, some people, and the scenes you play out between them. Start one and it'll walk you through the rest.</p>
+          <button class="btn btn-pri">New campaign</button>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Worlds · none standalone</div>
+      <div class="fr stage dark sheet">
+        <div class="tabs"><div class="tab">Campaigns</div><div class="tab">Reading</div><div class="tab tab-on">Worlds</div><div class="tab">People</div><div class="tab">Groups</div></div>
+        <div class="px-4 py-9 text-center">
+          <div class="ttl text-[16px] mb-1.5" style="font-weight:500">No worlds yet.</div>
+          <p class="text-[13px] leading-relaxed dim">You'll write one inside your first campaign. It'll show up here afterwards, and you can use it again in another campaign.</p>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Search · nothing found</div>
+      <div class="fr stage dark sheet">
+        <div class="tabs"><div class="tab">Campaigns</div><div class="tab">Reading</div><div class="tab">Worlds</div><div class="tab tab-on">People</div><div class="tab">Groups</div></div>
+        <div class="px-4 py-2.5 row"><div class="field px-3 py-2 text-[13px]">alchemist</div>
+          <div class="flex flex-wrap gap-1.5 mt-2">
+            <span class="pill" style="background:var(--b3)">Everyone</span><span class="pill dim">Main cast</span>
+            <span class="pill dim">Recurring</span><span class="pill dim">Walk-ons</span></div></div>
+        <div class="px-4 py-8 text-center">
+          <p class="text-[13px] leading-relaxed dim mb-1">Nobody by that name.</p>
+          <p class="text-[12px] leading-relaxed dim">Try clearing the tier filters — walk-ons are hidden more often than people expect.</p>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 04 · ARCHIVE -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">04 · Archive &amp; trash</div>
+    <h2 class="text-2xl font-bold mb-2">The recovery window, finally visible</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      Archive, delete, restore and purge all exist in the backend; only the first two have ever had a
+      button. That means everything archived so far is unreachable and the recovery promise has had
+      nothing behind it. Two different things, deliberately kept apart.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Archived · out of the way</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between gap-2" style="background:var(--b2)">
+          <span class="flex items-center gap-1.5"><span class="ttl text-[15px]" style="font-weight:600">Archived</span><span class="info">i</span></span>
+          <span class="pill dim shrink-0">4</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5 arch">
+          <span class="av" style="background:var(--v4)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Sable Quist</div>
+            <div class="text-[11px] dim">The Salt Line · archived in March</div></div>
+          <button class="btn btn-gh btn-sm shrink-0">Restore</button></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5 arch">
+          <span class="av" style="background:var(--v1)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Untitled world</div>
+            <div class="text-[11px] dim">Never used · archived in March</div></div>
+          <button class="btn btn-gh btn-sm shrink-0">Restore</button></div>
+        <div class="px-4 py-2.5 arch flex items-center gap-2.5">
+          <span class="av" style="background:var(--v3)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">The Ledger</div>
+            <div class="text-[11px] dim">Campaign · 4 scenes · archived in January</div></div>
+          <button class="btn btn-gh btn-sm shrink-0">Restore</button></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Nothing here is going anywhere. Archive is filing, not deleting.</p>
+    </div>
+    <div><div class="wall mb-2">Trash · on a clock</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between gap-2" style="background:var(--b2)">
+          <span class="flex items-center gap-1.5"><span class="ttl text-[15px]" style="font-weight:600">Trash</span><span class="info">i</span></span>
+          <span class="pill" style="border-color:var(--pencil);color:var(--pencil)">2</span></div>
+        <div class="px-4 py-2.5 row arch">
+          <div class="flex items-center gap-2.5">
+            <span class="av" style="background:var(--b3)"></span>
+            <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">A harbour constable</div>
+              <div class="text-[11px]" style="color:var(--pencil)">Gone for good in 24 days</div></div></div>
+          <div class="flex gap-1.5 mt-2"><button class="btn btn-gh btn-sm">Put it back</button><button class="btn btn-pen btn-sm">Delete now</button></div></div>
+        <div class="px-4 py-2.5 arch">
+          <div class="flex items-center gap-2.5">
+            <span class="av" style="background:var(--b3)"></span>
+            <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Test world</div>
+              <div class="text-[11px]" style="color:var(--pencil)">Gone for good in 3 days</div></div></div>
+          <div class="flex gap-1.5 mt-2"><button class="btn btn-gh btn-sm">Put it back</button><button class="btn btn-pen btn-sm">Delete now</button></div></div>
+      </div>
+      <p class="text-[12px] mt-2 note">The countdown is the whole point — it's the only place the recovery window is a number rather than a claim.</p>
+    </div>
+    <div><div class="wall mb-2">Both empty</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><span class="ttl text-[15px]" style="font-weight:600">Archived</span></div>
+        <div class="px-4 py-7 text-center">
+          <p class="text-[13px] leading-relaxed dim">Nothing archived. Anything you file away goes here and stays here.</p></div>
+        <div class="px-4 py-3 row" style="background:var(--b2)"><span class="ttl text-[15px]" style="font-weight:600">Trash</span></div>
+        <div class="px-4 py-7 text-center">
+          <p class="text-[13px] leading-relaxed dim">Empty. Deleted things wait 30 days before they're really gone.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Filtering to the archive</div>
+      <div class="fr stage dark sheet">
+        <div class="tabs"><div class="tab">Campaigns</div><div class="tab">Reading</div><div class="tab">Worlds</div><div class="tab tab-on">People</div><div class="tab">Groups</div></div>
+        <div class="px-4 py-2.5 row"><div class="field px-3 py-2 text-[13px] dim">Search people…</div>
+          <div class="flex flex-wrap gap-1.5 mt-2">
+            <span class="pill" style="background:var(--b3)">In use</span>
+            <span class="pill" style="border-color:var(--lamp);color:var(--lamp)">Archived</span>
+            <span class="pill dim">Main cast</span><span class="pill dim">Walk-ons</span></div></div>
+        <div class="px-4 py-2 row" style="background:var(--b2)"><span class="lbl dim">Archived · 4</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5 arch">
+          <span class="av" style="background:var(--v4)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Sable Quist</div>
+            <div class="text-[11px] dim">The Salt Line</div></div>
+          <button class="btn btn-gh btn-sm shrink-0">Restore</button></div>
+        <div class="px-4 py-2.5 arch flex items-center gap-2.5">
+          <span class="av" style="background:var(--b3)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Bellwether Rusk</div>
+            <div class="text-[11px] dim">Low Water</div></div>
+          <button class="btn btn-gh btn-sm shrink-0">Restore</button></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Archived is a filter, not a place — it's off by default everywhere, which is the whole point of archiving something.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 04b · READING -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">04b · Reading</div>
+    <h2 class="text-2xl font-bold mb-2">Stories you're partway through</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      A published campaign you're reading isn't yours and may not be forkable, so it can't live under
+      Campaigns — but you still need to find your way back to it. Its own shelf, with your place kept
+      and the perspective you were reading in.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Partway through</div>
+      <div class="fr stage dark sheet">
+        <div class="tabs"><div class="tab">Campaigns</div><div class="tab tab-on">Reading</div><div class="tab">Worlds</div><div class="tab">People</div><div class="tab">Groups</div></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="ttl text-[15px] min-w-0 truncate" style="font-weight:600">The Ninth Gate</div>
+            <span class="pill shrink-0" style="border-color:var(--v2);color:var(--v2)">As Halden</span></div>
+          <div class="lbl dim mb-1.5">By Ilse Marek</div>
+          <p class="text-[13px] leading-relaxed mb-2">The counting house — scene 3 of 7.</p>
+          <button class="btn btn-pri btn-sm">Carry on reading</button></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="ttl text-[15px] min-w-0 truncate" style="font-weight:600">Kettleworth, Second Shift</div>
+            <span class="pill shrink-0" style="border-color:var(--lamp);color:var(--lamp)">All five</span></div>
+          <div class="lbl dim mb-1.5">By Aurelio Banks</div>
+          <p class="text-[13px] leading-relaxed dim">Finished it in March.</p></div>
+        <div class="px-4 py-3">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="ttl text-[15px] min-w-0 truncate dim" style="font-weight:600">The Long Quiet</div>
+            <span class="pill dim shrink-0">Gone</span></div>
+          <p class="text-[13px] leading-relaxed dim">Noor unpublished this. Your place is kept in case it comes back.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Nothing yet</div>
+      <div class="fr stage dark sheet">
+        <div class="tabs"><div class="tab">Campaigns</div><div class="tab tab-on">Reading</div><div class="tab">Worlds</div><div class="tab">People</div><div class="tab">Groups</div></div>
+        <div class="px-4 py-9 text-center">
+          <div class="ttl text-[16px] mb-1.5" style="font-weight:500">You're not reading anything.</div>
+          <p class="text-[13px] leading-relaxed dim mb-4">People publish stories you can read from inside the head of someone in them. Anything you start shows up here with your place kept.</p>
+          <button class="btn btn-gh btn-sm">Have a look</button></div>
+      </div></div>
+    <div><div class="wall mb-2">Why it's a separate shelf</div>
+      <div class="fr stage dark sheet p-4">
+        <p class="text-[13px] leading-relaxed mb-2.5">A story you're reading isn't a campaign you own. You can't play it, you may not be able to fork it, and it can be unpublished out from under you.</p>
+        <p class="text-[13px] leading-relaxed dim mb-2.5">Putting it under Campaigns would promise all three. Its own shelf promises exactly one thing — you can get back to where you were.</p>
+        <div class="flex items-center gap-1.5"><span class="dot" style="background:var(--lamp)"></span>
+          <span class="text-[12px] dim">Needs a bookmark on the backend: scene, beat, and perspective.</span></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 05 · WHERE VISIBILITY LIVES -->
+<section class="max-w-6xl mx-auto px-5 pb-24">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">05 · Visibility isn't set here</div>
+    <h2 class="text-2xl font-bold mb-3">The library shows it; the editor sets it</h2>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note">
+      <div><b style="color:var(--page-fg)">Changing who can see something belongs next to the thing
+        itself.</b> You decide a world is ready to share while you're looking at the world, not while
+        scanning a list — so private / unlisted / public lives on the world bible, the character
+        sheet and campaign settings. The library just wears the badge.</div>
+      <div><b style="color:var(--page-fg)">Unlisted has never had a screen.</b> It mints a share
+        token today and shows it to nobody, so the link exists and is unreachable. It appears on the
+        editor the moment you choose unlisted, with Copy as the primary action.</div>
+    </div>
+    <p class="mt-4 max-w-2xl text-[14.5px] leading-relaxed note">
+      Worth keeping straight: this is <b style="color:var(--page-fg)">library visibility</b>, which
+      governs the live artifact and its share link. Publishing a campaign is a different thing — it
+      freezes a copy and grants a set of reading perspectives. Two systems, two homes, never merged.
+    </p>
+  </div>
+</section>
+
+<!-- ========== TEMPLATE ========== -->
+<template id="spec-lib">
+  <div>
+    <div class="px-4 py-3.5 row flex items-center justify-between gap-2" style="background:var(--b2)">
+      <div class="ttl text-[17px]" style="font-weight:600">Your stuff</div>
+      <button class="btn btn-pri btn-sm shrink-0">New campaign</button>
+    </div>
+    <div class="tabs">
+      <div class="tab tab-on">Campaigns</div><div class="tab">Reading</div><div class="tab">Worlds</div>
+      <div class="tab">People</div><div class="tab">Groups</div>
+    </div>
+
+    <div class="px-4 py-3 row" style="background:color-mix(in srgb,var(--lamp) 7%,transparent)">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[16px] min-w-0 truncate" style="font-weight:600">The Salt Line</div>
+        <span class="pill shrink-0" style="border-color:var(--lamp);color:var(--lamp)">Playing</span></div>
+      <div class="lbl dim mb-1.5">Saltmarch · 11 people · 3 scenes</div>
+      <p class="text-[13px] leading-relaxed mb-2">The quay, after the second bell — beat 4, waiting on you.</p>
+      <div class="flex flex-wrap gap-1.5">
+        <button class="btn btn-pri btn-sm">Carry on</button>
+        <button class="btn btn-gh btn-sm">3 to review</button>
+      </div>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[16px] min-w-0 truncate" style="font-weight:600">Low Water</div>
+        <span class="pill dim shrink-0">Finished</span></div>
+      <div class="lbl dim mb-1.5">Saltmarch · 5 people · 11 scenes</div>
+      <p class="text-[13px] leading-relaxed dim">Ended at the spring tide, with the ledger burned and nobody admitting to it.</p>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[16px] min-w-0 truncate" style="font-weight:600">The Ninth Gate</div>
+        <span class="pill" style="border-color:var(--ok);color:var(--ok)">Published</span></div>
+      <div class="lbl dim mb-1.5">The Ninth Gate · 4 people · 7 scenes</div>
+      <p class="text-[13px] leading-relaxed dim mb-2">A descent that got away from everyone involved.</p>
+      <div class="flex items-center gap-1.5"><span class="dot" style="background:var(--ok)"></span>
+        <span class="text-[11px] dim">Readable as 2 characters · 14 people have taken a copy</span></div>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[16px] min-w-0 truncate dim" style="font-weight:600">Untitled campaign</div>
+        <span class="pill dim shrink-0">Not started</span></div>
+      <div class="lbl dim mb-1.5">No world yet</div>
+      <p class="text-[13px] leading-relaxed dim">Made in March and never opened again.</p>
+    </div>
+
+    <div class="px-4 py-3 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-3">
+        <span class="text-[12px] dim">4 archived</span>
+        <span class="text-[12px]" style="color:var(--pencil)">2 in trash</span>
+      </div>
+      <span class="dim text-[14px]">›</span>
+    </div>
+  </div>
+</template>
+
+<script>
+  document.querySelectorAll('[data-spec]').forEach(function(slot){
+    var t = document.getElementById('spec-' + slot.getAttribute('data-spec'));
+    if (!t) { slot.innerHTML = '<div style="padding:1rem;font:12px monospace;color:#E0604A">missing template: ' + slot.getAttribute('data-spec') + '</div>'; return; }
+    slot.appendChild(t.content.cloneNode(true));
+  });
+</script>
+</body>
+</html>

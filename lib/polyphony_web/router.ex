@@ -72,6 +72,13 @@ defmodule PolyphonyWeb.Router do
       live("/resume", ResumeLive, :index)
       live("/browse", BrowseLive, :index)
       live("/s/:token", ShareLive, :show)
+
+      # The doc index. The files themselves are served by `Plug.Static`, which runs
+      # ahead of this router and has no directory listing — so `/docs` falls through to
+      # here and everything under it doesn't. Public, like the files it lists: see
+      # `Mix.Tasks.Docs.Publish`.
+      live("/docs", DocsLive, :index)
+      live("/ux", DocsLive, :index)
     end
   end
 
