@@ -25,6 +25,7 @@ statement of intent — and a code session turns them into commits with tests.
 | `BASE` | The deployed app's URL. Ask the human if you don't have it. |
 | `DRIVE_FOLDER` | `1y1HudA1L2Ns36Hx_CmO0BDGDp8bBmfuv` |
 | Linear team | `StrutCo` |
+| Linear project | `Polyphone` — **every issue goes here**, without exception |
 
 You need the **Google Drive** and **Linear** connectors. Drive also needs **code
 execution and file creation** enabled — without both, saving a file silently isn't an
@@ -102,10 +103,12 @@ takes the most recent one, so keep the same title and let the timestamps order t
 
 ## Filing the intent
 
-Then create a Linear issue in the **StrutCo** team, in **Designing** or **Ready for dev**
-(see above), labelled **`design-inbox`**. The issue is the instruction; the Drive file is
-the material. Keep them apart — an issue that *contains* the mock is a second copy of it,
-and the two will disagree.
+Then create a Linear issue in the **StrutCo** team and the **Polyphone** project, in
+**Designing** or **Ready for dev** (see above), labelled **`design-inbox`**. The project
+is not optional: a code session reads the queue as *Ready for dev in Polyphone*, so an
+issue filed outside it is invisible no matter what state it's in. The issue is the
+instruction; the Drive file is the material. Keep them apart — an issue that *contains*
+the mock is a second copy of it, and the two will disagree.
 
 **Title:** what changes, in the imperative — *"Set the scene: cast picker moves above the
 premise"*.

@@ -149,8 +149,9 @@ Design happens in a **normal Claude thread** — faster to iterate with, and it 
 block this one. Its instructions are `docs/design-thread.md`. It hands work over in two
 pieces, and never writes to the repo itself:
 
-- **Linear** (team `StrutCo`) carries the intent — an issue saying what changes and why.
-  This is the instruction.
+- **Linear** carries the intent — an issue saying what changes and why. Every issue lives
+  in the **`Polyphone`** project (team `StrutCo`); that project *is* the scope, so an
+  issue outside it isn't part of this loop and isn't yours to act on.
 - **Google Drive** carries the material — a mock HTML file in the folder
   `1y1HudA1L2Ns36Hx_CmO0BDGDp8bBmfuv`, named in the issue as `Drive: <title> (<fileId>)`.
   This is never canonical; `ux/` in the repo is.
@@ -173,13 +174,14 @@ issues with the same label can be in completely different states.
 
 To drain it, when the author asks:
 
-1. **Linear** — list issues in **Ready for dev**. Read the whole description; the
-   argument in it is the part that decides whether the change is right, and the part
-   nothing else records. Move an issue to **In Progress** when you start it, and to
-   **Ready to merge** when the PR is open — the author merges, and that column is the
-   only place an unmerged PR is visible. If the Linear connector isn't attached to this
-   session, say so and ask for the issue to be pasted rather than guessing at what's
-   queued.
+1. **Linear** — list issues in **Ready for dev** in the **Polyphone** project. Both
+   filters matter: the state is the queue, the project is the scope. Read the whole
+   description; the argument in it is the part that decides whether the change is right,
+   and the part nothing else records. Move an issue to **In Progress** when you start
+   it, and to **Ready to merge** when the PR is open — the author merges, and that
+   column is the only place an unmerged PR is visible. If the Linear connector isn't
+   attached to this session, say so and ask for the issue to be pasted rather than
+   guessing at what's queued.
 2. **Drive** — for each issue with a `Drive:` line, `download_file_content` on that
    `fileId`, base64-decode it, and **check the byte count against Drive's `fileSize`**
    before doing anything with it. The transport is byte-exact when the design thread sets
