@@ -27,6 +27,8 @@ defmodule PolyphonyWeb.PlayLive do
   """
   use PolyphonyWeb, :live_view
 
+  require Logger
+
   alias Polyphony.{
     App,
     Broadcast,
@@ -119,6 +121,8 @@ defmodule PolyphonyWeb.PlayLive do
        page_title: "Play",
        topic: nil,
        joinable: [],
+       writable: [],
+       writing_in: MapSet.new(),
        cast: %Cast{},
        waiting: :you,
        progress: %{phase: :idle, subject: nil},
@@ -211,6 +215,7 @@ defmodule PolyphonyWeb.PlayLive do
       traces: traces,
       roster: roster,
       joinable: joinable(socket, roster),
+      writable: writable(socket, roster),
       cast: cast,
       voices: voices,
       strip:
@@ -556,6 +561,21 @@ defmodule PolyphonyWeb.PlayLive do
         do: entry
   end
 
+  # The same list, for the people this story invented and never wrote — the walk-ons a
+  # character's relationships stubbed. `SceneControl` refuses them, which is why they
+  # are a separate list with a separate control rather than more options in the picker:
+  # the honest offer is not "bring them in" but "write them, then bring them in".
+  defp writable(socket, roster) do
+    present = MapSet.new(roster, &to_string/1)
+
+    for id <- campaign_character_ids(socket),
+        entry = Library.get(id),
+        entry != nil,
+        not MapSet.member?(present, to_string(entry.id)),
+        match?(%CharacterSheet{status: s} when s != :full, Library.payload(entry)),
+        do: entry
+  end
+
   defp campaign_character_ids(socket) do
     with cid when not is_nil(cid) <- campaign_of(socket.assigns.scene_id),
          entry when not is_nil(entry) <- Library.get(cid),
@@ -830,6 +850,31 @@ defmodule PolyphonyWeb.PlayLive do
     end)
   end
 
+  # Write a walk-on in and bring them on, in one act. Reuses `play.intro` — the same op
+  # an accepted Director introduction takes — so a walk-on the author reached for and
+  # one the Director asked for are written the same way and arrive the same way. Keyed
+  # by **id** rather than by name: this person already exists, and a name is a display
+  # value that two of them can share.
+  def handle_event("write_in", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      entry = Enum.find(socket.assigns.writable, &(to_string(&1.id) == to_string(id)))
+
+      if entry do
+        uid = socket.assigns.current_user && socket.assigns.current_user.id
+
+        {:noreply,
+         socket
+         |> assign(writing_in: MapSet.put(socket.assigns.writing_in, entry.id))
+         |> request_generation("write_in:#{entry.id}", "play.intro", %{
+           entry_id: entry.id,
+           user_id: uid
+         })}
+      else
+        {:noreply, put_flash(socket, :error, "They aren't waiting to be written.")}
+      end
+    end)
+  end
+
   def handle_event("toggle_intros", _params, socket),
     do: {:noreply, assign(socket, panel: toggle(socket.assigns.panel, :intros), narrating: false)}
 
@@ -1022,6 +1067,42 @@ defmodule PolyphonyWeb.PlayLive do
   end
 
   # A just-generated introduction is now :full — admit them.
+  def handle_info({:generation, "write_in:" <> id, {:ok, _}}, socket) do
+    safe(socket, fn ->
+      socket =
+        socket
+        |> forget_generation("write_in:#{id}")
+        |> assign(writing_in: MapSet.delete(socket.assigns.writing_in, normalize_id(id)))
+
+      case Library.get(normalize_id(id)) do
+        nil ->
+          {:noreply, put_flash(socket, :error, "They're gone.")}
+
+        entry ->
+          sheet = Library.payload(entry)
+
+          # `admit/3` refuses a non-`:full` character the same way `SceneControl` does,
+          # so the check is here rather than trusted: a generation that came back
+          # `{:ok, _}` having written nothing usable must not be walked on stage.
+          if match?(%CharacterSheet{status: :full}, sheet) do
+            {:noreply, admit(socket, entry, sheet)}
+          else
+            {:noreply, put_flash(socket, :error, "Written, but not ready — open them to finish.")}
+          end
+      end
+    end)
+  end
+
+  def handle_info({:generation, "write_in:" <> id, result}, socket) do
+    Logger.warning("[play] write-in failed for #{id}: #{inspect(result)}")
+
+    {:noreply,
+     socket
+     |> forget_generation("write_in:#{id}")
+     |> assign(writing_in: MapSet.delete(socket.assigns.writing_in, normalize_id(id)))
+     |> put_flash(:error, "Couldn't write them — open them to finish by hand.")}
+  end
+
   def handle_info({:generation, "intro:" <> name, {:ok, _}}, socket) do
     safe(socket, fn ->
       case find_owned(socket, name) do
@@ -1966,7 +2047,38 @@ defmodule PolyphonyWeb.PlayLive do
           </p>
         </div>
 
-        <p :if={@joinable == [] and @roster != []} class="text-[11px] leading-relaxed dim mt-3">
+        <%!-- The walk-ons this story invented and never wrote. `SceneControl` refuses
+              a non-`:full` character, so they cannot be options in the picker above —
+              the honest offer is *write them, then bring them in*, which is one press
+              and the same `play.intro` an accepted Director introduction takes. Without
+              this, a side character a scene actually calls for was unreachable from
+              play: the only route was leaving the scene for the campaign's cast tab. --%>
+        <div :if={@writable != []} class="mt-3">
+          <div class="lbl dim mb-1.5">Not written yet</div>
+          <div class="flex flex-col gap-1.5">
+            <div :for={c <- @writable} class="flex items-center justify-between gap-2">
+              <span class="text-[12.5px] min-w-0 truncate"><%= char_name(c) %></span>
+              <Kit.btn
+                size={:sm}
+                type="button"
+                phx-click="write_in"
+                phx-value-id={c.id}
+                disabled={MapSet.member?(@writing_in, c.id)}
+                class="shrink-0"
+              >
+                <%= if MapSet.member?(@writing_in, c.id), do: "✦ …", else: "✦ Write them in" %>
+              </Kit.btn>
+            </div>
+          </div>
+          <p class="text-[11px] leading-relaxed dim mt-1.5">
+            They're written from their role and this world, then walk in at this beat.
+          </p>
+        </div>
+
+        <p
+          :if={@joinable == [] and @writable == [] and @roster != []}
+          class="text-[11px] leading-relaxed dim mt-3"
+        >
           Everyone this campaign has written is already here.
         </p>
 

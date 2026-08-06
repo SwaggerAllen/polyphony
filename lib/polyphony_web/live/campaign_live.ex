@@ -85,6 +85,7 @@ defmodule PolyphonyWeb.CampaignLive do
          qb_groups: false,
          quick_build_open: false,
          viewer: :omniscient,
+         writing_in: MapSet.new(),
          publish_help: false,
          scene_location: "",
          scene_premise: "",
@@ -343,6 +344,38 @@ defmodule PolyphonyWeb.CampaignLive do
 
   def handle_event("publish_help", _params, socket),
     do: {:noreply, assign(socket, publish_help: not socket.assigns.publish_help)}
+
+  # Write one pending character in, from the screen where you are choosing a cast.
+  #
+  # The scene picker only ever offered `:full` characters, because `SceneControl`
+  # refuses anything else — correct, and it left the walk-ons a campaign invents for
+  # itself unreachable from the one screen where you decide who is in a scene. The
+  # cast tab's "generate the pending ones" is a bulk pass on another tab, which is not
+  # the same act: here you want *this* person, now, because the scene needs them.
+  #
+  # Reuses the same `campaign.stubs` op with a list of one — a walk-on written for a
+  # scene should be written the same way as one written in a batch, or they read
+  # differently in the same story.
+  def handle_event("write_in", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      cid = normalize_id(id)
+      uid = socket.assigns.current_user && socket.assigns.current_user.id
+
+      case Enum.find(socket.assigns.cast, &(&1.id == cid and pending?(&1))) do
+        nil ->
+          {:noreply, put_flash(socket, :error, "They aren't waiting to be written.")}
+
+        entry ->
+          {:noreply,
+           socket
+           |> assign(writing_in: MapSet.put(socket.assigns.writing_in, entry.id))
+           |> request_generation("write_in:#{entry.id}", "campaign.stubs", %{
+             ids: [entry.id],
+             user_id: uid
+           })}
+      end
+    end)
+  end
 
   def handle_event("toggle_quick_build", _params, socket),
     do: {:noreply, assign(socket, quick_build_open: not socket.assigns.quick_build_open)}
@@ -698,6 +731,40 @@ defmodule PolyphonyWeb.CampaignLive do
            })}
       end
     end)
+  end
+
+  # Written in, and **selected**: you pressed this while choosing who is in a scene, so
+  # the only reason to write them was to use them. Adding them to the selection saves
+  # the step, and `scene_cast_ids/1` intersects with who is currently ready, so this is
+  # the moment they become eligible at all.
+  def handle_info({:generation, "write_in:" <> id, {:ok, {done, _failed}}}, socket) do
+    cid = normalize_id(id)
+
+    socket =
+      socket
+      |> forget_generation("write_in:#{id}")
+      |> assign(
+        writing_in: MapSet.delete(socket.assigns.writing_in, cid),
+        entry: Library.get(socket.assigns.entry.id)
+      )
+      |> load()
+
+    if done > 0 do
+      chosen = MapSet.put(scene_cast_ids(socket.assigns), cid)
+      {:noreply, assign(socket, scene_cast: chosen)}
+    else
+      {:noreply, put_flash(socket, :error, "Couldn't write them — open them to finish by hand.")}
+    end
+  end
+
+  def handle_info({:generation, "write_in:" <> id, result}, socket) do
+    Logger.warning("[campaign] write-in failed for #{id}: #{inspect(result)}")
+
+    {:noreply,
+     socket
+     |> forget_generation("write_in:#{id}")
+     |> assign(writing_in: MapSet.delete(socket.assigns.writing_in, normalize_id(id)))
+     |> put_flash(:error, "Couldn't write them — open them to finish by hand.")}
   end
 
   def handle_info({:generation, "stubs", {:ok, {done, failed}}}, socket) do
@@ -1959,7 +2026,7 @@ defmodule PolyphonyWeb.CampaignLive do
             everybody present is how a two-hander becomes a crowd — the roster is what
             turn order walks, so it is also a cost. Everyone ready is the default, so
             an author who never touches this gets exactly what they got before. --%>
-      <Kit.row :if={scene_ready(@cast) != []} class="px-4 py-3">
+      <Kit.row :if={@cast != []} class="px-4 py-3">
         <div class="flex items-center justify-between gap-2">
           <span class="lbl dim">Who's in it</span>
           <span class="text-[11px] dim"><%= length(scene_cast_entries(assigns)) %> of <%= length(scene_ready(@cast)) %></span>
@@ -1980,6 +2047,38 @@ defmodule PolyphonyWeb.CampaignLive do
         <p :if={scene_cast_entries(assigns) == []} class="text-[11px] leading-relaxed mt-1.5" style="color:var(--pencil)">
           Nobody is in it. Pick at least one.
         </p>
+
+        <%!-- The walk-ons this story invented for itself, reachable from the screen
+              where you choose a cast. `SceneControl` refuses a non-`:full` character,
+              so offering one as a chip would be offering a choice that can't be
+              honoured — the answer is to write them, here, rather than to send the
+              author to another tab to run a batch they didn't ask for. Written in,
+              they are selected: the only reason to press this while picking a cast is
+              to use them. --%>
+        <div :if={pending_cast(@cast) != []} class="mt-3 pt-3" style="border-top:1px solid var(--rule)">
+          <div class="lbl dim mb-1.5">Not written yet</div>
+          <div class="flex flex-col gap-1.5">
+            <div
+              :for={c <- pending_cast(@cast)}
+              class="flex items-center justify-between gap-2"
+            >
+              <span class="text-[13px] min-w-0 truncate"><%= char_name(c) %></span>
+              <Kit.btn
+                size={:sm}
+                type="button"
+                phx-click="write_in"
+                phx-value-id={c.id}
+                disabled={MapSet.member?(@writing_in, c.id)}
+                class="shrink-0"
+              >
+                <%= if MapSet.member?(@writing_in, c.id), do: "✦ …", else: "✦ Write them in" %>
+              </Kit.btn>
+            </div>
+          </div>
+          <p class="text-[11px] leading-relaxed dim mt-2">
+            Stubs somebody's relationships invented. Writing one puts them in this scene.
+          </p>
+        </div>
       </Kit.row>
 
       <%!-- `OpenScene` has carried `location_id` since §2.3 and nothing ever passed
@@ -2167,6 +2266,8 @@ defmodule PolyphonyWeb.CampaignLive do
   end
 
   defp scene_ready(cast), do: Enum.filter(cast, &full?/1)
+
+  defp pending_cast(cast), do: Enum.filter(cast, &pending?/1)
 
   # Who is in the next scene: the author's selection, or everyone ready if they haven't
   # made one. Always intersected with who is *currently* ready — a selection made before

@@ -118,10 +118,16 @@ defmodule PolyphonyWeb.SceneSetupLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=scenes")
 
-      # `SceneControl` refuses a non-`:full` character, so offering one would be
-      # offering a choice that can't be honoured.
+      # `SceneControl` refuses a non-`:full` character, so offering one as a chip would
+      # be offering a choice that can't be honoured.
       assert html =~ "1 of 1"
-      refute html =~ ~s(phx-value-id="#{stub.id}")
+      refute html =~ ~s(phx-click="toggle_scene_cast" phx-value-id="#{stub.id}")
+
+      # It is offered as something to *write*, which is the honest version of the same
+      # offer — and reachable from the screen where you are choosing a cast, rather
+      # than only from a bulk pass on another tab.
+      assert html =~ "Not written yet"
+      assert html =~ ~s(phx-click="write_in" phx-value-id="#{stub.id}")
     end
   end
 
@@ -202,6 +208,58 @@ defmodule PolyphonyWeb.SceneSetupLiveTest do
       # a beat after mount — `render/1` is what waits for it.
       {:ok, later, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=scenes")
       assert render(later) =~ ~r/id="scene-location"[^>]*value="[^"]+"/
+    end
+  end
+
+  describe "writing a walk-on in while choosing a cast" do
+    test "writes them and puts them in the scene", %{conn: conn, user: user} do
+      wren = character(user, "Wren")
+      stub = character(user, "The bellman", %{status: :stub})
+      camp = campaign(user, %{character_ids: [wren.id, stub.id]})
+
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=scenes")
+
+      view
+      |> element(~s(button[phx-click="write_in"][phx-value-id="#{stub.id}"]))
+      |> render_click()
+
+      html = generate(view)
+
+      # Written, and therefore castable at all.
+      assert %CharacterSheet{status: :full} = Library.payload(Library.get(stub.id))
+
+      # And selected. The only reason to press this while choosing who is in a scene is
+      # to use them, so making it two steps would be making the second one pointless.
+      assert html =~ "2 of 2"
+
+      render_click(view, "start_scene", %{})
+      assert to_string(stub.id) in entered(latest_scene(camp))
+    end
+
+    test "a campaign of nothing but stubs still offers the way out",
+         %{conn: conn, user: user} do
+      stub = character(user, "The bellman", %{status: :stub})
+      camp = campaign(user, %{character_ids: [stub.id]})
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=scenes")
+
+      # The block used to render only when somebody was already ready, which hid the
+      # one control that fixes having nobody ready.
+      assert html =~ "Not written yet"
+      assert html =~ ~s(phx-click="write_in" phx-value-id="#{stub.id}")
+    end
+
+    test "somebody already written isn't offered to be written again",
+         %{conn: conn, user: user} do
+      wren = character(user, "Wren")
+      camp = campaign(user, %{character_ids: [wren.id]})
+
+      {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=scenes")
+      refute html =~ "Not written yet"
+
+      # And refused rather than ignored if asked for anyway.
+      assert render_click(view, "write_in", %{"id" => to_string(wren.id)}) =~
+               "aren&#39;t waiting to be written"
     end
   end
 end
