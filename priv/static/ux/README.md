@@ -173,9 +173,9 @@ wired. World arc — somewhere for "the moon fell out of the sky" to live as dur
 a way for it to reach a character who was off-screen — is built. Neither is a reason to
 discount a screen any more.
 
-What to look at instead: the **`needs-design`** label marks issues whose open questions have
-to be answered before code, and the **Frontend rebuild** milestone is the slice that gates
-these mocks.
+What to look at instead: the **Frontend rebuild** milestone is the slice that gates these
+mocks, and anything in **Designing** is a live design question — that state is the design
+thread's own queue.
 
 **Confirmed non-asks** — things deliberately ruled out so nobody builds them speculatively —
 are the project document of that name. Read it before proposing something the design has

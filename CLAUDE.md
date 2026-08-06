@@ -154,9 +154,11 @@ things a markdown list can't do. Their shipped half is in `docs/completed-roadma
 things deliberately ruled out are the **Confirmed non-asks** project document, which is
 worth reading before building anything that looks obviously missing.
 
-Three labels do the filtering: **`frontend`** / **`backend`** for the kind of work,
-**`needs-design`** for open questions that come before code, and **`deferred`** for
-things recorded so a later pass doesn't re-find them as a surprise. Milestones carry the
+**Labels describe the work; states describe who has it.** The only labels are
+**`frontend`** / **`backend`** — which never change, because a thing doesn't stop being
+frontend work — plus `design-inbox` for provenance. Anything you'd have to *remove* when
+the work changes hands is a state wearing a label, which is why there is no `deferred`
+(that is Backlog) and no `needs-design` (that is Designing). Milestones carry the
 sequencing the roadmap used to argue for — **Frontend rebuild** (the critical path; the
 app has no users until it lands), then **Authoring quality**, then **World simulation**.
 
