@@ -205,22 +205,43 @@ up any queued work, design-thread or not:
    before doing anything with it. The transport is byte-exact when the design thread sets
    `disableConversionToGoogleType: true`; a size mismatch means it didn't, and the file
    is a Google Doc's idea of the file rather than the file.
-3. **Land it in a scratch directory first**, not `ux/`. A mock that arrives straight into
+3. **Check the base before applying anything.** For every `Base: <screen>.md rev <n>` line
+   on the issue, compare it against the file in the repo. **Equal — apply cleanly. Higher
+   in the repo — something moved while the design was being drawn**, and it will usually
+   be an undesigned fix made right here, since small changes never get an issue. Reconcile
+   by hand: keep both, unless the two touch the same behavior, in which case **the repo
+   wins and the issue goes back to Designing** with a comment saying what moved. Never
+   reconcile a design by guessing — that produces a design nobody agreed to.
+4. **Land it in a scratch directory first**, not `ux/`. A mock that arrives straight into
    the design source of truth is a design change nobody looked at. Read it, check its
    classes against `ux/polyphony-kit.css` — a class that isn't there means the mock is
    proposing a **new kit component**, which is a decision, not a port — then commit it to
-   `ux/` and run `mix docs.publish` so `/ux/` serves the new one.
-4. **Close the loop in Linear**: move the issue on, and comment with what landed and the
-   commit. Say plainly if you didn't do part of it and why. An issue that goes quiet is
-   indistinguishable from one nobody read — and an issue moved without a comment is a
-   state change nobody can audit.
+   `ux/` and run `mix docs.publish` so `/ux/` serves the new one. A kit change arrives as
+   a **fragment**, never a whole file: paste it into `ux/polyphony-kit.css`, run
+   `mix kit.port`, and if the class already exists, that collision is the conflict signal —
+   stop and ask rather than overwriting.
+5. **Docs first, then code.** Land the behaviors doc (bumping its `rev`) before
+   implementing, so what you build against is in the repo rather than in a Drive file.
+   That ordering is also what makes the next design session's base meaningful.
+6. **Close the loop in Linear**: open the PR, move the issue to **Ready to merge**, and
+   comment with what landed and the commit. Say plainly if you didn't do part of it and
+   why. An issue that goes quiet is indistinguishable from one nobody read — and an issue
+   moved without a comment is a state change nobody can audit. The author merges; feedback
+   in scope comes back as **Ready for dev**, anything new is a **new issue**, and a merged
+   issue with nothing outstanding is **Done**.
+
+**Issues are for designed work.** A small fix — a wrong label, a broken state, a rename —
+happens right here and never gets an issue. That is the intended behaviour and it is
+precisely why behaviors docs carry a `rev`: the undesigned changes are the ones no ticket
+warns the design thread about, so the counter is the only thing that says the ground moved.
 
 Two standing rules. A **mock is a proposal, not an instruction** — if it can't be built
 as drawn, or it contradicts something in `architecture.md`, say so on the issue and put
 it back in **Designing** rather than building a worse version of it silently. Rejecting
-one outright is **Canceled**, so the Done column stays a record of what shipped. And the design thread only ever *proposes*
-kit changes: `ux/polyphony-kit.css` is edited here, followed by `mix kit.port`, because
-`assets/css/kit.css` is generated from it and a test fails on drift.
+one outright is **Canceled**, so the Done column stays a record of what shipped. And the
+design thread only ever *proposes* kit changes: `ux/polyphony-kit.css` is edited here,
+followed by `mix kit.port`, because `assets/css/kit.css` is generated from it and a test
+fails on drift.
 
 ## Identity & numbering (easy to get wrong)
 
