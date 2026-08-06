@@ -37,11 +37,20 @@ services:
       # The design-kit catalogue at /storybook. RUN_TIME on purpose and it has to be:
       # the routes are gated per request, so this takes effect on a restart with no
       # rebuild. (It was a compile-time flag once, which meant setting it here stopped
-      # the app booting — see the router.) It reads no domain data; turning it on is a
-      # presentation choice.
+      # the app booting — see the router.)
+      #
+      # **On in prod, deliberately.** It is how the design thread sees composed screens
+      # in every state — including the empty and failed ones a live site would never
+      # happen to be in — which is what keeps design work off a session token for the
+      # real app. That only stays safe because storybook **reads no domain data**: every
+      # story renders from fixture assigns. A story that loads a campaign would turn this
+      # flag into an authorization hole, so don't write one.
+      #
+      # This value is authoritative: `deploy.yml` syncs the app to this spec, so flipping
+      # it in the DigitalOcean UI is reverted on the next deploy.
       - key: STORYBOOK
         scope: RUN_TIME
-        value: "false"
+        value: "true"
       - key: DEEPINFRA_API_KEY
         scope: RUN_TIME
         type: SECRET

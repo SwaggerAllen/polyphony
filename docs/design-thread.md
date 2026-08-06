@@ -24,8 +24,10 @@ Nine steps, two threads, one serial code worker. Your half is 1–5.
 
 1. **Take an issue** from Todo and move it to **Designing**. Moving it is what records
    that it's taken — the state is the lock.
-2. **Read what exists**: the `docs/behaviors/` file for the screen, its mock, the kit, and
-   `/storybook` for the components as they actually render.
+2. **Read what exists**, starting with **`BASE/storybook`** — the composed screens, every
+   state, rendered by the real components. That is the source of truth for what the UI
+   does; the `docs/behaviors/` file is its readable narrative and the mock is a drawing.
+   When they disagree, storybook is right.
 3. **Design.** Ask the human about anything that needs deciding; that's what Designing is.
 4. **Produce the artifacts** — a behaviors doc, usually a mock, sometimes a kit fragment.
 5. **Save to Drive, then move the issue to Ready for dev.** In that order: an issue in the
@@ -107,42 +109,47 @@ things are worth checking every time:
 Designing from memory is how a mock ends up using a class that was renamed in March. If a
 fetch fails, say so and ask — don't reconstruct.
 
-## The three artifacts, and how much of each to produce
+## The one artifact rule
 
-A design hands over up to three things. **They are not the same kind of object**, and the
-difference decides whether you write a whole file or a fragment:
+**Whole file when it's new. A fragment when it's a change.** That is the whole rule, and
+it applies the same way to a behaviors doc, a mock, and a kit change.
 
-| Artifact | Produce | Why |
-|---|---|---|
-| `docs/behaviors/<screen>.md` | The **whole file**, with a `rev` line | It *is* the spec of record. A diff of it is unreadable. |
-| The mock HTML | The **whole file** | It's a drawing, and it belongs to one screen. |
-| A kit change | **A fragment. Never the whole kit.** | Every screen shares `polyphony-kit.css`. A full-file replacement is the most destructive thing you can hand over. |
+A screen that doesn't exist yet has nothing to diff against, so draw the whole thing.
+Everything else — a state added to a screen that exists, a rule that changed, a new kit
+component — travels as **the part that changes**, quoted with enough surrounding text to
+place it.
 
-**The behaviors doc is the important one.** It records what the app does from a user's
-seat — every state, including the empty and failed ones — and it is what the next design
-session reads instead of guessing. The mock shows what one state *looks like*; the
-behaviors doc says what all of them *are*.
+The reason is worth understanding rather than just following, because it decides the
+edge cases:
 
-### The `rev` line, and why it exists
+**None of your artifacts are the source of truth.** The truth about what the UI does is
+`/storybook` — the composed screens, every state, rendered by the real components — plus
+the tests that pin the behavior. A behaviors doc is the readable narrative of that; a mock
+is a drawing of a proposal. Neither is the record, so neither needs to arrive whole, and
+a full-file version of either is a merge conflict nobody can resolve in exchange for
+nothing.
 
-Every behaviors file carries one, near the top:
+This is also why a whole `polyphony-kit.css` is the worst thing you can send: every screen
+shares it, so a replacement clobbers work across the entire app. As a fragment, a genuine
+collision announces itself as a class that already exists when the code thread pastes it.
+
+### The `rev` line
+
+Every behaviors file carries one near the top:
 
 ```
 <!-- rev: 7 -->
 ```
 
-Quote the rev you read in the issue, and bump it by one in the file you hand over. The
-code thread checks it before applying: same rev, apply cleanly; **different rev, something
-moved underneath you** and it reconciles rather than clobbering.
+Quote the rev you read in the issue (`Base: play.md rev 7`). It is **not** the merge
+mechanism — a fragment that no longer fits is its own signal. It is provenance: it records
+what the design was reasoning about, which is the question somebody asks months later when
+the design and the app disagree and nobody remembers which moved.
 
-This is not about deploy lag — the deployed app is minutes behind `main`, not days. It is
-that **not every change goes through an issue.** Small fixes happen directly in the code
-thread, and they edit behaviors docs. The rev is what makes that visible instead of
-silently overwritten.
-
-The kit gets no rev, deliberately: because you only ever send a fragment, a collision
-shows up as a class that already exists when the code thread pastes it, which is a better
-signal than a version number.
+It also gives a cheap early warning, and there is a specific case it catches: **not every
+change goes through an issue.** Small fixes happen directly in the code thread and edit
+behaviors docs without a ticket, so a bumped rev with no issue attached is the only trace
+that the ground moved.
 
 ## Producing a mock
 
@@ -244,8 +251,9 @@ Drive entirely and file the issue. Most of them are this.
   and `deployment.md` are the code thread's. `docs/behaviors/` is the exception and the
   only one: it describes what the app *should* do from a user's seat, which is the thing
   you are deciding.
-- **Never sends a whole `polyphony-kit.css`.** Fragments only. This is the rule most worth
-  keeping, because it is the one that turns a merge conflict into a paste.
+- **Never sends a whole file for something that already exists** — kit, behaviors doc or
+  mock alike. Fragments only. This is the rule most worth keeping, because it is the one
+  that turns a merge conflict into a paste.
 - **Doesn't decide it's done.** The code session ports it, and may come back with a
   reason it can't work as drawn. That's the review, and it's the point of the split.
 - **Doesn't move an issue past Ready for dev.** In Progress, Ready to merge and Done
