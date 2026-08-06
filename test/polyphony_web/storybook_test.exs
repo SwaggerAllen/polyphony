@@ -77,9 +77,22 @@ defmodule PolyphonyWeb.StorybookTest do
   #
   # The granularity is the point. Allowing the *module* would also allow `Cast.of/1`,
   # which reads the event store; allowing the function allows exactly the pure lookup.
+  # Each entry was read before it was added: a string transform or a constant, no reads.
+  # The list is allowed to grow, but only one function at a time and only after looking —
+  # a module-level exemption is what would make this guard decorative.
   @pure_display [
     {Polyphony.Scene.Cast, :render_name, 2},
-    {Polyphony.Scene.Cast, :render_names, 2}
+    {Polyphony.Scene.Cast, :render_names, 2},
+    # `"wren@example.com" -> "w***@example.com"` — a `String.split` and nothing else.
+    {Polyphony.Notifications.Transport, :redact, 1},
+    # The username rule as prose and as an HTML `pattern`; both are module attributes,
+    # and both belong on the screen precisely so the browser can say it without a
+    # round trip.
+    {Polyphony.Accounts.User, :username_rule, 0},
+    {Polyphony.Accounts.User, :username_pattern, 0},
+    {Polyphony.Accounts.User, :username_length, 0},
+    # Five clauses over a struct's own fields, returning a phrase.
+    {Polyphony.Authoring.ArcEntry, :label, 1}
   ]
 
   test "no screen reads domain data" do

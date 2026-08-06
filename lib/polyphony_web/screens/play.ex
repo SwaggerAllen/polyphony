@@ -427,7 +427,7 @@ defmodule PolyphonyWeb.Screens.Play do
             <%= case item do %>
               <% {:block, block} -> %>
                 <.turn_block
-                  id={"blk-#{i}"}
+                  id={eid(@id, "blk-#{i}")}
                   block={block}
                   register={@register}
                   cast={@cast}
@@ -439,7 +439,7 @@ defmodule PolyphonyWeb.Screens.Play do
                 />
               <% {:fail, f} -> %>
                 <Kit.fail_move
-                  id={"fail-#{i}"}
+                  id={eid(@id, "fail-#{i}")}
                   class="my-3"
                   title={"#{if f.subject, do: name_of(@cast, f.subject), else: "A turn"} didn't generate"}
                   detail={failure_reason(f)}
@@ -676,10 +676,10 @@ defmodule PolyphonyWeb.Screens.Play do
           <span class="text-[13px] font-semibold" style={"color:#{Voice.of(@voices, c)}"}>
             <%= name_of(@cast, c) %>
           </span>
-          <form id={"control-#{c}"} phx-change="set_control">
+          <form id={eid(@id, "control-#{c}")} phx-change="set_control">
             <input type="hidden" name="character" value={c} />
             <label for={"control-select-#{c}"} class="sr-only">Control mode</label>
-            <select id={"control-select-#{c}"} name="control" class="field px-2 py-1 text-[12px]">
+            <select id={eid(@id, "control-select-#{c}")} name="control" class="field px-2 py-1 text-[12px]">
               <option value="autonomous" selected={control_of(@control_modes, c) == "autonomous"}>
                 Automated
               </option>
@@ -788,7 +788,7 @@ defmodule PolyphonyWeb.Screens.Play do
 
   # ── Transcript blocks ─────────────────────────────────────────────────────────
 
-  attr(:id, :string, required: true)
+  attr(:id, :string, required: true, doc: "already namespaced by the screen prefix")
   attr(:block, :map, required: true)
   attr(:register, :atom, required: true)
   attr(:cast, :any, required: true)
