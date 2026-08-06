@@ -47,6 +47,12 @@ COPY assets assets
 COPY priv priv
 RUN mix assets.setup
 COPY lib lib
+# The story files. `phoenix_storybook` compiles them **into** the backend module
+# outside dev (`compilation_mode: :eager`), so they have to be here at `mix compile`
+# — and a missing content path is not an error there, it is an empty catalogue. That
+# is why `PolyphonyWeb.Storybook` raises when the directory is absent: a build that
+# forgets this line should fail rather than ship a storybook with nothing in it.
+COPY storybook storybook
 RUN mix assets.deploy
 
 # Compile the app and assemble the release.

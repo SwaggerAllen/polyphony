@@ -433,6 +433,18 @@ generation — end to end:
    - **Unexpected 500s** (with `SHOW_ERROR_DETAILS=true`) now render the full
      exception + stacktrace in the browser, plus a request id — so you rarely need
      the logs during bring-up. Turn the flag off before opening the app publicly.
+   - **Review the design kit on the deployment.** Set `STORYBOOK=true` (RUN_TIME) and
+     restart to serve the component catalogue at `/storybook`. It reads no domain
+     data, so it is a presentation choice rather than an exposure, and it is gated per
+     request — no rebuild, and no build-time variable to match. It was a *compile-time*
+     flag until it wasn't, and the failure was ugly: the value baked from `config.exs`
+     (`false`) disagreed with the one `runtime.exs` read from the env, and the release
+     **refused to boot** — *the application :polyphony has a different value set for
+     key :storybook during runtime compared to compile time*. Setting the variable in
+     the App Platform UI could not fix that in either scope, because nothing on the
+     compile-time path read it. If you see that message for some *other* key, this is
+     the shape: an `Application.compile_env` read whose `runtime.exs` counterpart
+     disagrees.
    - **Watch the server live from the browser.** Set `DEBUG_DRAWER=true` to get a
      floating **debug drawer** (bottom-right, on every page) that streams recent
      server logs with **Copy** and **Clear** — invaluable when a click seems to do

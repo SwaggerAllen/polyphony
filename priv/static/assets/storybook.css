@@ -171,6 +171,10 @@
   margin-bottom: 1.5rem;
 }
 
+.mb-7 {
+  margin-bottom: 1.75rem;
+}
+
 .ml-2 {
   margin-left: 0.5rem;
 }
@@ -277,6 +281,10 @@
 
 .min-w-\[8rem\] {
   min-width: 8rem;
+}
+
+.max-w-2xl {
+  max-width: 42rem;
 }
 
 .max-w-md {

@@ -62,6 +62,16 @@ and test, and elsewhere only with `STORYBOOK=true`. `PolyphonyWeb.StorybookTest`
 every story and asserts every kit component has one, so the catalogue can't drift from the
 components.
 
+`STORYBOOK` is read at **run time** (`config/runtime.exs`) and the routes are gated per
+request, so flipping it on a deployment is an env-var change and a restart — no rebuild.
+It was a `compile_env` read until it wasn't: the value is baked from `config.exs` at image
+build, `runtime.exs` then disagreed with it, and the release refused to boot rather than
+serve a catalogue. Setting the variable in a hosting UI could not have worked in either
+scope, because nothing on the compile-time path read it. The stories themselves *are*
+compile-time — `phoenix_storybook` bakes them into `PolyphonyWeb.Storybook` outside dev —
+so a release build has to copy `storybook/` (the Dockerfile does; the module raises if it
+is missing, because an absent content path is otherwise a silently empty catalogue).
+
 ## Design choices worth knowing
 
 - **Modern toolchain.** Phoenix 1.8 / LiveView 1.2 on OTP 27 / Elixir 1.17 (installed by
