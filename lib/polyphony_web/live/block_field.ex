@@ -176,7 +176,7 @@ defmodule PolyphonyWeb.BlockField do
         class="flex items-start gap-1.5 mb-1.5"
       >
         <textarea
-          id={"ta-#{@field}-#{i}"}
+          id={"ta-#{@id || @field}-#{i}"}
           name={"b_#{@field}[]"}
           class="field px-3 py-2.5 text-[14px] leading-relaxed w-full"
           rows="2"

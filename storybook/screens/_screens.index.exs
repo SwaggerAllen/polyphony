@@ -19,4 +19,8 @@ defmodule Storybook.Screens do
   def entry("resume"), do: [name: "Resume"]
   def entry("share"), do: [name: "Shared link"]
   def entry("play"), do: [name: "Play"]
+  def entry("signup"), do: [name: "Sign up"]
+  def entry("settings"), do: [name: "Settings"]
+  def entry("arc_review"), do: [name: "Arc review"]
+  def entry("group_editor"), do: [name: "Group editor"]
 end

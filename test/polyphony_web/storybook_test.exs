@@ -92,7 +92,10 @@ defmodule PolyphonyWeb.StorybookTest do
     {Polyphony.Accounts.User, :username_pattern, 0},
     {Polyphony.Accounts.User, :username_length, 0},
     # Five clauses over a struct's own fields, returning a phrase.
-    {Polyphony.Authoring.ArcEntry, :label, 1}
+    {Polyphony.Authoring.ArcEntry, :label, 1},
+    # `do: 30`. The retention window is a policy number the copy has to state, and
+    # threading a constant through assigns would say less than naming it does.
+    {Polyphony.Accounts, :deletion_window_days, 0}
   ]
 
   test "no screen reads domain data" do
