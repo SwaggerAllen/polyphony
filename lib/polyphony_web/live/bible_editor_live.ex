@@ -470,7 +470,11 @@ defmodule PolyphonyWeb.BibleEditorLive do
     name = if values["name"] in [nil, ""], do: socket.assigns.name, else: values["name"]
 
     {:noreply,
-     socket |> assign(name: name, blocks: blocks, items: items) |> mark("all", false) |> touch()}
+     socket
+     |> assign(name: name, blocks: blocks, items: items)
+     |> mark("all", false)
+     |> touch()
+     |> maybe_generate_cover()}
   end
 
   def handle_info({:generation, "cover", {:ok, cover}}, socket) do
@@ -688,6 +692,25 @@ defmodule PolyphonyWeb.BibleEditorLive do
   # written from what the author is looking at, secrets and all.
   # Takes assigns rather than the socket, because the template needs it too — the
   # preview has to show unsaved edits or it would be previewing the last save.
+  # The cover, chained rather than folded into `autofill.all`. A cover is written *from*
+  # everything else — the setting, the tone, the rules and the canon, secrets included,
+  # under instruction to give none of them away (§2.12) — so asking for it in the call
+  # that produces those fields is asking it to describe fields that do not exist yet.
+  # It is written last for the same reason in Quick Build, and on the character sheet.
+  #
+  # Only onto an empty cover, like the lists above: a redraft of prose somebody has
+  # already read and kept is a second author, not a first draft.
+  defp maybe_generate_cover(socket) do
+    if socket.assigns.cover in [nil, ""] do
+      Generating.request(socket, "cover", "cover", %{
+        subject: draft_bible(socket.assigns),
+        opts: gen_opts(socket)
+      })
+    else
+      socket
+    end
+  end
+
   defp draft_bible(%{bible: bible} = assigns) do
     %WorldBible{
       bible
@@ -861,7 +884,16 @@ defmodule PolyphonyWeb.BibleEditorLive do
                 </div>
 
                 <label for="cover-text" class="sr-only">Cover</label>
+                <%!-- The slowest ✦ here, and now the tail of an even longer chained one,
+                      so it draws where the words will land rather than leaving an empty
+                      box that reads as nothing having happened. --%>
+                <Kit.skel_lines
+                  :if={busy?(@generating, "cover") and @cover in [nil, ""]}
+                  lines={["100%", "95%", "48%"]}
+                  label="Writing the cover"
+                />
                 <textarea
+                  :if={not (busy?(@generating, "cover") and @cover in [nil, ""])}
                   id="cover-text"
                   name="cover"
                   rows="3"
