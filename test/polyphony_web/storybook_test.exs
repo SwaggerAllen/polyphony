@@ -68,6 +68,20 @@ defmodule PolyphonyWeb.StorybookTest do
     end
   end
 
+  # Pure display resolvers a screen may call, by **function** rather than by module.
+  #
+  # `Polyphony.Scene.Cast` is the id↔name resolver the whole codebase renders through:
+  # `character_id` is the routing key and a name is display, resolved at the edges — and
+  # a screen *is* an edge. `render_name/2` is a `Map.get` over a struct already sitting in
+  # assigns, with an identity fallback, so a story renders it from a fixture.
+  #
+  # The granularity is the point. Allowing the *module* would also allow `Cast.of/1`,
+  # which reads the event store; allowing the function allows exactly the pure lookup.
+  @pure_display [
+    {Polyphony.Scene.Cast, :render_name, 2},
+    {Polyphony.Scene.Cast, :render_names, 2}
+  ]
+
   test "no screen reads domain data" do
     # The property that makes `STORYBOOK=true` safe in production. A screen takes assigns
     # and returns markup; a story that could load a campaign would quietly turn the flag
@@ -80,28 +94,32 @@ defmodule PolyphonyWeb.StorybookTest do
       mod = String.to_atom(name)
       Code.ensure_loaded!(mod)
 
-      called =
-        for {:imports, imports} <- mod.__info__(:compile) |> List.wrap(),
-            {called_mod, _} <- imports,
-            do: called_mod
-
       offenders =
-        (called ++ referenced_modules(mod))
-        |> Enum.filter(&String.starts_with?(to_string(&1), "Elixir.Polyphony."))
-        |> Enum.reject(&String.starts_with?(to_string(&1), "Elixir.PolyphonyWeb."))
+        mod
+        |> domain_calls()
+        |> Enum.reject(&(&1 in @pure_display))
         |> Enum.uniq()
 
       assert offenders == [],
-             "#{inspect(mod)} references #{inspect(offenders)} — a screen must render from " <>
+             "#{inspect(mod)} calls #{inspect(offenders)} — a screen must render from " <>
                "assigns alone. Resolve it in the LiveView and pass the answer in."
     end
   end
 
-  # The modules a compiled module actually refers to, read off its BEAM chunk.
-  defp referenced_modules(mod) do
+  # Every `Polyphony.*` (but not `PolyphonyWeb.*`) call a compiled module makes, as MFAs,
+  # read off its BEAM imports chunk rather than off the source.
+  defp domain_calls(mod) do
     case :beam_lib.chunks(:code.which(mod), [:imports]) do
-      {:ok, {_, [imports: imports]}} -> imports |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
-      _ -> []
+      {:ok, {_, [imports: imports]}} ->
+        Enum.filter(imports, fn {m, _f, _a} ->
+          name = to_string(m)
+
+          String.starts_with?(name, "Elixir.Polyphony.") and
+            not String.starts_with?(name, "Elixir.PolyphonyWeb.")
+        end)
+
+      _ ->
+        []
     end
   end
 

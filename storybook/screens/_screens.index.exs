@@ -15,4 +15,5 @@ defmodule Storybook.Screens do
   # Ordered the way somebody meets them: the way in, then the shelf, then the two
   # places the work happens, then the edges.
   def entry("login"), do: [name: "Sign in"]
+  def entry("play"), do: [name: "Play"]
 end

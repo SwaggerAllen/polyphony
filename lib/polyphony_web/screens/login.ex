@@ -18,6 +18,15 @@ defmodule PolyphonyWeb.Screens.Login do
 
   alias PolyphonyWeb.{Kit, Layouts}
 
+  # "" -> "email"; "sent" -> "sent-email". The app renders this screen once and its ids
+  # are what tests target; storybook renders every variation on one page and must not
+  # let one variation's label point at another's input.
+  defp eid("", name), do: name
+  defp eid(nil, name), do: name
+  defp eid(prefix, name), do: "#{prefix}-#{name}"
+
+  attr(:id, :string, default: "", doc: "prefix for every element id — see eid/2")
+
   attr(:current_user, :map,
     default: nil,
     doc: "signed-in user, or nil — only reaches the corner menu"
@@ -39,11 +48,13 @@ defmodule PolyphonyWeb.Screens.Login do
       <Layouts.corner_menu current_user={@current_user} />
       <Kit.sheet class="w-full max-w-sm">
         <.sent :if={@sent_to} sent_to={@sent_to} dev_link={@dev_link} />
-        <.form_state :if={is_nil(@sent_to)} />
+        <.form_state :if={is_nil(@sent_to)} id={@id} />
       </Kit.sheet>
     </Kit.frame>
     """
   end
+
+  attr(:id, :string, default: "")
 
   defp form_state(assigns) do
     ~H"""
@@ -58,12 +69,12 @@ defmodule PolyphonyWeb.Screens.Login do
     </div>
 
     <div class="px-5 py-5">
-      <form id="login-form" phx-submit="send">
-        <label for="email" class="lbl dim mb-1.5 block">Email</label>
+      <form id={eid(@id, "login-form")} phx-submit="send">
+        <label for={eid(@id, "email")} class="lbl dim mb-1.5 block">Email</label>
         <input
           type="email"
           name="email"
-          id="email"
+          id={eid(@id, "email")}
           required
           autofocus
           placeholder="you@example.com"
@@ -82,13 +93,13 @@ defmodule PolyphonyWeb.Screens.Login do
           and the browser's validation with it. Secondary by placement, because an
           address is what almost everyone will reach for. --%>
     <div class="px-5 py-4 row" style="background:var(--b2)">
-      <form id="login-username-form" phx-submit="send_username">
-        <label for="username" class="lbl dim mb-1.5 block">Or your username</label>
+      <form id={eid(@id, "login-username-form")} phx-submit="send_username">
+        <label for={eid(@id, "username")} class="lbl dim mb-1.5 block">Or your username</label>
         <div class="flex gap-1.5">
           <input
             type="text"
             name="username"
-            id="username"
+            id={eid(@id, "username")}
             required
             placeholder="yourhandle"
             autocapitalize="none"
