@@ -319,9 +319,13 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/library?tab=worlds")
 
-      # Attaching copies (§2.5b) — so without this the tab lists the same name twice,
+      # Attaching copies (§2.5b) — so without this the tab lists the same world twice,
       # one of which belongs to a campaign. The library keeps templates.
-      assert Enum.count(Regex.scan(~r/Saltmarch/, html)) == 1
+      #
+      # Counted by row rather than by name: the row's ⋯ is labelled with the name too,
+      # so counting the text would go up every time the row gains a control.
+      assert Enum.count(Regex.scan(~r|href="/authoring/bible/|, html)) == 1
+      refute html =~ ~s(href="/authoring/bible/#{copy.id}")
       assert html =~ "1 campaign started from this"
     end
 
@@ -465,6 +469,99 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/library?tab=people")
       refute html =~ "Secret"
+    end
+  end
+
+  describe "worlds and people can be reached, not only read" do
+    test "a world row has a menu that edits and files it", %{conn: conn, user: user} do
+      entry = world(user, "Saltmarch")
+      {:ok, view, html} = live(conn, ~p"/library?tab=worlds")
+
+      # Nothing but a link before: the tab could show you a world and offer you no way
+      # to file one, throw one away, or do anything but open it.
+      refute html =~ ~s(aria-modal="true")
+
+      html = open_menu(view, entry)
+      assert html =~ ~s(aria-modal="true" aria-label="Change Saltmarch")
+
+      # "Edit", not "Open" — a world is a thing you write, and the verb is the
+      # difference between a menu that reads as navigation and one that reads as filing.
+      assert html =~ ~s(href="/authoring/bible/#{entry.id}")
+      assert html =~ "Edit"
+
+      view
+      |> element(~s(button[phx-click="archive"][phx-value-id="#{entry.id}"]))
+      |> render_click()
+
+      assert [%{id: id}] = Library.archived(Owner.of(user))
+      assert id == entry.id
+    end
+
+    test "and says what goes with it, which for a world is nothing",
+         %{conn: conn, user: user} do
+      entry = world(user, "Saltmarch")
+      {:ok, view, _html} = live(conn, ~p"/library?tab=worlds")
+
+      # The library lists templates only, and attaching copies (§2.5b) — so a campaign
+      # started from this keeps its own. Worth saying before the press rather than
+      # leaving somebody to guess whether they are about to break a running story.
+      assert open_menu(view, entry) =~ "Campaigns started from it keep their own copy"
+    end
+
+    test "a person row has one too", %{conn: conn, user: user} do
+      entry = character(user, "Wren")
+      {:ok, view, _html} = live(conn, ~p"/library?tab=people")
+
+      html = open_menu(view, entry)
+      assert html =~ ~s(aria-modal="true" aria-label="Change Wren")
+      assert html =~ ~s(href="/authoring/character/#{entry.id}")
+
+      view |> element(~s(button[phx-click="trash"][phx-value-id="#{entry.id}"])) |> render_click()
+      assert [%{id: id}] = Library.trash(Owner.of(user))
+      assert id == entry.id
+    end
+
+    test "trashing somebody takes them off the cast, and putting them back restores it",
+         %{conn: conn, user: user} do
+      wren = character(user, "Wren")
+      camp = campaign(user, %{name: "The Salt Line", character_ids: [wren.id]})
+
+      {:ok, view, _html} = live(conn, ~p"/library?tab=people")
+      open_menu(view, wren)
+      view |> element(~s(button[phx-click="trash"][phx-value-id="#{wren.id}"])) |> render_click()
+
+      # The roster still names them — the reference is harmless while they're gone,
+      # because every read of a cast goes through `list_for_owner`, which excludes the
+      # deleted. That is what makes restore complete rather than half a recovery.
+      assert Library.payload(Library.get(camp.id))[:character_ids] == [wren.id]
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+      refute html =~ "Wren"
+
+      {:ok, _} = Library.restore(wren.id)
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+      assert html =~ "Wren"
+    end
+
+    test "the menu says that, rather than leaving it to be discovered",
+         %{conn: conn, user: user} do
+      entry = character(user, "Wren")
+      {:ok, view, _html} = live(conn, ~p"/library?tab=people")
+
+      assert open_menu(view, entry) =~
+               "They leave any cast they&#39;re in until you put them back."
+    end
+
+    test "one menu at a time across all three tabs", %{conn: conn, user: user} do
+      wren = character(user, "Wren")
+      world(user, "Saltmarch")
+
+      {:ok, view, _html} = live(conn, ~p"/library?tab=people")
+      html = open_menu(view, wren)
+
+      # `menu_for` is an id and an id is unique across the library, so the kind is
+      # resolved from the row rather than carried through the click.
+      assert [_] = Regex.scan(~r|class="scrim"|, html)
+      assert html =~ ~s(aria-label="Change Wren")
     end
   end
 end

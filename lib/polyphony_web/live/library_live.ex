@@ -491,14 +491,17 @@ defmodule PolyphonyWeb.LibraryLive do
   attr(:c, :map, required: true)
 
   defp row_menu_overlay(assigns) do
+    {to, verb} = row_open(assigns.c)
+    assigns = assign(assigns, to: to, verb: verb)
+
     ~H"""
     <Kit.overlay label={"Change #{@c.name}"} on_close="close_row_menu">
       <div class="px-4 py-3 row flex items-center justify-between gap-2" style="background:var(--b2)">
         <span class="ttl text-[15px] font-semibold min-w-0 truncate"><%= @c.name %></span>
         <Kit.btn size={:sm} type="button" phx-click="close_row_menu">✕</Kit.btn>
       </div>
-      <.link navigate={~p"/campaigns/#{@c.id}"} class="row block px-4 py-3 text-[13px]">
-        Open
+      <.link navigate={@to} class="row block px-4 py-3 text-[13px]">
+        <%= @verb %>
       </.link>
       <button
         type="button"
@@ -519,15 +522,51 @@ defmodule PolyphonyWeb.LibraryLive do
         phx-value-id={@c.id}
       >
         Move to trash
-        <span class="block text-[11px] dim">Recoverable until it expires.</span>
+        <span class="block text-[11px] dim">
+          Recoverable until it expires. <%= row_note(@c) %>
+        </span>
       </button>
     </Kit.overlay>
     """
   end
 
+  # The open row, whatever kind it is. `menu_for` is an id, and an id is unique across
+  # the library, so the kind is resolved here rather than carried through the click —
+  # one less thing a `phx-value-*` can be wrong about.
   defp menu_row(assigns) do
-    Enum.find(assigns.campaigns, &(to_string(&1.id) == assigns.menu_for))
+    Enum.find_value(
+      [
+        {"campaign", assigns.campaigns},
+        {"world_bible", assigns.worlds},
+        {"character", Enum.flat_map(assigns.people, & &1.people)}
+      ],
+      fn {kind, rows} ->
+        case Enum.find(rows, &(to_string(&1.id) == assigns.menu_for)) do
+          nil -> nil
+          row -> Map.put(row, :kind, kind)
+        end
+      end
+    )
   end
+
+  # Where the row's own editor is. The campaign hub is an "Open"; a world and a
+  # character are things you edit, and saying so is the difference between a menu that
+  # reads as navigation and one that reads as a filing cabinet.
+  defp row_open(%{kind: "campaign", id: id}), do: {~p"/campaigns/#{id}", "Open"}
+  defp row_open(%{kind: "world_bible", id: id}), do: {~p"/authoring/bible/#{id}", "Edit"}
+  defp row_open(%{kind: "character", id: id}), do: {~p"/authoring/character/#{id}", "Edit"}
+
+  # What goes with it when it goes. Said out loud rather than left to be discovered:
+  # a world is a template and campaigns hold their own copies, so nothing that is
+  # being played breaks — but a character on a roster simply stops being there until
+  # they're restored, and that is worth knowing before you press it.
+  defp row_note(%{kind: "world_bible"}),
+    do: "Campaigns started from it keep their own copy — nothing being played breaks."
+
+  defp row_note(%{kind: "character"}),
+    do: "They leave any cast they're in until you put them back."
+
+  defp row_note(_), do: "The world and the cast go with it."
 
   # ── Campaigns ────────────────────────────────────────────────────────────────
 
@@ -657,9 +696,12 @@ defmodule PolyphonyWeb.LibraryLive do
           >
             <%= w.name %>
           </.link>
-          <Kit.pill colour={visibility_colour(w.visibility)} class="shrink-0">
-            <%= visibility_label(w.visibility) %>
-          </Kit.pill>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <Kit.pill colour={visibility_colour(w.visibility)}>
+              <%= visibility_label(w.visibility) %>
+            </Kit.pill>
+            <.row_menu c={w} />
+          </div>
         </div>
         <p :if={w.blurb} class="text-[12.5px] leading-relaxed dim mb-1.5"><%= w.blurb %></p>
         <p :if={is_nil(w.blurb)} class="text-[12.5px] leading-relaxed dim mb-1.5">
@@ -752,7 +794,10 @@ defmodule PolyphonyWeb.LibraryLive do
         </.link>
         <div :if={@person.role} class="text-[11px] dim"><%= @person.role %></div>
       </div>
-      <Kit.pill class="shrink-0"><%= short_tier(@person.tier) %></Kit.pill>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <Kit.pill><%= short_tier(@person.tier) %></Kit.pill>
+        <.row_menu c={@person} />
+      </div>
     </Kit.row>
     """
   end
