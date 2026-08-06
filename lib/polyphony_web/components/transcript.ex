@@ -138,6 +138,50 @@ defmodule PolyphonyWeb.Transcript do
 
   def to_message(%{} = message), do: message
 
+  @doc """
+  Speech, in quotes.
+
+  The mocks quote every spoken line in both registers (`ux/polyphony-play.html` §01 and
+  §05) and the port dropped it. In the working register the loss was invisible — a
+  `Speech` label in the gutter says which move this is. In the **reading** register
+  there is no label, and speech and action rendered as the same paragraph at the same
+  size: a page of prose with no way to tell what was said from what was done, which is
+  the one distinction fiction has always drawn typographically.
+
+  Curly, because this is prose — straight quotes read as code, and the kit sets
+  Spectral against them. Content that already arrives quoted is not quoted twice, and a
+  straight-quoted line is normalised rather than left to sit differently beside the
+  others: the model's punctuation habits are not a thing a reader should be able to
+  see.
+  """
+  @spec said(term()) :: String.t()
+  def said(content) do
+    case String.trim(to_string(content || "")) do
+      "" -> ""
+      text -> text |> unwrap() |> wrap()
+    end
+  end
+
+  # Only a *matched* pair, and only at the ends. `He said "no" and left` is a line with
+  # a quote in it, not a quoted line.
+  defp unwrap(text) do
+    cond do
+      wrapped?(text, "\u201C", "\u201D") -> slice_ends(text)
+      wrapped?(text, "\"", "\"") -> slice_ends(text)
+      true -> text
+    end
+  end
+
+  defp wrapped?(text, open, close) do
+    String.length(text) > 1 and String.starts_with?(text, open) and
+      String.ends_with?(text, close)
+  end
+
+  defp slice_ends(text), do: text |> String.slice(1..-2//1) |> String.trim()
+
+  defp wrap(""), do: ""
+  defp wrap(text), do: "\u201C" <> text <> "\u201D"
+
   defp turn_blocks(messages) do
     messages
     |> Enum.reduce([], fn m, acc ->
@@ -200,7 +244,7 @@ defmodule PolyphonyWeb.Transcript do
   # the kit drops slant as a semantic outright.
   def render_move(%{kind: "SpeechUttered", payload: p}, cast, register, _voices) do
     assigns = %{
-      content: p[:content],
+      content: said(p[:content]),
       whisper: to_string(p[:audibility]) == "private",
       to: p[:addressed_to] |> List.wrap() |> Enum.map_join(", ", &Cast.render_name(cast, &1)),
       register: register
