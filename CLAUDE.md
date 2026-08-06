@@ -150,7 +150,7 @@ block this one. Its instructions are `docs/design-thread.md`. It hands work over
 pieces, and never writes to the repo itself:
 
 - **Linear** carries the intent — an issue saying what changes and why. Every issue lives
-  in the **`Polyphone`** project (team `StrutCo`); that project *is* the scope, so an
+  in the **`Polyphony`** project (team `StrutCo`); that project *is* the scope, so an
   issue outside it isn't part of this loop and isn't yours to act on.
 - **Google Drive** carries the material — a mock HTML file in the folder
   `1y1HudA1L2Ns36Hx_CmO0BDGDp8bBmfuv`, named in the issue as `Drive: <title> (<fileId>)`.
@@ -174,7 +174,7 @@ issues with the same label can be in completely different states.
 
 To drain it, when the author asks:
 
-1. **Linear** — list issues in **Ready for dev** in the **Polyphone** project. Both
+1. **Linear** — list issues in **Ready for dev** in the **Polyphony** project. Both
    filters matter: the state is the queue, the project is the scope. Read the whole
    description; the argument in it is the part that decides whether the change is right,
    and the part nothing else records. Move an issue to **In Progress** when you start
