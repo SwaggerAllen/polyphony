@@ -27,6 +27,21 @@ defmodule Storybook.Kit.Chk do
           %Variation{id: :via_a_group, attributes: %{state: :via}},
           %Variation{id: :off, attributes: %{state: :off}}
         ]
+      },
+      %Variation{
+        id: :on_a_real_checkbox,
+        description:
+          "The form version, and the one to reach for on a form: a real <input type=\"checkbox\"> immediately before it, visually hidden, so the control is focusable, keyboard-operable, named and submitted — and the tick is only a picture of it. Drawing two boxes and hiding one with a utility does not work: the kit loads after Tailwind, so .chk's own display:flex outranks .hidden and both ticks render.",
+        attributes: %{state: :off},
+        template: """
+        <div class="fr stage dark p-4">
+          <label class="flex items-center gap-2.5 cursor-pointer">
+            <input type="checkbox" class="sr-only peer" aria-label="Tick me" checked />
+            <.psb-variation/>
+            <span class="text-[13px]">Tick me — the box is driven by the input</span>
+          </label>
+        </div>
+        """
       }
     ]
   end

@@ -40,6 +40,7 @@ defmodule PolyphonyWeb.SettingsLive do
   use PolyphonyWeb, :live_view
 
   alias Polyphony.{Accounts, Campaigns, Costs, Library, Owner}
+  alias Polyphony.Accounts.User
   alias Polyphony.Notifications.Prefs
   alias PolyphonyWeb.{Kit, Layouts}
 
@@ -353,11 +354,20 @@ defmodule PolyphonyWeb.SettingsLive do
                 type="text"
                 name="username"
                 value={@current_user.username}
+                pattern={User.username_pattern()}
+                title={User.username_rule()}
+                aria-describedby="username-rule"
                 class="field px-3 py-2 text-[14px] flex-1"
               />
               <Kit.btn size={:sm} type="submit" disabled={@username_free_in != nil}>Save</Kit.btn>
             </div>
           </form>
+          <%!-- The rule, stated where it can be read rather than where it is broken.
+                Same sentence as the sign-up form, from `User.username_rule/0`, because
+                two forms writing it separately is two forms that will disagree. --%>
+          <p id="username-rule" class="text-[11px] leading-relaxed dim mt-1.5">
+            <%= User.username_rule() %>
+          </p>
           <div class="flex items-start gap-1.5 mt-1.5">
             <Kit.dot colour="var(--bcm)" class="mt-1.5 shrink-0" />
             <span class="text-[11.5px] leading-relaxed dim"><%= username_note(@username_free_in) %></span>

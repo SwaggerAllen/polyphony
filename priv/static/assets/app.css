@@ -1772,6 +1772,9 @@ video {
   background:var(--b3);
 }
 
+/* The tick is always in the box and invisible until something turns it on, so the
+   box never changes size and nothing beside it reflows on a click. */
+
 .chk    {
   width:18px;
   height:18px;
@@ -1783,6 +1786,7 @@ video {
   justify-content:center;
   font-size:11px;
   font-weight:700;
+  color:transparent;
 }
 
 .chk-on  {
@@ -1796,6 +1800,22 @@ video {
 .chk-via {
   border-color:var(--secret);
   color:var(--secret);
+}
+
+/* Driven by a real checkbox. The input is the control — focusable, keyboard-operable,
+   named, and submitted with the form — and the box beside it is what you see; put the
+   input immediately before it and hide it visually.
+
+   This exists because the alternative doesn't work: drawing two .chk boxes and showing
+   one with a utility fails, since the kit is loaded after Tailwind and .chk's own
+   `display:flex` outranks `.hidden`. Both ticks render, always. Colour by state belongs
+   here anyway — a component that can only be driven by server state is a component that
+   can't be used in a plain form. */
+
+input:checked + .chk {
+  background:var(--lamp);
+  border-color:var(--lamp);
+  color:var(--b1);
 }
 
 .bar    {
@@ -2523,14 +2543,6 @@ video {
 
 .last\:border-b-0:last-child {
   border-bottom-width: 0px;
-}
-
-.peer:checked ~ .peer-checked\:flex {
-  display: flex;
-}
-
-.peer:checked ~ .peer-checked\:hidden {
-  display: none;
 }
 
 @media (min-width: 768px) {

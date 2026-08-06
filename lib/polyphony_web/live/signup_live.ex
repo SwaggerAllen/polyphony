@@ -27,7 +27,7 @@ defmodule PolyphonyWeb.SignupLive do
   require Logger
 
   alias Polyphony.Accounts
-  alias Polyphony.Accounts.Consent
+  alias Polyphony.Accounts.{Consent, User}
   alias PolyphonyWeb.{Auth, Kit, Layouts}
 
   def mount(_params, _session, socket) do
@@ -43,25 +43,26 @@ defmodule PolyphonyWeb.SignupLive do
      )}
   end
 
-  def handle_event("toggle", %{"field" => "attest"}, socket),
-    do: {:noreply, assign(socket, attest: not socket.assigns.attest, error: nil, field: nil)}
-
-  def handle_event("toggle", %{"field" => "consent"}, socket),
-    do: {:noreply, assign(socket, consent: not socket.assigns.consent, error: nil, field: nil)}
-
   def handle_event("register", params, socket) do
     # Logged unconditionally so the server logs prove the click reached the server (a
     # stuck button is usually the socket not connecting — then this line never appears).
     Logger.info("[signup] register submitted for username=#{inspect(params["username"])}")
 
     safe(socket, fn ->
+      attest? = params["attest"] == "true"
+      consent? = params["consent"] == "true"
+
       attrs = %{
         email: params["email"],
         username: params["username"],
-        attested_adult: socket.assigns.attest,
-        accepted_consents: if(socket.assigns.consent, do: Consent.required_documents(), else: []),
+        attested_adult: attest?,
+        accepted_consents: if(consent?, do: Consent.required_documents(), else: []),
         invite_token: params["invite_token"]
       }
+
+      # Kept on the socket so a rejected submit re-renders with the boxes as the person
+      # left them. Nothing reads them to decide anything — the form did that.
+      socket = assign(socket, attest: attest?, consent: consent?)
 
       case Accounts.register(attrs) do
         {:ok, user} ->
@@ -104,7 +105,7 @@ defmodule PolyphonyWeb.SignupLive do
 
   defp changeset_message(cs) do
     cond do
-      cs.errors[:username] -> "Taken. Try something else."
+      cs.errors[:username] -> username_message(cs.errors[:username])
       cs.errors[:email] -> "There's already an account on that address."
       true -> "Check your details and try again."
     end
@@ -189,40 +190,65 @@ defmodule PolyphonyWeb.SignupLive do
               required
               minlength="3"
               maxlength="32"
+              pattern={User.username_pattern()}
+              title={User.username_rule()}
               placeholder="A name other people will see"
+              aria-describedby="username-rule"
               class="field px-3 py-2.5 text-[14px] w-full"
               style={@field == :username && "border-color:var(--pencil)"}
             />
+            <%!-- Before anything is typed, not after it is rejected. The rule was only
+                  ever stated by the failure — and the failure said "Taken", which is
+                  what a *format* error came back as too, so the one message you did get
+                  was wrong about which rule you'd broken. --%>
+            <p id="username-rule" class="text-[11px] leading-relaxed dim mt-1.5">
+              <%= User.username_rule() %>
+            </p>
             <.field_error :if={@field == :username} message={@error} />
           </Kit.row>
 
           <div class="px-5 py-4">
-            <%!-- Not a content preference: leaving this unchecked ends the signup. --%>
-            <div class="flex items-start gap-2.5 mb-3">
-              <Kit.chk
-                state={if @attest, do: :on, else: :off}
-                phx-click="toggle"
-                phx-value-field="attest"
+            <%!-- Real `<input type="checkbox">`es inside the form, not `phx-click` on a
+                  span drawing a tick. The span was unreachable by keyboard, announced
+                  as nothing by a screen reader, and needed a live socket to change —
+                  on the two controls that decide whether an account can exist at all.
+                  The kit's tick is now decoration over the input (`sr-only peer`, the
+                  same pattern the turn editor uses), so it looks identical and *is* a
+                  checkbox. The state rides the submit, which is also why the toggle
+                  round-trip is gone. --%>
+            <label class="flex items-start gap-2.5 mb-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="attest"
+                value="true"
+                checked={@attest}
+                aria-label="I'm 18 or over"
+                class="sr-only peer"
               />
+              <Kit.chk class="mt-0.5" />
               <div>
                 <div class="text-[13px] leading-snug">I'm 18 or over</div>
                 <div class="text-[11px] leading-relaxed dim mt-0.5">
                   Polyphony is for adults. We can't offer it to under-18s yet.
                 </div>
               </div>
-            </div>
+            </label>
 
-            <div class="flex items-start gap-2.5 mb-4">
-              <Kit.chk
-                state={if @consent, do: :on, else: :off}
-                phx-click="toggle"
-                phx-value-field="consent"
+            <label class="flex items-start gap-2.5 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                name="consent"
+                value="true"
+                checked={@consent}
+                aria-label="I've read the terms and the privacy notice"
+                class="sr-only peer"
               />
+              <Kit.chk class="mt-0.5" />
               <div class="text-[13px] leading-snug">
                 I've read the <span class="underline">terms</span> and the
                 <span class="underline">privacy notice</span>
               </div>
-            </div>
+            </label>
 
             <.field_error :if={is_nil(@field) and @error} message={@error} />
 
@@ -243,6 +269,17 @@ defmodule PolyphonyWeb.SignupLive do
     </Kit.frame>
     """
   end
+
+  # "Taken" was the answer to every username error, including the two that are about the
+  # rule rather than about somebody else having it — so the one time you were told
+  # anything, you were told the wrong thing and the name you tried was fine.
+  defp username_message({_msg, opts}) do
+    if opts[:constraint] == :unique,
+      do: "Taken. Try something else.",
+      else: User.username_rule()
+  end
+
+  defp username_message(_), do: User.username_rule()
 
   attr(:message, :string, required: true)
 

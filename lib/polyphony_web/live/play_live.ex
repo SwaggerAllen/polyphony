@@ -2554,9 +2554,14 @@ defmodule PolyphonyWeb.PlayLive do
                 turn that no longer says what it said. --%>
           <div class="mt-2">
             <label class="flex items-start gap-2 cursor-pointer">
-              <input type="checkbox" name="invalidates" value="true" class="sr-only peer" />
-              <Kit.chk state={:off} class="mt-0.5 peer-checked:hidden" />
-              <Kit.chk state={:on} class="mt-0.5 hidden peer-checked:flex" />
+              <input
+                type="checkbox"
+                name="invalidates"
+                value="true"
+                aria-label="This changes what happened"
+                class="sr-only peer"
+              />
+              <Kit.chk class="mt-0.5" />
               <span class="text-[12px] leading-relaxed">
                 This changes what happened
                 <span class="dim block">
