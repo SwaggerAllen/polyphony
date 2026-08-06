@@ -143,6 +143,67 @@ for it.
   that's deliberate, the app has no users until the rebuild lands. Review components at
   `/storybook`, and give any new one a story — the suite requires it.
 
+## The design inbox (drain it when asked, not on every session)
+
+Design happens in a **normal Claude thread** — faster to iterate with, and it doesn't
+block this one. Its instructions are `docs/design-thread.md`. It hands work over in two
+pieces, and never writes to the repo itself:
+
+- **Linear** carries the intent — an issue saying what changes and why. Every issue lives
+  in the **`Polyphony`** project (team `StrutCo`); that project *is* the scope, so an
+  issue outside it isn't part of this loop and isn't yours to act on.
+- **Google Drive** carries the material — a mock HTML file in the folder
+  `1y1HudA1L2Ns36Hx_CmO0BDGDp8bBmfuv`, named in the issue as `Drive: <title> (<fileId>)`.
+  This is never canonical; `ux/` in the repo is.
+
+**The queue is a state, not a label.** Every state answers *who has the ball*, and each
+answers it differently — which is the test for whether a state earns its place:
+
+| State | Who has it |
+|---|---|
+| Backlog / Todo | Nobody. |
+| Designing | The design thread. Still has open questions — **not yours yet**. |
+| **Ready for dev** | **The queue. This is what you drain.** |
+| In Progress | You, now. |
+| Ready to merge | The author. A PR is open. (Linear's default `In Review`, renamed.) |
+| Done / Canceled | Nobody. A rejected proposal is **Canceled**, never Done. |
+
+The `design-inbox` label is provenance — *this came from the design thread* — and is
+worth reading for context, but it is never the queue: a label doesn't move, and two
+issues with the same label can be in completely different states.
+
+To drain it, when the author asks:
+
+1. **Linear** — list issues in **Ready for dev** in the **Polyphony** project. Both
+   filters matter: the state is the queue, the project is the scope. Read the whole
+   description; the argument in it is the part that decides whether the change is right,
+   and the part nothing else records. Move an issue to **In Progress** when you start
+   it, and to **Ready to merge** when the PR is open — the author merges, and that
+   column is the only place an unmerged PR is visible. If the Linear connector isn't
+   attached to this session, say so and ask for the issue to be pasted rather than
+   guessing at what's queued.
+2. **Drive** — for each issue with a `Drive:` line, `download_file_content` on that
+   `fileId`, base64-decode it, and **check the byte count against Drive's `fileSize`**
+   before doing anything with it. The transport is byte-exact when the design thread sets
+   `disableConversionToGoogleType: true`; a size mismatch means it didn't, and the file
+   is a Google Doc's idea of the file rather than the file.
+3. **Land it in a scratch directory first**, not `ux/`. A mock that arrives straight into
+   the design source of truth is a design change nobody looked at. Read it, check its
+   classes against `ux/polyphony-kit.css` — a class that isn't there means the mock is
+   proposing a **new kit component**, which is a decision, not a port — then commit it to
+   `ux/` and run `mix docs.publish` so `/ux/` serves the new one.
+4. **Close the loop in Linear**: move the issue on, and comment with what landed and the
+   commit. Say plainly if you didn't do part of it and why. An issue that goes quiet is
+   indistinguishable from one nobody read — and an issue moved without a comment is a
+   state change nobody can audit.
+
+Two standing rules. A **mock is a proposal, not an instruction** — if it can't be built
+as drawn, or it contradicts something in `architecture.md`, say so on the issue and put
+it back in **Designing** rather than building a worse version of it silently. Rejecting
+one outright is **Canceled**, so the Done column stays a record of what shipped. And the design thread only ever *proposes*
+kit changes: `ux/polyphony-kit.css` is edited here, followed by `mix kit.port`, because
+`assets/css/kit.css` is generated from it and a test fails on drift.
+
 ## Identity & numbering (easy to get wrong)
 
 - `scene_id` is the event-store stream id and stands in for a branch. A **fork** is
