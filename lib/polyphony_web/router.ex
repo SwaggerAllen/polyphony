@@ -43,6 +43,10 @@ defmodule PolyphonyWeb.Router do
     plug(:allow_mailbox)
   end
 
+  pipeline :storybook do
+    plug(:allow_storybook)
+  end
+
   pipeline :browser do
     plug(:accepts, ["html"])
     plug(:fetch_session)
@@ -72,6 +76,13 @@ defmodule PolyphonyWeb.Router do
       live("/resume", ResumeLive, :index)
       live("/browse", BrowseLive, :index)
       live("/s/:token", ShareLive, :show)
+
+      # The doc index. The files themselves are served by `Plug.Static`, which runs
+      # ahead of this router and has no directory listing — so `/docs` falls through to
+      # here and everything under it doesn't. Public, like the files it lists: see
+      # `Mix.Tasks.Docs.Publish`.
+      live("/docs", DocsLive, :index)
+      live("/ux", DocsLive, :index)
     end
   end
 
@@ -143,19 +154,29 @@ defmodule PolyphonyWeb.Router do
     forward("/mailbox", Plug.Swoosh.MailboxPreview)
   end
 
-  # The design-kit catalogue. Compiled in only where :storybook is on — dev by
-  # default, elsewhere via STORYBOOK=true — so the routes don't exist at all in a
-  # plain prod boot. It renders components and reads nothing from the domain,
-  # which is why it needs no auth pipeline.
-  if Application.compile_env(:polyphony, :storybook, false) do
-    scope "/" do
-      storybook_assets()
-    end
+  # The design-kit catalogue. Always compiled in, gated **per request** on
+  # `:storybook` — the same arrangement as `/dev/mailbox` above and for the reason
+  # stated there: a compile-time flag is fixed at image build, long before anyone
+  # decides to turn it on.
+  #
+  # It used to be `Application.compile_env`, which made `STORYBOOK=true` a promise the
+  # deployment could not keep. The value is baked at build time from `config.exs`
+  # (`false`), `runtime.exs` then reads the env var, and the release's config provider
+  # compares the two at boot and **refuses to start**: *the application :polyphony has a
+  # different value set for key :storybook during runtime compared to compile time*.
+  # No setting in a hosting UI could fix that, in either scope, because nothing on the
+  # compile-time path read the variable at all.
+  #
+  # It renders components and reads nothing from the domain, which is why the gate is a
+  # presentation switch rather than an auth one.
+  scope "/" do
+    pipe_through(:storybook)
+    storybook_assets()
+  end
 
-    scope "/", PolyphonyWeb do
-      pipe_through(:browser)
-      live_storybook("/storybook", backend_module: PolyphonyWeb.Storybook)
-    end
+  scope "/", PolyphonyWeb do
+    pipe_through([:browser, :storybook])
+    live_storybook("/storybook", backend_module: PolyphonyWeb.Storybook)
   end
 
   # Basic auth rather than `require_admin`, deliberately: the moment you need to read a
@@ -172,6 +193,16 @@ defmodule PolyphonyWeb.Router do
 
       true ->
         conn |> Plug.Conn.send_resp(404, "Not found") |> Plug.Conn.halt()
+    end
+  end
+
+  # Off is a 404, not a 403: the catalogue either exists on this deployment or it
+  # doesn't, and there is nothing to be granted.
+  defp allow_storybook(conn, _opts) do
+    if Application.get_env(:polyphony, :storybook, false) do
+      conn
+    else
+      conn |> Plug.Conn.send_resp(404, "Not found") |> Plug.Conn.halt()
     end
   end
 

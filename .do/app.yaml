@@ -34,6 +34,14 @@ services:
       - key: SECRET_KEY_BASE
         scope: RUN_TIME
         type: SECRET
+      # The design-kit catalogue at /storybook. RUN_TIME on purpose and it has to be:
+      # the routes are gated per request, so this takes effect on a restart with no
+      # rebuild. (It was a compile-time flag once, which meant setting it here stopped
+      # the app booting — see the router.) It reads no domain data; turning it on is a
+      # presentation choice.
+      - key: STORYBOOK
+        scope: RUN_TIME
+        value: "false"
       - key: DEEPINFRA_API_KEY
         scope: RUN_TIME
         type: SECRET

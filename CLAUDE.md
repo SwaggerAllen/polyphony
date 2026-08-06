@@ -41,12 +41,15 @@ mix compile --warnings-as-errors       # must stay clean
 mix run -e "…"               # exercise the loop offline against LLM.Mock
 mix assets.build             # rebuild priv/static/assets/{app,storybook}.{js,css} after assets/
 mix kit.port                 # regenerate assets/css/kit.css from ux/polyphony-kit.css
+mix docs.publish             # copy docs/ + ux/ into priv/static so the app serves them
+                             # (run after editing either; CI + a test fail on drift)
 mix dialyzer                 # type analysis; first run builds the PLT (~2 min, cached)
 mix deps.audit               # dependency advisories (CI: blocking)
 mix sobelow --exit low --skip  # Phoenix static analysis (CI: blocking)
 mix deps.unlock --check-unused # stale mix.lock entries (CI: blocking)
 mix phx.server               # the LiveView frontend at :4000 (watches + rebuilds assets),
-                             # and the component catalogue at :4000/storybook
+                             # the component catalogue at :4000/storybook, and the docs
+                             # at :4000/docs — `docs/` and `ux/` served as files, no auth
 ```
 
 The frontend (`PolyphonyWeb`) is a thin Phoenix LiveView layer; `mix phx.server`
