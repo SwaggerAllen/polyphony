@@ -783,7 +783,13 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   def render(assigns) do
     ~H"""
-    <Kit.frame class="flex flex-col min-h-[100dvh]">
+    <%!-- **`height`, not `min-height`.** A `min-h-[100dvh]` column grows with its
+          content, so `flex-1 min-h-0 overflow-y-auto` inside it never has a height to
+          be a fraction *of* — nothing scrolls, the page runs to whatever length the
+          sheet is, and the `shrink-0` bar meant to hold the bottom of the viewport
+          lands at the bottom of a document several screens tall. Play has always
+          pinned its say-bar this way; these three didn't. --%>
+    <Kit.frame class="flex flex-col min-h-0" style="height:100dvh">
       <Kit.header
         title={world_title(@name)}
         subtitle={lineage_line(assigns)}
@@ -981,12 +987,6 @@ defmodule PolyphonyWeb.BibleEditorLive do
               />
             </Kit.sheet>
 
-            <div class="mx-4 mb-4 flex items-center gap-2">
-              <Kit.btn kind={:primary} type="submit">Save</Kit.btn>
-              <span :if={@saved} class="text-[12px]" style="color:var(--ok)" role="status">
-                ✓ Saved
-              </span>
-            </div>
           </form>
 
           <Kit.info_drawer :if={@drawer == "cover"} on_close="close_drawer" title="About the cover">
@@ -1116,6 +1116,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
             </div>
           </Kit.sheet>
         </div>
+
+        <.save_bar {assigns} />
       </div>
     </Kit.frame>
     """
@@ -1352,6 +1354,51 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   # The one info drawer, same shape as the character sheet's — title, prose, a
   # subsection per concept with its own dot.
+
+  # The bar that doesn't scroll away, and its own comment two hundred lines up said why
+  # it was needed: *"Save sits at the foot of a sheet several viewports tall and Name is
+  # at its head, so the refusal rendered somewhere the author wasn't looking — pressing
+  # Save read as nothing happening at all."* That was patched by also flashing the
+  # clash; this puts the control itself where it can be seen.
+  #
+  # What it says is what is actually true. The prose autosaves — every edit calls
+  # `touch/1` — so "unsaved changes" would be a lie most of the time. What only a
+  # deliberate Save does here is run the **name-clash gate**: two worlds with one name
+  # is the bug that made an interrupted Quick Build unsaveable, and a timer is not
+  # entitled to decide a name is fine.
+  defp save_bar(assigns) do
+    ~H"""
+    <div
+      class="shrink-0 px-4 py-3 flex items-center gap-2"
+      style="background:var(--b2);border-top:1px solid var(--rule)"
+    >
+      <div class="min-w-0 flex-1">
+        <div :if={@name_error} class="text-[12.5px] leading-snug" style="color:var(--pencil)">
+          <%= @name_error %>
+        </div>
+        <div :if={is_nil(@name_error) and @dirty} class="text-[12px] dim" role="status">
+          Saving…
+        </div>
+        <div
+          :if={is_nil(@name_error) and not @dirty and @saved}
+          class="text-[12px]"
+          style="color:var(--ok)"
+          role="status"
+        >
+          ✓ Saved
+        </div>
+        <div :if={is_nil(@name_error) and not @dirty and not @saved} class="text-[12px] dim">
+          Everything here is saved as you write.
+        </div>
+      </div>
+
+      <%!-- Outside the form, submitting it by id — the alternative is a second form or
+            a duplicate button inside the sheet, and both mean two Saves that can
+            disagree about what was pressed. --%>
+      <Kit.btn kind={:primary} type="submit" form="bible-form" class="shrink-0">Save</Kit.btn>
+    </div>
+    """
+  end
 
   # Back to where you came from. Attaching a world **copies** it (§2.5b), so a bible
   # with a campaign belongs to that campaign alone and there is one right answer; a

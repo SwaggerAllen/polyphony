@@ -1309,7 +1309,13 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   def render(assigns) do
     ~H"""
-    <Kit.frame class="flex flex-col min-h-[100dvh]">
+    <%!-- **`height`, not `min-height`.** A `min-h-[100dvh]` column grows with its
+          content, so `flex-1 min-h-0 overflow-y-auto` inside it never has a height to
+          be a fraction *of* — nothing scrolls, the page runs to whatever length the
+          sheet is, and the `shrink-0` bar meant to hold the bottom of the viewport
+          lands at the bottom of a document several screens tall. Play has always
+          pinned its say-bar this way; these three didn't. --%>
+    <Kit.frame class="flex flex-col min-h-0" style="height:100dvh">
       <Kit.header
         title={header_title(@name)}
         eyebrow={@world_context && @world_context["name"]}

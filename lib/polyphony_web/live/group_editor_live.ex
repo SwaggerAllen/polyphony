@@ -298,6 +298,35 @@ defmodule PolyphonyWeb.GroupEditorLive do
     assign(socket, name: params["name"] || socket.assigns.name, blocks: blocks)
   end
 
+  # Same bar as the other two editors, for the same reason: this is one long scroll and
+  # a Save at the foot of it is a Save you have to go and find. The prose autosaves, so
+  # the line says that rather than claiming there is unsaved work.
+  defp save_bar(assigns) do
+    ~H"""
+    <div
+      class="shrink-0 px-4 py-3 flex items-center gap-2"
+      style="background:var(--b2);border-top:1px solid var(--rule)"
+    >
+      <div class="min-w-0 flex-1">
+        <div :if={@dirty} class="text-[12px] dim" role="status">Saving…</div>
+        <div
+          :if={not @dirty and @saved}
+          class="text-[12px]"
+          style="color:var(--ok)"
+          role="status"
+        >
+          ✓ Saved
+        </div>
+        <div :if={not @dirty and not @saved} class="text-[12px] dim">
+          Everything here is saved as you write.
+        </div>
+      </div>
+
+      <Kit.btn kind={:primary} type="submit" form="group-form" class="shrink-0">Save</Kit.btn>
+    </div>
+    """
+  end
+
   # A group belongs to a world, and a world belongs to one campaign (attaching copies),
   # so the campaign is a lookup rather than a guess. Groups written outside one — or
   # before a world was attached — keep the library.
@@ -361,7 +390,13 @@ defmodule PolyphonyWeb.GroupEditorLive do
 
   def render(assigns) do
     ~H"""
-    <Kit.frame class="flex flex-col min-h-[100dvh]">
+    <%!-- **`height`, not `min-height`.** A `min-h-[100dvh]` column grows with its
+          content, so `flex-1 min-h-0 overflow-y-auto` inside it never has a height to
+          be a fraction *of* — nothing scrolls, the page runs to whatever length the
+          sheet is, and the `shrink-0` bar meant to hold the bottom of the viewport
+          lands at the bottom of a document several screens tall. Play has always
+          pinned its say-bar this way; these three didn't. --%>
+    <Kit.frame class="flex flex-col min-h-0" style="height:100dvh">
       <Kit.header
         title={@name}
         eyebrow="Group"
@@ -523,12 +558,6 @@ defmodule PolyphonyWeb.GroupEditorLive do
             </div>
           </Kit.sheet>
 
-          <div class="mx-4 mb-4 flex items-center gap-2">
-            <Kit.btn kind={:primary} type="submit">Save</Kit.btn>
-            <span :if={@saved} class="text-[12px]" style="color:var(--ok)" role="status">
-              ✓ Saved
-            </span>
-          </div>
         </form>
 
         <form id="group-fact-form" phx-submit="add_fact"></form>
@@ -561,6 +590,8 @@ defmodule PolyphonyWeb.GroupEditorLive do
           </Kit.empty>
         </Kit.sheet>
       </div>
+
+      <.save_bar {assigns} />
     </Kit.frame>
     """
   end
