@@ -758,17 +758,27 @@ defmodule PolyphonyWeb.LibraryLive do
         <.person :for={p <- named} person={p} />
         <%!-- Walk-ons collapse: the tier you scan past shouldn't bury the two people
               you came for. Filtering to them opens them, because then they're the
-              thing you're looking at. --%>
-        <.link
+              thing you're looking at.
+
+              **A button, not a link.** It was a `patch` to the URL it was already on,
+              carrying a `phx-click` to do the actual work — and LiveView's nav handler
+              calls `stopImmediatePropagation()` on a `data-phx-link` click, so the
+              ordinary click binding never sees it. The only route left is the
+              `phx-click` lookup at the end of that handler, which sits *after* an early
+              `return` when the patch href matches the pending one. Clicking the row did
+              nothing. The tier filter is socket state and the URL never changed, so the
+              link was buying nothing to begin with — and the tier pills above are plain
+              buttons doing exactly this. --%>
+        <button
           :if={walk_ons != []}
-          patch={~p"/library?#{[tab: "people"]}"}
+          type="button"
           phx-click="tier"
           phx-value-tier="incidental"
-          class="px-4 py-2.5 row flex items-center justify-between gap-2"
+          class="w-full px-4 py-2.5 row flex items-center justify-between gap-2 text-left"
         >
           <span class="text-[12px] dim"><%= walk_on_line(length(walk_ons)) %></span>
           <span class="dim text-[14px]">⌄</span>
-        </.link>
+        </button>
       <% end %>
 
       <Kit.empty :if={@shown == [] and @query != ""} headline="Nobody by that name." class="py-8">
