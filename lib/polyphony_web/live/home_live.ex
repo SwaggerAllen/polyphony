@@ -18,13 +18,14 @@ defmodule PolyphonyWeb.HomeLive do
   """
   use PolyphonyWeb, :live_view
 
-  alias PolyphonyWeb.Kit
+  alias PolyphonyWeb.{Kit, Layouts}
 
   def mount(_params, _session, socket), do: {:ok, assign(socket, page_title: "Polyphony")}
 
   def render(assigns) do
     ~H"""
-    <Kit.frame class="min-h-[100dvh]">
+    <Kit.frame class="relative min-h-[100dvh]">
+      <Layouts.corner_menu current_user={@current_user} />
       <div class="max-w-md mx-auto px-4 py-10">
         <.hero {assigns} />
         <.demo />

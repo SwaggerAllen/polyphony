@@ -129,6 +129,30 @@ defmodule PolyphonyWeb.Layouts do
     """
   end
 
+  @doc """
+  The same menu, for a screen that has no header to hang it in.
+
+  The sign-in, sign-up, resume, landing and shared-link screens are single centred
+  cards by design — no `Kit.header/1`, so nothing carried the `☰`, and each was
+  navigable only through whatever links it wrote into its own copy. That reads as
+  complete until you count: `/s/:token` offered a stranger *nothing at all*, and the
+  landing page offered a signed-in visitor no way to their settings or out of their
+  account.
+
+  Pinned to the frame's corner rather than given a bar of its own, because the spare
+  centred card is the design and a header row holding one control would undo it. The
+  frame it sits in needs `relative`.
+  """
+  attr(:current_user, :map, default: nil)
+
+  def corner_menu(assigns) do
+    ~H"""
+    <div class="absolute top-2 right-2 z-30">
+      <.nav_menu current_user={@current_user} />
+    </div>
+    """
+  end
+
   # The debug drawer (server-log viewer) is a bring-up aid, off unless enabled.
   defp debug_drawer?, do: Application.get_env(:polyphony, :debug_drawer, false)
 end

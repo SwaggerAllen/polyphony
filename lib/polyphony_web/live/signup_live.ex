@@ -28,7 +28,7 @@ defmodule PolyphonyWeb.SignupLive do
 
   alias Polyphony.Accounts
   alias Polyphony.Accounts.Consent
-  alias PolyphonyWeb.{Auth, Kit}
+  alias PolyphonyWeb.{Auth, Kit, Layouts}
 
   def mount(_params, _session, socket) do
     {:ok,
@@ -114,7 +114,8 @@ defmodule PolyphonyWeb.SignupLive do
 
   def render(%{turned_away: true} = assigns) do
     ~H"""
-    <Kit.frame class="flex flex-col min-h-[100dvh] items-center justify-center p-4">
+    <Kit.frame class="relative flex flex-col min-h-[100dvh] items-center justify-center p-4">
+      <Layouts.corner_menu current_user={@current_user} />
       <Kit.sheet class="w-full max-w-sm">
         <%!-- No retry button and no "go back and change your answer". A door that
               reopens on the same screen isn't a door. --%>
@@ -135,7 +136,8 @@ defmodule PolyphonyWeb.SignupLive do
 
   def render(assigns) do
     ~H"""
-    <Kit.frame class="flex flex-col min-h-[100dvh] items-center justify-center p-4">
+    <Kit.frame class="relative flex flex-col min-h-[100dvh] items-center justify-center p-4">
+      <Layouts.corner_menu current_user={@current_user} />
       <Kit.sheet class="w-full max-w-sm">
         <Kit.row class="px-5 py-4" style="background:var(--b2)">
           <%!-- Same wordmark-goes-home convention as the sign-in screen. Somebody
