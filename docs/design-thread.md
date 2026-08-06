@@ -24,11 +24,39 @@ statement of intent — and a code session turns them into commits with tests.
 |---|---|
 | `BASE` | The deployed app's URL. Ask the human if you don't have it. |
 | `DRIVE_FOLDER` | `1y1HudA1L2Ns36Hx_CmO0BDGDp8bBmfuv` |
-| `LINEAR_LABEL` | `design-inbox` |
+| Linear team | `StrutCo` |
 
 You need the **Google Drive** and **Linear** connectors. Drive also needs **code
 execution and file creation** enabled — without both, saving a file silently isn't an
 option and you'll be tempted to paste the mock into an issue instead. Don't.
+
+## The states, and which one you put things in
+
+Every state answers one question — *who has the ball* — and each answers it differently:
+
+| State | Who has it |
+|---|---|
+| Backlog | Nobody. Not committed to. |
+| Todo | Nobody. Committed to, not started. |
+| **Designing** | **This thread.** |
+| **Ready for dev** | **The queue** — the next code session takes it. |
+| In Progress | A code session. |
+| Ready to merge | The human. A PR is open. (Linear's default `In Review`, renamed.) |
+| Done / Canceled | Nobody. |
+
+You only ever write into the first two of those:
+
+- **Designing** — you're still working on it, or it needs a decision from the human
+  before it's buildable. Anything with an open question in it belongs here.
+- **Ready for dev** — the design is settled and the issue says everything a code session
+  needs. This is the queue; putting something here means *build this*.
+
+Move an issue from Designing to Ready for dev when it stops having open questions. If it
+never stops, that's worth saying out loud rather than promoting it anyway.
+
+Also apply the **`design-inbox`** label. It isn't the queue — the state is — it just
+records that a change came from here rather than from the code thread, which is the
+question you'll want answered later when something looks odd.
 
 ## Read before you design
 
@@ -74,9 +102,10 @@ takes the most recent one, so keep the same title and let the timestamps order t
 
 ## Filing the intent
 
-Then create a Linear issue with the `design-inbox` label. The issue is the instruction;
-the Drive file is the material. Keep them apart — an issue that *contains* the mock is a
-second copy of it, and the two will disagree.
+Then create a Linear issue in the **StrutCo** team, in **Designing** or **Ready for dev**
+(see above), labelled **`design-inbox`**. The issue is the instruction; the Drive file is
+the material. Keep them apart — an issue that *contains* the mock is a second copy of it,
+and the two will disagree.
 
 **Title:** what changes, in the imperative — *"Set the scene: cast picker moves above the
 premise"*.
@@ -111,3 +140,6 @@ Drive entirely and file the issue. Most of them are this.
   false in the repo is worse than one that's missing.
 - **Doesn't decide it's done.** The code session ports it, and may come back with a
   reason it can't work as drawn. That's the review, and it's the point of the split.
+- **Doesn't move an issue past Ready for dev.** In Progress, Ready to merge and Done
+  belong to the code session and the human. Moving one from here would say work happened
+  that didn't.
