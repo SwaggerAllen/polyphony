@@ -50,7 +50,7 @@ defmodule PolyphonyWeb.BrowseLive do
   @tabs ~w(stories worlds)
 
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, page_title: "Browse", reporting: false, sort: "any")}
+    {:ok, assign(socket, page_title: "Browse", reporting: false, sort: "any", who: nil)}
   end
 
   # Everything is in the URL: which story, which scene, which perspective. A reading
@@ -168,7 +168,7 @@ defmodule PolyphonyWeb.BrowseLive do
   end
 
   defp load_scene(%{assigns: %{snapshot: nil}} = socket),
-    do: assign(socket, events: [], scene: nil, gap: nil, names: %{})
+    do: assign(socket, events: [], scene: nil, gap: nil, names: %{}, who: nil)
 
   defp load_scene(%{assigns: %{scene_id: nil}} = socket),
     do:
@@ -196,7 +196,8 @@ defmodule PolyphonyWeb.BrowseLive do
       end
 
     socket
-    |> assign(scene: scene, gap: gap, events: events, names: Session.names(snapshot))
+    # A new scene closes an open card — it was about somebody in the one you left.
+    |> assign(scene: scene, gap: gap, events: events, names: Session.names(snapshot), who: nil)
     |> mark_place()
   end
 
@@ -231,6 +232,13 @@ defmodule PolyphonyWeb.BrowseLive do
     do: socket.assigns[:bookmark] && Publication.from_param(socket.assigns.bookmark.perspective)
 
   # ── Events ───────────────────────────────────────────────────────────────────
+
+  # The name in the transcript. A reader meets six names in two pages and had no way to
+  # ask who any of them are without leaving the story.
+  def handle_event("who", %{"id" => id}, socket),
+    do: {:noreply, assign(socket, who: who_card(socket.assigns.snapshot, id))}
+
+  def handle_event("close_who", _params, socket), do: {:noreply, assign(socket, who: nil)}
 
   def handle_event("report", _params, socket),
     do: {:noreply, assign(socket, reporting: true)}
@@ -695,6 +703,15 @@ defmodule PolyphonyWeb.BrowseLive do
           voices={voices(@snapshot)}
         />
 
+        <Transcript.who
+          :if={@who}
+          name={Map.get(@who, :name) || "Someone"}
+          pronouns={Map.get(@who, :pronouns)}
+          cover={Map.get(@who, :cover)}
+          colour={Voice.of_sheet(@who)}
+          on_close="close_who"
+        />
+
         <%!-- A fact about the reader's perspective, with a way out. --%>
         <Kit.empty
           :if={@gap == :not_present}
@@ -820,6 +837,18 @@ defmodule PolyphonyWeb.BrowseLive do
   defp who(:spectator, _names), do: "The camera"
   defp who({:character, id}, names), do: Map.get(names, to_string(id), to_string(id))
   defp who(_, _), do: "This perspective"
+
+  # Who is this — the public read, from the snapshot the reader already holds. No extra
+  # authorization question: a published campaign's characters travelled with it, and the
+  # card shows the cover, which is the part written to be shown.
+  defp who_card(snapshot, id) do
+    sheet =
+      Enum.find_value(Map.get(snapshot || %{}, :characters) || [], fn c ->
+        if to_string(Map.get(c, :source_id)) == to_string(id), do: Map.get(c, :sheet)
+      end)
+
+    sheet && Map.put(Map.new(Map.from_struct(sheet)), :id, to_string(id))
+  end
 
   defp voices(snapshot) do
     for c <- Map.get(snapshot || %{}, :characters) || [],

@@ -63,6 +63,7 @@ defmodule PolyphonyWeb.Transcript do
   attr(:names, :map, default: %{}, doc: "character id → display name")
   attr(:voices, :map, default: %{}, doc: "character id → voice colour")
   attr(:empty, :string, default: "Nothing happened here.")
+  attr(:on_name, :string, default: "who", doc: "event pushed when a name is tapped")
 
   def transcript(assigns) do
     assigns =
@@ -81,16 +82,23 @@ defmodule PolyphonyWeb.Transcript do
           </div>
 
           <div :if={b.type == :turn} class="mb-5">
-            <div
+            <%!-- The name is the way in to who this is. A `button` rather than a link:
+                  the answer opens over the page, so following it never costs you your
+                  place in the story. --%>
+            <button
+              type="button"
               class={[
-                "ttl font-semibold mb-1.5",
+                "ttl font-semibold mb-1.5 block text-left",
                 @register == :stage && "text-[14px]",
                 @register == :page && "text-[12.5px] tracking-[.06em]"
               ]}
               style={"color:#{Voice.of(@voices, b.character)}"}
+              phx-click={@on_name}
+              phx-value-id={b.character}
+              aria-label={"About #{Cast.render_name(@cast, b.character)}"}
             >
               <%= block_name(@cast, b.character, @register) %>
-            </div>
+            </button>
             <div :for={m <- ordered_moves(b.msgs)}>
               <%= render_move(m, @cast, @register, @voices) %>
             </div>
@@ -107,6 +115,70 @@ defmodule PolyphonyWeb.Transcript do
 
   defp block_name(cast, id, :page), do: cast |> Cast.render_name(id) |> String.upcase()
   defp block_name(cast, id, _register), do: Cast.render_name(cast, id)
+
+  @doc """
+  Who is this — the **public** read of a character, opened from their name.
+
+  A transcript names people and shows nothing about them, which is fine on the fourth
+  scene and useless on the first: a reader meets six names in two pages and has no way
+  to ask who any of them are without leaving the story.
+
+  It shows the **cover** and nothing else from the sheet, and that is the whole design
+  rather than a first cut. The cover already *is* this thing — the codebase says so in
+  five places, *"the only part strangers see"* — and it is written from everything
+  including the secrets under instruction to give none of them away (§2.12), with a
+  leaked draft refused rather than shown. Premise, backstory and facts are the author's
+  working material: some of them are concealed per-item, and a panel that had to filter
+  them would be a second implementation of a guarantee that already has one.
+
+  So there is no viewer parameter. The same card is correct for the author, for a
+  character, and for a stranger reading a published campaign — which is why it can live
+  here and be called from both screens.
+  """
+  attr(:name, :string, required: true)
+  attr(:colour, :string, default: "var(--bc)")
+  attr(:pronouns, :string, default: nil)
+  attr(:cover, :string, default: nil)
+  attr(:on_close, :string, required: true)
+
+  def who(assigns) do
+    ~H"""
+    <Kit.overlay label={"About #{@name}"} on_close={@on_close}>
+      <Kit.row class="px-4 py-3 flex items-start gap-3" style="background:var(--b2)">
+        <span class="av shrink-0" style={"background:#{@colour}"}></span>
+        <div class="min-w-0 flex-1">
+          <div class="ttl text-[17px] font-semibold truncate"><%= @name %></div>
+          <div :if={filled(@pronouns)} class="lbl dim mt-0.5"><%= @pronouns %></div>
+        </div>
+        <button
+          type="button"
+          class="dim text-[17px] leading-none"
+          phx-click={@on_close}
+          aria-label={"Close #{@name}"}
+        >
+          ×
+        </button>
+      </Kit.row>
+
+      <div class="modal-body">
+        <div :if={filled(@cover)} class="px-4 py-3">
+          <p class="text-[14px] leading-relaxed"><%= @cover %></p>
+        </div>
+
+        <%!-- An honest absence rather than an empty panel. Nothing is being withheld —
+              nobody has written the part a stranger reads. --%>
+        <div :if={not filled(@cover)} class="px-4 py-4">
+          <p class="text-[13px] leading-relaxed dim">
+            Nothing written about them yet — this is the part a stranger sees, and it's
+            still blank.
+          </p>
+        </div>
+      </div>
+    </Kit.overlay>
+    """
+  end
+
+  defp filled(text), do: is_binary(text) and String.trim(text) != ""
 
   # Pair each block with the beat it opens, or nil.
   defp with_beat_rules(blocks) do
@@ -257,8 +329,20 @@ defmodule PolyphonyWeb.Transcript do
         <span class="text-[15px] leading-relaxed"><%= @content %></span>
       </div>
       <p :if={@register == :page} class="text-[17px] leading-[1.75] mt-2.5"><%= @content %></p>
-      <div :if={@whisper and @to != ""} class="lbl mt-1" style="color:var(--pencil)">
-        Whisper · only <%= @to %>
+      <%!-- The kit's own spec for this move: *a coloured marker line under the speech*
+            (`ux/polyphony-kit.html` §03, "no italic carries meaning"). Under **this
+            line**, not on the turn — a whisper is one move, and a turn that contains
+            one still has actions and speech everybody heard. `Visibility` has always
+            been per-event; this is the rendering catching up.
+
+            Drawn whether or not the addressees resolve to names. It used to render
+            nothing when they didn't, which is the one direction that must never
+            happen: a private line reading as a public one. --%>
+      <div :if={@whisper} class="flex items-center gap-1.5 mt-1">
+        <span class="dot" style="background:var(--pencil)"></span>
+        <span class="lbl" style="color:var(--pencil)">
+          <%= if @to == "", do: "Whisper", else: "Whisper → #{@to}" %>
+        </span>
       </div>
     </div>
     """

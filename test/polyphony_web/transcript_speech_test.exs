@@ -97,4 +97,52 @@ defmodule PolyphonyWeb.TranscriptSpeechTest do
       assert html =~ "Whisper"
     end
   end
+
+  describe "the whisper marker" do
+    test "sits under the speech, not on the turn" do
+      html =
+        render(
+          move("SpeechUttered", %{
+            content: "I burned it.",
+            audibility: "private",
+            addressed_to: ["b"]
+          }),
+          :page
+        )
+
+      # The kit's own spec: *a coloured marker line under the speech*. A whisper is one
+      # move, and a turn that contains one still has actions everybody watched —
+      # `Visibility` has always been per-event, and this is the rendering catching up.
+      assert html =~ "Whisper"
+      assert html =~ "var(--pencil)"
+      assert html =~ ~s(class="dot")
+    end
+
+    test "an action in the same turn is untouched by it" do
+      # Nothing about a whisper reaches another move: the mark is rendered by the
+      # speech clause and nothing else looks at `audibility`.
+      html =
+        render(
+          move("ActionTaken", %{content: "He writes nothing down.", audibility: "private"}),
+          :page
+        )
+
+      refute html =~ "Whisper"
+      assert html =~ "He writes nothing down."
+    end
+
+    test "a private line is marked even when the addressees don't resolve" do
+      html =
+        render(move("SpeechUttered", %{content: "I burned it.", audibility: "private"}), :page)
+
+      # It used to render nothing at all without names, which is the one direction that
+      # must never happen: a private line reading as a public one.
+      assert html =~ "Whisper"
+    end
+
+    test "ordinary speech carries no marker" do
+      html = render(move("SpeechUttered", %{content: "Bring it over."}), :page)
+      refute html =~ "Whisper"
+    end
+  end
 end

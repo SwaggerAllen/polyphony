@@ -709,6 +709,10 @@
   text-transform: capitalize;
 }
 
+.italic {
+  font-style: italic;
+}
+
 .leading-\[1\.15\] {
   line-height: 1.15;
 }
