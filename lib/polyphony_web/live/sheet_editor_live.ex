@@ -1245,6 +1245,22 @@ defmodule PolyphonyWeb.SheetEditorLive do
     from_campaign || if(sheet.world_bible_id, do: to_string(sheet.world_bible_id), else: "")
   end
 
+  # Back to where you came from. A character belongs to one campaign (§2.7), and that
+  # is where you were when you opened them — the library is a place you pass through on
+  # the way in, not the place you were. Falling back to it keeps the chevron meaningful
+  # for a character that has no campaign yet.
+  defp back_to(nil), do: ~p"/library"
+  defp back_to(campaign), do: ~p"/campaigns/#{campaign.id}"
+
+  defp back_label(nil), do: "Back to library"
+
+  defp back_label(campaign) do
+    case String.trim(to_string(Map.get(Library.payload(campaign) || %{}, :name) || "")) do
+      "" -> "Back to the campaign"
+      name -> "Back to #{name}"
+    end
+  end
+
   # The rest of the campaign's cast — who **already exists in this story**, which is a
   # different question from who this character is connected to (`relations`).
   #
@@ -1297,8 +1313,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
       <Kit.header
         title={header_title(@name)}
         eyebrow={@world_context && @world_context["name"]}
-        back={~p"/library"}
-        back_label="Back to library"
+        back={back_to(@campaign)}
+        back_label={back_label(@campaign)}
         back_confirm={leave_confirm(@dirty)}
       >
         <:actions>

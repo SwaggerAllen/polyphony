@@ -44,7 +44,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   import PolyphonyWeb.BlockField
 
-  alias Polyphony.{Characters, Groups, Library, Owner}
+  alias Polyphony.{Campaigns, Characters, Groups, Library, Owner}
   alias Polyphony.Permissions
   alias Polyphony.Authoring.{Audience, WorldBible}
   alias Polyphony.Authoring.WorldBible.Entry
@@ -88,6 +88,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
        |> assign(
          page_title: bible.name || "World",
          entry: entry,
+         campaign: Campaigns.of_world(Owner.of(socket.assigns.current_user), entry.id),
          bible: bible,
          name: bible.name || "",
          name_error: nil,
@@ -786,8 +787,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
       <Kit.header
         title={world_title(@name)}
         subtitle={lineage_line(assigns)}
-        back={~p"/library"}
-        back_label="Back to library"
+        back={back_to(@campaign)}
+        back_label={back_label(@campaign)}
         back_confirm={leave_confirm(@dirty)}
       >
         <:actions>
@@ -1351,6 +1352,21 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   # The one info drawer, same shape as the character sheet's — title, prose, a
   # subsection per concept with its own dot.
+
+  # Back to where you came from. Attaching a world **copies** it (§2.5b), so a bible
+  # with a campaign belongs to that campaign alone and there is one right answer; a
+  # library template has none, and keeps the library.
+  defp back_to(nil), do: ~p"/library"
+  defp back_to(campaign), do: ~p"/campaigns/#{campaign.id}"
+
+  defp back_label(nil), do: "Back to library"
+
+  defp back_label(campaign) do
+    case String.trim(to_string(Map.get(Library.payload(campaign) || %{}, :name) || "")) do
+      "" -> "Back to the campaign"
+      name -> "Back to #{name}"
+    end
+  end
 
   # ── Render helpers ────────────────────────────────────────────────────────────
 

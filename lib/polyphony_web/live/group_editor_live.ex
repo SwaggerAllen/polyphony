@@ -34,7 +34,7 @@ defmodule PolyphonyWeb.GroupEditorLive do
 
   import PolyphonyWeb.BlockField
 
-  alias Polyphony.{Groups, Library, Owner}
+  alias Polyphony.{Campaigns, Groups, Library, Owner}
   alias Polyphony.Authoring.{ArcEntry, Group, GroupArc}
   alias Polyphony.Authoring.CharacterSheet.Fact
   alias Polyphony.Permissions
@@ -75,6 +75,8 @@ defmodule PolyphonyWeb.GroupEditorLive do
          page_title: group.name || "Group",
          entry: entry,
          group: group,
+         campaign:
+           Campaigns.of_world(Owner.of(socket.assigns.current_user), group.world_bible_id),
          name: group.name || "",
          blocks: blocks_from_group(group),
          facts: group.facts || [],
@@ -296,6 +298,21 @@ defmodule PolyphonyWeb.GroupEditorLive do
     assign(socket, name: params["name"] || socket.assigns.name, blocks: blocks)
   end
 
+  # A group belongs to a world, and a world belongs to one campaign (attaching copies),
+  # so the campaign is a lookup rather than a guess. Groups written outside one — or
+  # before a world was attached — keep the library.
+  defp back_to(nil), do: ~p"/library"
+  defp back_to(campaign), do: ~p"/campaigns/#{campaign.id}"
+
+  defp back_label(nil), do: "Back to library"
+
+  defp back_label(campaign) do
+    case String.trim(to_string(Map.get(Library.payload(campaign) || %{}, :name) || "")) do
+      "" -> "Back to the campaign"
+      name -> "Back to #{name}"
+    end
+  end
+
   defp blocks_from_group(group),
     do: Map.new(@prose_fields, fn f -> {f, to_blocks(Map.get(group, field_atom(f)))} end)
 
@@ -345,7 +362,12 @@ defmodule PolyphonyWeb.GroupEditorLive do
   def render(assigns) do
     ~H"""
     <Kit.frame class="flex flex-col min-h-[100dvh]">
-      <Kit.header title={@name} eyebrow="Group" back={~p"/library"} back_label="Back to library">
+      <Kit.header
+        title={@name}
+        eyebrow="Group"
+        back={back_to(@campaign)}
+        back_label={back_label(@campaign)}
+      >
         <:actions>
           <Kit.pill><%= length(@members) %> in it</Kit.pill>
           <Layouts.nav_menu current_user={@current_user} />
