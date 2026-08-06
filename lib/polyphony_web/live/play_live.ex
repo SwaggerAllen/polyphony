@@ -44,7 +44,7 @@ defmodule PolyphonyWeb.PlayLive do
   }
 
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
-  alias Polyphony.Director.BeatDriver
+  alias Polyphony.Director.{Auto, BeatDriver}
   alias Polyphony.Campaigns
   alias Polyphony.Edit
   alias Polyphony.Generations
@@ -110,6 +110,9 @@ defmodule PolyphonyWeb.PlayLive do
       # through a perspective change without ever subscribing a character's view to
       # the omniscient projection.
       Phoenix.PubSub.subscribe(Polyphony.PubSub, Drafts.topic(scene_id))
+      # An auto run outlives the tab that started it, so its state is read on mount and
+      # subscribed for the rest — the same contract Quick Build's progress uses.
+      Auto.subscribe(scene_id)
     end
 
     socket = assign(socket, scene_id: scene_id)
@@ -130,6 +133,7 @@ defmodule PolyphonyWeb.PlayLive do
        # showing nothing — no placeholder, no waiting line, and Continue live enough to
        # race a second beat into a scene that was already advancing.
        progress: Broadcast.progress(scene_id),
+       auto: Auto.get(scene_id),
        introductions: [],
        control_modes: %{},
        failures: [],
@@ -1051,6 +1055,64 @@ defmodule PolyphonyWeb.PlayLive do
     end
   end
 
+  # Auto (§10 + `Director.Auto`): the beat loop with nobody to hand back to. Runs until
+  # the Director closes the scene, the room empties, or it hits the beat cap.
+  def handle_event("start_auto", _params, socket) do
+    safe(socket, fn ->
+      scene_id = socket.assigns.scene_id
+      beat = socket.assigns.next_beat
+
+      cond do
+        beat_busy?(socket.assigns.progress) ->
+          {:noreply, put_flash(socket, :error, "The scene is already advancing.")}
+
+        socket.assigns.roster == [] ->
+          {:noreply, put_flash(socket, :error, "No cast present to run with.")}
+
+        true ->
+          case Auto.start(scene_id, beat) do
+            {:ok, run} ->
+              {:noreply,
+               socket
+               |> assign(auto: run, progress: %{phase: :director, subject: nil, beat: beat})}
+
+            {:error, :taken} ->
+              {:noreply, put_flash(socket, :error, "It's already running itself.")}
+          end
+      end
+    end)
+  end
+
+  def handle_event("pause_auto", _params, socket) do
+    safe(socket, fn ->
+      case Auto.pause(socket.assigns.scene_id) do
+        {:ok, run} ->
+          # The beat in flight finishes: it is already generating, and throwing it away
+          # would cost the same money to produce nothing.
+          {:noreply,
+           socket
+           |> assign(auto: run)
+           |> put_flash(:info, "Pausing after this beat.")}
+
+        {:error, :not_running} ->
+          {:noreply, put_flash(socket, :error, "Nothing is running.")}
+      end
+    end)
+  end
+
+  def handle_event("resume_auto", _params, socket) do
+    safe(socket, fn ->
+      case Auto.resume(socket.assigns.scene_id, socket.assigns.next_beat) do
+        {:ok, run} -> {:noreply, assign(socket, auto: run)}
+        {:error, :not_paused} -> {:noreply, put_flash(socket, :error, "It isn't paused.")}
+      end
+    end)
+  end
+
+  # The finished line, taken off the bar. Not a delete of the run — the row is how a
+  # second tab and the next mount know what happened.
+  def handle_event("clear_auto", _params, socket), do: {:noreply, assign(socket, auto: nil)}
+
   # ── Director introductions (resolve the pending queue) ─────────────────────────
 
   # ── Assisted drafts (§A2) ────────────────────────────────────────────────────
@@ -1338,6 +1400,9 @@ defmodule PolyphonyWeb.PlayLive do
 
   # Commit the player's typed turn (§A1). Grouped here (not among the handle_events) so
   # the two "say" clauses stay adjacent.
+
+  def handle_info({:scene_auto, run}, socket),
+    do: {:noreply, socket |> assign(auto: run) |> reload()}
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
@@ -1887,6 +1952,55 @@ defmodule PolyphonyWeb.PlayLive do
     """
   end
 
+  # Auto: one control that says what it will do next.
+  #
+  # Three states, three verbs, and never two of them at once — a bar carrying Auto,
+  # Pause *and* Resume asks the author which of three things is currently true, which is
+  # the question the control is supposed to answer.
+  attr(:auto, :any, required: true)
+  attr(:progress, :map, required: true)
+
+  defp auto_control(%{auto: %{status: "running"}} = assigns) do
+    ~H"""
+    <Kit.btn kind={:ghost} type="button" phx-click="pause_auto">Pause</Kit.btn>
+    """
+  end
+
+  defp auto_control(%{auto: %{status: "paused"}} = assigns) do
+    ~H"""
+    <Kit.btn kind={:ghost} type="button" phx-click="resume_auto">Resume</Kit.btn>
+    """
+  end
+
+  defp auto_control(assigns) do
+    ~H"""
+    <Kit.btn
+      kind={:ghost}
+      type="button"
+      phx-click="start_auto"
+      disabled={beat_busy?(@progress)}
+      title="Let the scene run itself until the Director ends it, everyone leaves, or it hits the beat limit"
+    >
+      Auto
+    </Kit.btn>
+    """
+  end
+
+  defp auto_line(%{status: "running"} = run),
+    do: "Running itself — beat #{run.beats_run} of #{run.max_beats}."
+
+  defp auto_line(%{status: "paused"} = run),
+    do: "Paused at beat #{run.beats_run} of #{run.max_beats}."
+
+  defp auto_line(%{status: "done"} = run),
+    do: "#{run.ended_reason || "Stopped."} #{run.beats_run} beats."
+
+  defp auto_line(_), do: ""
+
+  defp auto_colour(%{status: "running"}), do: "var(--lamp)"
+  defp auto_colour(%{status: "paused"}), do: "var(--bcm)"
+  defp auto_colour(_), do: "var(--ok)"
+
   # A short, human reason for a failure line — the model's reason if any, else the kind.
   defp failure_reason(%{reason: r}) when is_binary(r) and r != "", do: r
   defp failure_reason(%{kind: k}) when is_binary(k) and k != "", do: String.replace(k, "_", " ")
@@ -2203,8 +2317,22 @@ defmodule PolyphonyWeb.PlayLive do
                 Introductions <span class="dim"><%= length(@introductions) %></span>
               </Kit.btn>
             </div>
-            <Kit.btn kind={:primary} type="button" phx-click="continue" disabled={beat_busy?(@progress)}>
-              Continue
+            <div class="flex gap-1.5">
+              <.auto_control auto={@auto} progress={@progress} />
+              <Kit.btn kind={:primary} type="button" phx-click="continue" disabled={beat_busy?(@progress)}>
+                Continue
+              </Kit.btn>
+            </div>
+          </div>
+
+          <%!-- Where an auto run says how far it has got, and what stopped it. A run
+                that ends with nothing said is indistinguishable from one that is still
+                thinking, and the difference is minutes of waiting. --%>
+          <div :if={@auto} class="flex items-center gap-2 mt-2">
+            <Kit.dot colour={auto_colour(@auto)} live={@auto.status == "running"} />
+            <span class="text-[12px] dim flex-1"><%= auto_line(@auto) %></span>
+            <Kit.btn :if={@auto.status == "done"} kind={:pen} type="button" phx-click="clear_auto">
+              Dismiss
             </Kit.btn>
           </div>
         </div>
