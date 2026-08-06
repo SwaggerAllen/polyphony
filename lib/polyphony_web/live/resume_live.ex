@@ -20,7 +20,7 @@ defmodule PolyphonyWeb.ResumeLive do
   require Logger
 
   alias Polyphony.Notifications.Transport
-  alias PolyphonyWeb.{Auth, Kit}
+  alias PolyphonyWeb.{Auth, Kit, Layouts}
 
   def mount(_params, session, socket) do
     # No cookie, or a cookie for an account that has since gone: this page has nothing
@@ -63,7 +63,8 @@ defmodule PolyphonyWeb.ResumeLive do
 
   def render(assigns) do
     ~H"""
-    <Kit.frame class="flex flex-col min-h-[100dvh] items-center justify-center p-4">
+    <Kit.frame class="relative flex flex-col min-h-[100dvh] items-center justify-center p-4">
+      <Layouts.corner_menu current_user={@current_user} />
       <Kit.sheet class="w-full max-w-sm">
         <.sent :if={@sent} {assigns} />
         <.offer :if={not @sent} {assigns} />

@@ -36,8 +36,13 @@ defmodule PolyphonyWeb.HomeScreenLiveTest do
     test "both ways in, twice — the top of the page and the bottom", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
-      assert length(Regex.scan(~r|href="/signup"|, html)) == 2
-      assert length(Regex.scan(~r|href="/login"|, html)) == 2
+      # The page's own two, top and bottom. The `☰` in the corner offers both as well
+      # now, and counting those here would let the copy lose a call to action without
+      # anything failing — the claim is about the page, not about the total.
+      body = String.replace(html, ~r|<nav .*?</nav>|s, "")
+
+      assert length(Regex.scan(~r|href="/signup"|, body)) == 2
+      assert length(Regex.scan(~r|href="/login"|, body)) == 2
       assert html =~ ~s(href="/browse")
       # Magic links are the whole sign-in flow, so the page says so before the click.
       assert html =~ "No password to remember"

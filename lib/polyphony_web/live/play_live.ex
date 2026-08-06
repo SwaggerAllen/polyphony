@@ -44,7 +44,7 @@ defmodule PolyphonyWeb.PlayLive do
   }
 
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
-  alias Polyphony.Director.BeatDriver
+  alias Polyphony.Director.{Auto, BeatDriver}
   alias Polyphony.Campaigns
   alias Polyphony.Edit
   alias Polyphony.Generations
@@ -110,6 +110,9 @@ defmodule PolyphonyWeb.PlayLive do
       # through a perspective change without ever subscribing a character's view to
       # the omniscient projection.
       Phoenix.PubSub.subscribe(Polyphony.PubSub, Drafts.topic(scene_id))
+      # An auto run outlives the tab that started it, so its state is read on mount and
+      # subscribed for the rest — the same contract Quick Build's progress uses.
+      Auto.subscribe(scene_id)
     end
 
     socket = assign(socket, scene_id: scene_id)
@@ -130,6 +133,7 @@ defmodule PolyphonyWeb.PlayLive do
        # showing nothing — no placeholder, no waiting line, and Continue live enough to
        # race a second beat into a scene that was already advancing.
        progress: Broadcast.progress(scene_id),
+       auto: Auto.get(scene_id),
        introductions: [],
        control_modes: %{},
        failures: [],
@@ -525,9 +529,32 @@ defmodule PolyphonyWeb.PlayLive do
     end
   end
 
-  defp narration_meter(socket) do
+  # Who a generation started from this screen is billed to (§B5).
+  #
+  # `campaign_id` is the half that was missing. Every ✦ here built its own meter opts
+  # by hand with only a `user_id`, so a turn drafted in a scene, a narration, a walk-on
+  # written in and a mention sweep all landed in the *unattributed* bucket — which the
+  # settings breakdown labels "authoring", i.e. the one place a scene's spend can't be
+  # seen. The Director loop resolved this properly all along (`Attribution.for_scene`);
+  # the screen didn't. Supplying it also puts these calls under the campaign's own
+  # lifetime cap, which is where they always belonged.
+  defp meter(socket, kind) do
     uid = socket.assigns.current_user && socket.assigns.current_user.id
-    [usage_kind: "authoring"] ++ if(uid, do: [user_id: uid], else: [])
+
+    [usage_kind: kind] ++
+      if(uid, do: [user_id: uid], else: []) ++
+      case campaign_of(socket.assigns.scene_id) do
+        nil -> []
+        cid -> [campaign_id: cid]
+      end
+  end
+
+  defp narration_meter(socket), do: meter(socket, "authoring")
+
+  # The same two fields as a map, for the ops whose request the worker meters rather
+  # than the screen.
+  defp billing(socket) do
+    socket |> meter(nil) |> Keyword.take([:user_id, :campaign_id]) |> Map.new()
   end
 
   # What everybody in the scene has already seen: speech that wasn't a whisper, actions,
@@ -856,12 +883,15 @@ defmodule PolyphonyWeb.PlayLive do
   def handle_event("find_mentions", _params, socket) do
     safe(socket, fn ->
       prose = scene_prose(socket.assigns.scene_id)
-      uid = socket.assigns.current_user && socket.assigns.current_user.id
 
       {:noreply,
        socket
        |> put_flash(:info, "Scanning for mentioned characters…")
-       |> request_generation("mentions", "play.mentions", %{prose: prose, user_id: uid})}
+       |> request_generation(
+         "mentions",
+         "play.mentions",
+         Map.merge(%{prose: prose}, billing(socket))
+       )}
     end)
   end
 
@@ -981,15 +1011,14 @@ defmodule PolyphonyWeb.PlayLive do
       entry = Enum.find(socket.assigns.writable, &(to_string(&1.id) == to_string(id)))
 
       if entry do
-        uid = socket.assigns.current_user && socket.assigns.current_user.id
-
         {:noreply,
          socket
          |> assign(writing_in: MapSet.put(socket.assigns.writing_in, entry.id))
-         |> request_generation("write_in:#{entry.id}", "play.intro", %{
-           entry_id: entry.id,
-           user_id: uid
-         })}
+         |> request_generation(
+           "write_in:#{entry.id}",
+           "play.intro",
+           Map.merge(%{entry_id: entry.id}, billing(socket))
+         )}
       else
         {:noreply, put_flash(socket, :error, "They aren't waiting to be written.")}
       end
@@ -1025,6 +1054,64 @@ defmodule PolyphonyWeb.PlayLive do
         end)
     end
   end
+
+  # Auto (§10 + `Director.Auto`): the beat loop with nobody to hand back to. Runs until
+  # the Director closes the scene, the room empties, or it hits the beat cap.
+  def handle_event("start_auto", _params, socket) do
+    safe(socket, fn ->
+      scene_id = socket.assigns.scene_id
+      beat = socket.assigns.next_beat
+
+      cond do
+        beat_busy?(socket.assigns.progress) ->
+          {:noreply, put_flash(socket, :error, "The scene is already advancing.")}
+
+        socket.assigns.roster == [] ->
+          {:noreply, put_flash(socket, :error, "No cast present to run with.")}
+
+        true ->
+          case Auto.start(scene_id, beat) do
+            {:ok, run} ->
+              {:noreply,
+               socket
+               |> assign(auto: run, progress: %{phase: :director, subject: nil, beat: beat})}
+
+            {:error, :taken} ->
+              {:noreply, put_flash(socket, :error, "It's already running itself.")}
+          end
+      end
+    end)
+  end
+
+  def handle_event("pause_auto", _params, socket) do
+    safe(socket, fn ->
+      case Auto.pause(socket.assigns.scene_id) do
+        {:ok, run} ->
+          # The beat in flight finishes: it is already generating, and throwing it away
+          # would cost the same money to produce nothing.
+          {:noreply,
+           socket
+           |> assign(auto: run)
+           |> put_flash(:info, "Pausing after this beat.")}
+
+        {:error, :not_running} ->
+          {:noreply, put_flash(socket, :error, "Nothing is running.")}
+      end
+    end)
+  end
+
+  def handle_event("resume_auto", _params, socket) do
+    safe(socket, fn ->
+      case Auto.resume(socket.assigns.scene_id, socket.assigns.next_beat) do
+        {:ok, run} -> {:noreply, assign(socket, auto: run)}
+        {:error, :not_paused} -> {:noreply, put_flash(socket, :error, "It isn't paused.")}
+      end
+    end)
+  end
+
+  # The finished line, taken off the bar. Not a delete of the run — the row is how a
+  # second tab and the next mount know what happened.
+  def handle_event("clear_auto", _params, socket), do: {:noreply, assign(socket, auto: nil)}
 
   # ── Director introductions (resolve the pending queue) ─────────────────────────
 
@@ -1118,15 +1205,15 @@ defmodule PolyphonyWeb.PlayLive do
   def handle_event("intro_generate", %{"name" => name}, socket) do
     safe(socket, fn ->
       entry = ensure_character(socket, name)
-      uid = socket.assigns.current_user && socket.assigns.current_user.id
 
       {:noreply,
        socket
        |> put_flash(:info, "Generating #{name}…")
-       |> request_generation("intro:#{name}", "play.intro", %{
-         entry_id: entry.id,
-         user_id: uid
-       })}
+       |> request_generation(
+         "intro:#{name}",
+         "play.intro",
+         Map.merge(%{entry_id: entry.id}, billing(socket))
+       )}
     end)
   end
 
@@ -1314,6 +1401,9 @@ defmodule PolyphonyWeb.PlayLive do
   # Commit the player's typed turn (§A1). Grouped here (not among the handle_events) so
   # the two "say" clauses stay adjacent.
 
+  def handle_info({:scene_auto, run}, socket),
+    do: {:noreply, socket |> assign(auto: run) |> reload()}
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # The reroll is the one generation still on a plain task, and deliberately: it
@@ -1407,7 +1497,6 @@ defmodule PolyphonyWeb.PlayLive do
         as ->
           scene_id = socket.assigns.scene_id
           roster = socket.assigns.roster
-          user = socket.assigns.current_user
           premise = socket.assigns.premise
           sheet = character_sheet(socket, as)
           bible = campaign_world_bible(socket)
@@ -1416,7 +1505,9 @@ defmodule PolyphonyWeb.PlayLive do
            socket
            |> assign(composing: true)
            |> request_generation("compose", "play.compose", %{
-             opts: compose_opts(scene_id, as, sheet, premise, bible, roster, draft, user)
+             opts:
+               compose_opts(scene_id, as, sheet, premise, bible, roster, draft) ++
+                 meter(socket, "suggestion")
            })}
       end
     end)
@@ -1465,7 +1556,7 @@ defmodule PolyphonyWeb.PlayLive do
   # Draft a turn from the character's filtered view (§11) — steered by the player's
   # partial text if any, else generated fresh. Never omniscient (a suggestion can't
   # react to something the character never learned).
-  defp compose_opts(scene_id, character, sheet, premise, bible, roster, draft, user) do
+  defp compose_opts(scene_id, character, sheet, premise, bible, roster, draft) do
     ctx = character_context(scene_id, character, sheet, premise, bible)
 
     [
@@ -1473,9 +1564,7 @@ defmodule PolyphonyWeb.PlayLive do
       live_events: BeatOps.canonical_events(scene_id),
       members: roster,
       count: 1,
-      steer: compose_steer(draft),
-      user_id: user && user.id,
-      usage_kind: "suggestion"
+      steer: compose_steer(draft)
     ]
   end
 
@@ -1863,6 +1952,55 @@ defmodule PolyphonyWeb.PlayLive do
     """
   end
 
+  # Auto: one control that says what it will do next.
+  #
+  # Three states, three verbs, and never two of them at once — a bar carrying Auto,
+  # Pause *and* Resume asks the author which of three things is currently true, which is
+  # the question the control is supposed to answer.
+  attr(:auto, :any, required: true)
+  attr(:progress, :map, required: true)
+
+  defp auto_control(%{auto: %{status: "running"}} = assigns) do
+    ~H"""
+    <Kit.btn kind={:ghost} type="button" phx-click="pause_auto">Pause</Kit.btn>
+    """
+  end
+
+  defp auto_control(%{auto: %{status: "paused"}} = assigns) do
+    ~H"""
+    <Kit.btn kind={:ghost} type="button" phx-click="resume_auto">Resume</Kit.btn>
+    """
+  end
+
+  defp auto_control(assigns) do
+    ~H"""
+    <Kit.btn
+      kind={:ghost}
+      type="button"
+      phx-click="start_auto"
+      disabled={beat_busy?(@progress)}
+      title="Let the scene run itself until the Director ends it, everyone leaves, or it hits the beat limit"
+    >
+      Auto
+    </Kit.btn>
+    """
+  end
+
+  defp auto_line(%{status: "running"} = run),
+    do: "Running itself — beat #{run.beats_run} of #{run.max_beats}."
+
+  defp auto_line(%{status: "paused"} = run),
+    do: "Paused at beat #{run.beats_run} of #{run.max_beats}."
+
+  defp auto_line(%{status: "done"} = run),
+    do: "#{run.ended_reason || "Stopped."} #{run.beats_run} beats."
+
+  defp auto_line(_), do: ""
+
+  defp auto_colour(%{status: "running"}), do: "var(--lamp)"
+  defp auto_colour(%{status: "paused"}), do: "var(--bcm)"
+  defp auto_colour(_), do: "var(--ok)"
+
   # A short, human reason for a failure line — the model's reason if any, else the kind.
   defp failure_reason(%{reason: r}) when is_binary(r) and r != "", do: r
   defp failure_reason(%{kind: k}) when is_binary(k) and k != "", do: String.replace(k, "_", " ")
@@ -2179,8 +2317,22 @@ defmodule PolyphonyWeb.PlayLive do
                 Introductions <span class="dim"><%= length(@introductions) %></span>
               </Kit.btn>
             </div>
-            <Kit.btn kind={:primary} type="button" phx-click="continue" disabled={beat_busy?(@progress)}>
-              Continue
+            <div class="flex gap-1.5">
+              <.auto_control auto={@auto} progress={@progress} />
+              <Kit.btn kind={:primary} type="button" phx-click="continue" disabled={beat_busy?(@progress)}>
+                Continue
+              </Kit.btn>
+            </div>
+          </div>
+
+          <%!-- Where an auto run says how far it has got, and what stopped it. A run
+                that ends with nothing said is indistinguishable from one that is still
+                thinking, and the difference is minutes of waiting. --%>
+          <div :if={@auto} class="flex items-center gap-2 mt-2">
+            <Kit.dot colour={auto_colour(@auto)} live={@auto.status == "running"} />
+            <span class="text-[12px] dim flex-1"><%= auto_line(@auto) %></span>
+            <Kit.btn :if={@auto.status == "done"} kind={:pen} type="button" phx-click="clear_auto">
+              Dismiss
             </Kit.btn>
           </div>
         </div>
@@ -2402,9 +2554,14 @@ defmodule PolyphonyWeb.PlayLive do
                 turn that no longer says what it said. --%>
           <div class="mt-2">
             <label class="flex items-start gap-2 cursor-pointer">
-              <input type="checkbox" name="invalidates" value="true" class="sr-only peer" />
-              <Kit.chk state={:off} class="mt-0.5 peer-checked:hidden" />
-              <Kit.chk state={:on} class="mt-0.5 hidden peer-checked:flex" />
+              <input
+                type="checkbox"
+                name="invalidates"
+                value="true"
+                aria-label="This changes what happened"
+                class="sr-only peer"
+              />
+              <Kit.chk class="mt-0.5" />
               <span class="text-[12px] leading-relaxed">
                 This changes what happened
                 <span class="dim block">

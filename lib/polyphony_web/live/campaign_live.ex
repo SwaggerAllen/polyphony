@@ -1191,9 +1191,12 @@ defmodule PolyphonyWeb.CampaignLive do
         </Kit.sheet>
       </form>
 
-      <details>
-        <summary class="lbl dim cursor-pointer">Model tuning</summary>
-        <form id="campaign-tuning" phx-change="update_details" class="mt-2">
+      <%!-- Flat, like everything else on this screen. A settings page is read by
+            scrolling it; a fold hides one of its sections behind a guess about whether
+            you want it, and the guess is wrong the moment you came here to change it. --%>
+      <div>
+        <div class="lbl dim mb-2">Model tuning</div>
+        <form id="campaign-tuning" phx-change="update_details">
           <Kit.sheet class="px-3.5 py-3 space-y-3">
             <label class="flex items-center justify-between gap-3 cursor-pointer">
               <span class="text-[13px]">Director reasoning (“thinking”)</span>
@@ -1232,7 +1235,7 @@ defmodule PolyphonyWeb.CampaignLive do
             </p>
           </Kit.sheet>
         </form>
-      </details>
+      </div>
 
       <%!-- Publishing is a decision about the campaign, and it lived on **Cast** — next
             to the people, because the perspective list is people. But the list is one

@@ -14,7 +14,7 @@ defmodule PolyphonyWeb.ShareLive do
   use PolyphonyWeb, :live_view
 
   alias Polyphony.Library
-  alias PolyphonyWeb.Kit
+  alias PolyphonyWeb.{Kit, Layouts}
 
   def mount(%{"token" => token}, _session, socket) do
     case Library.get_by_share_token(token) do
@@ -36,7 +36,8 @@ defmodule PolyphonyWeb.ShareLive do
 
   def render(%{entry: nil} = assigns) do
     ~H"""
-    <Kit.frame register={:page} class="flex flex-col min-h-[100dvh] items-center justify-center p-4">
+    <Kit.frame register={:page} class="relative flex flex-col min-h-[100dvh] items-center justify-center p-4">
+      <Layouts.corner_menu current_user={@current_user} />
       <Kit.sheet class="w-full max-w-sm p-4">
         <div class="ttl text-[15px] font-semibold mb-1.5">Nothing here</div>
         <p class="text-[13px] leading-relaxed dim">
@@ -49,7 +50,8 @@ defmodule PolyphonyWeb.ShareLive do
 
   def render(assigns) do
     ~H"""
-    <Kit.frame register={:page} class="flex flex-col min-h-[100dvh] items-center justify-center p-4">
+    <Kit.frame register={:page} class="relative flex flex-col min-h-[100dvh] items-center justify-center p-4">
+      <Layouts.corner_menu current_user={@current_user} />
       <Kit.sheet class="w-full max-w-sm">
         <Kit.row class="px-4 py-3" style="background:var(--b2)">
           <div class="lbl dim mb-1">Shared with you</div>

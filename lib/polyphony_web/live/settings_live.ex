@@ -40,6 +40,7 @@ defmodule PolyphonyWeb.SettingsLive do
   use PolyphonyWeb, :live_view
 
   alias Polyphony.{Accounts, Campaigns, Costs, Library, Owner}
+  alias Polyphony.Accounts.User
   alias Polyphony.Notifications.Prefs
   alias PolyphonyWeb.{Kit, Layouts}
 
@@ -75,7 +76,14 @@ defmodule PolyphonyWeb.SettingsLive do
   # month without anyone noticing until the cap bites. Each row carries its campaign's
   # *own* lifetime limit, because that's the number you'd want to change from here.
   defp spend_rows(user) do
-    campaigns = Map.new(Campaigns.list(Owner.of(user)), &{to_string(&1.id), &1})
+    # Archived and trashed ones too. A row here is *where the money went*, and the
+    # campaign's current shelf doesn't change that — leaving them out sent a filed-away
+    # story's whole spend into the "outside any scene" bucket, which is the same
+    # misattribution as not recording the campaign at all.
+    campaigns =
+      Owner.of(user)
+      |> Campaigns.list(include_archived: true, include_deleted: true)
+      |> Map.new(&{to_string(&1.id), &1})
 
     for row <- Costs.by_campaign(user.id) do
       case Map.get(campaigns, to_string(row.campaign_id)) do
@@ -346,11 +354,20 @@ defmodule PolyphonyWeb.SettingsLive do
                 type="text"
                 name="username"
                 value={@current_user.username}
+                pattern={User.username_pattern()}
+                title={User.username_rule()}
+                aria-describedby="username-rule"
                 class="field px-3 py-2 text-[14px] flex-1"
               />
               <Kit.btn size={:sm} type="submit" disabled={@username_free_in != nil}>Save</Kit.btn>
             </div>
           </form>
+          <%!-- The rule, stated where it can be read rather than where it is broken.
+                Same sentence as the sign-up form, from `User.username_rule/0`, because
+                two forms writing it separately is two forms that will disagree. --%>
+          <p id="username-rule" class="text-[11px] leading-relaxed dim mt-1.5">
+            <%= User.username_rule() %>
+          </p>
           <div class="flex items-start gap-1.5 mt-1.5">
             <Kit.dot colour="var(--bcm)" class="mt-1.5 shrink-0" />
             <span class="text-[11.5px] leading-relaxed dim"><%= username_note(@username_free_in) %></span>

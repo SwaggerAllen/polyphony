@@ -16,7 +16,7 @@ defmodule PolyphonyWeb.LoginLive do
 
   alias Polyphony.Accounts
   alias Polyphony.Notifications.Transport
-  alias PolyphonyWeb.{Auth, Kit}
+  alias PolyphonyWeb.{Auth, Kit, Layouts}
 
   def mount(_params, _session, socket) do
     {:ok, assign(socket, page_title: "Sign in", sent_to: nil, dev_link: nil)}
@@ -88,7 +88,8 @@ defmodule PolyphonyWeb.LoginLive do
 
   def render(assigns) do
     ~H"""
-    <Kit.frame class="flex flex-col min-h-[100dvh] items-center justify-center p-4">
+    <Kit.frame class="relative flex flex-col min-h-[100dvh] items-center justify-center p-4">
+      <Layouts.corner_menu current_user={@current_user} />
       <Kit.sheet class="w-full max-w-sm">
         <.sent :if={@sent_to} {assigns} />
         <.form_state :if={is_nil(@sent_to)} {assigns} />

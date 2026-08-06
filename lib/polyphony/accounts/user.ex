@@ -45,6 +45,12 @@ defmodule Polyphony.Accounts.User do
     timestamps(type: :naive_datetime_usec)
   end
 
+  # One statement of the rule, read by the validation, the two forms that state it, and
+  # the `pattern` the browser enforces.
+  @username_min 3
+  @username_max 32
+  @username_format ~r/^[a-zA-Z0-9_]+$/
+
   @doc "Changeset for a new account — email + username required, both normalized and unique."
   def registration_changeset(attrs) do
     %__MODULE__{}
@@ -98,9 +104,29 @@ defmodule Polyphony.Accounts.User do
 
   defp validate_username(changeset) do
     changeset
-    |> validate_length(:username, min: 3, max: 32)
-    |> validate_format(:username, ~r/^[a-zA-Z0-9_]+$/,
+    |> validate_length(:username, min: @username_min, max: @username_max)
+    |> validate_format(:username, @username_format,
       message: "may only contain letters, numbers, and underscores"
     )
   end
+
+  @doc """
+  The username rules, in the words a form should show **before** anything is typed.
+
+  Here rather than in the template because there are two forms — sign-up and settings —
+  and a rule stated separately in each is a rule that will disagree with the validation
+  in at least one of them. Somebody finding out the constraint by tripping over it is
+  the failure this exists to prevent, and two of them saying different things is worse.
+  """
+  @spec username_rule() :: String.t()
+  def username_rule,
+    do: "#{@username_min}–#{@username_max} characters. Letters, numbers and underscores only."
+
+  @doc "The same rule as an HTML `pattern`, so the browser can say it without a round trip."
+  @spec username_pattern() :: String.t()
+  def username_pattern, do: "[A-Za-z0-9_]{#{@username_min},#{@username_max}}"
+
+  @doc "Bounds for a form's `minlength`/`maxlength`."
+  @spec username_length() :: {pos_integer(), pos_integer()}
+  def username_length, do: {@username_min, @username_max}
 end

@@ -27,7 +27,7 @@ defmodule Polyphony.Director.BeatDriver do
   alias Polyphony.Scene.Cast
   alias Polyphony.{App, Drafts, Broadcast}
   alias Polyphony.Commands.CommitPacket
-  alias Polyphony.Director.{BeatWalk, BeatOps, BeatPolicy}
+  alias Polyphony.Director.{Auto, BeatWalk, BeatOps, BeatPolicy}
   alias Polyphony.Director.Commands.{CloseBeat, RecordPacket, RecordPass}
   alias Polyphony.Jobs.{GeneratePacket, RunBeat}
 
@@ -39,11 +39,28 @@ defmodule Polyphony.Director.BeatDriver do
   """
   @spec advance(term(), integer(), keyword()) :: :ok
   def advance(scene_id, beat, opts \\ []) do
+    # An auto run plays *everybody*, control modes included. A user-controlled slot
+    # waits for a person, and an assisted one parks a draft for a person to accept —
+    # either would stall an unattended run at the first such character and leave it
+    # sitting there until somebody noticed. Nothing is changed on the character: the
+    # modes are exactly as the author set them, and the next hand-played beat honours
+    # them again (§A1/§A2).
+    auto? = opts[:auto] == true
+
     case BeatWalk.next(scene_id, beat) do
-      :settled -> close(scene_id, beat, opts)
-      {:autonomous, character_id} -> enqueue_generate(scene_id, beat, character_id, false, opts)
-      {:assisted, character_id} -> enqueue_generate(scene_id, beat, character_id, true, opts)
-      {:user_controlled, character_id} -> await_user(scene_id, beat, character_id)
+      :settled ->
+        close(scene_id, beat, opts)
+
+      {:autonomous, character_id} ->
+        enqueue_generate(scene_id, beat, character_id, false, opts)
+
+      {:assisted, character_id} ->
+        enqueue_generate(scene_id, beat, character_id, not auto?, opts)
+
+      {:user_controlled, character_id} ->
+        if auto?,
+          do: enqueue_generate(scene_id, beat, character_id, false, opts),
+          else: await_user(scene_id, beat, character_id)
     end
 
     :ok
@@ -133,6 +150,7 @@ defmodule Polyphony.Director.BeatDriver do
       "beat_ref" => BeatOps.beat_ref(scene_id, beat),
       "chain" => true,
       "draft" => draft?,
+      "auto" => opts[:auto] == true,
       "provider" => provider_arg(opts[:provider]),
       "depth" => opts[:depth] || 0,
       "max_depth" => opts[:max_depth] || BeatPolicy.default_max_depth(),
@@ -183,17 +201,22 @@ defmodule Polyphony.Director.BeatDriver do
 
     if next == :continue do
       # Another beat runs immediately — the next RunBeat announces :director itself.
+      # `auto` rides along so a self-chained beat is still an auto beat and hits the
+      # run's gate; without it the chain would keep going past a pause.
       RunBeat.enqueue(%{
         "scene_id" => scene_id,
         "beat" => beat + 1,
         "depth" => depth + 1,
         "max_depth" => max_depth,
         "provider" => provider_arg(opts[:provider]),
-        "control_hint" => control_str(opts[:control])
+        "auto" => opts[:auto] == true,
+        "control_hint" => if(opts[:auto], do: "auto", else: control_str(opts[:control]))
       })
     else
       # The beat settled and nothing follows — the loop is idle, the reliable "done"
-      # signal the transcript stream never carried.
+      # signal the transcript stream never carried. For an auto run that *is* the end:
+      # the depth cap is the beat cap, and nothing else will enqueue for this scene.
+      if opts[:auto], do: Auto.finish(scene_id, :cap)
       Broadcast.announce_progress(scene_id, :idle, beat: beat)
     end
   end

@@ -168,12 +168,25 @@
 .seg > * { flex:1; text-align:center; padding:.35rem .5rem; font-size:12px; font-weight:600; }
 .seg-on  { background:var(--b3); }
 
+/* The tick is always in the box and invisible until something turns it on, so the
+   box never changes size and nothing beside it reflows on a click. */
 .chk    { width:18px; height:18px; border-radius:5px; border:1.5px solid var(--rule);
           flex-shrink:0; display:flex; align-items:center; justify-content:center;
-          font-size:11px; font-weight:700; }
+          font-size:11px; font-weight:700; color:transparent; }
 .chk-on  { background:var(--lamp); border-color:var(--lamp); color:var(--b1); }
 /* Outlined tick = inherited from a group. Can't be individually removed. */
 .chk-via { border-color:var(--secret); color:var(--secret); }
+
+/* Driven by a real checkbox. The input is the control — focusable, keyboard-operable,
+   named, and submitted with the form — and the box beside it is what you see; put the
+   input immediately before it and hide it visually.
+
+   This exists because the alternative doesn't work: drawing two .chk boxes and showing
+   one with a utility fails, since the kit is loaded after Tailwind and .chk's own
+   `display:flex` outranks `.hidden`. Both ticks render, always. Colour by state belongs
+   here anyway — a component that can only be driven by server state is a component that
+   can't be used in a plain form. */
+input:checked + .chk { background:var(--lamp); border-color:var(--lamp); color:var(--b1); }
 
 .bar    { height:5px; border-radius:99px; background:var(--b3); overflow:hidden; }
 .bar i  { display:block; height:100%; background:var(--lamp); }
@@ -433,9 +446,13 @@
    dock puts in its corner.
    ============================================================================ */
 
-.dock { position:fixed; right:0; bottom:0; z-index:60;
-        padding:0 calc(env(safe-area-inset-right) + .5rem)
-                calc(env(safe-area-inset-bottom) + .5rem) 0; }
+/* Middle of the right edge, not the bottom corner. The corner is where an app puts
+   its own primary controls — on the play screen, the whole bottom bar — and a dock
+   pinned on top of them is in the way of the thing you are trying to debug. Halfway
+   up is empty on every screen this has. */
+.dock { position:fixed; right:0; top:50%; transform:translateY(-50%); z-index:60;
+        display:flex; align-items:center; justify-content:flex-end;
+        padding:0 calc(env(safe-area-inset-right) + .5rem) 0 0; }
 /* Wide enough to read a wrapped line, never wider than the screen. */
 .dock-panel { width:min(100vw - 1rem, 46rem); max-height:min(70vh, 32rem);
               box-shadow:0 8px 32px rgb(0 0 0 / 55%); }
@@ -449,22 +466,19 @@
 .dock-panel { display:none; }
 .dock-open .dock-panel { display:flex; flex-direction:column; }
 .dock-open .dock-tab   { display:none; }
-/* 44px: the smallest reliably tappable target, and a dock is opened one-handed
-   while something is already going wrong. */
-.dock-tab { min-height:44px; box-shadow:0 2px 12px rgb(0 0 0 / 35%); }
+/* The closed tab is a sliver at the edge, always — there is no expanded version of
+   it to be in the way. It used to carry a label and a count, with a control to tuck
+   it down to this; but the label answered nothing you would open the dock for, so the
+   tuck was the state everyone left it in and the rest was a step on the way there.
 
-/* Tucked: the tab slides off the right edge, leaving a sliver.
-
-   A dock is pinned over an app that has its own controls in that corner, and being
-   in the way of them is reason enough to move. What it must not do is disappear —
-   the state persists, and the log is what you reach for when nothing else works. So
-   it narrows rather than hides: the label goes, the status dot stays (it is the one
-   thing worth seeing at a glance), and it keeps its 44px height, because a target
-   you cannot hit is the same as no target. Vertical edge, so overshooting to the
+   What it must not do is disappear. The status dot stays, because "is the socket
+   alive" is the one thing worth reading without opening anything, and it keeps 44px
+   of height — the smallest reliably tappable target, and a dock is opened one-handed
+   while something is already going wrong. A vertical edge, so overshooting to the
    right lands on it rather than past it. */
-.dock-tucked .dock-tab       { transform:translateX(calc(100% - 15px));
-                               padding-left:.3rem; padding-right:.3rem; }
-.dock-tucked .dock-tab-label { display:none; }
+.dock-tab { min-height:44px; box-shadow:0 2px 12px rgb(0 0 0 / 35%);
+            transform:translateX(calc(100% - 15px));
+            padding-left:.3rem; padding-right:.3rem; }
 
 
 /* An overlay: a panel over the page, with the page still behind it.

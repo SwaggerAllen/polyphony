@@ -24,12 +24,14 @@ defmodule PolyphonyWeb.AuthLiveTest do
       {:ok, view, html} = live(conn, ~p"/signup")
       assert html =~ "You&#39;re the first"
 
-      view |> element("[phx-click=toggle][phx-value-field=attest]") |> render_click()
-      view |> element("[phx-click=toggle][phx-value-field=consent]") |> render_click()
-
       result =
         view
-        |> form("form[phx-submit=register]", %{email: "boss@x.io", username: "bossuser"})
+        |> form("form[phx-submit=register]", %{
+          email: "boss@x.io",
+          username: "bossuser",
+          attest: "true",
+          consent: "true"
+        })
         |> render_submit()
 
       assert {:error, {:redirect, %{to: "/auth/verify/" <> _}}} = result
@@ -41,11 +43,13 @@ defmodule PolyphonyWeb.AuthLiveTest do
       before = Accounts.count()
       {:ok, view, _html} = live(conn, ~p"/signup")
 
-      view |> element("[phx-click=toggle][phx-value-field=consent]") |> render_click()
-
       html =
         view
-        |> form("form[phx-submit=register]", %{email: "x@x.io", username: "xuser"})
+        |> form("form[phx-submit=register]", %{
+          email: "x@x.io",
+          username: "xuser",
+          consent: "true"
+        })
         |> render_submit()
 
       assert html =~ "Polyphony is for adults"
@@ -64,13 +68,13 @@ defmodule PolyphonyWeb.AuthLiveTest do
       {:ok, invite} = Accounts.create_invite(admin)
 
       {:ok, view, _html} = live(conn, ~p"/signup")
-      view |> element("[phx-click=toggle][phx-value-field=consent]") |> render_click()
 
       view
       |> form("form[phx-submit=register]", %{
         email: "x@x.io",
         username: "xuser",
-        invite_token: invite.token
+        invite_token: invite.token,
+        consent: "true"
       })
       |> render_submit()
 
@@ -81,15 +85,14 @@ defmodule PolyphonyWeb.AuthLiveTest do
       user_fixture()
       {:ok, view, _html} = live(conn, ~p"/signup")
 
-      view |> element("[phx-click=toggle][phx-value-field=attest]") |> render_click()
-      view |> element("[phx-click=toggle][phx-value-field=consent]") |> render_click()
-
       html =
         view
         |> form("form[phx-submit=register]", %{
           email: "x@x.io",
           username: "xuser",
-          invite_token: "nope"
+          invite_token: "nope",
+          attest: "true",
+          consent: "true"
         })
         |> render_submit()
 
@@ -103,15 +106,15 @@ defmodule PolyphonyWeb.AuthLiveTest do
       {:ok, invite} = Accounts.create_invite(admin)
 
       {:ok, view, _html} = live(conn, ~p"/signup")
-      view |> element("[phx-click=toggle][phx-value-field=attest]") |> render_click()
-      view |> element("[phx-click=toggle][phx-value-field=consent]") |> render_click()
 
       html =
         view
         |> form("form[phx-submit=register]", %{
           email: "new@x.io",
           username: "theboss",
-          invite_token: invite.token
+          invite_token: invite.token,
+          attest: "true",
+          consent: "true"
         })
         |> render_submit()
 

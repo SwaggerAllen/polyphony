@@ -372,6 +372,17 @@ defmodule PolyphonyWeb.Kit do
   @doc """
   A checkbox tick.
 
+  **Decoration, not a control.** It carries `aria-hidden`, because it is either sitting
+  beside a real `<input type="checkbox">` that is the control, or inside a `button` /
+  `aria-pressed` row that is. A tick that announced itself would be a second thing in
+  the accessibility tree saying what the input already says.
+
+  Two ways to drive it. `state` is for server-held state — a row in the audience picker,
+  a published-scope switch. Put a checkbox immediately before it instead (visually
+  hidden, `sr-only`) and the kit's `input:checked + .chk` colours it: that is the one to
+  reach for on a form, because then the control is a real checkbox and the tick is only
+  a picture of it.
+
   `:via` is the kit's outlined tick: inherited from a group and therefore *not*
   individually removable — take the group off instead.
   """
@@ -381,9 +392,7 @@ defmodule PolyphonyWeb.Kit do
 
   def chk(assigns) do
     ~H"""
-    <span class={["chk", chk_state(@state), @class]} {@rest}>
-      <%= if @state != :off, do: "✓" %>
-    </span>
+    <span class={["chk", chk_state(@state), @class]} aria-hidden="true" {@rest}>✓</span>
     """
   end
 
@@ -680,9 +689,18 @@ defmodule PolyphonyWeb.Kit do
   def world_move(assigns) do
     ~H"""
     <div class={["m-world", @class]}>
+      <%!-- `flex-1 min-w-0` on the text column, and it is load-bearing rather than tidy.
+            Without it the column is a shrink-to-fit flex item, so its width comes from
+            its content — and any child sized in *percent* then resolves against a width
+            that depends on that child, which CSS settles at zero. Text was fine and the
+            waiting placeholder (`skel_lines`, widths like "96%") collapsed to nothing:
+            the rules, the dash and "The Director" with an empty space between them,
+            which reads as a Director line that came back blank. --%>
       <div :if={@register == :stage} class="flex gap-3">
         <span class="mono text-[13px] dim">—</span>
-        <div class="ttl text-[16px] leading-relaxed font-medium"><%= render_slot(@inner_block) %></div>
+        <div class="ttl text-[16px] leading-relaxed font-medium flex-1 min-w-0">
+          <%= render_slot(@inner_block) %>
+        </div>
       </div>
       <div :if={@register == :stage} class="lbl dim mt-1.5 pl-6">The Director</div>
       <div :if={@register == :page} class="ttl text-[18px] leading-[1.55] font-medium">

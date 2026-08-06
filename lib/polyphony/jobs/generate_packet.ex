@@ -181,6 +181,9 @@ defmodule Polyphony.Jobs.GeneratePacket do
       depth: args["depth"] || 0,
       max_depth: args["max_depth"] || BeatPolicy.default_max_depth(),
       control: parse_control(args["control"]),
+      # An auto run stays one across the whole cast walk, or the beat after this slot
+      # would be an ordinary one and hand back to a user who isn't there.
+      auto: args["auto"] == true,
       # Keep the campaign-owner attribution flowing to the next slot (§B5).
       user_id: args["user_id"],
       campaign_id: args["campaign_id"],

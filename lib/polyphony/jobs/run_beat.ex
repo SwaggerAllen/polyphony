@@ -29,7 +29,7 @@ defmodule Polyphony.Jobs.RunBeat do
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Costs.Attribution
   alias Polyphony.Director
-  alias Polyphony.Director.{BeatDriver, BeatOps, BeatPolicy, Proposal, SceneBrief}
+  alias Polyphony.Director.{Auto, BeatDriver, BeatOps, BeatPolicy, Proposal, SceneBrief}
   alias Polyphony.Director.Commands.OpenBeat
   alias Polyphony.LLM.Settings
 
@@ -41,6 +41,17 @@ defmodule Polyphony.Jobs.RunBeat do
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     scene_id = args["scene_id"]
+
+    # An auto run answers to its row, not to the job that happens to be queued. Paused,
+    # finished, past its cap, closed by the Director, or emptied of everyone — all of it
+    # is decided here, before a beat is paid for. See `Director.Auto`.
+    case auto_gate(args, scene_id) do
+      :stop -> :ok
+      :go -> run(args, scene_id)
+    end
+  end
+
+  defp run(args, scene_id) do
     args = args |> put_attribution(scene_id) |> put_content_register()
     # Per-campaign LLM tuning (§9), resolved fresh each beat so a campaign-screen edit
     # takes effect next beat. Character budget rides args to the cast jobs.
@@ -71,6 +82,9 @@ defmodule Polyphony.Jobs.RunBeat do
     case decide_with_fallback(decide_opts(args, scene_id, beat, members, settings), beat, heavy) do
       {:ok, resolved} ->
         resolved = cap_to_one_beat(resolved, args)
+        # Counted here rather than at the end: this beat is now happening, and a crash
+        # further down must not leave a run that can retry the same beat forever.
+        if args["auto"], do: Auto.note_beat(scene_id, beat)
         BeatOps.author_world_events(resolved.world_events, scene_id, beat)
         BeatOps.author_introductions(Map.get(resolved, :introductions, []), scene_id, beat)
 
@@ -133,11 +147,42 @@ defmodule Polyphony.Jobs.RunBeat do
   # governed by the depth cap, not `control` — so a mid-beat exit is handled but the beat
   # doesn't spawn a fresh autonomous one. A future "Auto/Play" control omits the hint and
   # lets the Director pace up to the depth cap (see docs/roadmap.md).
+  # `:go` unless this is an auto beat that shouldn't happen. A stop that came from one
+  # of the run's three ends is recorded on the row and announced; a paused or absent run
+  # is not an ending and says nothing.
+  defp auto_gate(%{"auto" => true} = args, scene_id) do
+    case Auto.check(scene_id, args["beat"] || 1) do
+      :ok ->
+        :go
+
+      {:stop, nil} ->
+        Broadcast.announce_progress(scene_id, :idle)
+        :stop
+
+      {:stop, reason} ->
+        Logger.info("[auto] #{scene_id} stopped: #{Auto.reason_text(reason)}")
+        Auto.finish(scene_id, reason)
+        Broadcast.announce_progress(scene_id, :idle)
+        :stop
+    end
+  end
+
+  defp auto_gate(_args, _scene_id), do: :go
+
   defp cap_to_one_beat(resolved, args) do
-    if args["control_hint"] in ["yield_to_user", :yield_to_user] do
-      %{resolved | control: :yield_to_user}
-    else
-      resolved
+    cond do
+      # An auto run *is* the user for as long as it lasts, so the Director's hand-back
+      # has nobody to hand back to. It ends on its own three rules (`Director.Auto`) —
+      # honouring `yield_to_user` here would stop it after the first beat, every time,
+      # which is the whole thing Continue already does.
+      args["auto"] ->
+        %{resolved | control: :continue}
+
+      args["control_hint"] in ["yield_to_user", :yield_to_user] ->
+        %{resolved | control: :yield_to_user}
+
+      true ->
+        resolved
     end
   end
 
@@ -184,6 +229,7 @@ defmodule Polyphony.Jobs.RunBeat do
       depth: depth,
       max_depth: max_depth,
       control: resolved.control,
+      auto: args["auto"] == true,
       user_id: args["user_id"],
       campaign_id: args["campaign_id"],
       character_max_tokens: args["character_max_tokens"],
