@@ -125,7 +125,11 @@ defmodule PolyphonyWeb.PlayLive do
        writing_in: MapSet.new(),
        cast: %Cast{},
        waiting: :you,
-       progress: %{phase: :idle, subject: nil},
+       # Not `idle()`: the loop may well be mid-beat right now, and until this read
+       # existed a reload (or simply opening the scene from another screen) came back
+       # showing nothing — no placeholder, no waiting line, and Continue live enough to
+       # race a second beat into a scene that was already advancing.
+       progress: Broadcast.progress(scene_id),
        introductions: [],
        control_modes: %{},
        failures: [],

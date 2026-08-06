@@ -200,6 +200,87 @@ defmodule PolyphonyWeb.WaitingStatesLiveTest do
     end
   end
 
+  describe "arriving while it is already writing" do
+    setup %{user: user} do
+      wren = character(user, %{name: "Wren"})
+      scene = "wait-mid-" <> Integer.to_string(System.unique_integer([:positive]))
+      :ok = App.dispatch(%OpenScene{scene_id: scene, opened_beat: 0})
+
+      :ok =
+        App.dispatch(%EnterCharacter{scene_id: scene, character_id: to_string(wren.id), beat: 1})
+
+      %{scene: scene, wren: wren}
+    end
+
+    test "the Director's placeholder is there for someone who wasn't watching",
+         %{conn: conn, scene: scene} do
+      # Nobody is on the screen when the loop starts. The announcement is a broadcast,
+      # so this reaches no one — which is the whole case: the reader closed the tab, or
+      # reloaded, or opened the scene from the campaign screen a second later.
+      broadcast(scene, :director)
+
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+      assert html =~ "m-world"
+      assert skels(html) > 0
+      assert html =~ "The director is setting the scene…"
+    end
+
+    test "so is a character's, with their name on it", %{conn: conn, scene: scene, wren: wren} do
+      broadcast(scene, :generating, to_string(wren.id))
+
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+      assert html =~ "m-writing"
+      assert html =~ "Wren is writing their turn…"
+    end
+
+    test "and Continue is held, so a second beat can't be raced into the scene",
+         %{conn: conn, scene: scene} do
+      # The real cost of coming back idle. `beat_busy?` guards Continue, and it was
+      # reading a phase the reload had thrown away — so the button was live during a
+      # beat that was already running.
+      broadcast(scene, :director)
+
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+      assert html =~ ~r/<button[^>]*disabled[^>]*phx-click="continue"/
+    end
+
+    test "a settled loop is not restored", %{conn: conn, scene: scene, wren: wren} do
+      broadcast(scene, :generating, to_string(wren.id))
+      broadcast(scene, :idle)
+
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+      refute html =~ "m-writing"
+      assert skels(html) == 0
+    end
+
+    test "neither is a pause on the author, which is not a spinner",
+         %{conn: conn, scene: scene, wren: wren} do
+      broadcast(scene, :awaiting_user, to_string(wren.id))
+
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+      # `awaiting_user` is read by `take_turn/3` to route a turn *into that slot at that
+      # beat*. Restoring a stale one would commit a packet into a closed beat, which is
+      # a worse failure than forgetting the pause — so the cache holds busy phases only.
+      assert skels(html) == 0
+      refute html =~ ~r/<button[^>]*disabled[^>]*phx-click="continue"/
+    end
+
+    test "one scene's beat says nothing about another's", %{conn: conn, scene: scene} do
+      other = "wait-other-" <> Integer.to_string(System.unique_integer([:positive]))
+      :ok = App.dispatch(%OpenScene{scene_id: other, opened_beat: 0})
+      broadcast(scene, :director)
+
+      {:ok, _view, html} = live(conn, ~p"/play/#{other}")
+
+      assert skels(html) == 0
+    end
+  end
+
   # The beat loop's own progress announcement, which every viewer of the scene receives.
   defp broadcast(scene, phase, subject \\ nil) do
     Polyphony.Broadcast.announce_progress(scene, phase, subject: subject)

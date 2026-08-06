@@ -1112,6 +1112,14 @@ a risk. Detail in `completed-roadmap.md`.
 - **Reading preferences persistence.** Typeface, size and line spacing are per-user and
   per-device, scoped to the transcript. Could live client-side; noting it so it doesn't get
   modelled as campaign state by accident.
+- **A paused slot should survive a reload.** `Broadcast.Activity` restores the *busy*
+  phases, so a viewer arriving mid-beat sees the placeholder again. `:awaiting_user` is
+  deliberately left out: `PlayLive.take_turn/3` reads it to commit a turn **into that slot
+  at that beat**, so a stale restore would commit into a closed beat. Today a reload while
+  the loop waits on you means your turn goes in free at `next_beat` and the Director writes
+  that character again when it resumes — the §A1 failure the driver's own comment describes.
+  The fix wants the beat aggregate's state (which slot is open, has it been recorded), not a
+  cache: a `BeatOps.pending_slot/2` read at mount.
 
 ---
 
