@@ -145,8 +145,8 @@ defmodule Polyphony.Jobs.RunBeat do
   # own `control`, so the loop doesn't self-chain further autonomous beats. Membership
   # truncation still runs — it re-decides the *same* exchange against a changed roster,
   # governed by the depth cap, not `control` — so a mid-beat exit is handled but the beat
-  # doesn't spawn a fresh autonomous one. A future "Auto/Play" control omits the hint and
-  # lets the Director pace up to the depth cap (see docs/roadmap.md).
+  # doesn't spawn a fresh autonomous one. Auto mode omits the hint and lets the Director
+  # pace up to the depth cap — see `Polyphony.Director.Auto`.
   # `:go` unless this is an auto beat that shouldn't happen. A stop that came from one
   # of the run's three ends is recorded on the row and announced; a paused or absent run
   # is not an ending and says nothing.

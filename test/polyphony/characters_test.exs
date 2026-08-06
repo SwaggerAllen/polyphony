@@ -1,6 +1,6 @@
 defmodule Polyphony.CharactersTest do
   @moduledoc """
-  Cast tiers (`backend-backlog.md` §2.5) — the second axis, and the operations that
+  Cast tiers (`completed-roadmap.md` §2.5) — the second axis, and the operations that
   move a character along it.
 
   The thing worth pinning is that `tier` and `status` stay independent. They came

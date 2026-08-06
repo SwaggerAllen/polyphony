@@ -22,7 +22,7 @@ defmodule Polyphony.Authoring.WorldBible do
   would be the world-level version of the leak `Polyphony.Visibility` exists to
   prevent, and it would leak into *prompts*, where nobody can see it happen.
 
-  **Who else knows a secret is not modelled yet** (`backend-backlog.md` §3.3, the
+  **Who else knows a secret is not modelled yet** (`completed-roadmap.md` §3.3, the
   audience picker). Until it is, `concealed: true` means what its default says —
   nobody starts out knowing. That is the safe direction: a character knows too
   little, never too much.

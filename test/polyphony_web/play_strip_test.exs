@@ -11,7 +11,7 @@ defmodule PolyphonyWeb.Play.StripTest do
   unknown to the people in it; filtering would model a distinction the domain
   doesn't have, and would cost a player the thing the strip is for, which is seeing
   that the beat is moving rather than hung. Concealed presence is specced
-  (`backend-backlog.md` §2.1/§2.2) and gets a greyed placeholder here rather than an
+  (Linear `STR-17`/`STR-18`) and gets a greyed placeholder here rather than an
   omission, landing together with the context-generation half.
   """
   use ExUnit.Case, async: true

@@ -2,7 +2,7 @@ defmodule PolyphonyWeb.PlayUserTurnLiveTest do
   @moduledoc """
   User-controlled slots (§A1): the beat loop pauses, and the composer answers *that*.
 
-  The gap this closes was flagged in `roadmap.md`'s FE/BE parity audit as deliberately
+  The gap this closes was flagged in the FE/BE parity audit (`completed-roadmap.md`) as deliberately
   deferred, with a workaround — "don't speak as a character you want the cast to
   drive". `BeatDriver` has always paused at a `user_controlled` slot and broadcast
   `awaiting_user`; the composer never read it, so Send always did a *free*

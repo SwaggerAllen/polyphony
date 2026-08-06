@@ -380,7 +380,7 @@ defmodule PolyphonyWeb.CampaignLive do
   def handle_event("toggle_quick_build", _params, socket),
     do: {:noreply, assign(socket, quick_build_open: not socket.assigns.quick_build_open)}
 
-  # **Attaching a world copies it** (`backend-backlog.md` §2.5b). A campaign
+  # **Attaching a world copies it** (`completed-roadmap.md` §2.5b). A campaign
   # accumulates world arc, and two campaigns cannot write different histories onto one
   # bible — so what the campaign holds is its own copy, and the library entry stays a
   # template. The honest cost is stated on the screen rather than implied away: fixing

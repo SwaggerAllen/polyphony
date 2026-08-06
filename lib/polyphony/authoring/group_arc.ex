@@ -1,6 +1,6 @@
 defmodule Polyphony.Authoring.GroupArc do
   @moduledoc """
-  When a group changes, one change becomes many proposals (`backend-backlog.md` §3.0b,
+  When a group changes, one change becomes many proposals (`completed-roadmap.md` §3.0b,
   `ux/polyphony-arc.html` §03b).
 
   A group is a character-shaped template that seeds people **by copy**, so updating the

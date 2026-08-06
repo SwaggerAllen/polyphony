@@ -15,8 +15,8 @@ defmodule PolyphonyWeb.Play.Strip do
   distinction the domain doesn't have, and it would cost a player the thing the
   strip is *for*: seeing that the beat is moving rather than hung.
 
-  Concealed presence is a real feature and it is specced — `backend-backlog.md`
-  §2.1 (per-observer presence) and §2.2 (turn-order visibility). When it lands, the
+  Concealed presence is a real feature and it is specced — Linear `STR-17`
+  (per-observer presence) and `STR-18` (turn-order visibility). When it lands, the
   treatment here is a **greyed placeholder** rather than an omission, with runs of
   consecutive concealed slots collapsed into one, so the tracker still accounts for
   the time the beat spends on them. It has to land with the **context-generation**

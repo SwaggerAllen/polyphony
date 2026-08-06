@@ -1,6 +1,6 @@
 defmodule Polyphony.Authoring.EffectiveAsOfTest do
   @moduledoc """
-  Sheet time travel (`backend-backlog.md` §2.14) — reading a sheet as it stood at
+  Sheet time travel (`completed-roadmap.md` §2.14) — reading a sheet as it stood at
   the close of a past scene.
 
   The history was already recorded: `arc_entries` carries `source_scene_id`, so

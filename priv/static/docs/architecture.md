@@ -2,7 +2,7 @@
 
 How the system is built and why. Companion to the design brief (cited as §n) and
 the frontend spec. For day-to-day commands and invariants see `../CLAUDE.md`; for
-what's planned see `roadmap.md`.
+what's planned see the Linear project `Polyphony`.
 
 ---
 

@@ -5,7 +5,7 @@ copy, screen structure, the argument for a change. Not for Claude Code; the code
 has `CLAUDE.md`.
 
 Paste this into a Claude Project's custom instructions, or point a thread at
-`<BASE>/docs/design-thread.md` and tell it to follow it.
+`https://polyphony-h7sgq.ondigitalocean.app/docs/design-thread.md` and tell it to follow it.
 
 ## Why the split
 
@@ -18,11 +18,11 @@ exists to make the handover lossless in one direction and impossible in the othe
 thread **never writes to the repository**. It produces two things — a file and a
 statement of intent — and a code session turns them into commits with tests.
 
-## Fill these in
+## Constants
 
 | | |
 |---|---|
-| `BASE` | The deployed app's URL. Ask the human if you don't have it. |
+| `BASE` | `https://polyphony-h7sgq.ondigitalocean.app` |
 | `DRIVE_FOLDER` | `1y1HudA1L2Ns36Hx_CmO0BDGDp8bBmfuv` |
 | Linear team | `StrutCo` |
 | Linear project | `Polyphony` — **every issue goes here**, without exception |
@@ -63,16 +63,27 @@ question you'll want answered later when something looks odd.
 
 The current design is *live*, not remembered. Fetch it:
 
-- `<BASE>/docs` — index of everything, with a line on what each file is for.
-- `<BASE>/ux/polyphony-kit.css` — **the single source of truth** for tokens and
-  component classes. Every class you use in a mock must already exist here, or your mock
-  is proposing a new component and should say so in as many words.
-- `<BASE>/ux/polyphony-<screen>.html` — the current mock for the screen you're changing.
-- `<BASE>/docs/architecture.md`, `<BASE>/docs/roadmap.md` — what the system does and
-  what's planned, when the design question touches either.
+- `BASE/docs` — index of everything, with a line on what each file is for.
+- `BASE/ux/polyphony-kit.css` — **the single source of truth** for tokens and component
+  classes. Every class you use in a mock must already exist here, or your mock is
+  proposing a new component and should say so in as many words.
+- `BASE/ux/polyphony-<screen>.html` — the current mock for the screen you're changing.
+- `BASE/docs/architecture.md` — what the system actually does, when the design question
+  touches it.
 
-Designing from memory is how a mock ends up using a class that was renamed in March. If
-a fetch fails, say so and ask — don't reconstruct.
+**And read Linear before proposing anything.** The worklist is there, not in the docs —
+`roadmap.md` and `backend-backlog.md` were retired into the `Polyphony` project. Two
+things are worth checking every time:
+
+- **Is it already filed?** Search the project before writing a new issue. A second issue
+  for the same change splits the argument across two places.
+- **Has it already been declined?** The **Confirmed non-asks** document on the project
+  lists what the design deliberately doesn't want, each with its reason. Proposing one of
+  those isn't forbidden — but do it knowing you're arguing against a recorded decision,
+  and say so.
+
+Designing from memory is how a mock ends up using a class that was renamed in March. If a
+fetch fails, say so and ask — don't reconstruct.
 
 ## Producing a mock
 
@@ -138,7 +149,7 @@ Drive entirely and file the issue. Most of them are this.
 - **Never writes to the repository.** No commits, no PRs, no edits. If you find yourself
   wanting to, the answer is an issue.
 - **Never treats a Drive file as canonical.** It's in transit. The design of record is
-  `ux/` in the repo, served at `<BASE>/ux/`, and it gets there through a code session.
+  `ux/` in the repo, served at `BASE/ux/`, and it gets there through a code session.
 - **Never edits `docs/`.** Those describe running code, and a doc that's true here and
   false in the repo is worse than one that's missing.
 - **Doesn't decide it's done.** The code session ports it, and may come back with a

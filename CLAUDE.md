@@ -1,8 +1,9 @@
 # CLAUDE.md
 
 Operational guide for working in this repo. `docs/README.md` indexes the docs and
-says where new writing goes; read `docs/architecture.md` for the design, `docs/roadmap.md`
-for the near-term schedule, and `docs/decisions.md` for the post-v1 rationale.
+says where new writing goes; read `docs/architecture.md` for the design and
+`docs/decisions.md` for the post-v1 rationale. **The near-term schedule is not a document** —
+open work is the Linear project `Polyphony` (team `StrutCo`); see "The worklist" below.
 
 ## What this is
 
@@ -23,8 +24,8 @@ design pass — static mocks (`polyphony-*.html`), a component kit
 notes). `polyphony-kit.css` is the **single source of truth** for tokens and every
 component class. When that rework lands, port from the kit as directly as possible —
 lift its classes and markup rather than re-deriving them — so the shipped UI and the
-design don't drift. The backend work the redesign depends on is tracked in
-`docs/backend-backlog.md`.
+design don't drift. The backend work the redesign depends on is the **Frontend rebuild**
+milestone in Linear.
 
 ## Commands
 
@@ -143,15 +144,29 @@ for it.
   that's deliberate, the app has no users until the rebuild lands. Review components at
   `/storybook`, and give any new one a story — the suite requires it.
 
-## The design inbox (drain it when asked, not on every session)
+## The worklist (Linear, not a document)
 
-Design happens in a **normal Claude thread** — faster to iterate with, and it doesn't
-block this one. Its instructions are `docs/design-thread.md`. It hands work over in two
-pieces, and never writes to the repo itself:
+**Every open item is a Linear issue** in the **`Polyphony`** project (team `StrutCo`).
+That project *is* the scope: an issue outside it isn't part of this loop and isn't yours
+to act on. `docs/roadmap.md` and `docs/backend-backlog.md` used to hold this and are
+**retired** — a worklist wants a tracker, because prioritising, moving and closing are
+things a markdown list can't do. Their shipped half is in `docs/completed-roadmap.md`;
+things deliberately ruled out are the **Confirmed non-asks** project document, which is
+worth reading before building anything that looks obviously missing.
 
-- **Linear** carries the intent — an issue saying what changes and why. Every issue lives
-  in the **`Polyphony`** project (team `StrutCo`); that project *is* the scope, so an
-  issue outside it isn't part of this loop and isn't yours to act on.
+Three labels do the filtering: **`frontend`** / **`backend`** for the kind of work,
+**`needs-design`** for open questions that come before code, and **`deferred`** for
+things recorded so a later pass doesn't re-find them as a surprise. Milestones carry the
+sequencing the roadmap used to argue for — **Frontend rebuild** (the critical path; the
+app has no users until it lands), then **Authoring quality**, then **World simulation**.
+
+Some issues arrive from elsewhere. Design happens in a **normal Claude thread** — faster
+to iterate with, and it doesn't block this one. Its instructions are
+`docs/design-thread.md`, it never writes to the repo, and it hands work over in two
+pieces:
+
+- **Linear** carries the intent — an issue saying what changes and why, tagged
+  `design-inbox`.
 - **Google Drive** carries the material — a mock HTML file in the folder
   `1y1HudA1L2Ns36Hx_CmO0BDGDp8bBmfuv`, named in the issue as `Drive: <title> (<fileId>)`.
   This is never canonical; `ux/` in the repo is.
@@ -172,7 +187,8 @@ The `design-inbox` label is provenance — *this came from the design thread* �
 worth reading for context, but it is never the queue: a label doesn't move, and two
 issues with the same label can be in completely different states.
 
-To drain it, when the author asks:
+To drain the design inbox, when the author asks — and the same first step is how you pick
+up any queued work, design-thread or not:
 
 1. **Linear** — list issues in **Ready for dev** in the **Polyphony** project. Both
    filters matter: the state is the queue, the project is the scope. Read the whole

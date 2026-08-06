@@ -5,8 +5,8 @@ defmodule PolyphonyWeb.Storybook do
   `ux/polyphony-kit.html` is the design's catalogue — every component and state,
   drawn once. This is its live counterpart: the same components as they actually
   render, reviewable on their own page instead of only in situ on a screen. The
-  roadmap's reason for adopting it is drift (`roadmap.md`, "Frontend redesign &
-  design-kit fidelity"): when a component's states live in one place, a screen
+  reason for adopting it is drift (`completed-roadmap.md`, "Frontend rebuild — the
+  design-kit foundation"): when a component's states live in one place, a screen
   can't quietly invent a sixth one.
 
   It is mounted at `/storybook`, gated **per request** on the `:storybook` config

@@ -38,7 +38,7 @@ defmodule PolyphonyWeb.DocsServedTest do
       ux = Publish.collect("priv/static/ux")
 
       assert Map.has_key?(docs, "architecture.md")
-      assert Map.has_key?(docs, "roadmap.md")
+      assert Map.has_key?(docs, "completed-roadmap.md")
       assert Map.has_key?(ux, "polyphony-kit.css")
       # The brief every `§n` in the codebase cites. It lives in an archive subdirectory,
       # so it is also the check that the copy is a tree walk rather than a glob of one

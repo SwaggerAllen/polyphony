@@ -34,9 +34,7 @@ defmodule PolyphonyWeb.DocsLive do
   @about %{
     "docs/README.md" => "Start here: what each document is for and where new writing goes.",
     "docs/architecture.md" => "How the shipped system works, section by section.",
-    "docs/roadmap.md" => "What's left to build, and in what order.",
     "docs/completed-roadmap.md" => "What's already been built, with the detail.",
-    "docs/backend-backlog.md" => "The concrete engineering worklist.",
     "docs/backend-capabilities.md" => "What the backend can already do, as a reference.",
     "docs/decisions.md" => "Post-v1 rationale — the forward argument, not the schedule.",
     "docs/deployment.md" => "Running it: the release, the host, mail, and the env vars.",
