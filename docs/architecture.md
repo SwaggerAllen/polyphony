@@ -297,7 +297,10 @@ Roles (`Accounts.Roles`) are pure and default-deny: `:user` < `:admin` <
 index (`one_superadmin`) so even a race can't mint a second — and it is un-demotable
 (even by itself) and never assignable by promotion. Admins and the superadmin may
 promote a user to admin; only the superadmin may demote. Invites mirror this:
-`create_invite/2` is admin-gated and each redeems exactly once. Real `owner_id`s for
+`create_invite/2` is admin-gated and each redeems exactly once — except a `reusable: true`
+one, which stays valid after redemption for hands-on testing and is the reason
+`revoke_invite/3` exists (an invite that never spends itself is a standing hole in the
+gate, and revoking closes either kind without deleting the row). Real `owner_id`s for
 §B1 fall out of this once the web layer authenticates a session.
 
 ## 17. Moderation — reporting, admin authz, audit (§B3)

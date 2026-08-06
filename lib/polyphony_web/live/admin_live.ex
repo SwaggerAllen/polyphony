@@ -177,11 +177,17 @@ defmodule PolyphonyWeb.AdminLive do
     end)
   end
 
-  def handle_event("mint_invite", _params, socket) do
+  def handle_event("mint_invite", _params, socket), do: mint(socket, [])
+
+  # Stays valid after it is used — for putting a second and third account on a build
+  # while testing by hand, which single-use turns into a trip back here each time.
+  def handle_event("mint_reusable", _params, socket), do: mint(socket, reusable: true)
+
+  def handle_event("revoke_invite", %{"id" => id}, socket) do
     safe(socket, fn ->
-      case Accounts.create_invite(socket.assigns.current_user) do
-        {:ok, _} -> {:noreply, socket |> put_flash(:info, "Minted one.") |> load()}
-        _ -> {:noreply, put_flash(socket, :error, "Couldn't mint one.")}
+      case Accounts.revoke_invite(socket.assigns.current_user, to_int(id)) do
+        {:ok, _} -> {:noreply, socket |> put_flash(:info, "Closed it.") |> load()}
+        _ -> {:noreply, put_flash(socket, :error, "Couldn't close it.")}
       end
     end)
   end
@@ -616,11 +622,39 @@ defmodule PolyphonyWeb.AdminLive do
     <Kit.sheet class="m-4">
       <Kit.row class="px-4 py-3 flex items-center justify-between gap-2" style="background:var(--b2)">
         <span class="ttl text-[15px] font-semibold">Invites</span>
-        <Kit.btn kind={:primary} size={:sm} type="button" phx-click="mint_invite">Mint one</Kit.btn>
+        <div class="flex gap-1.5">
+          <%!-- Two buttons rather than a switch beside one, because these are different
+                objects once minted and the difference is not a setting you'd revisit.
+                The reusable one is a standing hole in the gate for as long as it exists
+                — so it says what it is on the row, and it can be closed. --%>
+          <Kit.btn size={:sm} type="button" phx-click="mint_reusable">Reusable</Kit.btn>
+          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="mint_invite">Mint one</Kit.btn>
+        </div>
       </Kit.row>
-      <Kit.row :for={i <- @invites} class="px-4 py-2.5">
-        <div class={["mono text-[12px]", i.redeemed_by_id && "dim"]}><%= i.token %></div>
-        <div class="text-[11px] dim"><%= invite_line(i) %></div>
+      <Kit.row :for={i <- @invites} class="px-4 py-2.5 flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <div class={["mono text-[12px] break-all", spent?(i) && "dim"]} id={"invite-#{i.id}"}>
+            <%= i.token %>
+          </div>
+          <div class="text-[11px] dim"><%= invite_line(i) %></div>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <%!-- The code is meant to be typed into another device, which is the whole
+                use for a reusable one. Reading it off a phone screen is not that. --%>
+          <Kit.btn
+            kind={:ghost}
+            size={:sm}
+            type="button"
+            id={"invite-copy-#{i.id}"}
+            phx-hook="CopyText"
+            data-copy-target={"invite-#{i.id}"}
+          >
+            Copy
+          </Kit.btn>
+          <Kit.btn :if={not spent?(i)} kind={:pen} type="button" phx-click="revoke_invite" phx-value-id={i.id}>
+            Revoke
+          </Kit.btn>
+        </div>
       </Kit.row>
       <Kit.empty :if={@invites == []} headline="No invites minted." class="py-7">
         Polyphony is invite-only while it's young, so this is the door.
@@ -628,6 +662,8 @@ defmodule PolyphonyWeb.AdminLive do
     </Kit.sheet>
     """
   end
+
+  defp spent?(invite), do: Polyphony.Accounts.Invite.spent?(invite)
 
   defp admins(assigns) do
     ~H"""
@@ -781,6 +817,24 @@ defmodule PolyphonyWeb.AdminLive do
     "By #{author} · descended from what was taken down"
   end
 
+  defp mint(socket, opts) do
+    safe(socket, fn ->
+      case Accounts.create_invite(socket.assigns.current_user, opts) do
+        {:ok, _} -> {:noreply, socket |> put_flash(:info, "Minted one.") |> load()}
+        _ -> {:noreply, put_flash(socket, :error, "Couldn't mint one.")}
+      end
+    end)
+  end
+
+  # What this invite is and what has happened to it. A reusable one leads with the fact
+  # that it stays open, because that is the thing about it somebody needs to know
+  # before they send it anywhere.
+  defp invite_line(%{revoked_at: at} = i) when not is_nil(at),
+    do: "Closed · #{used_count(i)} · made #{month(i.inserted_at)}"
+
+  defp invite_line(%{reusable: true} = i),
+    do: "Reusable — stays valid · #{used_count(i)} · made #{month(i.inserted_at)}"
+
   defp invite_line(%{redeemed_by_id: nil, inserted_at: at}), do: "Unused · made #{month(at)}"
 
   defp invite_line(%{redeemed_by_id: id, inserted_at: at}) do
@@ -789,6 +843,11 @@ defmodule PolyphonyWeb.AdminLive do
       user -> "Used by #{user.username} · #{month(at)}"
     end
   end
+
+  defp used_count(%{uses: n}) when is_integer(n) and n > 0,
+    do: "used #{n} #{if n == 1, do: "time", else: "times"}"
+
+  defp used_count(_), do: "never used"
 
   defp admin_line(%{role: "superadmin"}), do: "The first account"
   defp admin_line(%{inserted_at: at}), do: "Admin since #{month(at)}"

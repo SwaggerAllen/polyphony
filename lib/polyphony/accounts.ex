@@ -273,7 +273,9 @@ defmodule Polyphony.Accounts do
             {:error, :invite_invalid}
 
           invite ->
-            if Invite.redeemed?(invite), do: {:error, :invite_invalid}, else: {:ok, invite}
+            # `spent?/1`, not `redeemed?/1`: a reusable invite stays open after a
+            # redemption, and a revoked one is closed whether or not it ever was.
+            if Invite.spent?(invite), do: {:error, :invite_invalid}, else: {:ok, invite}
         end
     end
   end
@@ -318,13 +320,48 @@ defmodule Polyphony.Accounts do
 
   # ── Invites (planned addition #5) ─────────────────────────────────────────────
 
-  @doc "Mint a single-use invite. Admin-or-above only; returns `{:ok, invite} | {:error, :forbidden}`."
+  @doc """
+  Mint an invite. Admin-or-above only; returns `{:ok, invite} | {:error, :forbidden}`.
+
+  Single-use by default. `reusable: true` mints one that stays valid after it is
+  redeemed — for hands-on testing, where putting a second and third account on a build
+  is the job and a spent invite makes each of those a trip back to the admin screen. It
+  is a standing hole in an invite-only gate for as long as it exists, which is what
+  `revoke_invite/3` is for.
+  """
   @spec create_invite(User.t(), keyword()) :: {:ok, Invite.t()} | {:error, :forbidden}
   def create_invite(%User{} = actor, opts \\ []) do
     if Roles.admin?(role_atom(actor.role)) do
-      {:ok, repo(opts).insert!(Invite.new_changeset(gen_token(), actor.id))}
+      changeset = Invite.new_changeset(gen_token(), actor.id, reusable: opts[:reusable] == true)
+      {:ok, repo(opts).insert!(changeset)}
     else
       {:error, :forbidden}
+    end
+  end
+
+  @doc """
+  Close an invite. Admin-or-above only.
+
+  Not a delete: the row stays, so an account that came in through it keeps its
+  provenance, and a reusable invite's history doesn't disappear along with the code.
+  Already-revoked is a no-op rather than an error — the question is whether the invite
+  is closed, and it is.
+  """
+  @spec revoke_invite(User.t(), term(), keyword()) ::
+          {:ok, Invite.t()} | {:error, :forbidden | :not_found}
+  def revoke_invite(%User{} = actor, invite_id, opts \\ []) do
+    repo = repo(opts)
+
+    cond do
+      not Roles.admin?(role_atom(actor.role)) ->
+        {:error, :forbidden}
+
+      true ->
+        case repo.get(Invite, invite_id) do
+          nil -> {:error, :not_found}
+          %Invite{revoked_at: at} = invite when not is_nil(at) -> {:ok, invite}
+          invite -> {:ok, repo.update!(Invite.revoke_changeset(invite, now(opts)))}
+        end
     end
   end
 
@@ -335,11 +372,11 @@ defmodule Polyphony.Accounts do
     repo(opts).all(from(i in Invite, order_by: [desc: i.inserted_at]))
   end
 
-  @doc "An unredeemed invite for `token`, or nil."
+  @doc "An invite for `token` that can still be redeemed, or nil."
   def open_invite(token, opts \\ []) do
     case repo(opts).get_by(Invite, token: to_string(token)) do
       nil -> nil
-      invite -> if Invite.redeemed?(invite), do: nil, else: invite
+      invite -> if Invite.spent?(invite), do: nil, else: invite
     end
   end
 

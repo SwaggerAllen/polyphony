@@ -308,6 +308,50 @@ defmodule PolyphonyWeb.AdminScreenLiveTest do
       assert length(Accounts.list_invites()) == 1
     end
 
+    test "a reusable one is a second button, and says what it is", %{conn: conn} do
+      {conn, _admin} = admin_conn(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/admin?#{[tab: "invites"]}")
+      html = view |> element("button[phx-click=mint_reusable]") |> render_click()
+
+      # Two buttons rather than a switch beside one: these are different objects once
+      # minted, and the row has to say which it is before anybody sends it anywhere.
+      assert html =~ "Reusable — stays valid"
+      assert html =~ "never used"
+      assert [%{reusable: true}] = Accounts.list_invites()
+    end
+
+    test "and it can be closed, because it never closes itself", %{conn: conn} do
+      {conn, admin} = admin_conn(conn)
+      {:ok, invite} = Accounts.create_invite(admin, reusable: true)
+
+      {:ok, view, html} = live(conn, ~p"/admin?#{[tab: "invites"]}")
+      assert html =~ "Revoke"
+
+      closed =
+        view
+        |> element("button[phx-click=revoke_invite][phx-value-id='#{invite.id}']")
+        |> render_click()
+
+      assert closed =~ "Closed ·"
+      # Not a delete: the row stays, so an account that came in through it keeps its
+      # provenance. And a closed invite has nothing left to revoke.
+      assert length(Accounts.list_invites()) == 1
+      refute closed =~ "Revoke"
+      assert Accounts.open_invite(invite.token) == nil
+    end
+
+    test "the code can be copied, since it is meant to be typed into another device",
+         %{conn: conn} do
+      {conn, admin} = admin_conn(conn)
+      {:ok, invite} = Accounts.create_invite(admin, reusable: true)
+
+      {:ok, _view, html} = live(conn, ~p"/admin?#{[tab: "invites"]}")
+
+      assert html =~ ~s(data-copy-target="invite-#{invite.id}")
+      assert html =~ ~s(id="invite-#{invite.id}")
+    end
+
     test "demotion exists, and the first account stays pinned", %{conn: conn} do
       boss = user_fixture(%{role: "superadmin"})
       conn = log_in_user(conn, boss)

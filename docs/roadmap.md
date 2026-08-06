@@ -157,8 +157,10 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
     authorization — admins/superadmin promote to admin, superadmin alone demotes, and the
     superadmin is un-demotable (even by itself) and never assignable.
   - **[planned addition #5]** ✅ **invite-only sign-up** — `create_invite/2` is admin-gated,
-    invites are single-use, and the first user bypasses. Free / subscription tiers remain a
-    future addition.
+    invites are single-use, and the first user bypasses. `reusable: true` mints one that
+    stays valid after use — for putting a second and third account on a build by hand —
+    and `revoke_invite/3` closes either kind, since an invite that never spends itself is
+    a standing hole in the gate. Free / subscription tiers remain a future addition.
   - *Deferred to the web/auth layer:* magic-link email delivery + numeric-code fallback,
     sessions with sliding renewal (transport). The domain that decides *who may do what* is
     complete and tested; only the login channel is deferred.
