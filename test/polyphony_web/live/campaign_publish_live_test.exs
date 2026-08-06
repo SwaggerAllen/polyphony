@@ -11,6 +11,11 @@ defmodule PolyphonyWeb.CampaignPublishLiveTest do
 
   The lesson is the shape of the test, not the bug: a path whose only coverage calls
   past the UI is a path with no coverage of the UI.
+
+  The panel lives on **Settings**, not Cast. It sat with the people because the
+  perspective list is people — but that list is one control inside it, and the panel
+  also decides whether a spectator may read at all and whether the sheets travel,
+  neither of which is about the cast.
   """
   use PolyphonyWeb.ConnCase, async: false
 
@@ -53,7 +58,7 @@ defmodule PolyphonyWeb.CampaignPublishLiveTest do
   test "the Publish button actually publishes", %{conn: conn, user: user} do
     {entry, _wren} = campaign(user)
 
-    {:ok, view, _html} = live(conn, ~p"/campaigns/#{entry.id}?tab=cast")
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{entry.id}?tab=settings")
     html = view |> element("button[phx-click=publish]") |> render_click()
 
     assert html =~ "Published. Anyone with the link reads this."
@@ -69,7 +74,7 @@ defmodule PolyphonyWeb.CampaignPublishLiveTest do
   test "the grant the author ticked is what travels with it", %{conn: conn, user: user} do
     {entry, wren} = campaign(user)
 
-    {:ok, view, _html} = live(conn, ~p"/campaigns/#{entry.id}?tab=cast")
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{entry.id}?tab=settings")
     view |> element("[phx-click=toggle_perspective][phx-value-id='#{wren.id}']") |> render_click()
     view |> element("[phx-click=toggle_forkable]") |> render_click()
     view |> element("button[phx-click=publish]") |> render_click()
@@ -85,7 +90,7 @@ defmodule PolyphonyWeb.CampaignPublishLiveTest do
        %{conn: conn, user: user} do
     {entry, _wren} = campaign(user, %{scenes: ["s1"]})
 
-    {:ok, view, _html} = live(conn, ~p"/campaigns/#{entry.id}?tab=cast")
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{entry.id}?tab=settings")
     view |> element("button[phx-click=publish]") |> render_click()
 
     {:ok, _view, html} = live(conn, ~p"/library")
@@ -102,11 +107,11 @@ defmodule PolyphonyWeb.CampaignPublishLiveTest do
     test "replaces the published copy in place, keeping its id", %{conn: conn, user: user} do
       {entry, _wren} = campaign(user)
 
-      {:ok, view, _html} = live(conn, ~p"/campaigns/#{entry.id}?tab=cast")
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{entry.id}?tab=settings")
       view |> element("button[phx-click=publish]") |> render_click()
       [first] = Library.publications_of(entry)
 
-      {:ok, view, html} = live(conn, ~p"/campaigns/#{entry.id}?tab=cast")
+      {:ok, view, html} = live(conn, ~p"/campaigns/#{entry.id}?tab=settings")
       # The button says which of the two things it is.
       assert html =~ "Update what&#39;s published"
       view |> element("button[phx-click=publish]") |> render_click()
@@ -273,7 +278,7 @@ defmodule PolyphonyWeb.CampaignPublishLiveTest do
   test "the published copy is readable, and the editor sends you there", %{conn: conn, user: user} do
     {entry, _wren} = campaign(user)
 
-    {:ok, view, _html} = live(conn, ~p"/campaigns/#{entry.id}?tab=cast")
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{entry.id}?tab=settings")
     view |> element("button[phx-click=publish]") |> render_click()
     [snapshot] = Library.publications_of(entry)
 
@@ -283,5 +288,50 @@ defmodule PolyphonyWeb.CampaignPublishLiveTest do
 
     {:ok, _view, html} = live(conn, ~p"/browse")
     assert html =~ "Saltmarch"
+  end
+
+  describe "the perspective list" do
+    defp person(user, name, tier) do
+      Library.put(%{
+        owner: Owner.of(user),
+        kind: "character",
+        payload: %CharacterSheet{name: name, status: :full, tier: tier}
+      })
+    end
+
+    test "is ordered by tier, not by the order people were cast",
+         %{conn: conn, user: user} do
+      # Cast deliberately worst-first, so roster order and tier order disagree.
+      walk_on = person(user, "The bellman", :incidental)
+      recurring = person(user, "Bram", :recurring)
+      lead = person(user, "Wren", :main)
+
+      {entry, _} =
+        campaign(user, %{character_ids: [walk_on.id, recurring.id, lead.id], scenes: ["s1"]})
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{entry.id}?tab=settings")
+
+      # The roster is the order people happened to be cast — an accident of how the
+      # campaign was built. The tier is the author's own statement about who the story
+      # is about, and a reader offered a walk-on's head above a lead's is being offered
+      # the wrong story.
+      assert [_, _, _] = order = perspective_order(html)
+      assert order == ["Wren", "Bram", "The bellman"]
+    end
+
+    test "and within a tier keeps cast order, which is what the colours key on",
+         %{conn: conn, user: user} do
+      first = person(user, "Wren", :main)
+      second = person(user, "Ilias", :main)
+      {entry, _} = campaign(user, %{character_ids: [first.id, second.id], scenes: ["s1"]})
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{entry.id}?tab=settings")
+      assert perspective_order(html) == ["Wren", "Ilias"]
+    end
+  end
+
+  # The names in the "As …" checkboxes, in the order they render.
+  defp perspective_order(html) do
+    for [_, name] <- Regex.scan(~r|As ([^<]+?)</span>|, html), do: String.trim(name)
   end
 end
