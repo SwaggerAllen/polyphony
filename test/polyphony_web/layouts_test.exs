@@ -94,6 +94,19 @@ defmodule PolyphonyWeb.LayoutsTest do
       assert html =~ ~s(<details class="relative ml-2)
     end
 
+    test "it is drawn as a control, not as a status chip", %{conn: conn} do
+      scene = open_scene()
+
+      {:ok, _view, html} = live(conn, ~p"/play/#{scene}")
+
+      # It wore `.pill` — the kit's chip for the read-only things in a header, so the
+      # one way into the rest of the app was bordered like a label, set at 11px, and
+      # shorter than the action beside it. `.hamb` is borderless and 28px square,
+      # `.btn-sm`'s exact height, so the header's controls share a baseline.
+      assert html =~ ~s(class="hamb")
+      refute html =~ ~s(class="pill list-none)
+    end
+
     test "it carries the landing page too, which nothing else linked to", %{conn: conn} do
       scene = open_scene()
 

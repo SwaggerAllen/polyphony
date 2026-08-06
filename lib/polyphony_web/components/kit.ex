@@ -142,8 +142,12 @@ defmodule PolyphonyWeb.Kit do
   and a status pill, that is most of the time. The extra left margin is the same
   point made in space: the gap says this one isn't part of that group.
 
-  The kit draws the closed affordance (a `.pill`) but not the open state, so the
-  panel below is the kit's own sheet-and-rows applied to it rather than a new idea.
+  The kit draws the closed affordance (`.hamb`) but not the open state, so the panel
+  below is the kit's own sheet-and-rows applied to it rather than a new idea. `.hamb`
+  replaced a `.pill`, which had drawn the only way into the rest of the app as a
+  status chip: bordered like the read-only things beside it, an 11px glyph, and
+  shorter than the action it sits next to. It is a borderless 28px square now —
+  `.btn-sm`'s exact height, so the header's two controls share a baseline.
   """
   attr(:label, :string, default: "Menu")
   attr(:class, :string, default: nil)
@@ -157,7 +161,7 @@ defmodule PolyphonyWeb.Kit do
   def menu(assigns) do
     ~H"""
     <details class={["relative ml-2", @class]}>
-      <summary class="pill list-none cursor-pointer" aria-label={@label}>☰</summary>
+      <summary class="hamb" aria-label={@label}>☰</summary>
       <nav
         class="sheet absolute right-0 top-full mt-1 z-20 min-w-[11rem] overflow-hidden"
         style="background:var(--b2)"

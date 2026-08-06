@@ -133,6 +133,21 @@
         border:1px solid var(--rule); border-radius:999px;
         padding:.1rem .5rem; font-size:11px; line-height:1.6; }
 
+/* The nav trigger. It was drawn as a .pill, which made the one way into the rest
+   of the app look like a status chip — bordered like the read-only things beside
+   it, an 11px glyph, and shorter than the action it sits next to. So: no border,
+   nothing but the mark, and 28px square — exactly .btn-sm's height, so the two
+   header controls share a baseline and neither reads as subordinate to the other.
+   A square box rather than padding because the glyph is the whole control and it
+   should be centred in a tap target, not measured from its own edges.
+   It is drawn on a <summary> in the app, so it clears the disclosure marker too —
+   otherwise Safari sets a triangle beside it. */
+.hamb { display:inline-flex; align-items:center; justify-content:center;
+        width:28px; height:28px; flex-shrink:0;
+        border:0; border-radius:8px; background:transparent; color:var(--bc);
+        font-size:18px; line-height:1; cursor:pointer; list-style:none; }
+.hamb::-webkit-details-marker { display:none; }
+
 .dot { width:7px; height:7px; border-radius:999px; display:inline-block; }
 .av  { width:28px; height:28px; border-radius:8px; flex-shrink:0; }
 

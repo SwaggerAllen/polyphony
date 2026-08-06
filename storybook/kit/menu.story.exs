@@ -19,7 +19,7 @@ defmodule Storybook.Kit.Menu do
       %Variation{
         id: :open_it,
         description:
-          "The closed affordance is the kit's pill; the open panel is its sheet and rows.",
+          "Closed, it is the kit's `.hamb` — borderless, 28px square, the same height as the primary action it sits beside. Open, it is the kit's own sheet and rows.",
         slots: [
           ~s|<:item navigate="#">Your stuff</:item>|,
           ~s|<:item navigate="#">Browse published</:item>|,
