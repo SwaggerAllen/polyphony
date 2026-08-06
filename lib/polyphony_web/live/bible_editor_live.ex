@@ -427,6 +427,11 @@ defmodule PolyphonyWeb.BibleEditorLive do
      view_patch(socket, drawer: if(socket.assigns.drawer == section, do: nil, else: section))}
   end
 
+  # The overlay's three ways out — the ×, the scrim and Escape — all push this. They
+  # carry no section, and shouldn't have to: there is only ever one drawer open.
+  def handle_event("close_drawer", _params, socket),
+    do: {:noreply, view_patch(socket, drawer: nil)}
+
   def handle_event("panel", %{"panel" => panel}, socket) do
     {:noreply,
      view_patch(socket,
@@ -983,7 +988,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
             </div>
           </form>
 
-          <.drawer :if={@drawer == "cover"} section="cover" title="About the cover">
+          <Kit.info_drawer :if={@drawer == "cover"} on_close="close_drawer" title="About the cover">
             <:intro>
               The existing fields are written for the Director — setting and tone are
               instructions to a model. Someone deciding whether to use this world wants
@@ -997,9 +1002,9 @@ defmodule PolyphonyWeb.BibleEditorLive do
               Save it off the cover and find out what's in it while you play. For a writer
               who wants to be surprised by their own campaign, that's the point.
             </:part>
-          </.drawer>
+          </Kit.info_drawer>
 
-          <.drawer :if={@drawer == "secrets"} section="secrets" title="About secrets">
+          <Kit.info_drawer :if={@drawer == "secrets"} on_close="close_drawer" title="About secrets">
             <:intro>
               Anything here can be marked secret — a rule, something that's already true, a
               character's fact. It's one control in all three places.
@@ -1015,7 +1020,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
               For now a secret is known by nobody. Naming the people who start out in on it
               is the audience picker, which isn't built yet.
             </:part>
-          </.drawer>
+          </Kit.info_drawer>
 
           <%!-- Outside the form, like every other panel: it isn't part of the sheet's
                 own submission, and a form inside a form isn't a thing. It draws itself
@@ -1346,45 +1351,6 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   # The one info drawer, same shape as the character sheet's — title, prose, a
   # subsection per concept with its own dot.
-  attr(:title, :string, required: true)
-  attr(:section, :string, required: true)
-  slot(:intro)
-
-  slot :part do
-    attr(:colour, :string)
-    attr(:name, :string)
-  end
-
-  defp drawer(assigns) do
-    ~H"""
-    <Kit.sheet class="mx-4 mb-4">
-      <Kit.row class="px-4 py-3 flex items-center justify-between" style="background:var(--b2)">
-        <span class="ttl text-[15px] font-semibold"><%= @title %></span>
-        <button
-          type="button"
-          class="dim text-[17px] leading-none"
-          phx-click="drawer"
-          phx-value-section={@section}
-          aria-label={"Close #{@title}"}
-        >
-          ×
-        </button>
-      </Kit.row>
-      <Kit.row :if={@intro != []} class="px-4 py-3">
-        <p class="text-[13px] leading-relaxed"><%= render_slot(@intro) %></p>
-      </Kit.row>
-      <div :for={{p, i} <- Enum.with_index(@part)} class={i < length(@part) - 1 && "row"}>
-        <div class="px-4 py-3">
-          <div class="flex items-center gap-1.5 mb-1">
-            <Kit.dot colour={p[:colour] || "var(--bcm)"} />
-            <span class="text-[13px] font-semibold"><%= p[:name] %></span>
-          </div>
-          <p class="text-[13px] leading-relaxed"><%= render_slot(p) %></p>
-        </div>
-      </div>
-    </Kit.sheet>
-    """
-  end
 
   # ── Render helpers ────────────────────────────────────────────────────────────
 

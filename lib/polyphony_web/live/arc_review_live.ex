@@ -431,47 +431,22 @@ defmodule PolyphonyWeb.ArcReviewLive do
 
   defp drawer(assigns) do
     ~H"""
-    <Kit.sheet class="mx-4 mt-4">
-      <Kit.row class="px-4 py-3 flex items-center justify-between" style="background:var(--b2)">
-        <span class="ttl text-[15px] font-semibold">About this</span>
-        <button
-          type="button"
-          class="dim text-[17px] leading-none"
-          phx-click="drawer"
-          aria-label="Close"
-        >
-          ×
-        </button>
-      </Kit.row>
-      <Kit.row class="px-4 py-3">
-        <p class="text-[13px] leading-relaxed">
-          A scene closed and the engine worked out what it changed. Nothing here is true
-          until you say so, and nothing is lost if you leave it.
-        </p>
-      </Kit.row>
-      <Kit.row class="px-4 py-3">
-        <div class="flex items-center gap-1.5 mb-1">
-          <Kit.dot colour="var(--lamp)" />
-          <span class="text-[13px] font-semibold">Why it holds up a new scene</span>
-        </div>
-        <p class="text-[13px] leading-relaxed">
-          Generation works from the sheet. An unreviewed change is a gap between who
-          someone is on paper and who they've become — let it run and the Director is
-          writing someone who stopped existing two scenes ago. Only the cast you're about
-          to use has to be current.
-        </p>
-      </Kit.row>
-      <div class="px-4 py-3">
-        <div class="flex items-center gap-1.5 mb-1">
-          <Kit.dot colour="var(--ok)" />
-          <span class="text-[13px] font-semibold">Accept all is the fast path</span>
-        </div>
-        <p class="text-[13px] leading-relaxed">
-          It's meant to be used. The gate exists to keep things consistent, not to make
-          you read carefully — one tap still leaves you with sheets that match your story.
-        </p>
-      </div>
-    </Kit.sheet>
+    <Kit.info_drawer title="About this" on_close="drawer">
+      <:intro>
+        A scene closed and the engine worked out what it changed. Nothing here is true
+        until you say so, and nothing is lost if you leave it.
+      </:intro>
+      <:part colour="var(--lamp)" name="Why it holds up a new scene">
+        Generation works from the sheet. An unreviewed change is a gap between who
+        someone is on paper and who they've become — let it run and the Director is
+        writing someone who stopped existing two scenes ago. Only the cast you're about
+        to use has to be current.
+      </:part>
+      <:part colour="var(--ok)" name="Accept all is the fast path">
+        It's meant to be used. The gate exists to keep things consistent, not to make
+        you read carefully — one tap still leaves you with sheets that match your story.
+      </:part>
+    </Kit.info_drawer>
     """
   end
 

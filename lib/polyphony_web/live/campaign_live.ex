@@ -84,6 +84,7 @@ defmodule PolyphonyWeb.CampaignLive do
          qb_suggest: true,
          qb_groups: false,
          quick_build_open: false,
+         publish_help: false,
          scene_location: "",
          scene_premise: "",
          scene_suggesting: false,
@@ -277,6 +278,13 @@ defmodule PolyphonyWeb.CampaignLive do
        |> request_generation("scene", "autofill.scene_opening", %{opts: opts})}
     end)
   end
+
+  # There was no clause for this at all. A `phx-click` with nothing to match raises
+  # `FunctionClauseError`, which kills the LiveView — so the one control on this screen
+  # whose entire job is *explaining* the screen took it down and left a page you could
+  # only get out of by reloading.
+  def handle_event("publish_help", _params, socket),
+    do: {:noreply, assign(socket, publish_help: not socket.assigns.publish_help)}
 
   def handle_event("toggle_quick_build", _params, socket),
     do: {:noreply, assign(socket, quick_build_open: not socket.assigns.quick_build_open)}
@@ -1447,6 +1455,26 @@ defmodule PolyphonyWeb.CampaignLive do
         <span class="lbl dim">How it's meant to be read</span>
         <Kit.info label="publishing" phx-click="publish_help" />
       </div>
+
+      <Kit.info_drawer :if={@publish_help} title="About publishing" on_close="publish_help">
+        <:intro>
+          Publishing asks two separate questions, not one ladder (§3.1c): which
+          perspectives a reader may take, and whether the authoring surface comes with it.
+        </:intro>
+        <:part colour="var(--bcm)" name="As a spectator">
+          Everything said and done, and nobody's thoughts. The safe read, and the one
+          that keeps the irony intact for somebody coming to the story cold.
+        </:part>
+        <:part colour="var(--secret)" name="Behind someone's eyes">
+          Publishing a head hands over what that character knew while they knew it —
+          which is a spoiler control, not a reading preference. A reader who takes Wren's
+          view learns what Wren was hiding.
+        </:part>
+        <:part colour="var(--ok)" name="With the sheets">
+          The world and the cast travel too, so a reader can fork the story and carry it
+          on. Concealed entries never come with it — what you kept back was never shared.
+        </:part>
+      </Kit.info_drawer>
 
       <div class="flex flex-col gap-1.5 mb-3">
         <label class="flex items-center gap-2.5 text-[13px]">

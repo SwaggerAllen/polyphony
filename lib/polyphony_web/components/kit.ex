@@ -519,6 +519,69 @@ defmodule PolyphonyWeb.Kit do
     """
   end
 
+  @doc """
+  The info drawer — what a section means, opened from its `info/1`.
+
+  Title, a line of prose, then a subsection per concept with its own status dot. One
+  per *section* rather than one per setting, because the concepts in a section only
+  make sense together (`ux/polyphony-character.html` §06b).
+
+  **An overlay, not an inline panel**, which is the whole reason this lives in the kit
+  rather than three times over in the editors. Rendered in the flow it landed wherever
+  it happened to sit in the document — and these are one-long-scroll authoring screens,
+  so "wherever" was routinely a screen or two below the `i` that opened it. The reader
+  gets no acknowledgement, the close control is off-screen, and the answer to *what
+  does this mean* arrives somewhere they have to go looking for. `overlay/1` says
+  exactly this in its own docs; the drawers predated it.
+
+  Explanation is also the clearest case for a modal there is: while you are reading it
+  there is nothing else to do.
+  """
+  attr(:title, :string, required: true)
+  attr(:on_close, :string, required: true, doc: "event pushed by ×, the scrim and Escape")
+  attr(:class, :string, default: nil)
+  slot(:intro)
+
+  slot :part, doc: "one concept, with the dot that says what kind of thing it is" do
+    attr(:colour, :string)
+    attr(:name, :string)
+  end
+
+  def info_drawer(assigns) do
+    ~H"""
+    <.overlay label={@title} on_close={@on_close} class={@class}>
+      <.row class="px-4 py-3 flex items-center justify-between gap-2" style="background:var(--b2)">
+        <span class="ttl text-[15px] font-semibold"><%= @title %></span>
+        <button
+          type="button"
+          class="dim text-[17px] leading-none"
+          phx-click={@on_close}
+          aria-label={"Close #{@title}"}
+        >
+          ×
+        </button>
+      </.row>
+
+      <%!-- The body scrolls and the head doesn't, so the way out is never the thing you
+            have to scroll to find — `overlay/1`'s own rule, and these run long. --%>
+      <div class="modal-body">
+        <.row :if={@intro != []} class="px-4 py-3">
+          <p class="text-[13px] leading-relaxed"><%= render_slot(@intro) %></p>
+        </.row>
+        <div :for={{p, i} <- Enum.with_index(@part)} class={i < length(@part) - 1 && "row"}>
+          <div class="px-4 py-3">
+            <div class="flex items-center gap-1.5 mb-1">
+              <.dot colour={p[:colour] || "var(--bcm)"} />
+              <span class="text-[13px] font-semibold"><%= p[:name] %></span>
+            </div>
+            <p class="text-[13px] leading-relaxed"><%= render_slot(p) %></p>
+          </div>
+        </div>
+      </div>
+    </.overlay>
+    """
+  end
+
   # ── Navigation ─────────────────────────────────────────────────────────────
 
   @doc """
