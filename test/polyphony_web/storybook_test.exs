@@ -37,6 +37,74 @@ defmodule PolyphonyWeb.StorybookTest do
     end
   end
 
+  test "every screen has a story, so no screen is unreviewable" do
+    # The kit rule, one level up. A screen component exists *in order* to be renderable
+    # from fixtures — that is the whole reason its markup was lifted out of the LiveView —
+    # so one without a story is a screen whose states can only be seen by driving the
+    # real app into them, which is the thing this was built to stop.
+    catalogued =
+      for leaf <- @backend.leaves(),
+          {:ok, story} = @backend.load_story(String.trim_leading(leaf.path, "/")),
+          story.storybook_type() == :component,
+          into: MapSet.new(),
+          do: story.function()
+
+    screens =
+      :code.all_available()
+      |> Enum.map(fn {mod, _, _} -> to_string(mod) end)
+      |> Enum.filter(&String.starts_with?(&1, "Elixir.PolyphonyWeb.Screens."))
+      |> Enum.map(&String.to_atom/1)
+
+    assert screens != [], "no screen modules found — has PolyphonyWeb.Screens.* moved?"
+
+    for screen <- screens do
+      Code.ensure_loaded!(screen)
+
+      assert function_exported?(screen, :screen, 1),
+             "#{inspect(screen)} must expose screen/1 — that is the contract a story renders"
+
+      assert Function.capture(screen, :screen, 1) in catalogued,
+             "#{inspect(screen)} has no story — add one under storybook/screens/"
+    end
+  end
+
+  test "no screen reads domain data" do
+    # The property that makes `STORYBOOK=true` safe in production. A screen takes assigns
+    # and returns markup; a story that could load a campaign would quietly turn the flag
+    # into an authorization hole. Checked structurally rather than trusted, because the
+    # tempting shortcut — resolving a name inside the markup — is exactly how it breaks.
+    # It already had, once: play's character picker called `Library.payload/1` per row.
+    for {mod, _, _} <- :code.all_available(),
+        name = to_string(mod),
+        String.starts_with?(name, "Elixir.PolyphonyWeb.Screens.") do
+      mod = String.to_atom(name)
+      Code.ensure_loaded!(mod)
+
+      called =
+        for {:imports, imports} <- mod.__info__(:compile) |> List.wrap(),
+            {called_mod, _} <- imports,
+            do: called_mod
+
+      offenders =
+        (called ++ referenced_modules(mod))
+        |> Enum.filter(&String.starts_with?(to_string(&1), "Elixir.Polyphony."))
+        |> Enum.reject(&String.starts_with?(to_string(&1), "Elixir.PolyphonyWeb."))
+        |> Enum.uniq()
+
+      assert offenders == [],
+             "#{inspect(mod)} references #{inspect(offenders)} — a screen must render from " <>
+               "assigns alone. Resolve it in the LiveView and pass the answer in."
+    end
+  end
+
+  # The modules a compiled module actually refers to, read off its BEAM chunk.
+  defp referenced_modules(mod) do
+    case :beam_lib.chunks(:code.which(mod), [:imports]) do
+      {:ok, {_, [imports: imports]}} -> imports |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
+      _ -> []
+    end
+  end
+
   test "every kit component has a page in the catalogue" do
     catalogued =
       for leaf <- @backend.leaves(),

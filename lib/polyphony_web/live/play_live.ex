@@ -650,7 +650,7 @@ defmodule PolyphonyWeb.PlayLive do
         entry != nil,
         not MapSet.member?(present, to_string(entry.id)),
         match?(%CharacterSheet{status: :full}, Library.payload(entry)),
-        do: entry
+        do: %{id: entry.id, name: char_name(entry)}
   end
 
   # The same list, for the people this story invented and never wrote — the walk-ons a
@@ -665,8 +665,15 @@ defmodule PolyphonyWeb.PlayLive do
         entry != nil,
         not MapSet.member?(present, to_string(entry.id)),
         match?(%CharacterSheet{status: s} when s != :full, Library.payload(entry)),
-        do: entry
+        do: %{id: entry.id, name: char_name(entry)}
   end
+
+  # Both lists reach the screen as `%{id, name}` rather than as library entries, because
+  # the screen renders from assigns and may not read the library — see
+  # `PolyphonyWeb.Screens`. The handlers re-fetch by id against the offered list, which
+  # is also a fix: acting on an entry cached in socket state meant acting on the sheet as
+  # it stood when the beat opened.
+  defp offered?(offers, id), do: Enum.any?(offers, &(to_string(&1.id) == to_string(id)))
 
   defp campaign_character_ids(socket) do
     with cid when not is_nil(cid) <- campaign_of(socket.assigns.scene_id),
@@ -989,7 +996,7 @@ defmodule PolyphonyWeb.PlayLive do
   # Somebody from the campaign who isn't in this scene yet.
   def handle_event("add_to_scene", %{"id" => id}, socket) do
     safe(socket, fn ->
-      entry = Enum.find(socket.assigns.joinable, &(to_string(&1.id) == to_string(id)))
+      entry = if offered?(socket.assigns.joinable, id), do: Library.get(id)
 
       cond do
         is_nil(entry) ->
@@ -1008,7 +1015,7 @@ defmodule PolyphonyWeb.PlayLive do
   # value that two of them can share.
   def handle_event("write_in", %{"id" => id}, socket) do
     safe(socket, fn ->
-      entry = Enum.find(socket.assigns.writable, &(to_string(&1.id) == to_string(id)))
+      entry = if offered?(socket.assigns.writable, id), do: Library.get(id)
 
       if entry do
         {:noreply,
@@ -2372,7 +2379,7 @@ defmodule PolyphonyWeb.PlayLive do
           <form id="scene-add-cast" phx-submit="add_to_scene" class="flex gap-1.5">
             <label for="scene-add-select" class="sr-only">Bring someone into the scene</label>
             <select id="scene-add-select" name="id" class="field px-2 py-1 text-[12px] flex-1 min-w-0">
-              <option :for={c <- @joinable} value={c.id}><%= char_name(c) %></option>
+              <option :for={c <- @joinable} value={c.id}><%= c.name %></option>
             </select>
             <Kit.btn kind={:ghost} size={:sm} type="submit">Bring in</Kit.btn>
           </form>
@@ -2391,7 +2398,7 @@ defmodule PolyphonyWeb.PlayLive do
           <div class="lbl dim mb-1.5">Not written yet</div>
           <div class="flex flex-col gap-1.5">
             <div :for={c <- @writable} class="flex items-center justify-between gap-2">
-              <span class="text-[12.5px] min-w-0 truncate"><%= char_name(c) %></span>
+              <span class="text-[12.5px] min-w-0 truncate"><%= c.name %></span>
               <Kit.btn
                 size={:sm}
                 type="button"
