@@ -13,6 +13,7 @@ The map of what lives where, and the rule for where new writing goes. Start with
 | **`backend-capabilities.md`** | The **catalog** of every backend capability, with a gap register (surfaced / partial / backend-only). A survey of what exists. | "What can the backend already do?" |
 | **`backend-backlog.md`** | The standing **engineering worklist**: shaped backend work not built yet, and the immediate milestone that gates the current design. | "What backend work is queued, and what's its shape?" |
 | **`roadmap.md`** | The near-term **schedule**: what's *left* — the open §A/§B items, the frontend rebuild, and the order. Shipped work is not here. | "What ships next, in what order?" |
+| **`design-thread.md`** | Instructions for the **normal Claude thread** that does design work: what to read, how a mock reaches Drive, how intent reaches Linear. The code thread's half is in `CLAUDE.md`. | "How does design work get handed over?" |
 | **`completed-roadmap.md`** | **Shipped work**, moved out of the planning docs so they stay lean. Detail for done backlog/roadmap items lands here. | "What's already been built (and where)?" |
 | **`decisions.md`** | Post-v1 **strategy and forward rationale**: monetization, TTRPG resolution, kids/org products, style material, and the ordering logic (P1–P11). | "Why the post-v1 plan is what it is?" |
 | **`../CLAUDE.md`** | Operational guide + the non-negotiable invariants. | "How do I work in this repo safely?" |

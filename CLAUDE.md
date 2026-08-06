@@ -143,6 +143,44 @@ for it.
   that's deliberate, the app has no users until the rebuild lands. Review components at
   `/storybook`, and give any new one a story — the suite requires it.
 
+## The design inbox (drain it when asked, not on every session)
+
+Design happens in a **normal Claude thread** — faster to iterate with, and it doesn't
+block this one. Its instructions are `docs/design-thread.md`. It hands work over in two
+pieces, and never writes to the repo itself:
+
+- **Linear** carries the intent — an issue labelled `design-inbox` saying what changes
+  and why. This is the instruction.
+- **Google Drive** carries the material — a mock HTML file in the folder
+  `1y1HudA1L2Ns36Hx_CmO0BDGDp8bBmfuv`, named in the issue as `Drive: <title> (<fileId>)`.
+  This is never canonical; `ux/` in the repo is.
+
+To drain it, when the author asks:
+
+1. **Linear** — find open issues labelled `design-inbox`. Read the whole description; the
+   argument in it is the part that decides whether the change is right, and the part
+   nothing else records. If the Linear connector isn't attached to this session, say so
+   and ask for the issue to be pasted rather than guessing at what's queued.
+2. **Drive** — for each issue with a `Drive:` line, `download_file_content` on that
+   `fileId`, base64-decode it, and **check the byte count against Drive's `fileSize`**
+   before doing anything with it. The transport is byte-exact when the design thread sets
+   `disableConversionToGoogleType: true`; a size mismatch means it didn't, and the file
+   is a Google Doc's idea of the file rather than the file.
+3. **Land it in a scratch directory first**, not `ux/`. A mock that arrives straight into
+   the design source of truth is a design change nobody looked at. Read it, check its
+   classes against `ux/polyphony-kit.css` — a class that isn't there means the mock is
+   proposing a **new kit component**, which is a decision, not a port — then commit it to
+   `ux/` and run `mix docs.publish` so `/ux/` serves the new one.
+4. **Close the loop in Linear**: comment on the issue with what landed and the commit,
+   and say plainly if you didn't do part of it and why. An issue that goes quiet is
+   indistinguishable from one nobody read.
+
+Two standing rules. A **mock is a proposal, not an instruction** — if it can't be built
+as drawn, or it contradicts something in `architecture.md`, say so on the issue instead
+of building a worse version of it silently. And the design thread only ever *proposes*
+kit changes: `ux/polyphony-kit.css` is edited here, followed by `mix kit.port`, because
+`assets/css/kit.css` is generated from it and a test fails on drift.
+
 ## Identity & numbering (easy to get wrong)
 
 - `scene_id` is the event-store stream id and stands in for a branch. A **fork** is

@@ -41,6 +41,8 @@ defmodule PolyphonyWeb.DocsLive do
     "docs/decisions.md" => "Post-v1 rationale — the forward argument, not the schedule.",
     "docs/deployment.md" => "Running it: the release, the host, mail, and the env vars.",
     "docs/frontend.md" => "The LiveView layer and how to run it.",
+    "docs/design-thread.md" =>
+      "Instructions for a normal Claude thread doing design work — what to read, and how work gets handed to the code thread.",
     "ux/README.md" => "The design pass: information architecture, copy rules, porting notes.",
     "ux/polyphony-kit.css" => "The single source of truth for tokens and component classes.",
     "ux/polyphony-kit.html" => "The component kit, rendered — every component and its states.",
