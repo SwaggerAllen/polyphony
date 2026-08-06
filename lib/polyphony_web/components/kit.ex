@@ -680,9 +680,18 @@ defmodule PolyphonyWeb.Kit do
   def world_move(assigns) do
     ~H"""
     <div class={["m-world", @class]}>
+      <%!-- `flex-1 min-w-0` on the text column, and it is load-bearing rather than tidy.
+            Without it the column is a shrink-to-fit flex item, so its width comes from
+            its content — and any child sized in *percent* then resolves against a width
+            that depends on that child, which CSS settles at zero. Text was fine and the
+            waiting placeholder (`skel_lines`, widths like "96%") collapsed to nothing:
+            the rules, the dash and "The Director" with an empty space between them,
+            which reads as a Director line that came back blank. --%>
       <div :if={@register == :stage} class="flex gap-3">
         <span class="mono text-[13px] dim">—</span>
-        <div class="ttl text-[16px] leading-relaxed font-medium"><%= render_slot(@inner_block) %></div>
+        <div class="ttl text-[16px] leading-relaxed font-medium flex-1 min-w-0">
+          <%= render_slot(@inner_block) %>
+        </div>
       </div>
       <div :if={@register == :stage} class="lbl dim mt-1.5 pl-6">The Director</div>
       <div :if={@register == :page} class="ttl text-[18px] leading-[1.55] font-medium">
