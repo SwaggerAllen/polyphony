@@ -127,15 +127,20 @@ defmodule Polyphony.Jobs.Generate do
   # replacement arrives on the transcript stream. Wrapping the dispatch would buy
   # nothing.
 
-  defp apply_op("play.mentions", %{prose: prose, user_id: user_id}),
-    do: Autofill.extract_mentions(prose, user_id: user_id)
+  defp apply_op("play.mentions", %{prose: prose} = req),
+    do: Autofill.extract_mentions(prose, meter(req))
 
   # Finalising an introduction *writes* — the stub becomes a full sheet — so losing it
   # halfway is the class of failure that leaves a half-written person behind.
-  defp apply_op("play.intro", %{entry_id: id, user_id: user_id}) do
+  defp apply_op("play.intro", %{entry_id: id} = req) do
     case Library.get(id) do
-      nil -> {:error, :not_found}
-      entry -> if StubGen.finalize(entry, user_id) == :ok, do: {:ok, id}, else: {:error, :failed}
+      nil ->
+        {:error, :not_found}
+
+      entry ->
+        if StubGen.finalize(entry, Map.get(req, :user_id), meter(req)) == :ok,
+          do: {:ok, id},
+          else: {:error, :failed}
     end
   end
 
@@ -144,6 +149,9 @@ defmodule Polyphony.Jobs.Generate do
   # where the screen already has it.
   defp apply_op("play.compose", %{opts: opts}), do: Suggest.variants(opts)
 
+  # Who this generation is billed to, carried on the request the screen built (§B5).
+  # `campaign_id` is optional and absent for a request that isn't about one — the
+  # library's bulk stub fill, for instance — so it is taken rather than required.
   # Filling a batch of pending stubs. Best-effort per stub, exactly as the campaign
   # screen did it — one that can't be written leaves the rest alone and is counted.
   defp apply_op("campaign.stubs", %{ids: ids, user_id: user_id}) do
@@ -162,6 +170,13 @@ defmodule Polyphony.Jobs.Generate do
   end
 
   defp apply_op(op, _request), do: {:error, {:unknown_operation, op}}
+
+  # Who a generation is billed to, carried on the request the screen built (§B5).
+  # `campaign_id` is optional and absent for a request that isn't about one — the
+  # library's bulk stub fill, for instance — so it is taken rather than required.
+  defp meter(req) do
+    for key <- [:user_id, :campaign_id], value = Map.get(req, key), do: {key, value}
+  end
 
   @doc """
   The owner of a subject, for callers that need to attribute usage — kept here so the

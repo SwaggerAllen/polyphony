@@ -525,9 +525,32 @@ defmodule PolyphonyWeb.PlayLive do
     end
   end
 
-  defp narration_meter(socket) do
+  # Who a generation started from this screen is billed to (§B5).
+  #
+  # `campaign_id` is the half that was missing. Every ✦ here built its own meter opts
+  # by hand with only a `user_id`, so a turn drafted in a scene, a narration, a walk-on
+  # written in and a mention sweep all landed in the *unattributed* bucket — which the
+  # settings breakdown labels "authoring", i.e. the one place a scene's spend can't be
+  # seen. The Director loop resolved this properly all along (`Attribution.for_scene`);
+  # the screen didn't. Supplying it also puts these calls under the campaign's own
+  # lifetime cap, which is where they always belonged.
+  defp meter(socket, kind) do
     uid = socket.assigns.current_user && socket.assigns.current_user.id
-    [usage_kind: "authoring"] ++ if(uid, do: [user_id: uid], else: [])
+
+    [usage_kind: kind] ++
+      if(uid, do: [user_id: uid], else: []) ++
+      case campaign_of(socket.assigns.scene_id) do
+        nil -> []
+        cid -> [campaign_id: cid]
+      end
+  end
+
+  defp narration_meter(socket), do: meter(socket, "authoring")
+
+  # The same two fields as a map, for the ops whose request the worker meters rather
+  # than the screen.
+  defp billing(socket) do
+    socket |> meter(nil) |> Keyword.take([:user_id, :campaign_id]) |> Map.new()
   end
 
   # What everybody in the scene has already seen: speech that wasn't a whisper, actions,
@@ -856,12 +879,15 @@ defmodule PolyphonyWeb.PlayLive do
   def handle_event("find_mentions", _params, socket) do
     safe(socket, fn ->
       prose = scene_prose(socket.assigns.scene_id)
-      uid = socket.assigns.current_user && socket.assigns.current_user.id
 
       {:noreply,
        socket
        |> put_flash(:info, "Scanning for mentioned characters…")
-       |> request_generation("mentions", "play.mentions", %{prose: prose, user_id: uid})}
+       |> request_generation(
+         "mentions",
+         "play.mentions",
+         Map.merge(%{prose: prose}, billing(socket))
+       )}
     end)
   end
 
@@ -981,15 +1007,14 @@ defmodule PolyphonyWeb.PlayLive do
       entry = Enum.find(socket.assigns.writable, &(to_string(&1.id) == to_string(id)))
 
       if entry do
-        uid = socket.assigns.current_user && socket.assigns.current_user.id
-
         {:noreply,
          socket
          |> assign(writing_in: MapSet.put(socket.assigns.writing_in, entry.id))
-         |> request_generation("write_in:#{entry.id}", "play.intro", %{
-           entry_id: entry.id,
-           user_id: uid
-         })}
+         |> request_generation(
+           "write_in:#{entry.id}",
+           "play.intro",
+           Map.merge(%{entry_id: entry.id}, billing(socket))
+         )}
       else
         {:noreply, put_flash(socket, :error, "They aren't waiting to be written.")}
       end
@@ -1118,15 +1143,15 @@ defmodule PolyphonyWeb.PlayLive do
   def handle_event("intro_generate", %{"name" => name}, socket) do
     safe(socket, fn ->
       entry = ensure_character(socket, name)
-      uid = socket.assigns.current_user && socket.assigns.current_user.id
 
       {:noreply,
        socket
        |> put_flash(:info, "Generating #{name}…")
-       |> request_generation("intro:#{name}", "play.intro", %{
-         entry_id: entry.id,
-         user_id: uid
-       })}
+       |> request_generation(
+         "intro:#{name}",
+         "play.intro",
+         Map.merge(%{entry_id: entry.id}, billing(socket))
+       )}
     end)
   end
 
@@ -1407,7 +1432,6 @@ defmodule PolyphonyWeb.PlayLive do
         as ->
           scene_id = socket.assigns.scene_id
           roster = socket.assigns.roster
-          user = socket.assigns.current_user
           premise = socket.assigns.premise
           sheet = character_sheet(socket, as)
           bible = campaign_world_bible(socket)
@@ -1416,7 +1440,9 @@ defmodule PolyphonyWeb.PlayLive do
            socket
            |> assign(composing: true)
            |> request_generation("compose", "play.compose", %{
-             opts: compose_opts(scene_id, as, sheet, premise, bible, roster, draft, user)
+             opts:
+               compose_opts(scene_id, as, sheet, premise, bible, roster, draft) ++
+                 meter(socket, "suggestion")
            })}
       end
     end)
@@ -1465,7 +1491,7 @@ defmodule PolyphonyWeb.PlayLive do
   # Draft a turn from the character's filtered view (§11) — steered by the player's
   # partial text if any, else generated fresh. Never omniscient (a suggestion can't
   # react to something the character never learned).
-  defp compose_opts(scene_id, character, sheet, premise, bible, roster, draft, user) do
+  defp compose_opts(scene_id, character, sheet, premise, bible, roster, draft) do
     ctx = character_context(scene_id, character, sheet, premise, bible)
 
     [
@@ -1473,9 +1499,7 @@ defmodule PolyphonyWeb.PlayLive do
       live_events: BeatOps.canonical_events(scene_id),
       members: roster,
       count: 1,
-      steer: compose_steer(draft),
-      user_id: user && user.id,
-      usage_kind: "suggestion"
+      steer: compose_steer(draft)
     ]
   end
 

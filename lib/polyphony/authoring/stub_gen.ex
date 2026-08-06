@@ -18,14 +18,19 @@ defmodule Polyphony.Authoring.StubGen do
   for. Whatever was generated is still kept; the sheet simply stays pending, which is
   the failure direction that leaves the author something to open and finish.
   """
-  @spec finalize(map(), integer() | nil) :: :ok | :error
-  def finalize(entry, user_id) do
+  @spec finalize(map(), integer() | nil, keyword()) :: :ok | :error
+  def finalize(entry, user_id, extra \\ []) do
     sheet = struct(CharacterSheet, Map.from_struct(Library.payload(entry)))
     brief = [sheet.name, sheet.role] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join(" — ")
 
+    # `extra` carries the campaign this generation belongs to when the caller knows it
+    # — writing a walk-on into a running scene is that scene's campaign's spend (§B5),
+    # not unattributed authoring. The library's bulk action passes nothing and keeps
+    # the old behaviour.
     opts =
       [world: world_context(sheet.world_bible_id), role: sheet.role, usage_kind: "authoring"] ++
-        if(user_id, do: [user_id: user_id], else: [])
+        if(user_id, do: [user_id: user_id], else: []) ++
+        Keyword.take(extra, [:campaign_id])
 
     case Autofill.generate_all(:character, brief, %{"name" => sheet.name || ""}, opts) do
       {:ok, values} ->

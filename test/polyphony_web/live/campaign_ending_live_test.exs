@@ -174,4 +174,25 @@ defmodule PolyphonyWeb.CampaignEndingLiveTest do
       assert id == camp.id
     end
   end
+
+  describe "the settings tab" do
+    test "is flat — nothing on it is folded away", %{conn: conn, user: user} do
+      camp = campaign(user)
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=settings")
+
+      # Model tuning sat behind a `<details>`. A settings page is read by scrolling it,
+      # and a fold hides one of its sections behind a guess about whether you want it —
+      # a guess that is wrong the moment you came here to change that section.
+      #
+      # The header's `☰` is a `<details>` too, and is not a fold in the settings — so
+      # the question is what the *panel* contains, not what the document does.
+      panel = String.replace(html, ~r|<details class="relative.*?</details>|s, "")
+
+      refute panel =~ "<details"
+      assert html =~ "Model tuning"
+      assert html =~ ~s(id="campaign-tuning")
+      # The thing the fold hid, on the page rather than one click behind it.
+      assert html =~ "Director reasoning"
+    end
+  end
 end
