@@ -14,6 +14,9 @@ defmodule Polyphony.Application do
         Polyphony.Repo,
         Polyphony.Context.Store,
         {Phoenix.PubSub, name: Polyphony.PubSub},
+        # Owns the beat-loop activity table. Before anything that announces a phase,
+        # and before the endpoint, so a play view can never mount against a missing one.
+        Polyphony.Broadcast.Activity,
         Polyphony.DebugTap,
         {Oban, Application.fetch_env!(:polyphony, Oban)},
         Polyphony.App,

@@ -125,7 +125,11 @@ defmodule PolyphonyWeb.PlayLive do
        writing_in: MapSet.new(),
        cast: %Cast{},
        waiting: :you,
-       progress: %{phase: :idle, subject: nil},
+       # Not `idle()`: the loop may well be mid-beat right now, and until this read
+       # existed a reload (or simply opening the scene from another screen) came back
+       # showing nothing — no placeholder, no waiting line, and Continue live enough to
+       # race a second beat into a scene that was already advancing.
+       progress: Broadcast.progress(scene_id),
        introductions: [],
        control_modes: %{},
        failures: [],
@@ -580,8 +584,13 @@ defmodule PolyphonyWeb.PlayLive do
     socket
   end
 
-  # A reconnect can't see the composer's spinner, and it can't see an answer that
-  # arrived while the tab was closed. Both come back from the rows.
+  # A reconnect can't see a spinner, and it can't see an answer that arrived while the
+  # tab was closed. Both come back from the rows.
+  #
+  # Every ✦ on this screen, not just the composer's. A ✦ that comes back looking idle is
+  # worse than one that comes back looking stuck: the control is live again, so the
+  # obvious move is to press it — and pressing it *replaces the claim*, which throws away
+  # the answer that was seconds from arriving and pays for a second one.
   defp restore_generations(socket) do
     scene_id = socket.assigns.scene_id
     Generations.subscribe(scene_id)
@@ -589,7 +598,17 @@ defmodule PolyphonyWeb.PlayLive do
     for {key, result} <- Generations.take(scene_id),
         do: send(self(), {:generation, key, result})
 
-    assign(socket, composing: "compose" in Generations.running(scene_id))
+    running = Generations.running(scene_id)
+    narrating? = "narrate" in running
+
+    assign(socket,
+      composing: "compose" in running,
+      drafting_narration: narrating?,
+      # The panel has to be open for its own spinner to be visible at all — a narration
+      # being written behind a closed drawer is indistinguishable from nothing happening.
+      narrating: socket.assigns.narrating or narrating?,
+      writing_in: MapSet.new(for("write_in:" <> id <- running, do: normalize_id(id)))
+    )
   end
 
   # The campaign's cast who aren't in this scene: castable (`:full` — `SceneControl`

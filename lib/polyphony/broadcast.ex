@@ -23,6 +23,7 @@ defmodule Polyphony.Broadcast do
   """
 
   alias Polyphony.{Visibility, Packets}
+  alias Polyphony.Broadcast.Activity
 
   alias Polyphony.Events.{
     ThoughtOccurred,
@@ -58,9 +59,16 @@ defmodule Polyphony.Broadcast do
   @spec progress_topic(term()) :: String.t()
   def progress_topic(scene_id), do: "scene:#{scene_id}:progress"
 
-  @doc "Announce the current beat-loop phase to every viewer of the scene (best-effort)."
+  @doc """
+  Announce the current beat-loop phase to every viewer of the scene (best-effort).
+
+  Also recorded in `Activity`, because a broadcast only reaches whoever is subscribed
+  when it fires — which left everyone who *arrived* mid-beat looking at an idle screen.
+  """
   @spec announce_progress(term(), phase(), keyword()) :: :ok
   def announce_progress(scene_id, phase, opts \\ []) do
+    Activity.put(scene_id, phase, opts)
+
     Phoenix.PubSub.broadcast(
       Polyphony.PubSub,
       progress_topic(scene_id),
@@ -71,6 +79,20 @@ defmodule Polyphony.Broadcast do
     :ok
   rescue
     _ -> :ok
+  end
+
+  @doc """
+  The beat loop's phase in `scene_id` as of now — what a view should mount showing.
+
+  Idle unless the loop is *working* (`:director` / `:generating`). A pause on a user's
+  slot reads as idle here on purpose; see `Activity`.
+  """
+  @spec progress(term()) :: %{phase: phase(), subject: term(), beat: term()}
+  def progress(scene_id) do
+    case Activity.get(scene_id) do
+      nil -> %{phase: :idle, subject: nil, beat: nil}
+      entry -> entry
+    end
   end
 
   @doc """

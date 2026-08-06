@@ -258,9 +258,29 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
       assert html =~ "1 walk-on"
       refute html =~ "A harbour constable"
 
-      opened = view |> element("button[phx-value-tier=incidental]") |> render_click()
+      # The tier pill at the top of the tab.
+      opened = view |> element("button.pill[phx-value-tier=incidental]") |> render_click()
       assert opened =~ "A harbour constable"
       refute opened =~ "Wren Ashgrove"
+    end
+
+    test "and the collapsed row itself opens them", %{conn: conn, user: user} do
+      main = character(user, "Wren Ashgrove")
+      extra = character(user, "A harbour constable")
+      {:ok, _} = Characters.set_tier(extra.id, :incidental)
+      campaign(user, %{name: "The Salt Line", character_ids: [main.id, extra.id]})
+
+      {:ok, view, html} = live(conn, ~p"/library?tab=people")
+
+      # It was an `<a patch>` to the URL it was already on, carrying a `phx-click` to do
+      # the work — and LiveView's nav handler calls `stopImmediatePropagation()` on a
+      # `data-phx-link` click, so the ordinary click binding never saw it. Tapping the
+      # row did nothing. The old test passed because `button[phx-value-tier=…]` matched
+      # the *pill*, so the row it was named after was never clicked.
+      refute html =~ ~r/<a[^>]*phx-value-tier="incidental"/
+
+      opened = view |> element("button.row[phx-value-tier=incidental]") |> render_click()
+      assert opened =~ "A harbour constable"
     end
 
     test "search narrows by name and by what they are", %{conn: conn, user: user} do
