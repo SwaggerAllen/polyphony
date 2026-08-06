@@ -106,7 +106,7 @@ defmodule PolyphonyWeb.InfoDrawerLiveTest do
   test "the publishing i explains publishing instead of killing the page",
        %{conn: conn, user: user} do
     camp = campaign(user)
-    {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+    {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=settings")
 
     # It had no `handle_event` clause at all. A `phx-click` with nothing to match raises
     # `FunctionClauseError` and takes the LiveView with it — so the one control whose

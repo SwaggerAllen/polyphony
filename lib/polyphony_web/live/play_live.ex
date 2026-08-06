@@ -140,6 +140,7 @@ defmodule PolyphonyWeb.PlayLive do
        debug_feed: [],
        debug_feed_text: "",
        premise: "",
+       who: nil,
        narrating: false,
        narrating_draft: "",
        drafting_narration: false,
@@ -916,6 +917,23 @@ defmodule PolyphonyWeb.PlayLive do
 
   # The author panels are one-at-a-time: the bottom bar is small, and two open
   # drawers would push the transcript off the screen on a phone.
+  # Who is this. The **public** read — the cover — whoever is looking: an author
+  # reviewing, a character mid-scene, and a stranger reading a published campaign all
+  # get the same card, because the cover is the thing written to be shown (§2.12) and a
+  # panel that filtered a sheet per viewer would be a second implementation of a
+  # guarantee `Visibility` already owns.
+  def handle_event("who", %{"id" => id}, socket) do
+    entry = Library.get(normalize_id(id))
+    sheet = entry && Library.payload(entry)
+
+    case sheet do
+      %CharacterSheet{} -> {:noreply, assign(socket, who: sheet)}
+      _ -> {:noreply, put_flash(socket, :error, "Nothing written about them yet.")}
+    end
+  end
+
+  def handle_event("close_who", _params, socket), do: {:noreply, assign(socket, who: nil)}
+
   def handle_event("toggle_cast", _params, socket),
     do: {:noreply, assign(socket, panel: toggle(socket.assigns.panel, :cast), narrating: false)}
 
@@ -1969,6 +1987,15 @@ defmodule PolyphonyWeb.PlayLive do
         <% end %>
       </div>
 
+      <Transcript.who
+        :if={@who}
+        name={@who.name || "Someone"}
+        pronouns={@who.pronouns}
+        cover={@who.cover}
+        colour={Voice.of_sheet(@who)}
+        on_close="close_who"
+      />
+
       <Kit.strip sentence={@strip.sentence} tone={@strip.tone}>
         <:slot_item
           :for={s <- @strip.slots}
@@ -2292,12 +2319,19 @@ defmodule PolyphonyWeb.PlayLive do
         style={@register == :stage && "box-shadow:inset 2px 0 0 #{@colour}"}
       >
         <div class="flex items-center gap-2 mb-1.5 flex-wrap">
-          <span
-            class={["ttl font-semibold", @register == :stage && "text-[14px]", @register == :page && "text-[13px] tracking-[.06em]"]}
+          <%!-- The name is the way in to who this is — the same control the reading
+                screen has, so a character somebody meets mid-scene can be asked about
+                without leaving the scene. --%>
+          <button
+            type="button"
+            class={["ttl font-semibold text-left", @register == :stage && "text-[14px]", @register == :page && "text-[13px] tracking-[.06em]"]}
             style={"color:#{@colour}"}
+            phx-click="who"
+            phx-value-id={@block.character}
+            aria-label={"About #{@name}"}
           >
             <%= if @register == :page, do: String.upcase(@name), else: @name %>
-          </span>
+          </button>
           <Kit.pill :if={@register == :stage and @control} class="dim">
             <%= control_label(@control) %>
           </Kit.pill>

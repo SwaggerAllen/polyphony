@@ -1234,6 +1234,14 @@ defmodule PolyphonyWeb.CampaignLive do
         </form>
       </details>
 
+      <%!-- Publishing is a decision about the campaign, and it lived on **Cast** — next
+            to the people, because the perspective list is people. But the list is one
+            control inside it: the panel also decides whether a spectator may read at
+            all and whether the sheets travel, neither of which is about the cast. It
+            belongs with the other things you decide about the campaign as a whole,
+            above the three ways it ends. --%>
+      <.publish_panel {assigns} />
+
       <.ending_panel {assigns} />
     </div>
     """
@@ -1682,8 +1690,15 @@ defmodule PolyphonyWeb.CampaignLive do
 
         <%!-- The spoiler control, not a reading preference: publishing a head hands
               away everything in it, and only the author knows which are meant to be
-              read. So nothing here is ticked by default. --%>
-        <label :for={c <- @cast} class="flex items-center gap-2.5 text-[13px]">
+              read. So nothing here is ticked by default.
+
+              **In tier order, not roster order.** The roster is the order people were
+              cast, which is an accident of how the campaign was built; the tier is the
+              author's own statement about who the story is about. Main cast first,
+              then recurring, then walk-ons — a reader offered a walk-on's head above a
+              lead's is being offered the wrong story, and a list of forty walk-ons
+              buries the two heads worth publishing. --%>
+        <label :for={c <- publish_order(@cast)} class="flex items-center gap-2.5 text-[13px]">
           <Kit.chk
             state={if to_string(c.id) in @pub_perspectives, do: :on, else: :off}
             phx-click="toggle_perspective"
@@ -1872,8 +1887,6 @@ defmodule PolyphonyWeb.CampaignLive do
             seed the people they produce, so this is where they belong rather than in
             a corner of their own. --%>
       <.groups_card {assigns} />
-
-      <.publish_panel {assigns} />
     </div>
     """
   end
@@ -2268,6 +2281,18 @@ defmodule PolyphonyWeb.CampaignLive do
   defp scene_ready(cast), do: Enum.filter(cast, &full?/1)
 
   defp pending_cast(cast), do: Enum.filter(cast, &pending?/1)
+
+  # Tier first, then the roster's own order within a tier — which is cast order, and is
+  # what the voice colours key on, so two people in the same tier stay in the order they
+  # read in everywhere else.
+  @tier_rank %{main: 0, recurring: 1, incidental: 2}
+
+  defp publish_order(cast) do
+    cast
+    |> Enum.with_index()
+    |> Enum.sort_by(fn {c, i} -> {Map.get(@tier_rank, Characters.tier_of(c), 3), i} end)
+    |> Enum.map(&elem(&1, 0))
+  end
 
   # Who is in the next scene: the author's selection, or everyone ready if they haven't
   # made one. Always intersected with who is *currently* ready — a selection made before
