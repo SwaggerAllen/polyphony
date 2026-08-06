@@ -748,6 +748,80 @@ defmodule Polyphony.Authoring.Autofill do
   defp trimmed(value), do: String.trim(to_string(value || ""))
 
   @doc """
+  Draft a line of **Director narration** — the one move only the author writes.
+
+  The play screen's composer has had ✦ Expand since it existed; Narrate is the other
+  thing you can write there and had nothing, so the one move that is *entirely* the
+  author's was the one with no help. It takes what is already typed the way every other
+  ✦ does (`opts[:current]`): with something there it sharpens it, with nothing there it
+  writes one.
+
+  **Grounded in what the scene can see, and nothing else.** A world event goes straight
+  into every member's transcript, so this is more character-facing than a premise —
+  which is why `opts[:world]` should be the public read and why `opts[:recent]` must
+  carry only moves everyone present has already seen. Seeded with somebody's interior
+  thought or a whisper, a drafting aid narrates it out loud, and the author's own
+  transcript is where they would find out. `Polyphony.Visibility` is not in this path;
+  the caller choosing what to pass is.
+
+  Opts: `:world` (world display map), `:cast` (who is present, `[%{"name"}]`),
+  `:location`, `:recent` (public lines, oldest first), `:current`. Returns `{:ok, text}`.
+  """
+  @spec generate_narration(keyword()) :: {:ok, String.t()} | {:error, term()}
+  def generate_narration(opts \\ []) do
+    instruction =
+      case String.trim(to_string(opts[:current] || "")) do
+        s when s != "" ->
+          "The narration so far:\n#{s}\n\nSharpen it — make the thing that " <>
+            "happens concrete and physical, without changing what it is. Return the " <>
+            "revised line."
+
+        _ ->
+          "Write what happens next. Return only the line."
+      end
+
+    messages = [
+      %{
+        role: "system",
+        content:
+          "You are the Director of a role-play scene, writing a **world event**: " <>
+            "something that happens *around* the characters rather than something one of " <>
+            "them does.\n\n" <>
+            "One or two sentences, present tense, concrete and physical — a sound, a " <>
+            "change in the light, someone arriving at the door, the tide turning. It is " <>
+            "narration the whole room experiences.\n\n" <>
+            "Do NOT write dialogue, do NOT write anybody's thoughts, and do NOT decide " <>
+            "what a character does or feels about it — their turn is theirs. Do not " <>
+            "resolve the scene: a world event puts pressure on people, it does not " <>
+            "settle anything for them.\n\n" <>
+            "Return only the prose: no label, no quotes, no JSON."
+      },
+      %{
+        role: "user",
+        content:
+          world_block(opts[:world]) <>
+            location_block(opts[:location]) <>
+            campaign_cast_block(opts[:cast] || []) <>
+            recent_block(opts[:recent] || []) <> instruction
+      }
+    ]
+
+    with {:ok, text} <- Polyphony.LLM.call(messages, [response: :field] ++ meter_opts(opts)) do
+      {:ok, String.trim(text)}
+    end
+  end
+
+  # Deliberately named "so far, as everyone present saw it" rather than "the transcript":
+  # what the caller passes is a filtered read, and the prompt should say what it is
+  # rather than imply a completeness it doesn't have.
+  defp recent_block([]), do: ""
+
+  defp recent_block(lines) do
+    "The scene so far, as everyone present saw it:\n" <>
+      Enum.map_join(lines, "\n", &"- #{&1}") <> "\n\n"
+  end
+
+  @doc """
   Propose where the next scene happens and what is at stake in it.
 
   **One call for both**, because they are one creative act: a location is only worth

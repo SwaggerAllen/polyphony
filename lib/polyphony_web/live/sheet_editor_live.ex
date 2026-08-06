@@ -537,6 +537,11 @@ defmodule PolyphonyWeb.SheetEditorLive do
      view_patch(socket, drawer: if(socket.assigns.drawer == section, do: nil, else: section))}
   end
 
+  # The overlay's three ways out — the ×, the scrim and Escape — all push this. They
+  # carry no section, and shouldn't have to: there is only ever one drawer open.
+  def handle_event("close_drawer", _params, socket),
+    do: {:noreply, view_patch(socket, drawer: nil)}
+
   # ── Add panels ──────────────────────────────────────────────────────────────
 
   # Adding to a list opens a panel below the sheet rather than an inline form. Two
@@ -1240,6 +1245,22 @@ defmodule PolyphonyWeb.SheetEditorLive do
     from_campaign || if(sheet.world_bible_id, do: to_string(sheet.world_bible_id), else: "")
   end
 
+  # Back to where you came from. A character belongs to one campaign (§2.7), and that
+  # is where you were when you opened them — the library is a place you pass through on
+  # the way in, not the place you were. Falling back to it keeps the chevron meaningful
+  # for a character that has no campaign yet.
+  defp back_to(nil), do: ~p"/library"
+  defp back_to(campaign), do: ~p"/campaigns/#{campaign.id}"
+
+  defp back_label(nil), do: "Back to library"
+
+  defp back_label(campaign) do
+    case String.trim(to_string(Map.get(Library.payload(campaign) || %{}, :name) || "")) do
+      "" -> "Back to the campaign"
+      name -> "Back to #{name}"
+    end
+  end
+
   # The rest of the campaign's cast — who **already exists in this story**, which is a
   # different question from who this character is connected to (`relations`).
   #
@@ -1288,12 +1309,18 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   def render(assigns) do
     ~H"""
-    <Kit.frame class="flex flex-col min-h-[100dvh]">
+    <%!-- **`height`, not `min-height`.** A `min-h-[100dvh]` column grows with its
+          content, so `flex-1 min-h-0 overflow-y-auto` inside it never has a height to
+          be a fraction *of* — nothing scrolls, the page runs to whatever length the
+          sheet is, and the `shrink-0` bar meant to hold the bottom of the viewport
+          lands at the bottom of a document several screens tall. Play has always
+          pinned its say-bar this way; these three didn't. --%>
+    <Kit.frame class="flex flex-col min-h-0" style="height:100dvh">
       <Kit.header
         title={header_title(@name)}
         eyebrow={@world_context && @world_context["name"]}
-        back={~p"/library"}
-        back_label="Back to library"
+        back={back_to(@campaign)}
+        back_label={back_label(@campaign)}
         back_confirm={leave_confirm(@dirty)}
       >
         <:actions>
@@ -1329,7 +1356,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
       </Kit.jump>
 
       <div class="flex-1 min-h-0 overflow-y-auto">
-        <.drawer :if={@drawer == "tier"} section="tier" title="About cast tiers">
+        <Kit.info_drawer :if={@drawer == "tier"} on_close="close_drawer" title="About cast tiers">
           <:part colour="var(--lamp)" name="Main cast">
             Always in context. The people the story is about.
           </:part>
@@ -1340,7 +1367,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
             Loaded only for the scenes they appear in. A walk-on who turns out to matter
             gets promoted; one who has served their purpose gets demoted rather than deleted.
           </:part>
-        </.drawer>
+        </Kit.info_drawer>
 
         <%!-- One brief writes everything, above the sheet rather than buried in it.
               It was several screens down, under the fields it fills — which is the
@@ -1535,7 +1562,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
             <p class="text-[11px] dim mt-1.5">The only part strangers see.</p>
           </div>
 
-          <.drawer :if={@drawer == "cover"} section="cover" title="About the cover">
+          <Kit.info_drawer :if={@drawer == "cover"} on_close="close_drawer" title="About the cover">
             <:intro>
               A short blurb someone reads before they decide to take this character on.
               It's written from everything below it — the secrets included — under
@@ -1545,7 +1572,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
               That's what stops it reading like a stranger wrote it. If a draft quotes one,
               it's thrown away rather than shown to you.
             </:part>
-          </.drawer>
+          </Kit.info_drawer>
 
           <%!-- ── The five written fields ─────────────────────────────────── --%>
           <.block_field
@@ -1597,7 +1624,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
             <.add_row label="Add something that's true…" panel="fact" />
           </div>
 
-          <.drawer :if={@drawer == "facts"} section="facts" title="About facts">
+          <Kit.info_drawer :if={@drawer == "facts"} on_close="close_drawer" title="About facts">
             <:intro>
               Short, flat statements that are true about them. They're what they'd never
               contradict, so keep them to things you'd defend rather than things you'd like.
@@ -1612,7 +1639,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
               and the two settings are independent, so they can have a secret they rarely
               think about.
             </:part>
-          </.drawer>
+          </Kit.info_drawer>
 
           <%!-- ── What they start out knowing (§04) ───────────────────────── --%>
           <%!-- The other direction, and read-only on purpose: one fact, one home, so
@@ -1700,7 +1727,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
             <.add_row label="Add someone they know…" panel="relationship" />
           </div>
 
-          <.drawer :if={@drawer == "knows"} section="knows" title="About who they know">
+          <Kit.info_drawer :if={@drawer == "knows"} on_close="close_drawer" title="About who they know">
             <:intro>
               How <em>they</em> regard someone else — directional, and often lopsided. The
               interesting cases are where the two directions don't match.
@@ -1709,7 +1736,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
               Joins the campaign as a walk-on and stays unwritten until someone needs them.
               That's what stops the whole cast writing itself sideways from one button.
             </:part>
-          </.drawer>
+          </Kit.info_drawer>
 
           <%!-- ── Pressures: two lists, never one ─────────────────────────── --%>
           <div id="pushed">
@@ -1725,7 +1752,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
             </div>
           </div>
 
-          <.drawer :if={@drawer == "pushed"} section="pushed" title="About being pushed">
+          <Kit.info_drawer :if={@drawer == "pushed"} on_close="close_drawer" title="About being pushed">
             <:intro>
               These are played, not filtered. A line they hold is a scene beat — something
               the story has to work against, and something that can give at the right moment.
@@ -1743,7 +1770,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
               don't allow that content — and for something they can't stop, closed means
               they don't do it. The ceiling always pushes toward refusal.
             </:part>
-          </.drawer>
+          </Kit.info_drawer>
 
           <%!-- ── Groups ──────────────────────────────────────────────────── --%>
           <div class="px-4 py-3" id="groups">
@@ -1803,7 +1830,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
         <.pressure_panel :if={@panel == "pressure"} />
         <.group_panel :if={@panel == "group"} groups={joinable(@all_groups, @groups)} />
 
-        <.drawer :if={@drawer == "groups"} section="groups" title="About groups">
+        <Kit.info_drawer :if={@drawer == "groups"} on_close="close_drawer" title="About groups">
           <:intro>
             A group is written like a character and used as a starting point for others.
             Joining one and being written from one are different things.
@@ -1817,7 +1844,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
             group later doesn't reach back into them, and joining now doesn't backfill what
             it knows — they'd learn that in a scene.
           </:part>
-        </.drawer>
+        </Kit.info_drawer>
 
       </div>
 
@@ -2238,45 +2265,6 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # kit's sheet-and-rows applied to explanation rather than a new component — and
   # there is one per *section*, not one per setting, because the concepts in a
   # section only make sense together.
-  attr(:title, :string, required: true)
-  attr(:section, :string, required: true)
-  slot(:intro)
-
-  slot :part do
-    attr(:colour, :string)
-    attr(:name, :string)
-  end
-
-  defp drawer(assigns) do
-    ~H"""
-    <Kit.sheet class="mx-4 mt-4">
-      <Kit.row class="px-4 py-3 flex items-center justify-between" style="background:var(--b2)">
-        <span class="ttl text-[15px] font-semibold"><%= @title %></span>
-        <button
-          type="button"
-          class="dim text-[17px] leading-none"
-          phx-click="drawer"
-          phx-value-section={@section}
-          aria-label={"Close #{@title}"}
-        >
-          ×
-        </button>
-      </Kit.row>
-      <Kit.row :if={@intro != []} class="px-4 py-3">
-        <p class="text-[13px] leading-relaxed"><%= render_slot(@intro) %></p>
-      </Kit.row>
-      <div :for={{p, i} <- Enum.with_index(@part)} class={i < length(@part) - 1 && "row"}>
-        <div class="px-4 py-3">
-          <div class="flex items-center gap-1.5 mb-1">
-            <Kit.dot colour={p[:colour] || "var(--bcm)"} />
-            <span class="text-[13px] font-semibold"><%= p[:name] %></span>
-          </div>
-          <p class="text-[13px] leading-relaxed"><%= render_slot(p) %></p>
-        </div>
-      </div>
-    </Kit.sheet>
-    """
-  end
 
   # The bar that doesn't scroll away. A sibling of the scroll container rather than
   # something inside it, so it holds the bottom of the viewport the way play's say-bar

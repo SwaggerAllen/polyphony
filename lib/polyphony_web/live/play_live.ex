@@ -27,6 +27,8 @@ defmodule PolyphonyWeb.PlayLive do
   """
   use PolyphonyWeb, :live_view
 
+  require Logger
+
   alias Polyphony.{
     App,
     Broadcast,
@@ -67,7 +69,7 @@ defmodule PolyphonyWeb.PlayLive do
     SupersedePacket
   }
 
-  alias Polyphony.Authoring.{CharacterSheet, Stub}
+  alias Polyphony.Authoring.{CharacterSheet, Stub, WorldBible}
 
   alias Polyphony.Events.{
     IntroductionProposed,
@@ -119,6 +121,8 @@ defmodule PolyphonyWeb.PlayLive do
        page_title: "Play",
        topic: nil,
        joinable: [],
+       writable: [],
+       writing_in: MapSet.new(),
        cast: %Cast{},
        waiting: :you,
        progress: %{phase: :idle, subject: nil},
@@ -137,6 +141,8 @@ defmodule PolyphonyWeb.PlayLive do
        debug_feed_text: "",
        premise: "",
        narrating: false,
+       narrating_draft: "",
+       drafting_narration: false,
        panel: nil,
        voices: %{},
        campaign_name: "",
@@ -211,6 +217,7 @@ defmodule PolyphonyWeb.PlayLive do
       traces: traces,
       roster: roster,
       joinable: joinable(socket, roster),
+      writable: writable(socket, roster),
       cast: cast,
       voices: voices,
       strip:
@@ -494,6 +501,49 @@ defmodule PolyphonyWeb.PlayLive do
     end
   end
 
+  # The **public** read of this campaign's world. A narration is written into every
+  # member's transcript, so it is character-facing in the strictest sense the app has —
+  # more so than a scene premise, which takes the same read for the same reason.
+  defp narration_world(socket) do
+    case campaign_world_bible(socket) do
+      %WorldBible{} = wb ->
+        %{
+          "name" => wb.name || "",
+          "setting" => wb.setting || "",
+          "tone" => wb.tone || "",
+          "rules" => Enum.join(WorldBible.public(wb.rules), "\n"),
+          "starting_canon" => Enum.join(WorldBible.public(wb.starting_canon), "\n")
+        }
+
+      _ ->
+        nil
+    end
+  end
+
+  defp narration_meter(socket) do
+    uid = socket.assigns.current_user && socket.assigns.current_user.id
+    [usage_kind: "authoring"] ++ if(uid, do: [user_id: uid], else: [])
+  end
+
+  # What everybody in the scene has already seen: speech that wasn't a whisper, actions,
+  # demeanour, and the Director's own moves. Thoughts are structurally invisible to
+  # everyone else and a whisper reached two people — feeding either to a drafting aid
+  # whose output goes into the shared transcript is how a secret gets narrated out loud.
+  @public_kinds ~w(SpeechUttered ActionTaken DemeanorReported WorldEventOccurred)
+  @recent_lines 12
+
+  defp public_lines(messages) do
+    for m <- messages,
+        m[:kind] in @public_kinds,
+        p = m[:payload] || %{},
+        to_string(p[:audibility]) != "private",
+        text = String.trim(to_string(p[:content] || "")),
+        text != "" do
+      text
+    end
+    |> Enum.take(-@recent_lines)
+  end
+
   defp maybe_payload(nil), do: nil
   defp maybe_payload(entry), do: Library.payload(entry)
 
@@ -553,6 +603,21 @@ defmodule PolyphonyWeb.PlayLive do
         entry != nil,
         not MapSet.member?(present, to_string(entry.id)),
         match?(%CharacterSheet{status: :full}, Library.payload(entry)),
+        do: entry
+  end
+
+  # The same list, for the people this story invented and never wrote — the walk-ons a
+  # character's relationships stubbed. `SceneControl` refuses them, which is why they
+  # are a separate list with a separate control rather than more options in the picker:
+  # the honest offer is not "bring them in" but "write them, then bring them in".
+  defp writable(socket, roster) do
+    present = MapSet.new(roster, &to_string/1)
+
+    for id <- campaign_character_ids(socket),
+        entry = Library.get(id),
+        entry != nil,
+        not MapSet.member?(present, to_string(entry.id)),
+        match?(%CharacterSheet{status: s} when s != :full, Library.payload(entry)),
         do: entry
   end
 
@@ -789,7 +854,46 @@ defmodule PolyphonyWeb.PlayLive do
     do: {:noreply, assign(socket, narrating: true, panel: nil)}
 
   def handle_event("cancel_narrate", _params, socket),
-    do: {:noreply, assign(socket, narrating: false)}
+    do: {:noreply, assign(socket, narrating: false, narrating_draft: "")}
+
+  # Keep what's typed in the socket so a ✦ that comes back doesn't discard it — the
+  # textarea is uncontrolled, so without this the draft the author has half-written is
+  # the thing the expand is supposed to build on and can't see.
+  def handle_event("sync_narrate", %{"text" => text}, socket),
+    do: {:noreply, assign(socket, narrating_draft: text)}
+
+  # ✦ Expand for the one move that is entirely the author's. The composer has had this
+  # since it existed; Narrate is the other thing you can write from that bar and had
+  # nothing, which made the Director's own move the only one with no help.
+  #
+  # Grounded in **what the scene can see**: a world event goes straight into every
+  # member's transcript, so seeding the draft with somebody's interior thought or a
+  # whisper is how a drafting aid narrates a secret out loud. `Visibility` isn't in this
+  # path — `public_lines/1` choosing what to pass is.
+  def handle_event("expand_narrate", _params, socket) do
+    safe(socket, fn ->
+      # Read from the socket, not from the click. A `phx-click` carries `phx-value-*`,
+      # not the textarea beside it, and threading the live value through the button
+      # means racing `phx-change` against the blur the click itself causes. `sync_narrate`
+      # is debounced short for exactly this.
+      text = socket.assigns.narrating_draft
+
+      opts =
+        [
+          world: narration_world(socket),
+          cast:
+            for(id <- socket.assigns.roster, do: %{"name" => name_of(socket.assigns.cast, id)}),
+          location: elem(scene_campaign_location(socket.assigns.scene_id), 1),
+          recent: public_lines(socket.assigns.messages),
+          current: text
+        ] ++ narration_meter(socket)
+
+      {:noreply,
+       socket
+       |> assign(narrating_draft: text, drafting_narration: true)
+       |> request_generation("narrate", "autofill.narration", %{opts: opts})}
+    end)
+  end
 
   def handle_event("narrate", %{"text" => text}, socket) do
     case String.trim(text) do
@@ -826,6 +930,31 @@ defmodule PolyphonyWeb.PlayLive do
 
         true ->
           {:noreply, admit(socket, entry, Library.payload(entry))}
+      end
+    end)
+  end
+
+  # Write a walk-on in and bring them on, in one act. Reuses `play.intro` — the same op
+  # an accepted Director introduction takes — so a walk-on the author reached for and
+  # one the Director asked for are written the same way and arrive the same way. Keyed
+  # by **id** rather than by name: this person already exists, and a name is a display
+  # value that two of them can share.
+  def handle_event("write_in", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      entry = Enum.find(socket.assigns.writable, &(to_string(&1.id) == to_string(id)))
+
+      if entry do
+        uid = socket.assigns.current_user && socket.assigns.current_user.id
+
+        {:noreply,
+         socket
+         |> assign(writing_in: MapSet.put(socket.assigns.writing_in, entry.id))
+         |> request_generation("write_in:#{entry.id}", "play.intro", %{
+           entry_id: entry.id,
+           user_id: uid
+         })}
+      else
+        {:noreply, put_flash(socket, :error, "They aren't waiting to be written.")}
       end
     end)
   end
@@ -1022,6 +1151,59 @@ defmodule PolyphonyWeb.PlayLive do
   end
 
   # A just-generated introduction is now :full — admit them.
+  def handle_info({:generation, "narrate", {:ok, text}}, socket) do
+    {:noreply,
+     socket
+     |> forget_generation("narrate")
+     |> assign(drafting_narration: false, narrating: true, narrating_draft: text)}
+  end
+
+  def handle_info({:generation, "narrate", result}, socket) do
+    Logger.warning("[play] narration draft failed: #{inspect(result)}")
+
+    {:noreply,
+     socket
+     |> forget_generation("narrate")
+     |> assign(drafting_narration: false)
+     |> put_flash(:error, "Couldn't draft that — write it yourself, or try again.")}
+  end
+
+  def handle_info({:generation, "write_in:" <> id, {:ok, _}}, socket) do
+    safe(socket, fn ->
+      socket =
+        socket
+        |> forget_generation("write_in:#{id}")
+        |> assign(writing_in: MapSet.delete(socket.assigns.writing_in, normalize_id(id)))
+
+      case Library.get(normalize_id(id)) do
+        nil ->
+          {:noreply, put_flash(socket, :error, "They're gone.")}
+
+        entry ->
+          sheet = Library.payload(entry)
+
+          # `admit/3` refuses a non-`:full` character the same way `SceneControl` does,
+          # so the check is here rather than trusted: a generation that came back
+          # `{:ok, _}` having written nothing usable must not be walked on stage.
+          if match?(%CharacterSheet{status: :full}, sheet) do
+            {:noreply, admit(socket, entry, sheet)}
+          else
+            {:noreply, put_flash(socket, :error, "Written, but not ready — open them to finish.")}
+          end
+      end
+    end)
+  end
+
+  def handle_info({:generation, "write_in:" <> id, result}, socket) do
+    Logger.warning("[play] write-in failed for #{id}: #{inspect(result)}")
+
+    {:noreply,
+     socket
+     |> forget_generation("write_in:#{id}")
+     |> assign(writing_in: MapSet.delete(socket.assigns.writing_in, normalize_id(id)))
+     |> put_flash(:error, "Couldn't write them — open them to finish by hand.")}
+  end
+
   def handle_info({:generation, "intro:" <> name, {:ok, _}}, socket) do
     safe(socket, fn ->
       case find_owned(socket, name) do
@@ -1888,19 +2070,54 @@ defmodule PolyphonyWeb.PlayLive do
               strip's sentence says out loud. Narrate is the one thing only the GM can
               write, because it isn't anybody's turn. --%>
         <div :if={is_nil(@speaker)}>
-          <form :if={@narrating} id="narrate-form" phx-submit="narrate" class="mb-2">
+          <form
+            :if={@narrating}
+            id="narrate-form"
+            phx-submit="narrate"
+            phx-change="sync_narrate"
+            class="mb-2"
+          >
             <label for="narrate-input" class="lbl dim">What happens</label>
+
+            <%!-- Drawn where the words will land, like every other wait. The textarea
+                  is replaced rather than sat beside: an empty box is what nothing
+                  happening looks like, and there is nothing here to lose. --%>
+            <Kit.skel_lines
+              :if={@drafting_narration}
+              class="mt-1.5"
+              lines={["100%", "72%"]}
+              label="Drafting what happens"
+            />
             <textarea
+              :if={not @drafting_narration}
               id="narrate-input"
               name="text"
               rows="2"
               class="field say-input px-3.5 py-3 text-[15px] w-full mt-1.5"
               autocomplete="off"
+              phx-debounce="200"
               placeholder="The tide bell rings twice…"
-            ></textarea>
-            <div class="flex justify-end gap-1.5 mt-2">
-              <Kit.btn kind={:ghost} type="button" phx-click="cancel_narrate">Cancel</Kit.btn>
-              <Kit.btn kind={:primary} type="submit">Narrate it</Kit.btn>
+            ><%= @narrating_draft %></textarea>
+
+            <div class="flex items-center justify-between gap-2 mt-2">
+              <%!-- The one move that is entirely the author's was the only one on this
+                    bar with no ✦. It takes what is typed and sharpens it, or writes one
+                    from nothing — the same two behaviours ✦ has everywhere else. --%>
+              <Kit.btn
+                kind={:ghost}
+                type="button"
+                phx-click="expand_narrate"
+                disabled={@drafting_narration}
+                title="Draft what happens — you can edit it before narrating"
+              >
+                <%= if @drafting_narration, do: "✦ …", else: "✦ Expand" %>
+              </Kit.btn>
+              <div class="flex gap-1.5">
+                <Kit.btn kind={:ghost} type="button" phx-click="cancel_narrate">Cancel</Kit.btn>
+                <Kit.btn kind={:primary} type="submit" disabled={@drafting_narration}>
+                  Narrate it
+                </Kit.btn>
+              </div>
             </div>
           </form>
 
@@ -1966,7 +2183,38 @@ defmodule PolyphonyWeb.PlayLive do
           </p>
         </div>
 
-        <p :if={@joinable == [] and @roster != []} class="text-[11px] leading-relaxed dim mt-3">
+        <%!-- The walk-ons this story invented and never wrote. `SceneControl` refuses
+              a non-`:full` character, so they cannot be options in the picker above —
+              the honest offer is *write them, then bring them in*, which is one press
+              and the same `play.intro` an accepted Director introduction takes. Without
+              this, a side character a scene actually calls for was unreachable from
+              play: the only route was leaving the scene for the campaign's cast tab. --%>
+        <div :if={@writable != []} class="mt-3">
+          <div class="lbl dim mb-1.5">Not written yet</div>
+          <div class="flex flex-col gap-1.5">
+            <div :for={c <- @writable} class="flex items-center justify-between gap-2">
+              <span class="text-[12.5px] min-w-0 truncate"><%= char_name(c) %></span>
+              <Kit.btn
+                size={:sm}
+                type="button"
+                phx-click="write_in"
+                phx-value-id={c.id}
+                disabled={MapSet.member?(@writing_in, c.id)}
+                class="shrink-0"
+              >
+                <%= if MapSet.member?(@writing_in, c.id), do: "✦ …", else: "✦ Write them in" %>
+              </Kit.btn>
+            </div>
+          </div>
+          <p class="text-[11px] leading-relaxed dim mt-1.5">
+            They're written from their role and this world, then walk in at this beat.
+          </p>
+        </div>
+
+        <p
+          :if={@joinable == [] and @writable == [] and @roster != []}
+          class="text-[11px] leading-relaxed dim mt-3"
+        >
           Everyone this campaign has written is already here.
         </p>
 

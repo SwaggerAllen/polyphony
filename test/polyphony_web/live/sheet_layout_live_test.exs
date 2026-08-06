@@ -190,4 +190,86 @@ defmodule PolyphonyWeb.SheetLayoutLiveTest do
       assert Library.payload(Library.get(entry.id)).tier == :incidental
     end
   end
+
+  describe "every editor pins its save bar" do
+    defp world_entry(user),
+      do:
+        Library.put(%{
+          owner: Owner.of(user),
+          kind: "world_bible",
+          payload: %Polyphony.Authoring.WorldBible{
+            name: "Saltmarch",
+            rules: [],
+            starting_canon: []
+          }
+        })
+
+    defp group_entry(user),
+      do:
+        Library.put(%{
+          owner: Owner.of(user),
+          kind: Polyphony.Authoring.Group.kind(),
+          payload: %Polyphony.Authoring.Group{name: "The Tidewatch"}
+        })
+
+    test "the frame is a viewport, not a document", %{conn: conn, user: user} do
+      entry = character(user)
+      world = world_entry(user)
+      group = group_entry(user)
+
+      for path <- [
+            ~p"/authoring/character/#{entry.id}",
+            ~p"/authoring/bible/#{world.id}",
+            ~p"/authoring/group/#{group.id}"
+          ] do
+        {:ok, _view, html} = live(conn, path)
+
+        # This is the whole bug. `min-h-[100dvh]` grows with its content, so the
+        # `flex-1 min-h-0 overflow-y-auto` inside it has no height to be a fraction
+        # *of* — nothing scrolls, the page runs to whatever length the sheet is, and
+        # the `shrink-0` bar lands at the bottom of a document several screens tall
+        # instead of holding the bottom of the viewport.
+        assert html =~ ~s(style="height:100dvh"), "#{path} still grows with its content"
+        refute html =~ ~s(class="fr stage dark flex flex-col min-h-[100dvh]")
+      end
+    end
+
+    test "the world editor has one at all", %{conn: conn, user: user} do
+      world = world_entry(user)
+      {:ok, view, html} = live(conn, ~p"/authoring/bible/#{world.id}")
+
+      # Its own code comment said why: *"Save sits at the foot of a sheet several
+      # viewports tall and Name is at its head, so the refusal rendered somewhere the
+      # author wasn't looking."* That was patched by also flashing the clash; this puts
+      # the control where it can be seen.
+      assert html =~ ~s(form="bible-form")
+      assert html =~ "Everything here is saved as you write."
+
+      html = view |> form("#bible-form", %{name: "Low Water"}) |> render_submit()
+      assert html =~ "✓ Saved"
+      assert Library.payload(Library.get(world.id)).name == "Low Water"
+    end
+
+    test "and it carries the name clash, which is the thing only Save does",
+         %{conn: conn, user: user} do
+      world_entry(user)
+      other = world_entry(user)
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{other.id}")
+      html = view |> form("#bible-form", %{name: "Saltmarch"}) |> render_submit()
+
+      # Two worlds with one name is the bug that made an interrupted Quick Build
+      # unsaveable. A timer is not entitled to decide a name is fine, which is why the
+      # gate is Save's and why the bar is where the refusal has to show.
+      assert html =~ "You already have a world called Saltmarch."
+    end
+
+    test "the group editor's too", %{conn: conn, user: user} do
+      group = group_entry(user)
+      {:ok, _view, html} = live(conn, ~p"/authoring/group/#{group.id}")
+
+      assert html =~ ~s(form="group-form")
+      assert html =~ "Everything here is saved as you write."
+    end
+  end
 end

@@ -342,5 +342,49 @@ defmodule PolyphonyWeb.AuthoringAutofillLiveTest do
       # somebody has already approved is a second author, not a first.
       assert render(view) =~ "Mine, thanks."
     end
+
+    test "the world bible does it too — same order, same reason", %{conn: conn, user: user} do
+      entry = world(user, %WorldBible{name: "", rules: [], starting_canon: []})
+      {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
+
+      view |> form("#bible-generate-all", %{brief: "a rain-drowned harbour"}) |> render_submit()
+      generate(view)
+      generate(view)
+
+      view |> form("form[phx-submit=save]") |> render_submit()
+
+      # A world's cover is what a stranger reads before they take it (§2.12) — the one
+      # part of a published world that decides whether anybody does.
+      assert Library.payload(Library.get(entry.id)).cover not in [nil, ""]
+    end
+
+    test "a world's existing cover survives generate-all", %{conn: conn, user: user} do
+      entry =
+        world(user, %WorldBible{
+          name: "Saltmarch",
+          cover: "Mine, thanks.",
+          rules: [],
+          starting_canon: []
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
+      view |> form("#bible-generate-all", %{brief: "a harbour"}) |> render_submit()
+      generate(view)
+      generate(view)
+
+      assert render(view) =~ "Mine, thanks."
+    end
+
+    test "the world's cover is drawn while it is being written", %{conn: conn, user: user} do
+      entry = world(user, %WorldBible{name: "", rules: [], starting_canon: []})
+      {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
+
+      html = view |> element("button[phx-click=generate_cover]") |> render_click()
+
+      # An empty box is what "nothing happened" looks like, and this is now the tail of
+      # a longer chained wait than it used to be.
+      assert html =~ "Writing the cover"
+      refute html =~ ~s(id="cover-text")
+    end
   end
 end

@@ -34,7 +34,7 @@ defmodule PolyphonyWeb.GroupEditorLive do
 
   import PolyphonyWeb.BlockField
 
-  alias Polyphony.{Groups, Library, Owner}
+  alias Polyphony.{Campaigns, Groups, Library, Owner}
   alias Polyphony.Authoring.{ArcEntry, Group, GroupArc}
   alias Polyphony.Authoring.CharacterSheet.Fact
   alias Polyphony.Permissions
@@ -75,6 +75,8 @@ defmodule PolyphonyWeb.GroupEditorLive do
          page_title: group.name || "Group",
          entry: entry,
          group: group,
+         campaign:
+           Campaigns.of_world(Owner.of(socket.assigns.current_user), group.world_bible_id),
          name: group.name || "",
          blocks: blocks_from_group(group),
          facts: group.facts || [],
@@ -296,6 +298,50 @@ defmodule PolyphonyWeb.GroupEditorLive do
     assign(socket, name: params["name"] || socket.assigns.name, blocks: blocks)
   end
 
+  # Same bar as the other two editors, for the same reason: this is one long scroll and
+  # a Save at the foot of it is a Save you have to go and find. The prose autosaves, so
+  # the line says that rather than claiming there is unsaved work.
+  defp save_bar(assigns) do
+    ~H"""
+    <div
+      class="shrink-0 px-4 py-3 flex items-center gap-2"
+      style="background:var(--b2);border-top:1px solid var(--rule)"
+    >
+      <div class="min-w-0 flex-1">
+        <div :if={@dirty} class="text-[12px] dim" role="status">Saving…</div>
+        <div
+          :if={not @dirty and @saved}
+          class="text-[12px]"
+          style="color:var(--ok)"
+          role="status"
+        >
+          ✓ Saved
+        </div>
+        <div :if={not @dirty and not @saved} class="text-[12px] dim">
+          Everything here is saved as you write.
+        </div>
+      </div>
+
+      <Kit.btn kind={:primary} type="submit" form="group-form" class="shrink-0">Save</Kit.btn>
+    </div>
+    """
+  end
+
+  # A group belongs to a world, and a world belongs to one campaign (attaching copies),
+  # so the campaign is a lookup rather than a guess. Groups written outside one — or
+  # before a world was attached — keep the library.
+  defp back_to(nil), do: ~p"/library"
+  defp back_to(campaign), do: ~p"/campaigns/#{campaign.id}"
+
+  defp back_label(nil), do: "Back to library"
+
+  defp back_label(campaign) do
+    case String.trim(to_string(Map.get(Library.payload(campaign) || %{}, :name) || "")) do
+      "" -> "Back to the campaign"
+      name -> "Back to #{name}"
+    end
+  end
+
   defp blocks_from_group(group),
     do: Map.new(@prose_fields, fn f -> {f, to_blocks(Map.get(group, field_atom(f)))} end)
 
@@ -344,8 +390,19 @@ defmodule PolyphonyWeb.GroupEditorLive do
 
   def render(assigns) do
     ~H"""
-    <Kit.frame class="flex flex-col min-h-[100dvh]">
-      <Kit.header title={@name} eyebrow="Group" back={~p"/library"} back_label="Back to library">
+    <%!-- **`height`, not `min-height`.** A `min-h-[100dvh]` column grows with its
+          content, so `flex-1 min-h-0 overflow-y-auto` inside it never has a height to
+          be a fraction *of* — nothing scrolls, the page runs to whatever length the
+          sheet is, and the `shrink-0` bar meant to hold the bottom of the viewport
+          lands at the bottom of a document several screens tall. Play has always
+          pinned its say-bar this way; these three didn't. --%>
+    <Kit.frame class="flex flex-col min-h-0" style="height:100dvh">
+      <Kit.header
+        title={@name}
+        eyebrow="Group"
+        back={back_to(@campaign)}
+        back_label={back_label(@campaign)}
+      >
         <:actions>
           <Kit.pill><%= length(@members) %> in it</Kit.pill>
           <Layouts.nav_menu current_user={@current_user} />
@@ -501,12 +558,6 @@ defmodule PolyphonyWeb.GroupEditorLive do
             </div>
           </Kit.sheet>
 
-          <div class="mx-4 mb-4 flex items-center gap-2">
-            <Kit.btn kind={:primary} type="submit">Save</Kit.btn>
-            <span :if={@saved} class="text-[12px]" style="color:var(--ok)" role="status">
-              ✓ Saved
-            </span>
-          </div>
         </form>
 
         <form id="group-fact-form" phx-submit="add_fact"></form>
@@ -539,6 +590,8 @@ defmodule PolyphonyWeb.GroupEditorLive do
           </Kit.empty>
         </Kit.sheet>
       </div>
+
+      <.save_bar {assigns} />
     </Kit.frame>
     """
   end

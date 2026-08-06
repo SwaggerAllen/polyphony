@@ -104,7 +104,7 @@ defmodule PolyphonyWeb.PlayAddCastLiveTest do
     refute to_string(bram.id) in offered(render(view))
   end
 
-  test "a pending stub is never offered — `SceneControl` would refuse them",
+  test "a pending stub is offered to be written, not to be brought in",
        %{conn: conn, user: user} do
     wren = character(user, "Wren")
     stub = character(user, "The bellman", :stub)
@@ -114,8 +114,13 @@ defmodule PolyphonyWeb.PlayAddCastLiveTest do
     {:ok, view, _html} = live(conn, ~p"/play/#{id}")
     html = view |> element("button[phx-click=toggle_cast]") |> render_click()
 
+    # `SceneControl` refuses a non-`:full` character, so they can't be an option in the
+    # picker. The honest offer is *write them, then bring them in* — and without it a
+    # side character the scene actually calls for was unreachable from play at all.
     assert offered(html) == []
-    assert html =~ "Everyone this campaign has written is already here."
+    assert html =~ "Not written yet"
+    assert html =~ ~s(phx-click="write_in" phx-value-id="#{stub.id}")
+    refute html =~ "Everyone this campaign has written is already here."
   end
 
   test "the picker is scoped to the campaign, not the library", %{conn: conn, user: user} do
@@ -144,5 +149,90 @@ defmodule PolyphonyWeb.PlayAddCastLiveTest do
 
     refute to_string(stranger.id) in members(id)
     assert render(view) =~ "They aren&#39;t available to bring in."
+  end
+
+  describe "writing a walk-on in from the cast menu" do
+    test "generates them, then walks them on at this beat", %{conn: conn, user: user} do
+      wren = character(user, "Wren")
+      stub = character(user, "The bellman", :stub)
+      camp = campaign(user, [wren.id, stub.id])
+      id = scene(camp.id, [wren])
+
+      {:ok, view, _html} = live(conn, ~p"/play/#{id}")
+      view |> element("button[phx-click=toggle_cast]") |> render_click()
+
+      view
+      |> element(~s(button[phx-click="write_in"][phx-value-id="#{stub.id}"]))
+      |> render_click()
+
+      generate(view)
+
+      # Written first — `SceneControl` refuses anything that isn't `:full`, so the
+      # order is the point rather than an implementation detail.
+      assert %CharacterSheet{status: :full} = Library.payload(Library.get(stub.id))
+      assert to_string(stub.id) in members(id)
+    end
+
+    test "and they stop being on offer, because they are the roster now",
+         %{conn: conn, user: user} do
+      wren = character(user, "Wren")
+      stub = character(user, "The bellman", :stub)
+      camp = campaign(user, [wren.id, stub.id])
+      id = scene(camp.id, [wren])
+
+      {:ok, view, _html} = live(conn, ~p"/play/#{id}")
+      view |> element("button[phx-click=toggle_cast]") |> render_click()
+
+      view
+      |> element(~s(button[phx-click="write_in"][phx-value-id="#{stub.id}"]))
+      |> render_click()
+
+      html = generate(view)
+      refute html =~ ~s(phx-click="write_in" phx-value-id="#{stub.id}")
+    end
+
+    test "somebody who isn't waiting to be written can't be smuggled through it",
+         %{conn: conn, user: user} do
+      wren = character(user, "Wren")
+      outsider = character(user, "Outsider", :stub)
+      camp = campaign(user, [wren.id])
+      id = scene(camp.id, [wren])
+
+      {:ok, view, _html} = live(conn, ~p"/play/#{id}")
+      view |> element("button[phx-click=toggle_cast]") |> render_click()
+      render_click(view, "write_in", %{"id" => to_string(outsider.id)})
+
+      # Scoped to this campaign like the picker above it (§2.7), and refused rather
+      # than trusted — a `phx-click` is a message, not a button.
+      refute to_string(outsider.id) in members(id)
+      assert %CharacterSheet{status: :stub} = Library.payload(Library.get(outsider.id))
+    end
+
+    test "a generation that comes back unusable does not walk them on",
+         %{conn: conn, user: user} do
+      wren = character(user, "Wren")
+      stub = character(user, "The bellman", :stub)
+      camp = campaign(user, [wren.id, stub.id])
+      id = scene(camp.id, [wren])
+
+      # The provider answers, and answers with nothing worth keeping. `StubGen` leaves
+      # the sheet a stub, so the ok-tuple is not on its own evidence that anybody is
+      # ready to be in a scene.
+      Application.put_env(:polyphony, :llm,
+        provider: Polyphony.LLM.Stub,
+        stub_response: {:ok, "{}"}
+      )
+
+      {:ok, view, _html} = live(conn, ~p"/play/#{id}")
+      view |> element("button[phx-click=toggle_cast]") |> render_click()
+
+      view
+      |> element(~s(button[phx-click="write_in"][phx-value-id="#{stub.id}"]))
+      |> render_click()
+
+      generate(view)
+
+      refute to_string(stub.id) in members(id)
+    end
   end
 end

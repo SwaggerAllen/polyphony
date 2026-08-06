@@ -84,6 +84,9 @@ defmodule PolyphonyWeb.CampaignLive do
          qb_suggest: true,
          qb_groups: false,
          quick_build_open: false,
+         viewer: :omniscient,
+         writing_in: MapSet.new(),
+         publish_help: false,
          scene_location: "",
          scene_premise: "",
          scene_suggesting: false,
@@ -110,7 +113,56 @@ defmodule PolyphonyWeb.CampaignLive do
   # The tab lives in the URL, so it's linkable, survives a reload, and back works
   # between sections of a screen that used to be one long scroll.
   def handle_params(params, _uri, socket) do
-    {:noreply, assign(socket, tab: tab_param(params["tab"]))}
+    {:noreply,
+     assign(socket, tab: tab_param(params["tab"]), viewer: viewer_param(socket, params))}
+  end
+
+  # The perspective control's state, in the URL for the same reason play keeps it there:
+  # a viewpoint is part of *what you are looking at*, so it survives a reload and a
+  # shared link, and switching it is a patch rather than a remount.
+  #
+  # Only a **castable** member is a valid viewpoint. A stub has no knowledge to speak
+  # of, and offering one would be offering a view that answers every question the same
+  # way — and an id that isn't on this roster is refused rather than trusted, because
+  # this is the control that decides what secrets are on the screen.
+  defp viewer_param(socket, params) do
+    ids = for c <- socket.assigns.cast, full?(c), into: MapSet.new(), do: to_string(c.id)
+
+    case params["as"] do
+      id when is_binary(id) -> if MapSet.member?(ids, id), do: {:character, id}, else: :omniscient
+      _ -> :omniscient
+    end
+  end
+
+  # The viewer decides what a *world* read shows. Omniscient is the author over their
+  # own world and sees everything, with concealed entries marked; a character sees what
+  # `Audience` says they know, resolved through their groups.
+  defp viewed_world(%{world: nil}), do: nil
+  defp viewed_world(%{viewer: :omniscient, world: world}), do: world
+
+  # No `:owner` opt: that one names the character a *fact* is about, and world entries
+  # are about the world. Group membership still resolves — `Audience.resolve/2` expands
+  # `group_ids` live, which is the whole reason a group is somewhere for a secret to
+  # point rather than a list of names frozen at writing time.
+  defp viewed_world(%{viewer: {:character, id}, world: world}),
+    do: WorldBible.for_character(world, id)
+
+  defp viewer_name(%{viewer: :omniscient}), do: "Omniscient"
+
+  defp viewer_name(%{viewer: {:character, id}, cast: cast}) do
+    case Enum.find(cast, &(to_string(&1.id) == id)) do
+      nil -> "Omniscient"
+      entry -> char_name(entry)
+    end
+  end
+
+  defp viewer_colour(%{viewer: :omniscient}), do: "var(--bc)"
+
+  defp viewer_colour(%{viewer: {:character, id}, cast: cast}) do
+    case Enum.find(cast, &(to_string(&1.id) == id)) do
+      nil -> "var(--bc)"
+      entry -> Voice.of_sheet(Library.payload(entry))
+    end
   end
 
   defp tab_param(tab) do
@@ -275,6 +327,53 @@ defmodule PolyphonyWeb.CampaignLive do
        socket
        |> assign(scene_suggesting: true)
        |> request_generation("scene", "autofill.scene_opening", %{opts: opts})}
+    end)
+  end
+
+  # There was no clause for this at all. A `phx-click` with nothing to match raises
+  # `FunctionClauseError`, which kills the LiveView — so the one control on this screen
+  # whose entire job is *explaining* the screen took it down and left a page you could
+  # only get out of by reloading.
+  # A patch, not a navigate: switching perspective is the same screen looking at the
+  # same campaign, which is the one thing a remount would throw away.
+  def handle_event("view_as", %{"as" => as}, socket) do
+    tab = socket.assigns.tab
+    query = if as in [nil, ""], do: [tab: tab], else: [tab: tab, as: as]
+    {:noreply, push_patch(socket, to: ~p"/campaigns/#{socket.assigns.entry.id}?#{query}")}
+  end
+
+  def handle_event("publish_help", _params, socket),
+    do: {:noreply, assign(socket, publish_help: not socket.assigns.publish_help)}
+
+  # Write one pending character in, from the screen where you are choosing a cast.
+  #
+  # The scene picker only ever offered `:full` characters, because `SceneControl`
+  # refuses anything else — correct, and it left the walk-ons a campaign invents for
+  # itself unreachable from the one screen where you decide who is in a scene. The
+  # cast tab's "generate the pending ones" is a bulk pass on another tab, which is not
+  # the same act: here you want *this* person, now, because the scene needs them.
+  #
+  # Reuses the same `campaign.stubs` op with a list of one — a walk-on written for a
+  # scene should be written the same way as one written in a batch, or they read
+  # differently in the same story.
+  def handle_event("write_in", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      cid = normalize_id(id)
+      uid = socket.assigns.current_user && socket.assigns.current_user.id
+
+      case Enum.find(socket.assigns.cast, &(&1.id == cid and pending?(&1))) do
+        nil ->
+          {:noreply, put_flash(socket, :error, "They aren't waiting to be written.")}
+
+        entry ->
+          {:noreply,
+           socket
+           |> assign(writing_in: MapSet.put(socket.assigns.writing_in, entry.id))
+           |> request_generation("write_in:#{entry.id}", "campaign.stubs", %{
+             ids: [entry.id],
+             user_id: uid
+           })}
+      end
     end)
   end
 
@@ -634,6 +733,40 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
+  # Written in, and **selected**: you pressed this while choosing who is in a scene, so
+  # the only reason to write them was to use them. Adding them to the selection saves
+  # the step, and `scene_cast_ids/1` intersects with who is currently ready, so this is
+  # the moment they become eligible at all.
+  def handle_info({:generation, "write_in:" <> id, {:ok, {done, _failed}}}, socket) do
+    cid = normalize_id(id)
+
+    socket =
+      socket
+      |> forget_generation("write_in:#{id}")
+      |> assign(
+        writing_in: MapSet.delete(socket.assigns.writing_in, cid),
+        entry: Library.get(socket.assigns.entry.id)
+      )
+      |> load()
+
+    if done > 0 do
+      chosen = MapSet.put(scene_cast_ids(socket.assigns), cid)
+      {:noreply, assign(socket, scene_cast: chosen)}
+    else
+      {:noreply, put_flash(socket, :error, "Couldn't write them — open them to finish by hand.")}
+    end
+  end
+
+  def handle_info({:generation, "write_in:" <> id, result}, socket) do
+    Logger.warning("[campaign] write-in failed for #{id}: #{inspect(result)}")
+
+    {:noreply,
+     socket
+     |> forget_generation("write_in:#{id}")
+     |> assign(writing_in: MapSet.delete(socket.assigns.writing_in, normalize_id(id)))
+     |> put_flash(:error, "Couldn't write them — open them to finish by hand.")}
+  end
+
   def handle_info({:generation, "stubs", {:ok, {done, failed}}}, socket) do
     detail = if failed > 0, do: " #{failed} failed — open those to retry.", else: ""
 
@@ -949,6 +1082,29 @@ defmodule PolyphonyWeb.CampaignLive do
     <Kit.frame class="flex flex-col min-h-[100dvh]">
       <Kit.header title={campaign_title(@payload)} subtitle={campaign_meta(assigns)}>
         <:actions>
+          <%!-- The perspective control, in the same place and the same markup it has on
+                every other surface with a viewpoint (`ux/README.md` calls its drift into
+                three treatments the worst consistency failure of the design pass). It
+                belongs here because this screen *reviews* content: the world tab is a
+                read of the bible, and "what does Wren actually know of this world"
+                is a question you can only answer by looking through her eyes. --%>
+          <form :if={scene_ready(@cast) != []} id="campaign-viewer" phx-change="view_as">
+            <Kit.viewas_select
+              id="campaign-viewer-select"
+              label="Viewing as"
+              name="as"
+              colour={viewer_colour(assigns)}
+            >
+              <option value="" selected={@viewer == :omniscient}>Omniscient</option>
+              <option
+                :for={c <- scene_ready(@cast)}
+                value={c.id}
+                selected={@viewer == {:character, to_string(c.id)}}
+              >
+                <%= char_name(c) %>
+              </option>
+            </Kit.viewas_select>
+          </form>
           <Kit.pill><%= String.capitalize(to_string(@entry.visibility)) %></Kit.pill>
           <Layouts.nav_menu current_user={@current_user} />
         </:actions>
@@ -1344,6 +1500,8 @@ defmodule PolyphonyWeb.CampaignLive do
   # attached by hand can be a name and nothing else, and a heading over an empty space
   # reads as a bug rather than as an absence.
   defp attached_world(assigns) do
+    assigns = assign(assigns, seen: viewed_world(assigns))
+
     ~H"""
     <div>
       <Kit.row
@@ -1362,40 +1520,85 @@ defmodule PolyphonyWeb.CampaignLive do
         </.link>
       </Kit.row>
 
-      <Kit.row :if={filled(@world.setting)} class="px-4 py-3">
+      <%!-- Said out loud, in the kit's secret tint, because the whole value of the
+            control is knowing which read you are looking at — a page that silently
+            drops three rules looks like a page missing three rules. --%>
+      <Kit.row
+        :if={@viewer != :omniscient}
+        class="px-4 py-2 flex items-center gap-2"
+        style="background:color-mix(in srgb,var(--secret) 14%,transparent)"
+      >
+        <Kit.dot colour="var(--secret)" />
+        <span class="text-[12.5px]">
+          As <b><%= viewer_name(assigns) %></b> knows it — what they haven't been told isn't here
+        </span>
+      </Kit.row>
+
+      <%!-- Every field the editor has, because this is where a world gets *reviewed*
+            and a review of half of it is a review of nothing. The cover was missing —
+            the one part a stranger reads — and so was starting canon, which is what
+            the Director opens a scene from. --%>
+      <Kit.row :if={filled(@seen.cover)} class="px-4 py-3">
+        <div class="lbl dim mb-1">Cover</div>
+        <p class="text-[13px] leading-relaxed"><%= @seen.cover %></p>
+      </Kit.row>
+
+      <Kit.row :if={filled(@seen.setting)} class="px-4 py-3">
         <div class="lbl dim mb-1">Setting</div>
-        <p class="text-[13px] leading-relaxed"><%= @world.setting %></p>
+        <p class="text-[13px] leading-relaxed"><%= @seen.setting %></p>
       </Kit.row>
 
-      <Kit.row :if={filled(@world.tone)} class="px-4 py-3">
+      <Kit.row :if={filled(@seen.tone)} class="px-4 py-3">
         <div class="lbl dim mb-1">Tone</div>
-        <p class="text-[13px] leading-relaxed"><%= @world.tone %></p>
+        <p class="text-[13px] leading-relaxed"><%= @seen.tone %></p>
       </Kit.row>
 
-      <Kit.row :if={world_rules(@world) != []} class="px-4 py-3">
-        <div class="lbl dim mb-1.5">Rules</div>
-        <div class="space-y-1 text-[13px] leading-relaxed">
-          <%!-- Concealed rules are shown: the author is omniscient over their own
-                world, and `:secret` is the same mark the bible editor gives them, so
-                the two screens don't describe the same entry differently. What a
-                *character* may know is `Polyphony.Visibility`'s business and is not
-                this screen. --%>
-          <Kit.marked
-            :for={{entry, i} <- Enum.with_index(world_rules(@world), 1)}
-            mark={if(entry.concealed, do: :secret, else: :plain)}
-            class="flex gap-2"
-          >
-            <span class="dim mono text-[11px] pt-0.5"><%= i %></span>
-            <span><%= entry.statement %></span>
-          </Kit.marked>
-        </div>
+      <.world_list label="Rules" entries={WorldBible.entries(@seen.rules)} />
+      <.world_list label="What's true at the start" entries={WorldBible.entries(@seen.starting_canon)} />
+
+      <Kit.row :if={world_empty?(@seen)} class="px-4 py-3">
+        <p class="text-[12.5px] leading-relaxed dim">
+          <%= if @viewer == :omniscient,
+            do: "Nothing written past the name yet.",
+            else: "Nothing here has been shared with them." %>
+        </p>
       </Kit.row>
     </div>
     """
   end
 
-  defp world_rules(%WorldBible{rules: rules}), do: WorldBible.entries(rules)
-  defp world_rules(_), do: []
+  attr(:label, :string, required: true)
+  attr(:entries, :list, required: true)
+
+  defp world_list(assigns) do
+    ~H"""
+    <Kit.row :if={@entries != []} class="px-4 py-3">
+      <div class="lbl dim mb-1.5"><%= @label %></div>
+      <div class="space-y-1 text-[13px] leading-relaxed">
+        <%!-- Concealed entries are marked, not hidden, for the omniscient author: they
+              are omniscient over their own world, and `:secret` is the same mark the
+              bible editor gives them, so the two screens don't describe one entry two
+              ways. A character's read never reaches here concealed — `for_character/3`
+              has already dropped what they don't know. --%>
+        <Kit.marked
+          :for={{entry, i} <- Enum.with_index(@entries, 1)}
+          mark={if(entry.concealed, do: :secret, else: :plain)}
+          class="flex gap-2"
+        >
+          <span class="dim mono text-[11px] pt-0.5"><%= i %></span>
+          <span><%= entry.statement %></span>
+        </Kit.marked>
+      </div>
+    </Kit.row>
+    """
+  end
+
+  defp world_empty?(%WorldBible{} = w) do
+    not filled(w.cover) and not filled(w.setting) and not filled(w.tone) and
+      WorldBible.entries(w.rules) == [] and WorldBible.entries(w.starting_canon) == []
+  end
+
+  defp world_empty?(_), do: true
 
   defp filled(value), do: is_binary(value) and String.trim(value) != ""
 
@@ -1447,6 +1650,26 @@ defmodule PolyphonyWeb.CampaignLive do
         <span class="lbl dim">How it's meant to be read</span>
         <Kit.info label="publishing" phx-click="publish_help" />
       </div>
+
+      <Kit.info_drawer :if={@publish_help} title="About publishing" on_close="publish_help">
+        <:intro>
+          Publishing asks two separate questions, not one ladder (§3.1c): which
+          perspectives a reader may take, and whether the authoring surface comes with it.
+        </:intro>
+        <:part colour="var(--bcm)" name="As a spectator">
+          Everything said and done, and nobody's thoughts. The safe read, and the one
+          that keeps the irony intact for somebody coming to the story cold.
+        </:part>
+        <:part colour="var(--secret)" name="Behind someone's eyes">
+          Publishing a head hands over what that character knew while they knew it —
+          which is a spoiler control, not a reading preference. A reader who takes Wren's
+          view learns what Wren was hiding.
+        </:part>
+        <:part colour="var(--ok)" name="With the sheets">
+          The world and the cast travel too, so a reader can fork the story and carry it
+          on. Concealed entries never come with it — what you kept back was never shared.
+        </:part>
+      </Kit.info_drawer>
 
       <div class="flex flex-col gap-1.5 mb-3">
         <label class="flex items-center gap-2.5 text-[13px]">
@@ -1803,7 +2026,7 @@ defmodule PolyphonyWeb.CampaignLive do
             everybody present is how a two-hander becomes a crowd — the roster is what
             turn order walks, so it is also a cost. Everyone ready is the default, so
             an author who never touches this gets exactly what they got before. --%>
-      <Kit.row :if={scene_ready(@cast) != []} class="px-4 py-3">
+      <Kit.row :if={@cast != []} class="px-4 py-3">
         <div class="flex items-center justify-between gap-2">
           <span class="lbl dim">Who's in it</span>
           <span class="text-[11px] dim"><%= length(scene_cast_entries(assigns)) %> of <%= length(scene_ready(@cast)) %></span>
@@ -1824,6 +2047,38 @@ defmodule PolyphonyWeb.CampaignLive do
         <p :if={scene_cast_entries(assigns) == []} class="text-[11px] leading-relaxed mt-1.5" style="color:var(--pencil)">
           Nobody is in it. Pick at least one.
         </p>
+
+        <%!-- The walk-ons this story invented for itself, reachable from the screen
+              where you choose a cast. `SceneControl` refuses a non-`:full` character,
+              so offering one as a chip would be offering a choice that can't be
+              honoured — the answer is to write them, here, rather than to send the
+              author to another tab to run a batch they didn't ask for. Written in,
+              they are selected: the only reason to press this while picking a cast is
+              to use them. --%>
+        <div :if={pending_cast(@cast) != []} class="mt-3 pt-3" style="border-top:1px solid var(--rule)">
+          <div class="lbl dim mb-1.5">Not written yet</div>
+          <div class="flex flex-col gap-1.5">
+            <div
+              :for={c <- pending_cast(@cast)}
+              class="flex items-center justify-between gap-2"
+            >
+              <span class="text-[13px] min-w-0 truncate"><%= char_name(c) %></span>
+              <Kit.btn
+                size={:sm}
+                type="button"
+                phx-click="write_in"
+                phx-value-id={c.id}
+                disabled={MapSet.member?(@writing_in, c.id)}
+                class="shrink-0"
+              >
+                <%= if MapSet.member?(@writing_in, c.id), do: "✦ …", else: "✦ Write them in" %>
+              </Kit.btn>
+            </div>
+          </div>
+          <p class="text-[11px] leading-relaxed dim mt-2">
+            Stubs somebody's relationships invented. Writing one puts them in this scene.
+          </p>
+        </div>
       </Kit.row>
 
       <%!-- `OpenScene` has carried `location_id` since §2.3 and nothing ever passed
@@ -2011,6 +2266,8 @@ defmodule PolyphonyWeb.CampaignLive do
   end
 
   defp scene_ready(cast), do: Enum.filter(cast, &full?/1)
+
+  defp pending_cast(cast), do: Enum.filter(cast, &pending?/1)
 
   # Who is in the next scene: the author's selection, or everyone ready if they haven't
   # made one. Always intersected with who is *currently* ready — a selection made before

@@ -44,7 +44,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   import PolyphonyWeb.BlockField
 
-  alias Polyphony.{Characters, Groups, Library, Owner}
+  alias Polyphony.{Campaigns, Characters, Groups, Library, Owner}
   alias Polyphony.Permissions
   alias Polyphony.Authoring.{Audience, WorldBible}
   alias Polyphony.Authoring.WorldBible.Entry
@@ -88,6 +88,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
        |> assign(
          page_title: bible.name || "World",
          entry: entry,
+         campaign: Campaigns.of_world(Owner.of(socket.assigns.current_user), entry.id),
          bible: bible,
          name: bible.name || "",
          name_error: nil,
@@ -427,6 +428,11 @@ defmodule PolyphonyWeb.BibleEditorLive do
      view_patch(socket, drawer: if(socket.assigns.drawer == section, do: nil, else: section))}
   end
 
+  # The overlay's three ways out — the ×, the scrim and Escape — all push this. They
+  # carry no section, and shouldn't have to: there is only ever one drawer open.
+  def handle_event("close_drawer", _params, socket),
+    do: {:noreply, view_patch(socket, drawer: nil)}
+
   def handle_event("panel", %{"panel" => panel}, socket) do
     {:noreply,
      view_patch(socket,
@@ -470,7 +476,11 @@ defmodule PolyphonyWeb.BibleEditorLive do
     name = if values["name"] in [nil, ""], do: socket.assigns.name, else: values["name"]
 
     {:noreply,
-     socket |> assign(name: name, blocks: blocks, items: items) |> mark("all", false) |> touch()}
+     socket
+     |> assign(name: name, blocks: blocks, items: items)
+     |> mark("all", false)
+     |> touch()
+     |> maybe_generate_cover()}
   end
 
   def handle_info({:generation, "cover", {:ok, cover}}, socket) do
@@ -688,6 +698,25 @@ defmodule PolyphonyWeb.BibleEditorLive do
   # written from what the author is looking at, secrets and all.
   # Takes assigns rather than the socket, because the template needs it too — the
   # preview has to show unsaved edits or it would be previewing the last save.
+  # The cover, chained rather than folded into `autofill.all`. A cover is written *from*
+  # everything else — the setting, the tone, the rules and the canon, secrets included,
+  # under instruction to give none of them away (§2.12) — so asking for it in the call
+  # that produces those fields is asking it to describe fields that do not exist yet.
+  # It is written last for the same reason in Quick Build, and on the character sheet.
+  #
+  # Only onto an empty cover, like the lists above: a redraft of prose somebody has
+  # already read and kept is a second author, not a first draft.
+  defp maybe_generate_cover(socket) do
+    if socket.assigns.cover in [nil, ""] do
+      Generating.request(socket, "cover", "cover", %{
+        subject: draft_bible(socket.assigns),
+        opts: gen_opts(socket)
+      })
+    else
+      socket
+    end
+  end
+
   defp draft_bible(%{bible: bible} = assigns) do
     %WorldBible{
       bible
@@ -754,12 +783,18 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   def render(assigns) do
     ~H"""
-    <Kit.frame class="flex flex-col min-h-[100dvh]">
+    <%!-- **`height`, not `min-height`.** A `min-h-[100dvh]` column grows with its
+          content, so `flex-1 min-h-0 overflow-y-auto` inside it never has a height to
+          be a fraction *of* — nothing scrolls, the page runs to whatever length the
+          sheet is, and the `shrink-0` bar meant to hold the bottom of the viewport
+          lands at the bottom of a document several screens tall. Play has always
+          pinned its say-bar this way; these three didn't. --%>
+    <Kit.frame class="flex flex-col min-h-0" style="height:100dvh">
       <Kit.header
         title={world_title(@name)}
         subtitle={lineage_line(assigns)}
-        back={~p"/library"}
-        back_label="Back to library"
+        back={back_to(@campaign)}
+        back_label={back_label(@campaign)}
         back_confirm={leave_confirm(@dirty)}
       >
         <:actions>
@@ -861,7 +896,16 @@ defmodule PolyphonyWeb.BibleEditorLive do
                 </div>
 
                 <label for="cover-text" class="sr-only">Cover</label>
+                <%!-- The slowest ✦ here, and now the tail of an even longer chained one,
+                      so it draws where the words will land rather than leaving an empty
+                      box that reads as nothing having happened. --%>
+                <Kit.skel_lines
+                  :if={busy?(@generating, "cover") and @cover in [nil, ""]}
+                  lines={["100%", "95%", "48%"]}
+                  label="Writing the cover"
+                />
                 <textarea
+                  :if={not (busy?(@generating, "cover") and @cover in [nil, ""])}
                   id="cover-text"
                   name="cover"
                   rows="3"
@@ -943,15 +987,9 @@ defmodule PolyphonyWeb.BibleEditorLive do
               />
             </Kit.sheet>
 
-            <div class="mx-4 mb-4 flex items-center gap-2">
-              <Kit.btn kind={:primary} type="submit">Save</Kit.btn>
-              <span :if={@saved} class="text-[12px]" style="color:var(--ok)" role="status">
-                ✓ Saved
-              </span>
-            </div>
           </form>
 
-          <.drawer :if={@drawer == "cover"} section="cover" title="About the cover">
+          <Kit.info_drawer :if={@drawer == "cover"} on_close="close_drawer" title="About the cover">
             <:intro>
               The existing fields are written for the Director — setting and tone are
               instructions to a model. Someone deciding whether to use this world wants
@@ -965,9 +1003,9 @@ defmodule PolyphonyWeb.BibleEditorLive do
               Save it off the cover and find out what's in it while you play. For a writer
               who wants to be surprised by their own campaign, that's the point.
             </:part>
-          </.drawer>
+          </Kit.info_drawer>
 
-          <.drawer :if={@drawer == "secrets"} section="secrets" title="About secrets">
+          <Kit.info_drawer :if={@drawer == "secrets"} on_close="close_drawer" title="About secrets">
             <:intro>
               Anything here can be marked secret — a rule, something that's already true, a
               character's fact. It's one control in all three places.
@@ -983,7 +1021,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
               For now a secret is known by nobody. Naming the people who start out in on it
               is the audience picker, which isn't built yet.
             </:part>
-          </.drawer>
+          </Kit.info_drawer>
 
           <%!-- Outside the form, like every other panel: it isn't part of the sheet's
                 own submission, and a form inside a form isn't a thing. It draws itself
@@ -1078,6 +1116,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
             </div>
           </Kit.sheet>
         </div>
+
+        <.save_bar {assigns} />
       </div>
     </Kit.frame>
     """
@@ -1314,44 +1354,65 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   # The one info drawer, same shape as the character sheet's — title, prose, a
   # subsection per concept with its own dot.
-  attr(:title, :string, required: true)
-  attr(:section, :string, required: true)
-  slot(:intro)
 
-  slot :part do
-    attr(:colour, :string)
-    attr(:name, :string)
-  end
-
-  defp drawer(assigns) do
+  # The bar that doesn't scroll away, and its own comment two hundred lines up said why
+  # it was needed: *"Save sits at the foot of a sheet several viewports tall and Name is
+  # at its head, so the refusal rendered somewhere the author wasn't looking — pressing
+  # Save read as nothing happening at all."* That was patched by also flashing the
+  # clash; this puts the control itself where it can be seen.
+  #
+  # What it says is what is actually true. The prose autosaves — every edit calls
+  # `touch/1` — so "unsaved changes" would be a lie most of the time. What only a
+  # deliberate Save does here is run the **name-clash gate**: two worlds with one name
+  # is the bug that made an interrupted Quick Build unsaveable, and a timer is not
+  # entitled to decide a name is fine.
+  defp save_bar(assigns) do
     ~H"""
-    <Kit.sheet class="mx-4 mb-4">
-      <Kit.row class="px-4 py-3 flex items-center justify-between" style="background:var(--b2)">
-        <span class="ttl text-[15px] font-semibold"><%= @title %></span>
-        <button
-          type="button"
-          class="dim text-[17px] leading-none"
-          phx-click="drawer"
-          phx-value-section={@section}
-          aria-label={"Close #{@title}"}
+    <div
+      class="shrink-0 px-4 py-3 flex items-center gap-2"
+      style="background:var(--b2);border-top:1px solid var(--rule)"
+    >
+      <div class="min-w-0 flex-1">
+        <div :if={@name_error} class="text-[12.5px] leading-snug" style="color:var(--pencil)">
+          <%= @name_error %>
+        </div>
+        <div :if={is_nil(@name_error) and @dirty} class="text-[12px] dim" role="status">
+          Saving…
+        </div>
+        <div
+          :if={is_nil(@name_error) and not @dirty and @saved}
+          class="text-[12px]"
+          style="color:var(--ok)"
+          role="status"
         >
-          ×
-        </button>
-      </Kit.row>
-      <Kit.row :if={@intro != []} class="px-4 py-3">
-        <p class="text-[13px] leading-relaxed"><%= render_slot(@intro) %></p>
-      </Kit.row>
-      <div :for={{p, i} <- Enum.with_index(@part)} class={i < length(@part) - 1 && "row"}>
-        <div class="px-4 py-3">
-          <div class="flex items-center gap-1.5 mb-1">
-            <Kit.dot colour={p[:colour] || "var(--bcm)"} />
-            <span class="text-[13px] font-semibold"><%= p[:name] %></span>
-          </div>
-          <p class="text-[13px] leading-relaxed"><%= render_slot(p) %></p>
+          ✓ Saved
+        </div>
+        <div :if={is_nil(@name_error) and not @dirty and not @saved} class="text-[12px] dim">
+          Everything here is saved as you write.
         </div>
       </div>
-    </Kit.sheet>
+
+      <%!-- Outside the form, submitting it by id — the alternative is a second form or
+            a duplicate button inside the sheet, and both mean two Saves that can
+            disagree about what was pressed. --%>
+      <Kit.btn kind={:primary} type="submit" form="bible-form" class="shrink-0">Save</Kit.btn>
+    </div>
     """
+  end
+
+  # Back to where you came from. Attaching a world **copies** it (§2.5b), so a bible
+  # with a campaign belongs to that campaign alone and there is one right answer; a
+  # library template has none, and keeps the library.
+  defp back_to(nil), do: ~p"/library"
+  defp back_to(campaign), do: ~p"/campaigns/#{campaign.id}"
+
+  defp back_label(nil), do: "Back to library"
+
+  defp back_label(campaign) do
+    case String.trim(to_string(Map.get(Library.payload(campaign) || %{}, :name) || "")) do
+      "" -> "Back to the campaign"
+      name -> "Back to #{name}"
+    end
   end
 
   # ── Render helpers ────────────────────────────────────────────────────────────

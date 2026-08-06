@@ -383,6 +383,23 @@ defmodule Polyphony.Campaigns do
   defp same_ref?(a, b), do: to_string(a) == to_string(b)
 
   @doc """
+  The campaign whose world is this bible, or nil.
+
+  Attaching **copies** (§2.5b), so a campaign's `bible_id` names a bible that belongs
+  to that campaign and to nothing else — which makes this a lookup rather than a
+  guess. A library *template* matches no campaign, which is the correct answer for it.
+  """
+  @spec of_world(term(), term(), keyword()) :: term() | nil
+  def of_world(owner, bible_id, opts \\ [])
+  def of_world(_owner, nil, _opts), do: nil
+
+  def of_world(owner, bible_id, opts) do
+    Enum.find(list(owner, opts), fn entry ->
+      campaign?(entry) and same_ref?(Map.get(Library.payload(entry) || %{}, :bible_id), bible_id)
+    end)
+  end
+
+  @doc """
   The campaign a character belongs to, or nil — the inverse of `by_character/2` for
   when you have the person and not the map.
   """
