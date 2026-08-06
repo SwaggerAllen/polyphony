@@ -22,7 +22,8 @@ defmodule Polyphony.QuickBuildEnsembleTest do
   use PolyphonyWeb.ConnCase, async: false
 
   alias Polyphony.{Library, Owner}
-  alias Polyphony.Authoring.QuickBuild
+  alias Polyphony.Authoring.{CharacterSheet, QuickBuild}
+  alias Polyphony.Authoring.CharacterSheet.Relationship
 
   @sheet_prompt "You are helping an author create a role-play character"
 
@@ -161,5 +162,119 @@ defmodule Polyphony.QuickBuildEnsembleTest do
       for e <- result.characters, do: Library.payload(Library.get(e.id)).name
 
     assert length(Enum.uniq(names)) == 2
+  end
+
+  # ── The same bug, one screen over ─────────────────────────────────────────────
+
+  describe "the character editor's ✦ Write every field" do
+    setup do
+      %{conn: Phoenix.ConnTest.build_conn()}
+    end
+
+    defp sheet_entry(user, sheet),
+      do: Library.put(%{owner: Owner.of(user), kind: "character", payload: sheet})
+
+    defp campaign_of(user, ids),
+      do:
+        Library.put(%{
+          owner: Owner.of(user),
+          kind: "campaign",
+          payload: %{
+            kind: :campaign,
+            name: "Camp",
+            character_ids: ids,
+            bible_id: nil,
+            scenes: []
+          }
+        })
+
+    test "is told who is already in the story", %{conn: conn, user: user} do
+      capture_prompts()
+      conn = log_in_user(conn, user)
+
+      wren =
+        sheet_entry(user, %CharacterSheet{
+          name: "Wren Ashgrove",
+          status: :full,
+          premise: "A harbour-master with a debt.",
+          voice: "Clipped, never repeats herself."
+        })
+
+      blank = sheet_entry(user, %CharacterSheet{name: "", status: :full})
+      campaign_of(user, [wren.id, blank.id])
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{blank.id}")
+      view |> form("#sheet-generate-all", %{brief: ""}) |> render_submit()
+      generate(view)
+
+      [prompt] = character_prompts()
+
+      # Quick Build and this screen make the *same* call — `Autofill.generate_all/4`
+      # with the same blank brief — so they had the same bug for the same reason. The
+      # prompt was already shared; only the ensemble opt wasn't being passed.
+      assert prompt =~ "Already written into this story — this character is somebody ELSE"
+      assert prompt =~ "Wren Ashgrove"
+      assert prompt =~ "Do NOT reuse a name, a role, a premise, a voice or a backstory"
+      refute prompt =~ "keep them consistent with these people"
+    end
+
+    test "a character with no campaign has no ensemble to be told about",
+         %{conn: conn, user: user} do
+      capture_prompts()
+      conn = log_in_user(conn, user)
+
+      sheet_entry(user, %CharacterSheet{name: "Wren Ashgrove", status: :full})
+      alone = sheet_entry(user, %CharacterSheet{name: "", status: :full})
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{alone.id}")
+      view |> form("#sheet-generate-all", %{brief: ""}) |> render_submit()
+      generate(view)
+
+      [prompt] = character_prompts()
+
+      # Scoped to the campaign, not the library (§2.7). Everyone the author has ever
+      # written is not "already in this story".
+      refute prompt =~ "Already written into this story"
+    end
+
+    test "somebody they're related to is described once, not twice",
+         %{conn: conn, user: user} do
+      capture_prompts()
+      conn = log_in_user(conn, user)
+
+      bram = sheet_entry(user, %CharacterSheet{name: "Bram Toller", status: :full})
+
+      linked =
+        sheet_entry(user, %CharacterSheet{
+          name: "",
+          status: :full,
+          relationships: [
+            %Relationship{target: "Bram Toller", target_id: bram.id, descriptor: "owes him"}
+          ]
+        })
+
+      campaign_of(user, [bram.id, linked.id])
+
+      {:ok, view, _html} = live(conn, ~p"/authoring/character/#{linked.id}")
+      # A sheet with a relationship on it isn't empty, so the brief card is folded away.
+      view |> element("button[phx-click=toggle_brief]") |> render_click()
+      view |> form("#sheet-generate-all", %{brief: ""}) |> render_submit()
+      generate(view)
+
+      [prompt] = character_prompts()
+
+      # The two blocks say different things about a person — "keep consistent with" and
+      # "this is somebody else" — so listing anyone under both is asking for a
+      # contradiction. Relations wins: it is the more specific claim.
+      assert prompt =~ "keep them consistent with these people"
+
+      ensemble =
+        case String.split(prompt, "Already written into this story", parts: 2) do
+          [_, rest] -> rest
+          [_] -> ""
+        end
+
+      refute ensemble =~ "Bram Toller"
+    end
   end
 end

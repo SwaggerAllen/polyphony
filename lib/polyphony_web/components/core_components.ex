@@ -28,8 +28,10 @@ defmodule PolyphonyWeb.CoreComponents do
     <Kit.toast
       :if={@msg}
       kind={if @kind == :error, do: :error, else: :ok}
+      dismiss
       class="pointer-events-auto cursor-pointer mx-auto w-full max-w-md"
       role="alert"
+      aria-label="Dismiss"
       phx-click="lv:clear-flash"
       phx-value-key={@kind}
     >

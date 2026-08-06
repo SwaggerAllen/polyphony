@@ -88,6 +88,43 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   - Where nothing needs approving, the accept control must read as *already applied* rather
     than *blocked* — the kit's `.btn-off` exists for the inert state, but the wording is the
     part that matters. Decide it in the mocks.
+  - **Carries the fact flags with it.** `Autofill.suggest_facts/2` already asks for `core`
+    and `concealed` per fact, with the distinction spelled out — *core is whether **she**
+    carries it every turn, concealed is who **else** has it; a woman can have a secret she
+    never thinks about*. But `generate_all/4` declares `facts` as `:lines`, a bare newline
+    list with nowhere to put a flag, so both the sheet editor's `put_generated_facts/2` and
+    Quick Build's `to_character_sheet/2` build `%Fact{statement: …}` on the struct defaults:
+    **everything public, nothing core**. The consequence is a quick-built cast with zero
+    concealed facts — `Visibility` working perfectly with nothing to act on, on the fastest
+    path to a cast and therefore the likeliest first experience of the product.
+    Quick Build's comment states the reasoning it was built on: *"concealment is an
+    authoring decision, and a build that guessed at it would be deciding what a character
+    may know on the author's behalf."* Right in principle, and shipping everything public
+    is also a decision made on their behalf — just an invisible one. Three things point the
+    other way now:
+    - the **risk is asymmetric**. A wrongly-concealed fact makes a character know too
+      little, which is the direction rule 3's default-deny already prefers and which the
+      author can flip. A wrongly-public one spills something that cannot be un-spilled once
+      it has been played into a scene.
+    - **`core` is not the same kind of call.** It is a context-budget knob, not a visibility
+      guarantee: over-marking costs tokens and dilutes conditioning, and can break nothing.
+    - `Group` already goes the other way and has to. Quick Build's group phase asks for
+      `concealed` on group facts, because `Group.secrets/1` exists, the design's own row
+      reads *"6 members · 2 secrets"*, and a group whose facts are all public is a label
+      rather than a membership.
+
+    So: change `generate_all`'s `facts` to the structured shape `suggest_facts` already
+    returns and carry the flags through both callers — with one hard limit, that
+    **`audience` stays empty**. Guessing *who else* knows a secret is the part that is
+    genuinely the author's and the part where a wrong guess actively leaks; concealed-from-
+    everyone is the safe default and the one the picker already starts from.
+
+    It lands **with** the review panel rather than before it, and that is the whole reason
+    it is filed here. Auto-categorising on its own does not fix the real complaint — that
+    an author never realises a decision was made — it only moves the invisible decision
+    from "all public" to "the model chose". Marked-up facts arriving in a panel that says
+    *these three came back secret* is the version where the author sees the call and can
+    overrule it.
 
 ---
 
@@ -452,7 +489,9 @@ The current LiveView is the first-cut UI; the redesign is speced in `ux/` (mocks
    works today, and its value is quality-of-authoring rather than capability. The panel half
    (steer and regenerate) stands alone and could ship first; the gate half wants real use
    behind it, since which generations overwrite enough to be worth stopping is a judgement
-   nobody can make from the outside.
+   nobody can make from the outside. The **fact-flag pass-through** rides with the panel:
+   it is a small change on its own and a bad one without somewhere to show what the model
+   decided.
 
 ---
 

@@ -71,7 +71,14 @@ defmodule PolyphonyWeb.Layouts do
     ~H"""
     <%!-- Flashes float over the screen rather than displacing it: a screen that owns
           the viewport can't have a banner pushing its bottom bar off. --%>
-    <div id="flash" class="fixed inset-x-0 top-0 z-50 p-3 flex flex-col gap-2 pointer-events-none">
+    <%!-- Bounded, and scrolling inside itself. A flash is a sentence by design, but a
+          bring-up build with `:show_error_details` on can put a long one here, and a
+          `fixed top-0` box with no ceiling grows over the whole screen — including the
+          controls you would use to get out of whatever produced it. --%>
+    <div
+      id="flash"
+      class="fixed inset-x-0 top-0 z-50 p-3 flex flex-col gap-2 pointer-events-none max-h-[50dvh] overflow-y-auto"
+    >
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
     </div>

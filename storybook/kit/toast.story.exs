@@ -27,6 +27,15 @@ defmodule Storybook.Kit.Toast do
         slots: ["Couldn't save — try again"]
       },
       %Variation{
+        id: :dismissible,
+        description:
+          "An ✕ for a toast that waits to be read rather than fading. \"Click it anywhere\" is a real gesture and an invisible one — an error somebody has to study is exactly the one they will look at for a control and not find.",
+        attributes: %{kind: :error, dismiss: true},
+        slots: [
+          "Error: ** (Protocol.UndefinedError) protocol String.Chars not implemented for %WorldBible.Entry{}"
+        ]
+      },
+      %Variation{
         id: :reversible,
         description: "Anything reversible carries its undo, in the editorial colour.",
         attributes: %{kind: :ok},

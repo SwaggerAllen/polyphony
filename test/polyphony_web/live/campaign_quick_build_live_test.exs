@@ -372,4 +372,45 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     # The premise was regenerated (Mock lorem replaces the seed).
     assert Library.payload(Library.get(camp.id))[:premise] != "A heist."
   end
+
+  describe "the premise tab writes the title too" do
+    test "with no title, ✦ Expand fills both", %{conn: conn, user: user} do
+      camp = campaign(user, %{name: ""})
+
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=premise")
+      view |> element("button[phx-click=expand_premise]") |> render_click()
+      generate(view)
+
+      payload = Library.payload(Library.get(camp.id))
+
+      # A title is a read on the premise, so asking for it separately gets the world's
+      # name back. Making the author press a second button for the obvious consequence
+      # of the first is the step nobody takes.
+      assert String.trim(to_string(payload[:name])) != ""
+      assert payload[:premise] not in [nil, ""]
+    end
+
+    test "a title the author wrote is never rewritten", %{conn: conn, user: user} do
+      camp = campaign(user, %{name: "The Salt Line", premise: "A heist."})
+
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=premise")
+      view |> element("button[phx-click=expand_premise]") |> render_click()
+      generate(view)
+
+      payload = Library.payload(Library.get(camp.id))
+      assert payload[:name] == "The Salt Line"
+      # The premise still deepened — it's the same button doing its original job.
+      assert payload[:premise] != "A heist."
+    end
+
+    test "the button says so while there is no title", %{conn: conn, user: user} do
+      camp = campaign(user, %{name: ""})
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=premise")
+      assert html =~ "With no title yet, it writes one too."
+
+      named = campaign(user, %{name: "The Salt Line"})
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{named.id}?tab=premise")
+      refute html =~ "With no title yet, it writes one too."
+    end
+  end
 end

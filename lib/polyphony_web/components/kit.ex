@@ -185,6 +185,7 @@ defmodule PolyphonyWeb.Kit do
   `:error` a correction — the same three semantics the rest of the kit uses.
   """
   attr(:kind, :atom, default: :ok, values: [:ok, :working, :error])
+  attr(:dismiss, :boolean, default: false, doc: "draw an ✕ — for a toast that waits")
   attr(:class, :string, default: nil)
   attr(:rest, :global)
   slot(:inner_block, required: true)
@@ -192,12 +193,20 @@ defmodule PolyphonyWeb.Kit do
 
   def toast(assigns) do
     ~H"""
-    <div class={["sheet p-3 flex items-center justify-between gap-2", @class]} role="status" {@rest}>
-      <span class="flex items-center gap-2 min-w-0">
-        <span class="dot" style={"background:#{toast_colour(@kind)}"}></span>
-        <span class="text-[13px]"><%= render_slot(@inner_block) %></span>
+    <div class={["sheet p-3 flex items-start justify-between gap-2", @class]} role="status" {@rest}>
+      <span class="flex items-start gap-2 min-w-0">
+        <span class="dot mt-1.5 shrink-0" style={"background:#{toast_colour(@kind)}"}></span>
+        <span class="text-[13px] min-w-0" style="overflow-wrap:anywhere">
+          <%= render_slot(@inner_block) %>
+        </span>
       </span>
       <%= render_slot(@action) %>
+      <%!-- Only where a toast waits to be read rather than fading. "Click it anywhere"
+            is a real gesture and an invisible one: an error a reader has to study is
+            exactly the one they will look at for a control and not find. --%>
+      <span :if={@dismiss} class="dim text-[15px] leading-none shrink-0 pt-0.5" aria-hidden="true">
+        ✕
+      </span>
     </div>
     """
   end

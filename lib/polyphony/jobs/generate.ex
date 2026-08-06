@@ -93,6 +93,9 @@ defmodule Polyphony.Jobs.Generate do
   defp apply_op("autofill.premise", %{opts: opts}),
     do: Autofill.generate_campaign_premise(opts)
 
+  defp apply_op("autofill.campaign_opening", %{opts: opts}),
+    do: Autofill.generate_campaign_opening(opts)
+
   defp apply_op("autofill.scene_opening", %{opts: opts}),
     do: Autofill.generate_scene_opening(opts)
 

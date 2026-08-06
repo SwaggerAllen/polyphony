@@ -82,6 +82,7 @@ defmodule PolyphonyWeb.CampaignLive do
          qb_world: "",
          qb_seeds: [""],
          qb_suggest: true,
+         qb_groups: false,
          quick_build_open: false,
          scene_location: "",
          scene_premise: "",
@@ -370,16 +371,27 @@ defmodule PolyphonyWeb.CampaignLive do
   end
 
   # ✨ Expand the premise: deepen whatever's saved, grounded in the world + cast.
+  # One button, two shapes. With a title already typed this deepens the premise and
+  # nothing else; with the title still blank it asks for both at once — the same call
+  # Quick Build makes, for the same reason: a title is a *read* on the premise, and
+  # asked for on its own it has only the world to go on and hands back the setting's
+  # name. An untitled campaign is the common case, and making the author press a
+  # second button for the obvious consequence of the first is the kind of step nobody
+  # takes.
   def handle_event("expand_premise", _params, socket) do
     safe(socket, fn ->
-      opts =
-        [current: socket.assigns.payload[:premise] || ""] ++
-          premise_context(socket) ++ meter_attribution(socket)
+      current = socket.assigns.payload[:premise] || ""
+      context = premise_context(socket) ++ meter_attribution(socket)
+
+      {op, opts} =
+        if blank?(socket.assigns.payload[:name]),
+          do: {"autofill.campaign_opening", context},
+          else: {"autofill.premise", [current: current] ++ context}
 
       {:noreply,
        socket
        |> assign(expanding_premise: true)
-       |> request_generation("premise", "autofill.premise", %{opts: opts})}
+       |> request_generation("premise", op, %{opts: opts})}
     end)
   end
 
@@ -390,7 +402,8 @@ defmodule PolyphonyWeb.CampaignLive do
      assign(socket,
        qb_world: params["world_seed"] || socket.assigns.qb_world,
        qb_seeds: seeds_param(params["char_seed"], socket.assigns.qb_seeds),
-       qb_suggest: params["suggest_offscreen"] == "true"
+       qb_suggest: params["suggest_offscreen"] == "true",
+       qb_groups: params["groups"] == "true"
      )}
   end
 
@@ -424,6 +437,7 @@ defmodule PolyphonyWeb.CampaignLive do
           world_seed: params["world_seed"] || "",
           character_seeds: seeds,
           suggest_offscreen: params["suggest_offscreen"] == "true",
+          groups: params["groups"] == "true",
           campaign_id: socket.assigns.entry.id
         ] ++ meter_attribution(socket)
 
@@ -513,6 +527,42 @@ defmodule PolyphonyWeb.CampaignLive do
     next = if id in current, do: List.delete(current, id), else: current ++ [id]
 
     {:noreply, socket |> assign(pub_perspectives: next) |> preflight()}
+  end
+
+  # ── Archive, trash, restart ──────────────────────────────────────────────────
+  #
+  # The three ways a campaign ends, and they are genuinely different things rather
+  # than one control with a severity dial. They live here rather than only on the
+  # library row because this is the screen you are on when you decide — and two of
+  # them had no reachable control at all from inside a campaign.
+
+  def handle_event("archive_campaign", _params, socket) do
+    owned(socket, fn ->
+      {:ok, _} = Library.archive(socket.assigns.entry.id)
+      {:noreply, push_navigate(socket, to: ~p"/library?tab=shelves")}
+    end)
+  end
+
+  def handle_event("trash_campaign", _params, socket) do
+    owned(socket, fn ->
+      {:ok, _} = Library.soft_delete(socket.assigns.entry.id)
+      {:noreply, push_navigate(socket, to: ~p"/library?tab=shelves")}
+    end)
+  end
+
+  # Not "delete the scenes". The arc queue goes with them, and that is the point: a
+  # proposal about something that never happened is a review item you cannot answer.
+  def handle_event("restart_campaign", _params, socket) do
+    owned(socket, fn ->
+      {:ok, %{scenes: n, rows: rows}} = Campaigns.restart(socket.assigns.entry.id)
+      arcs = Map.get(rows, "arc_entries", 0)
+
+      {:noreply,
+       socket
+       |> assign(entry: Library.get(socket.assigns.entry.id))
+       |> put_flash(:info, restart_note(n, arcs))
+       |> load()}
+    end)
   end
 
   def handle_event("publish", _params, socket) do
@@ -616,16 +666,21 @@ defmodule PolyphonyWeb.CampaignLive do
      |> put_flash(:error, "Couldn't suggest a scene: #{inspect(reason(result))}")}
   end
 
-  def handle_info({:generation, "premise", {:ok, text}}, socket) do
-    payload = Map.put(socket.assigns.payload, :premise, text)
-    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+  # A map when the campaign had no title, a string when it did. The name is only ever
+  # written into a blank — the same rule Quick Build follows, and for the same reason.
+  def handle_info({:generation, "premise", {:ok, %{"premise" => text} = data}}, socket) do
+    payload = socket.assigns.payload
 
-    {:noreply,
-     socket
-     |> forget_generation("premise")
-     |> assign(entry: entry, expanding_premise: false)
-     |> load()}
+    payload =
+      if blank?(payload[:name]) and not blank?(data["name"]),
+        do: Map.put(payload, :name, data["name"]),
+        else: payload
+
+    {:noreply, apply_premise(socket, payload, text)}
   end
+
+  def handle_info({:generation, "premise", {:ok, text}}, socket),
+    do: {:noreply, apply_premise(socket, socket.assigns.payload, text)}
 
   def handle_info({:generation, "stubs", result}, socket) do
     Logger.warning("[authoring] bulk stub generation failed: #{inspect(result)}")
@@ -665,7 +720,13 @@ defmodule PolyphonyWeb.CampaignLive do
        # move is to change a seed and go again — and taking it away would leave the
        # author looking at the card that opens it.
        socket
-       |> assign(quick_build_open: false, qb_world: "", qb_seeds: [""], qb_suggest: true)
+       |> assign(
+         quick_build_open: false,
+         qb_world: "",
+         qb_seeds: [""],
+         qb_suggest: true,
+         qb_groups: false
+       )
        |> load()
      else
        load(socket)
@@ -816,7 +877,13 @@ defmodule PolyphonyWeb.CampaignLive do
       "name" => Map.get(wb, :name) || "",
       "setting" => Map.get(wb, :setting) || "",
       "tone" => Map.get(wb, :tone) || "",
-      "rules" => Enum.join(Map.get(wb, :rules) || [], "\n"),
+      # Both list fields go through `public/1`, and both have to. They are lists of
+      # `WorldBible.Entry` structs, not strings — joining the raw list raises
+      # `String.Chars`, which is how this was found: every ✦ on this screen that
+      # grounds itself in the world (the premise, the scene opening) died on any bible
+      # with a rule in it. And a concealed rule is a secret law of the world, so the
+      # character-facing read is also the correct one, not merely the one that compiles.
+      "rules" => Enum.join(WorldBible.public(Map.get(wb, :rules) || []), "\n"),
       "starting_canon" => Enum.join(WorldBible.public(Map.get(wb, :starting_canon) || []), "\n")
     }
   end
@@ -935,19 +1002,6 @@ defmodule PolyphonyWeb.CampaignLive do
       <.quick_build :if={quick_build_open?(assigns)} {assigns} />
       <.build_card :if={@build} build={@build} />
 
-      <form id="campaign-details" phx-change="update_details">
-        <label for="campaign-name" class="lbl dim">Campaign name</label>
-        <input
-          id="campaign-name"
-          type="text"
-          name="name"
-          value={@payload[:name]}
-          placeholder="Name this campaign…"
-          phx-debounce="blur"
-          class="field px-3 py-2.5 text-[14px] w-full mt-1.5"
-        />
-      </form>
-
       <form id="campaign-content" phx-change="update_content">
         <div class="lbl dim mb-2">What this campaign can contain</div>
         <Kit.sheet class="px-3.5 py-3">
@@ -1023,8 +1077,93 @@ defmodule PolyphonyWeb.CampaignLive do
           </Kit.sheet>
         </form>
       </details>
+
+      <.ending_panel {assigns} />
     </div>
     """
+  end
+
+  # The three ways a campaign ends. Filing, throwing away and starting over are
+  # genuinely different acts, not one control with a severity dial, so they are three
+  # controls with the copy that tells them apart — and none of them was reachable from
+  # inside a campaign at all. The library's row menu could file and bin one; nothing
+  # anywhere could restart one.
+  defp ending_panel(assigns) do
+    ~H"""
+    <Kit.sheet>
+      <Kit.row class="px-4 py-3" style="background:var(--b2)">
+        <span class="lbl dim">Ending it</span>
+      </Kit.row>
+
+      <Kit.row class="px-4 py-3 flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="text-[13px] font-semibold">Archive</div>
+          <p class="text-[11px] leading-relaxed dim">
+            Out of the way, on the archive shelf. Nothing is at risk and it comes back
+            with one button.
+          </p>
+        </div>
+        <Kit.btn size={:sm} type="button" phx-click="archive_campaign" class="shrink-0">
+          Archive
+        </Kit.btn>
+      </Kit.row>
+
+      <%!-- Deliberately *not* wrapped in a confirm: trash is on a clock and the trash
+            shelf carries the one irreversible button, where the countdown is visible.
+            The library row menu says the same thing in the same words. --%>
+      <Kit.row class="px-4 py-3 flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="text-[13px] font-semibold">Move to trash</div>
+          <p class="text-[11px] leading-relaxed dim">
+            Recoverable until it expires. The world and the cast go with it.
+          </p>
+        </div>
+        <Kit.btn size={:sm} kind={:pen} type="button" phx-click="trash_campaign" class="shrink-0">
+          Trash
+        </Kit.btn>
+      </Kit.row>
+
+      <%!-- This one *does* confirm, and it is the only one here that has to: archive
+            and trash are both reversible, and this is not. --%>
+      <Kit.row class="px-4 py-3 flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="text-[13px] font-semibold">Start over</div>
+          <p class="text-[11px] leading-relaxed dim">
+            Lets go of <%= played_line(assigns) %> and everything play raised about these
+            people — the arc proposals go with the scenes that made them. The world, the
+            cast and the premise are untouched.
+          </p>
+        </div>
+        <Kit.btn
+          size={:sm}
+          kind={if @scenes == [], do: :off, else: :pen}
+          type="button"
+          phx-click="restart_campaign"
+          disabled={@scenes == []}
+          data-confirm={@scenes != [] && restart_confirm(assigns)}
+          class="shrink-0"
+        >
+          Start over
+        </Kit.btn>
+      </Kit.row>
+    </Kit.sheet>
+    """
+  end
+
+  defp played_line(%{scenes: []}), do: "nothing yet"
+  defp played_line(%{scenes: scenes}), do: count_label(length(scenes), "scene", "scenes")
+
+  defp restart_confirm(assigns) do
+    "Start #{campaign_label(assigns)} over? " <>
+      "#{played_line(assigns)} and any arc proposals from them are let go of. " <>
+      "This can't be undone."
+  end
+
+  defp campaign_label(assigns) do
+    case String.trim(to_string(assigns.payload[:name] || "")) do
+      "" -> "this campaign"
+      name -> name
+    end
   end
 
   defp quick_build(assigns) do
@@ -1064,6 +1203,22 @@ defmodule PolyphonyWeb.CampaignLive do
           </span>
           <input type="checkbox" name="suggest_offscreen" value="true" checked={@qb_suggest} class="sr-only" />
           <Kit.sw on={@qb_suggest} />
+        </label>
+
+        <%!-- Off by default like the one above: it is a provider call, and a two-hander
+              needs no order or watch. Where a world does name one, this is what makes
+              belonging mean something — the cast written into a group start out holding
+              its facts, secrets included, which is what `Group.seed/2` is for. --%>
+        <label class="flex items-center justify-between gap-3 mt-3 cursor-pointer">
+          <span class="text-[13px]">
+            Also write the groups this world names
+            <span class="text-[11px] dim block">
+              A crew, a household, an order — and the cast in them start out knowing what
+              it knows
+            </span>
+          </span>
+          <input type="checkbox" name="groups" value="true" checked={@qb_groups} class="sr-only" />
+          <Kit.sw on={@qb_groups} />
         </label>
 
         <div class="mt-3">
@@ -1535,16 +1690,33 @@ defmodule PolyphonyWeb.CampaignLive do
     ~H"""
     <div class="px-4 py-4">
       <%!-- Premise comes after Cast in the tab order because the pitch is written
-            *from* the cast — which is also what Expand reads. --%>
-      <div class="flex items-center justify-between gap-2 mb-2">
-        <span class="lbl dim">What this story is about</span>
-        <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="expand_premise" disabled={@expanding_premise}>
-          <%= if @expanding_premise, do: "✦ …", else: "✦ Expand" %>
-        </Kit.btn>
-      </div>
+            *from* the cast — which is also what Expand reads.
 
+            The **title lives here**, not in Settings. It was filed with the content
+            switches and the model pickers, which is where a campaign's configuration
+            goes — but a title isn't configuration, it's the first line of the pitch,
+            and it is written in the same sitting and out of the same material. Naming
+            it in one place and pitching it in another meant nothing on either screen
+            could see the other. --%>
       <form id="campaign-premise" phx-change="update_details">
-        <label for="premise-input" class="sr-only">Premise</label>
+        <label for="campaign-name" class="lbl dim">What it's called</label>
+        <input
+          id="campaign-name"
+          type="text"
+          name="name"
+          value={@payload[:name]}
+          placeholder="Name this campaign…"
+          phx-debounce="blur"
+          class="field px-3 py-2.5 text-[14px] w-full mt-1.5 mb-4"
+        />
+
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <label for="premise-input" class="lbl dim">What this story is about</label>
+          <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="expand_premise" disabled={@expanding_premise}>
+            <%= if @expanding_premise, do: "✦ …", else: "✦ Expand" %>
+          </Kit.btn>
+        </div>
+
         <textarea
           id="premise-input"
           name="premise"
@@ -1557,7 +1729,8 @@ defmodule PolyphonyWeb.CampaignLive do
 
       <p class="text-[11px] leading-relaxed dim mt-2">
         Expand deepens whatever's saved, grounded in the world and the cast — so it reads best
-        once both exist.
+        once both exist.<span :if={blank?(@payload[:name])}>
+          With no title yet, it writes one too.</span>
       </p>
     </div>
     """
@@ -1752,6 +1925,28 @@ defmodule PolyphonyWeb.CampaignLive do
     if parts == [], do: "Nothing built yet", else: Enum.join(parts, " · ")
   end
 
+  defp restart_note(0, _arcs), do: "Nothing had been played yet."
+
+  defp restart_note(scenes, arcs) do
+    "Back to the start — #{count_label(scenes, "scene", "scenes")} let go of" <>
+      if(arcs > 0,
+        do: ", and #{count_label(arcs, "arc proposal", "arc proposals")} with them.",
+        else: "."
+      )
+  end
+
+  # Owner-only, and refused rather than silently ignored: these three are the
+  # irreversible-ish ones, and `Permissions.can_edit?` is the same gate the editors use.
+  defp owned(socket, fun) do
+    safe(socket, fn ->
+      if Permissions.can_edit?(socket.assigns.entry, socket.assigns.current_user) do
+        fun.()
+      else
+        {:noreply, put_flash(socket, :error, "Not found.")}
+      end
+    end)
+  end
+
   defp count_label(0, _one, _many), do: nil
   defp count_label(1, one, _many), do: "1 #{one}"
   defp count_label(n, _one, many), do: "#{n} #{many}"
@@ -1773,6 +1968,16 @@ defmodule PolyphonyWeb.CampaignLive do
   # than the editors' set of in-flight keys, so it talks to `Generations` directly. The
   # durability is the same and the reason is the same: expanding a premise takes seconds,
   # and the answer must not belong to whichever tab happened to ask.
+  defp apply_premise(socket, payload, text) do
+    payload = Map.put(payload, :premise, text)
+    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+
+    socket
+    |> forget_generation("premise")
+    |> assign(entry: entry, expanding_premise: false)
+    |> load()
+  end
+
   defp request_generation(socket, key, op, request) do
     Generations.request(socket.assigns.entry.id, key, op, request)
     socket
@@ -1844,6 +2049,8 @@ defmodule PolyphonyWeb.CampaignLive do
 
   # The scenes already played, for "don't open on the same quay again".
   defp scene_lines(assigns), do: Enum.map(Enum.reverse(assigns.scenes), &scene_label/1)
+
+  defp blank?(value), do: String.trim(to_string(value || "")) == ""
 
   defp blank_to(value, fallback) do
     case String.trim(to_string(value || "")) do

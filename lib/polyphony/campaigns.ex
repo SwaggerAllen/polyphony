@@ -125,6 +125,77 @@ defmodule Polyphony.Campaigns do
 
   defp now(opts), do: Keyword.get(opts, :now, NaiveDateTime.utc_now())
 
+  # Everything derived from a scene stream, keyed by the scene it came from. The same
+  # set `Polyphony.SceneReset` truncates globally — minus `projection_versions`, which
+  # is Commanded's own projector bookkeeping and is not per-campaign: clearing it here
+  # would rewind every projector for every campaign to replay this one.
+  @scene_derived [
+    {"scene_memberships", "scene_id"},
+    {"character_scene_summaries", "scene_id"},
+    {"arc_entries", "source_scene_id"},
+    {"generation_failures", "scene_id"},
+    {"packet_drafts", "scene_id"},
+    {"scene_forks", "scene_id"}
+  ]
+
+  @doc """
+  Put a campaign back to before it was played, keeping everything that was written.
+
+  The cast, the world and the premise are authored work and survive untouched; the
+  scenes and everything derived from them go. That includes the **arc queue** — the
+  proposals play raised about these characters — which is the reason this exists as
+  its own control rather than as "delete the scenes": an arc entry outliving the scene
+  that proposed it is a review item about something that never happened.
+
+  It does **not** delete the event streams, and cannot: events are immutable (rule 6),
+  and rewriting or dropping history is the one thing an event-sourced system may never
+  do. What it does is stop the campaign referring to them — the streams are abandoned,
+  not erased, and nothing reads a stream that no campaign names. `SceneReset` is the
+  global version and only *it* is entitled to touch the store, because it is a
+  deployment-level clean slate rather than one author's decision about one story.
+
+  A finished campaign restarts as unstarted: concluding it was a statement about a
+  story that is now being started again.
+
+  Returns `{:ok, %{scenes: n, rows: %{table => n}}}` — what was actually let go of.
+  """
+  @spec restart(term(), keyword()) :: {:ok, map()} | {:error, term()}
+  def restart(id, opts \\ []) do
+    repo = Keyword.get(opts, :repo, Repo)
+
+    case Library.get(id, opts) do
+      nil ->
+        {:error, :not_found}
+
+      entry ->
+        payload = Library.payload(entry)
+        scenes = List.wrap(Map.get(payload, :scenes))
+
+        rows =
+          for {table, column} <- @scene_derived, into: %{} do
+            {table, delete_by_scene(repo, table, column, scenes)}
+          end
+
+        {:ok, _} =
+          Library.update_payload(
+            id,
+            payload |> Map.put(:scenes, []) |> Map.put(:finished_at, nil),
+            opts
+          )
+
+        {:ok, %{scenes: length(scenes), rows: rows}}
+    end
+  end
+
+  defp delete_by_scene(_repo, _table, _column, []), do: 0
+
+  defp delete_by_scene(repo, table, column, scenes) do
+    %{num_rows: n} =
+      repo.query!(~s|DELETE FROM "#{table}" WHERE "#{column}" = ANY($1)|, [scenes])
+
+    n
+  end
+
   @doc """
   How many arc proposals are waiting on this campaign — its cast's plus its world's.
 

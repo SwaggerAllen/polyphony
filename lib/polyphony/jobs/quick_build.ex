@@ -72,6 +72,7 @@ defmodule Polyphony.Jobs.QuickBuild do
       "world_seed" => to_string(Keyword.get(opts, :world_seed, "")),
       "character_seeds" => Enum.map(seeds, &to_string/1),
       "suggest_offscreen" => !!Keyword.get(opts, :suggest_offscreen, false),
+      "groups" => !!Keyword.get(opts, :groups, false),
       "user_id" => opts[:user_id] && to_string(opts[:user_id]),
       "provider" => opts[:provider] && to_string(opts[:provider]),
       # Who was in the cast *before* this build, so a resumed attempt can tell its own
@@ -142,6 +143,7 @@ defmodule Polyphony.Jobs.QuickBuild do
         world_seed: args["world_seed"],
         character_seeds: args["character_seeds"] || [],
         suggest_offscreen: args["suggest_offscreen"] == true,
+        groups: args["groups"] == true,
         campaign_id: campaign_id,
         progress: &Builds.progress(campaign_id, &1),
         on_entry: &associate(campaign_id, &1),
@@ -222,6 +224,13 @@ defmodule Polyphony.Jobs.QuickBuild do
   # both invent people the same way.
   defp associate(campaign_id, {kind, entry}) when kind in [:character, :stub],
     do: Campaigns.cast(campaign_id, entry.id)
+
+  # Groups need no association step, and the clause exists to say so rather than to
+  # fall through a catch-all. They are owner-scoped and the campaign screen lists them
+  # from the owner (`Groups.list/1`), so a group is reachable the moment it is written —
+  # there is no state in which one is orphaned the way an unattached world would be.
+  # `world_bible_id` is the tie it does carry, set at the write.
+  defp associate(_campaign_id, {:group, _entry}), do: :ok
 
   defp attach_premise(_campaign_id, premise) when premise in [nil, ""], do: :ok
 
