@@ -28,4 +28,5 @@ defmodule Storybook.Screens do
   def entry("arc_review"), do: [name: "Arc review"]
   def entry("group_editor"), do: [name: "Group editor"]
   def entry("library"), do: [name: "Library"]
+  def entry("browse"), do: [name: "Browse"]
 end
