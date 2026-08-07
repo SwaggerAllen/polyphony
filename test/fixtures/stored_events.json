@@ -1,0 +1,98 @@
+[
+  {
+    "data": "{\"seq\":1,\"scene_id\":\"scene-1\",\"character_id\":\"char-mira\",\"beat\":3,\"packet_id\":\"scene-1-3-char-mira\",\"content\":\"he is lying\",\"edited\":false}",
+    "event": "thought_occurred.v1"
+  },
+  {
+    "data": "{\"scene_id\":\"scene-1\",\"character_id\":\"char-mira\",\"beat\":3,\"packet_id\":\"scene-1-3-char-mira\",\"mood_felt\":\"furious\",\"intention\":\"keep him talking\"}",
+    "event": "private_state_reported.v1"
+  },
+  {
+    "data": "{\"seq\":2,\"scene_id\":\"scene-1\",\"beat\":3,\"packet_id\":\"scene-1-3-char-mira\",\"content\":\"psst\",\"edited\":true,\"speaker_id\":\"char-mira\",\"addressed_to\":[\"char-ilias\"],\"audibility\":\"private\"}",
+    "event": "speech_uttered.v1"
+  },
+  {
+    "data": "{\"seq\":3,\"scene_id\":\"scene-1\",\"character_id\":\"char-mira\",\"beat\":3,\"packet_id\":\"scene-1-3-char-mira\",\"content\":\"she reaches for the door\",\"edited\":false}",
+    "event": "action_taken.v1"
+  },
+  {
+    "data": "{\"position\":\"by the window\",\"demeanor\":\"composed\",\"scene_id\":\"scene-1\",\"character_id\":\"char-mira\",\"beat\":3,\"packet_id\":\"scene-1-3-char-mira\",\"posture\":\"standing\",\"attending_to\":\"char-ilias\"}",
+    "event": "demeanor_reported.v1"
+  },
+  {
+    "data": "{\"reason\":\"reroll\",\"attempt\":2,\"scene_id\":\"scene-1\",\"character_id\":\"char-mira\",\"beat\":3,\"packet_id\":\"scene-1-3-char-mira\"}",
+    "event": "packet_superseded.v1"
+  },
+  {
+    "data": "{\"scene_id\":\"scene-1\",\"beat\":3,\"content\":\"the door is locked\"}",
+    "event": "world_event_occurred.v1"
+  },
+  {
+    "data": "{\"campaign_id\":\"camp-7\",\"scene_id\":\"scene-1\",\"location_id\":\"loc-hall\",\"premise\":\"a wake nobody wanted\",\"opened_beat\":0}",
+    "event": "scene_opened.v1"
+  },
+  {
+    "data": "{\"scene_id\":\"scene-1\",\"closed_beat\":9}",
+    "event": "scene_closed.v1"
+  },
+  {
+    "data": "{\"control\":\"user_controlled\",\"scene_id\":\"scene-1\",\"character_id\":\"char-mira\"}",
+    "event": "control_mode_set.v1"
+  },
+  {
+    "data": "{\"scene_id\":\"scene-1\",\"beat\":3,\"order\":[\"char-mira\",\"char-ilias\"]}",
+    "event": "turn_order_declared.v1"
+  },
+  {
+    "data": "{\"label\":\"what if she stayed\",\"campaign_id\":\"camp-7\",\"scene_id\":\"scene-2\",\"parent_scene_id\":\"scene-1\",\"fork_beat\":4}",
+    "event": "scene_forked.v1"
+  },
+  {
+    "data": "{\"scene_id\":\"scene-1\",\"character_id\":\"char-mira\",\"beat\":1}",
+    "event": "character_entered.v1"
+  },
+  {
+    "data": "{\"scene_id\":\"scene-1\",\"character_id\":\"char-ilias\",\"beat\":6}",
+    "event": "character_exited.v1"
+  },
+  {
+    "data": "{\"name\":\"Wren Ashgrove\",\"reason\":\"somebody has to have seen it\",\"scene_id\":\"scene-1\",\"beat\":5}",
+    "event": "introduction_proposed.v1"
+  },
+  {
+    "data": "{\"name\":\"Wren Ashgrove\",\"scene_id\":\"scene-1\"}",
+    "event": "introduction_dismissed.v1"
+  },
+  {
+    "data": "{\"cast\":[\"char-mira\",\"char-ilias\"],\"scene_id\":\"scene-1\",\"beat\":3,\"beat_ref\":\"scene-1-b3\"}",
+    "event": "beat_opened.v1"
+  },
+  {
+    "data": "{\"failed\":[\"char-ilias\"],\"completed\":[\"char-mira\"],\"scene_id\":\"scene-1\",\"beat\":3,\"beat_ref\":\"scene-1-b3\",\"passed\":[]}",
+    "event": "beat_closed.v1"
+  },
+  {
+    "data": "{\"character_id\":\"char-mira\",\"beat_ref\":\"scene-1-b3\"}",
+    "event": "packet_recorded.v1"
+  },
+  {
+    "data": "{\"reason\":\"timeout\",\"scene_id\":\"scene-1\",\"character_id\":\"char-ilias\",\"beat\":3,\"beat_ref\":\"scene-1-b3\"}",
+    "event": "packet_failed.v1"
+  },
+  {
+    "data": "{\"character_id\":\"char-ilias\",\"beat_ref\":\"scene-1-b3\"}",
+    "event": "packet_passed.v1"
+  },
+  {
+    "data": "{\"reason\":\"timeout\",\"character_id\":\"char-ilias\",\"beat\":3}",
+    "event": "generation_failed.v1"
+  },
+  {
+    "data": "{\"kind\":\"belief\",\"beat\":9,\"arc_entry_id\":\"arc-1\",\"subject_id\":\"char-mira\",\"subject_type\":\"character\",\"sheet_field\":\"beliefs\",\"statement\":\"she no longer trusts him\",\"source_scene_id\":\"scene-1\"}",
+    "event": "arc_entry_proposed.v1"
+  },
+  {
+    "data": "{\"arc_entry_id\":\"arc-1\",\"subject_id\":\"char-mira\"}",
+    "event": "arc_entry_accepted.v1"
+  }
+]

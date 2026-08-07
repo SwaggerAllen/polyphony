@@ -52,6 +52,23 @@ defmodule PolyphonyCore.Content.CampaignConfig do
 
   def from_payload(_), do: %__MODULE__{}
 
+  @doc """
+  The config as the plain map a `Library` payload stores.
+
+  A payload is written to a `:binary` column as an Erlang term (`PolyphonyCore.Blob`),
+  which spells a struct's module out as an atom — so storing `%CampaignConfig{}` would put
+  this module's path in the row and a later rename would take the campaign's whole payload
+  down with it. A map has no module in it and cannot be broken that way; `from_payload/1`
+  has always read one.
+  """
+  @spec to_payload(t()) :: %{
+          adult_content: boolean(),
+          sexual: boolean(),
+          graphic_violence: boolean(),
+          other: boolean()
+        }
+  def to_payload(%__MODULE__{} = config), do: Map.from_struct(config)
+
   @doc "A short human label for the campaign's maturity, for the published snapshot."
   @spec label(t()) :: String.t()
   def label(%__MODULE__{} = config) do

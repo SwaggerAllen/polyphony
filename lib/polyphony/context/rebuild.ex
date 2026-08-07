@@ -12,6 +12,17 @@ defmodule Polyphony.Context.Rebuild do
 
   Best-effort: any missing piece yields `:error`, and the caller keeps its (now
   schema-bearing) fallback rather than failing the turn.
+
+  Best-effort is not the same as silent, and the difference cost something real. Every
+  read here ends in a `rescue` that returns a benign default, and one of them —
+  `content_config/1` — hands back the **all-off** content ceiling. When a namespace move
+  made stored payloads undecodable (see `PolyphonyCore.Blob`), that `rescue` turned a
+  broken read into an §A5 setting quietly reverting to its default: nothing failed, the
+  ceiling just dropped. So every fallback says so at warning level, through `degraded/2`.
+  The return values are unchanged — the caller still gets to carry on. `degraded/2` only
+  logs and hands the default back to its own `rescue` rather than returning it, because
+  routing six exact return types through one helper collapses them into their union and
+  Dialyzer is right to object.
   """
   require Logger
 
@@ -78,7 +89,9 @@ defmodule Polyphony.Context.Rebuild do
       stream -> Enum.find_value(stream, fn e -> match?(%SceneOpened{}, e.data) && e.data end)
     end
   rescue
-    _ -> nil
+    e ->
+      degraded(e, "opened/#{inspect(scene_id)}")
+      nil
   end
 
   @doc """
@@ -98,7 +111,9 @@ defmodule Polyphony.Context.Rebuild do
       _ -> []
     end
   rescue
-    _ -> []
+    e ->
+      degraded(e, "roster/#{inspect(scene_id)}")
+      []
   end
 
   @doc """
@@ -124,7 +139,9 @@ defmodule Polyphony.Context.Rebuild do
       _ -> []
     end
   rescue
-    _ -> []
+    e ->
+      degraded(e, "cast/#{inspect(scene_id)}")
+      []
   end
 
   @doc "The scene's campaign content config (§A5), or the all-off default."
@@ -138,7 +155,11 @@ defmodule Polyphony.Context.Rebuild do
       _ -> %CampaignConfig{}
     end
   rescue
-    _ -> %CampaignConfig{}
+    # The loudest of these: the fallback is the all-off ceiling, which looks exactly like
+    # an author who turned everything off.
+    e ->
+      degraded(e, "content_config/#{inspect(scene_id)}")
+      %CampaignConfig{}
   end
 
   @doc "The scene's campaign world bible (`%WorldBible{}`), or nil."
@@ -154,7 +175,9 @@ defmodule Polyphony.Context.Rebuild do
       _ -> nil
     end
   rescue
-    _ -> nil
+    e ->
+      degraded(e, "world_bible/#{inspect(scene_id)}")
+      nil
   end
 
   @doc """
@@ -261,8 +284,24 @@ defmodule Polyphony.Context.Rebuild do
   end
 
   defp stored_events(scene_id) do
-    App |> Commanded.EventStore.stream_forward(scene_id) |> Enum.map(& &1.data)
+    # A scene with no stream yet is ordinary, not a degradation — matched the way
+    # `opened/1` matches it, so the rescue below is left holding only real surprises.
+    case Commanded.EventStore.stream_forward(App, scene_id) do
+      {:error, _} -> []
+      stream -> Enum.map(stream, & &1.data)
+    end
   rescue
-    _ -> []
+    e ->
+      degraded(e, "stored_events/#{inspect(scene_id)}")
+      []
   end
+
+  # A read that failed and is carrying on anyway. Says so and returns nothing — the
+  # default belongs to the caller, and routing it through here collapsed six exact return
+  # types into their union.
+  defp degraded(exception, where),
+    do:
+      Logger.warning(
+        "[context] #{where} fell back to a default: " <> Exception.message(exception)
+      )
 end

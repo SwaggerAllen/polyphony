@@ -445,7 +445,12 @@ defmodule PolyphonyWeb.CampaignLive do
         other: params["other"] == "true"
       }
 
-      payload = Map.put(socket.assigns.payload, :content_config, config)
+      # Stored as a map, not the struct: a payload is an Erlang term in a `:binary`
+      # column, so a struct would put this module's path in the row (see
+      # `CampaignConfig.to_payload/1`).
+      payload =
+        Map.put(socket.assigns.payload, :content_config, CampaignConfig.to_payload(config))
+
       {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
       {:noreply, socket |> assign(entry: entry) |> load()}
     end)
