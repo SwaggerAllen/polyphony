@@ -58,6 +58,32 @@ defmodule PolyphonyWeb.DocsServedTest do
       end
     end
 
+    # Being committed and being *in the image* are different claims, and the gap between
+    # them cost a second round of exactly the same bug. `.gitignore` and `.dockerignore`
+    # both carried `priv/static/**/*-[0-9a-f]*.*`; fixing the first left the deployment
+    # 404ing on the same nine files, with git, CI and every local run green — because
+    # `COPY priv priv` cannot bring in what the build context never had.
+    #
+    # So this reads `.dockerignore` rather than restating what it ought to say. A test
+    # that asserts "the rule is scoped to assets/" is a second copy of the intent and
+    # would drift the same way the first one did.
+    test "survives .dockerignore, so the image has it too" do
+      patterns = docker_ignore_patterns()
+
+      for {_source, target} <- Publish.trees(), {path, _} <- Publish.collect(target) do
+        file = Path.join(target, path)
+
+        refute Enum.find(patterns, fn {regex, source} -> excluded?(regex, file) && source end),
+               """
+               #{file} is published, committed, and excluded from the Docker build context.
+
+               `COPY priv priv` copies what the context contains, so this file is absent
+               from the release and its URL 404s — while git, CI and `mix phx.server` all
+               look fine. Scope the offending `.dockerignore` line to `priv/static/assets/`.
+               """
+      end
+    end
+
     test "carries the files worth naming" do
       docs = Publish.collect("priv/static/docs")
       ux = Publish.collect("priv/static/ux")
@@ -121,5 +147,56 @@ defmodule PolyphonyWeb.DocsServedTest do
       # path — 400, not a file from outside the two published trees.
       assert_error_sent(400, fn -> get(conn, "/ux/../config/runtime.exs") end)
     end
+  end
+
+  # ── Reading .dockerignore ────────────────────────────────────────────────────
+  #
+  # Enough of Docker's pattern language for the patterns actually in the file: `**`
+  # spans path segments, `*` and `?` do not, `[…]` is a character class. Anything it
+  # does not understand raises rather than quietly matching nothing — a matcher that
+  # silently passes is the failure mode this whole test exists to close.
+
+  defp docker_ignore_patterns do
+    ".dockerignore"
+    |> File.read!()
+    |> String.split("\n")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == "" or String.starts_with?(&1, "#")))
+    |> Enum.map(fn line ->
+      if String.starts_with?(line, "!") do
+        raise """
+        .dockerignore line #{inspect(line)} is a negation, and this matcher does not
+        implement one. Teach it before relying on this test again — an unread pattern
+        makes every assertion here pass.
+        """
+      end
+
+      {compile(String.trim_trailing(line, "/")), line}
+    end)
+  end
+
+  defp compile(pattern), do: Regex.compile!("^" <> translate(pattern, "") <> "$")
+
+  defp translate("", acc), do: acc
+  defp translate("**" <> rest, acc), do: translate(rest, acc <> ".*")
+  defp translate("*" <> rest, acc), do: translate(rest, acc <> "[^/]*")
+  defp translate("?" <> rest, acc), do: translate(rest, acc <> "[^/]")
+
+  defp translate("[" <> rest, acc) do
+    [class, rest] = String.split(rest, "]", parts: 2)
+    translate(rest, acc <> "[" <> class <> "]")
+  end
+
+  defp translate(<<c::utf8, rest::binary>>, acc),
+    do: translate(rest, acc <> Regex.escape(<<c::utf8>>))
+
+  # A pattern naming a directory excludes everything beneath it, so every ancestor
+  # prefix is tested as well as the path itself.
+  defp excluded?(regex, path) do
+    segments = Path.split(path)
+
+    1..length(segments)
+    |> Enum.map(&(segments |> Enum.take(&1) |> Path.join()))
+    |> Enum.any?(&Regex.match?(regex, &1))
   end
 end
