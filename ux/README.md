@@ -12,7 +12,7 @@ CSS, no behaviour. Interactivity gets rewired server-side, so what's being hande
 |---|---|
 | **`polyphony-kit.css`** | **The single source of truth.** Tokens and every component class. Each screen links it and defines nothing of its own. |
 | **`polyphony-kit.html`** | The visual catalogue — every component and state, with the rules that govern each. Read this before building anything. |
-| _(backend asks)_ | The design's backend dependencies now live in the repo docs as **`docs/backend-backlog.md`** (renamed from this folder's `backend-asks.md`), the standing engineering worklist. |
+| _(backend asks)_ | The design's backend dependencies live in **Linear** (team `StrutCo`, project `Polyphony`) — one issue each. They were this folder's `backend-asks.md`, then `docs/backend-backlog.md`; a worklist wants a tracker, not a file. |
 | `polyphony-play.html` | Scene setup, both play registers, status strip, draft-in-composer, connection states, introductions |
 | `polyphony-campaign.html` | Campaign editor — Settings, World, Cast, Groups, Premise, Scenes, Quick Build |
 | `polyphony-character.html` | Character sheet — prose, facts, relationships, pressures, groups, the stub |
@@ -161,19 +161,22 @@ neighbours so windowing later is a query change, not a markup change.
 
 ---
 
-## Read `docs/backend-backlog.md` before estimating
+## Check Linear before estimating
 
-Several designed screens depend on work that doesn't exist. The two that gate the most:
+Several designed screens depend on backend work, and the backlog that used to record it is
+now the **Linear project `Polyphony`** (team `StrutCo`) — one issue per item, each carrying
+the argument that decides whether it's worth building.
 
-**§5.1 — scene-close fan-out has no caller.** Not from this design pass; it's in the existing
-capability catalogue. Per-character summaries and arc extraction never run in production, so arc
-review, world arc, the casting gate and published-campaign contents are all decorative until it's
-wired. It's the single highest-leverage fix in the document.
+**The two that gated the most are now closed.** Scene-close fan-out had no caller, which made
+arc review, world arc, the casting gate and published-campaign contents decorative; it is
+wired. World arc — somewhere for "the moon fell out of the sky" to live as durable canon, and
+a way for it to reach a character who was off-screen — is built. Neither is a reason to
+discount a screen any more.
 
-**§2.8 — world arc doesn't exist.** There's nowhere for "the moon fell out of the sky" to live as
-durable canon, and no way for it to reach a character who was off-screen. This bites inside a
-single self-contained campaign with no sharing features at all.
+What to look at instead: the **Frontend rebuild** milestone is the slice that gates these
+mocks, and anything in **Designing** is a live design question — that state is the design
+thread's own queue.
 
-The file also records **scope decisions** (§2.7 characters don't cross campaigns, §3.1c publication
-is two independent settings) and **confirmed non-asks** — things deliberately ruled out, so nobody
-builds them speculatively. Its immediate-milestone section is the slice that gates these mocks.
+**Confirmed non-asks** — things deliberately ruled out so nobody builds them speculatively —
+are the project document of that name. Read it before proposing something the design has
+already declined; it is short, and each line says why.

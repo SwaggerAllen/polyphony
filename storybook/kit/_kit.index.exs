@@ -1,6 +1,10 @@
 defmodule Storybook.Kit do
   use PhoenixStorybook.Index
 
+  # The catalogue is a reviewing surface, not part of the app's layering — it renders
+  # components and reaches nothing that reaches back.
+  use Boundary, check: [in: false, out: false]
+
   def folder_name, do: "Components"
   def folder_open?, do: true
 

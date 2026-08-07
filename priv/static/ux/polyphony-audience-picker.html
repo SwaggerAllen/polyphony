@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyphony — the audience picker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="polyphony-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="antialiased">
+
+<header class="max-w-6xl mx-auto px-5 pt-12 pb-8">
+  <div class="wall mb-3">Polyphony · step 8 · shared component</div>
+  <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">The audience picker</h1>
+  <p class="mt-4 max-w-2xl text-[15px] leading-relaxed note">
+    One component, answering one question: <em>who starts out knowing this?</em> It appears on world
+    canon, on character facts, and on whatever carries secrets next. Getting it right once means
+    those surfaces cost nothing.
+  </p>
+</header>
+
+<!-- 00 · THE MODEL -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">00 · The rules it encodes</div>
+    <h2 class="text-2xl font-bold mb-3">Five decisions, and why</h2>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note">
+      <div><b style="color:var(--page-fg)">Nobody, by default.</b> Same default-deny as everything
+        else. Most secrets stay empty, so the control costs nothing on the common fact and the
+        sheet doesn't get heavier for having it.</div>
+      <div><b style="color:var(--page-fg)">Additive only. No exceptions.</b> You can't say "the
+        whole Tidewatch except Marek" — you'd name people instead. Exceptions double the mental
+        model and the case is rare enough to pay for by hand.</div>
+      <div><b style="color:var(--page-fg)">Everything is an audience, including "everyone."</b>
+        An individual is an audience of one; common knowledge is the audience of all. So
+        <em>secret</em> is really shorthand for <em>an audience narrower than everyone</em> — the
+        toggle is a one-tap route to the common case, not a separate mechanism.</div>
+      <div><b style="color:var(--page-fg)">Two unscoped audiences do a lot of work.</b>
+        <em>Everyone</em> means common knowledge with no setting attached, and <em>whoever was
+        there</em> resolves to a scene's cast. Neither needs locations, and "the whole town" is a
+        location audience later rather than a special case now.</div>
+      <div><b style="color:var(--page-fg)">Groups resolve when a character enters the story, not
+        once at t=0.</b> This is the load-bearing one: a walk-on generated in scene 9 from the
+        Tidewatch seed arrives already knowing. The GM never assigns anything.</div>
+      <div><b style="color:var(--page-fg)">An audience is always belonging, never transit.</b>
+        Being in a group, or being one of the people of a place — not having visited it. A main
+        cast member who walks into the undercroft doesn't absorb its secrets; the people who work
+        there were born into them.</div>
+      <div><b style="color:var(--page-fg)">Joining later doesn't backfill.</b> If Wren joins the
+        Tidewatch in scene 9, she doesn't silently gain the secret — she learns it in a scene.
+        Same principle as world-arc catch-up: the reveal is fiction, not a migration.</div>
+      <div><b style="color:var(--page-fg)">It only sets the starting point.</b> Everything after
+        t=0 is play — someone told them, they were in the room. The picker's copy says
+        <em>starts out knowing</em> for exactly that reason.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 01 · IN CONTEXT -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">01 · How it's reached</div>
+    <h2 class="text-2xl font-bold mb-2">Secret first, audience second</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">Nothing appears until an item is marked secret. The audience line is then part of the item, so the count is readable without opening anything.</p>
+  </div>
+  <div class="grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Not secret</div>
+      <div class="fr stage dark sheet p-3.5">
+        <div class="flex items-start gap-2.5">
+          <span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <span class="text-[13.5px] leading-relaxed flex-1">The Kestrel has docked twice this month and appears in the register once.</span>
+          <span class="dim text-[14px] shrink-0">⋯</span>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">No audience line at all.</p>
+    </div>
+    <div><div class="wall mb-2">Secret · nobody knows</div>
+      <div class="fr stage dark sheet p-3.5">
+        <div class="flex items-start gap-2.5 secret pl-2 py-1">
+          <span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <div class="flex-1">
+            <span class="text-[13.5px] leading-relaxed">The harbourmaster has been paid to lose paperwork for thirty years.</span>
+            <div class="flex items-center gap-1.5 mt-1"><span class="dot" style="background:var(--secret)"></span>
+              <span class="lbl" style="color:var(--secret)">Secret · nobody knows</span></div>
+          </div>
+          <span class="dim text-[14px] shrink-0">⋯</span>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">The default, and usually the right answer.</p>
+    </div>
+    <div><div class="wall mb-2">Secret · some know</div>
+      <div class="fr stage dark sheet p-3.5">
+        <div class="flex items-start gap-2.5 secret pl-2 py-1">
+          <span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <div class="flex-1">
+            <span class="text-[13.5px] leading-relaxed">The harbourmaster has been paid to lose paperwork for thirty years.</span>
+            <div class="flex items-center gap-1.5 mt-1"><span class="dot" style="background:var(--secret)"></span>
+              <span class="lbl" style="color:var(--secret)">Secret · Aldous, Sable know</span></div>
+          </div>
+          <span class="dim text-[14px] shrink-0">⋯</span>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">Two or three fit; beyond that it's a count.</p>
+    </div>
+    <div><div class="wall mb-2">Secret · a group knows</div>
+      <div class="fr stage dark sheet p-3.5">
+        <div class="flex items-start gap-2.5 secret pl-2 py-1">
+          <span class="dim mono text-[11px] pt-0.5">⠿</span>
+          <div class="flex-1">
+            <span class="text-[13.5px] leading-relaxed">The tide bell answers to something under the flats, and it is owed.</span>
+            <div class="flex items-center gap-1.5 mt-1"><span class="dot" style="background:var(--secret)"></span>
+              <span class="lbl" style="color:var(--secret)">Secret · the Tidewatch, +1</span></div>
+          </div>
+          <span class="dim text-[14px] shrink-0">⋯</span>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">Groups are named, not expanded — the membership moves.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 02 · THE PICKER -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">02 · Open</div>
+    <h2 class="text-2xl font-bold mb-2">The picker itself</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note">Groups first, because that's the answer that scales. The resolved line at the bottom is the honesty check — it says who this means <em>right now</em>, since a group's membership will change.</p>
+  </div>
+  <div class="mt-7 grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr stage dark sheet"><div data-spec="picker"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr stage light sheet"><div data-spec="picker"></div></div></div>
+  </div>
+</section>
+
+<!-- 03 · STATES -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">03 · Every state</div>
+    <h2 class="text-2xl font-bold mb-2">Empty, inherited, crowded, broken</h2>
+  </div>
+  <div class="mt-6 grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Nobody knows · the default</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="lbl dim mb-1">Who starts out knowing</div>
+          <p class="text-[13px] leading-relaxed">The tide bell answers to something under the flats.</p></div>
+        <div class="px-4 py-6 text-center">
+          <div class="ttl text-[15px] mb-1" style="font-weight:500">Nobody, so far.</div>
+          <p class="text-[12.5px] leading-relaxed dim">Everyone finds this out in play, if they ever do.</p>
+        </div>
+        <div class="px-4 py-2.5" style="border-top:1px solid var(--rule)">
+          <div class="field px-3 py-2 text-[13px] dim">Add a person or a group…</div>
+        </div>
+      </div></div>
+
+    <div><div class="wall mb-2">Via a group · can't untick one</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="lbl dim">Who starts out knowing</div></div>
+        <div class="px-4 py-2 row"><span class="lbl dim">Groups</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="chk chk-on">✓</span>
+          <div class="flex-1"><div class="text-[13px] font-semibold">The Tidewatch</div><div class="text-[11px] dim">6 people, and anyone new who joins</div></div>
+        </div>
+        <div class="px-4 py-2 row" style="background:var(--b2)"><span class="lbl dim">Who that comes to</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="chk chk-via">✓</span><span class="av" style="background:var(--secret)"></span>
+          <span class="text-[13px] flex-1">Sable Quist</span>
+          <span class="text-[11px] dim shrink-0">Tidewatch</span>
+        </div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="chk chk-via">✓</span><span class="av" style="background:var(--secret)"></span>
+          <span class="text-[13px] flex-1">The bellman</span>
+          <span class="text-[11px] dim shrink-0">Tidewatch</span>
+        </div>
+        <div class="px-4 py-2.5 flex items-center gap-2.5">
+          <span class="chk"></span><span class="av" style="background:var(--b3)"></span>
+          <span class="text-[13px] flex-1">Wren Ashgrove</span>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">Outlined ticks are inherited and can't be individually removed — take the group off instead. That's the price of no exceptions, and it's cheap.</p>
+    </div>
+
+    <div><div class="wall mb-2">The owner</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="lbl dim mb-1">Who starts out knowing</div>
+          <p class="text-[13px] leading-relaxed">Wren has been signing for the Kestrel's cargo since March.</p>
+          <div class="lbl dim mt-1.5">A fact about Wren Ashgrove</div></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="chk chk-via">✓</span><span class="av" style="background:var(--secret)"></span>
+          <span class="text-[13px] font-semibold flex-1">Wren Ashgrove</span>
+          <span class="text-[11px] dim shrink-0">it's hers</span>
+        </div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="chk"></span><span class="av" style="background:var(--b3)"></span><span class="text-[13px] flex-1">Ilias Vane</span></div>
+        <div class="px-4 py-2.5 flex items-center gap-2.5">
+          <span class="chk"></span><span class="av" style="background:var(--b3)"></span><span class="text-[13px] flex-1">Aldous Ashgrove</span></div>
+      </div>
+      <p class="text-[12px] mt-2 note">A character always knows their own secrets. Locked on, never a decision.</p>
+    </div>
+  </div>
+
+  <div class="mt-5 grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Crowded cast · search</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="lbl dim">Who starts out knowing</div></div>
+        <div class="px-4 py-2.5 row"><div class="field px-3 py-2 text-[13px]">bell</div></div>
+        <div class="px-4 py-2 row"><span class="lbl dim">Groups · 1</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="chk"></span><div class="flex-1"><div class="text-[13px] font-semibold">The Tidewatch</div><div class="text-[11px] dim">Rings the bell · 6 people</div></div></div>
+        <div class="px-4 py-2 row"><span class="lbl dim">People · 2 of 41</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="chk"></span><span class="av" style="background:var(--b3)"></span><span class="text-[13px] flex-1">The bellman</span><span class="text-[11px] dim">Walk-on</span></div>
+        <div class="px-4 py-2.5 flex items-center gap-2.5">
+          <span class="chk"></span><span class="av" style="background:var(--b3)"></span><span class="text-[13px] flex-1">Bellwether Rusk</span><span class="text-[11px] dim">Recurring</span></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Forty-one characters is normal once walk-ons autogenerate. Search, not scroll.</p>
+    </div>
+    <div><div class="wall mb-2">Group with no members yet</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="lbl dim">Who starts out knowing</div></div>
+        <div class="px-4 py-2 row"><span class="lbl dim">Groups</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="chk chk-on">✓</span>
+          <div class="flex-1"><div class="text-[13px] font-semibold">The Tidewatch</div>
+            <div class="text-[11px]" style="color:var(--lamp)">Nobody's in it yet</div></div>
+        </div>
+        <div class="px-4 py-3" style="border-top:1px solid var(--rule)">
+          <p class="text-[12.5px] leading-relaxed dim">That's fine — anyone written from the Tidewatch will know this from the moment they turn up.</p>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">Not an error. Empty groups are how you set a trap before anyone walks into it.</p>
+    </div>
+    <div><div class="wall mb-2">No cast at all</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="lbl dim">Who starts out knowing</div></div>
+        <div class="px-4 py-6 text-center">
+          <p class="text-[13px] leading-relaxed dim mb-3">There's nobody in this campaign yet, so there's nobody to let in on it.</p>
+          <button class="btn btn-gh btn-sm">Go to Cast</button>
+        </div>
+        <div class="px-4 py-2.5" style="border-top:1px solid var(--rule)">
+          <p class="text-[11px] leading-relaxed dim">The secret keeps. You can come back to this.</p>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 04 · READ-BACK -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">04 · The other direction</div>
+    <h2 class="text-2xl font-bold mb-2">What does <em>she</em> know?</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      The character-side view is a read-only projection — you can see it from her sheet, but you
+      edit from the secret. One fact, one home, so nothing can drift out of sync.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">On her sheet</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="flex items-center gap-2.5"><span class="w-8 h-8 rounded-lg" style="background:var(--secret)"></span>
+            <div><div class="ttl text-[15px]" style="font-weight:600">Sable Quist</div><div class="lbl dim">Knows 3 things she shouldn't</div></div></div></div>
+        <div class="px-4 py-2.5 row">
+          <p class="text-[13px] leading-relaxed">The harbourmaster has been paid to lose paperwork for thirty years.</p>
+          <div class="lbl dim mt-1">From Saltmarch · you named her</div></div>
+        <div class="px-4 py-2.5 row">
+          <p class="text-[13px] leading-relaxed">The tide bell answers to something under the flats, and it is owed.</p>
+          <div class="lbl dim mt-1">From Saltmarch · she's in the Tidewatch</div></div>
+        <div class="px-4 py-2.5">
+          <p class="text-[13px] leading-relaxed">Wren has been signing for the Kestrel's cargo since March.</p>
+          <div class="lbl dim mt-1">Wren's secret · you named her</div></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Each line says where it came from, so an inherited one is obvious.</p>
+    </div>
+    <div><div class="wall mb-2">Read-only, and says so</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">What Sable knows</div></div>
+        <div class="px-4 py-2.5 row">
+          <p class="text-[13px] leading-relaxed">The tide bell answers to something under the flats.</p>
+          <div class="flex items-center justify-between gap-2 mt-1.5">
+            <span class="lbl dim">She's in the Tidewatch</span>
+            <button class="btn btn-gh btn-sm shrink-0">Open the secret</button></div></div>
+        <div class="px-4 py-2.5"><p class="text-[11px] leading-relaxed dim">To change who knows something, change it where the secret lives. There's only ever one copy.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Knows nothing</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="flex items-center gap-2.5"><span class="w-8 h-8 rounded-lg" style="background:var(--b3)"></span>
+            <div><div class="ttl text-[15px]" style="font-weight:600">Ilias Vane</div><div class="lbl dim">In the dark</div></div></div></div>
+        <div class="px-4 py-7 text-center">
+          <p class="text-[13px] leading-relaxed dim">He starts out knowing none of the secrets in this campaign. Everything he learns, he'll learn on the page.</p>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 05 · REUSE -->
+<section class="max-w-6xl mx-auto px-5 pb-24">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">05 · The same component, three headers</div>
+    <h2 class="text-2xl font-bold mb-2">Why building it once was worth it</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      World canon and character facts use it today. Locations use it the day they exist, as a
+      third kind of entry in the same list — <em>anyone who's been to the Ninth Gate</em> is an
+      audience like any other.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">World canon</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="lbl dim mb-1">Saltmarch · what's already true</div>
+          <p class="text-[13px] leading-relaxed">The tide bell answers to something under the flats.</p></div>
+        <div class="px-4 py-2.5 flex items-center justify-between gap-2">
+          <span class="text-[13px] dim">Who starts out knowing</span><span class="pill" style="border-color:var(--secret);color:var(--secret)">The Tidewatch</span></div>
+      </div></div>
+    <div><div class="wall mb-2">A character's fact</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="lbl dim mb-1">Wren Ashgrove · facts</div>
+          <p class="text-[13px] leading-relaxed">She's been signing for the Kestrel's cargo since March.</p></div>
+        <div class="px-4 py-2.5 flex items-center justify-between gap-2">
+          <span class="text-[13px] dim">Who starts out knowing</span><span class="pill" style="border-color:var(--secret);color:var(--secret)">Wren, +1</span></div>
+      </div></div>
+    <div><div class="wall mb-2">A location · later</div>
+      <div class="fr stage dark sheet" style="opacity:.72">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="lbl dim mb-1">The undercroft · what's true here</div>
+          <p class="text-[13px] leading-relaxed">There's a second door, and it isn't locked.</p></div>
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-2">
+          <span class="text-[13px] dim">Who starts out knowing</span><span class="pill" style="border-color:var(--secret);color:var(--secret)">People of the undercroft</span></div>
+        <div class="px-4 py-2.5">
+          <p class="text-[11px] leading-relaxed dim">The people who live and work here — not everyone who walks in. Your main cast will have to find that door.</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Not built. Drawn to check the shape holds — it does, with no change to the component, because a location audience means belonging, exactly like a group.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== TEMPLATE ========== -->
+<template id="spec-picker">
+  <div>
+    <div class="px-4 py-3 row" style="background:var(--b2)">
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <span class="flex items-center gap-1.5"><span class="ttl text-[15px]" style="font-weight:600">Who starts out knowing</span><span class="info">i</span></span>
+        <span class="dim text-[17px] leading-none shrink-0">×</span>
+      </div>
+      <p class="text-[13px] leading-relaxed">The tide bell answers to something under the flats, and it is owed.</p>
+      <div class="flex items-center gap-1.5 mt-2">
+        <span class="dot" style="background:var(--secret)"></span>
+        <span class="lbl" style="color:var(--secret)">Secret · Saltmarch</span>
+      </div>
+    </div>
+
+    <div class="px-4 py-2.5 row"><div class="field px-3 py-2 text-[13px] dim">Search people and groups…</div></div>
+
+    <div class="px-4 py-2 row" style="background:var(--b2)"><span class="lbl dim">Everybody, or nearly</span></div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="chk"></span>
+      <div class="flex-1"><div class="text-[13px] font-semibold">Everyone</div>
+        <div class="text-[11px] dim">Common knowledge — nobody had to be told</div></div>
+    </div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="chk"></span>
+      <div class="flex-1"><div class="text-[13px] font-semibold">Whoever was there</div>
+        <div class="text-[11px] dim">The people in the scene it came from</div></div>
+    </div>
+
+    <div class="px-4 py-2 row" style="background:var(--b2)"><span class="lbl dim">Groups</span></div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="chk chk-on">✓</span>
+      <div class="flex-1"><div class="text-[13px] font-semibold">The Tidewatch</div>
+        <div class="text-[11px] dim">6 people, and anyone new who joins</div></div>
+    </div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="chk"></span>
+      <div class="flex-1"><div class="text-[13px] font-semibold">The harbour office</div>
+        <div class="text-[11px] dim">3 people</div></div>
+    </div>
+
+    <div class="px-4 py-2 row" style="background:var(--b2)"><span class="lbl dim">Main cast</span></div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="chk"></span><span class="av" style="background:var(--b3)"></span>
+      <span class="text-[13px] flex-1">Wren Ashgrove</span></div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="chk"></span><span class="av" style="background:var(--b3)"></span>
+      <span class="text-[13px] flex-1">Ilias Vane</span></div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="chk chk-on">✓</span><span class="av" style="background:var(--secret)"></span>
+      <span class="text-[13px] flex-1">Mother Corrigan</span></div>
+
+    <div class="px-4 py-2 row" style="background:var(--b2)"><span class="lbl dim">Recurring</span></div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="chk chk-via">✓</span><span class="av" style="background:var(--secret)"></span>
+      <span class="text-[13px] flex-1">Sable Quist</span>
+      <span class="text-[11px] dim shrink-0">Tidewatch</span></div>
+    <div class="px-4 py-2.5 row flex items-center gap-2.5">
+      <span class="chk"></span><span class="av" style="background:var(--b3)"></span>
+      <span class="text-[13px] flex-1">Aldous Ashgrove</span></div>
+
+    <div class="px-4 py-2.5 row flex items-center justify-between gap-2" style="background:var(--b2)">
+      <span class="lbl dim">Walk-ons · 6</span><span class="dim text-[14px]">⌄</span></div>
+
+    <div class="px-4 py-3" style="background:var(--b2)">
+      <div class="flex items-start gap-2">
+        <span class="dot mt-1.5 shrink-0" style="background:var(--secret)"></span>
+        <p class="text-[12.5px] leading-relaxed">Right now that's <b>7 people</b> — Mother Corrigan, and everyone in the Tidewatch.</p>
+      </div>
+      <p class="text-[11px] leading-relaxed dim mt-1.5 pl-3.5">Anyone written into the Tidewatch later will know it too.</p>
+    </div>
+  </div>
+</template>
+
+<script>
+  document.querySelectorAll('[data-spec]').forEach(function(slot){
+    var t = document.getElementById('spec-' + slot.getAttribute('data-spec'));
+    if (!t) { slot.innerHTML = '<div style="padding:1rem;font:12px monospace;color:#E0604A">missing template: ' + slot.getAttribute('data-spec') + '</div>'; return; }
+    slot.appendChild(t.content.cloneNode(true));
+  });
+</script>
+</body>
+</html>

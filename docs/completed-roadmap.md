@@ -1066,6 +1066,766 @@ roadmap item. Also: metering fix (arc/world-arc extraction billed to the campaig
 
 ---
 
+## The shipped backend backlog — §1–§5
+
+`backend-backlog.md` and `roadmap.md` are **retired**. The worklist they carried now lives
+in Linear (team `StrutCo`, project `Polyphony`), where an item can be prioritised, moved
+through Designing → Ready for dev → In Progress, and closed — none of which a markdown list
+can do. Every open item became an issue; the argument in each one went with it.
+
+What follows is the other half: the **shipped** sections of `backend-backlog.md`, verbatim,
+because they are the record of what was built and why, and several are the citation target
+for `§n` references in moduledocs and tests. Nothing here is a task.
+
+Two notes on what didn't survive the move:
+
+- **§2.10 auto-advance shipped** and the file never said so. `Polyphony.Director.Auto` is a
+  full auto mode — it runs until the Director closes the scene, the room empties, or a
+  50-beat cap, with pause/resume as a DB row checked at the top of every beat, and
+  `control_hint: "auto"` forcing `control: :continue`. The backlog still described it as
+  "new (surface) + wiring".
+- **§6's "pronouns as a character field" contradicted §2.11**, which shipped pronouns. The
+  §6 bullet was stale and was dropped rather than filed.
+
+**§5.2 phase 5 is still open** — it is the one open item inside a section kept here, and it
+is tracked as its own Linear issue (opening the non-boundary sheet fields to arc override).
+
+### 1 · Blocking the current design
+
+#### 1.1 Fork wiring — `Fork.fork/3` · ✅ **Shipped** (found already complete)
+Fork truncates at the cut beat and opens live there; `Reroll`/`Edit` are branch-relative for
+free because a fork is a separate stream. "Branch from beat N" UI is frontend, deferred. See
+`completed-roadmap.md`.
+
+#### 1.2 Edit with tail invalidation — `Edit.edit/6` `:invalid` · ✅ **Shipped** (found already built)
+`Edit.edit/6` complete (`:valid` any beat, `:invalid` forks); no branch-relative guard needed.
+Caller (frontend) deferred. See `completed-roadmap.md`.
+
+#### 1.3 Lineage records the cut beat and nothing else — `ReadModels.SceneFork` · ✅ **Shipped**
+`SceneFork` records `fork_beat` and nothing else, as prescribed. The optional read-time
+"identical-so-far / changed" comparison is a small helper to add when the branch-navigator UI
+wants it — not a blocker. See `completed-roadmap.md`.
+
+#### 1.5 Draft accept / discard · ✅ **Shipped**
+`BeatDriver.accept_draft/2` and `discard_draft/2` complete and tested. The approve/discard card
+is built: `PlayLive` loads open drafts on every reload and renders each through the transcript's
+own `render_move/4`, so what is approved reads as it will read committed. Drafts announce on
+`Drafts.topic/1` — a workflow topic carrying no fiction — which is what lets a character's view
+hear about one without subscribing to the omniscient projection. See `completed-roadmap.md`.
+
+#### 1.6 Pass turn · ✅ **Shipped (backend)**
+`BeatDriver.pass_turn/4` complete; the composer/quick-sheet entry points are frontend, deferred.
+See `completed-roadmap.md`.
+
+#### 1.7 Failures scoped per viewer · **change** — ✅ **Shipped**
+Turn failures now reach the failed character's own viewer topic (+ omniscient); author-facing
+failures stay omniscient-only; `PlayLive` loads per-viewer. See `completed-roadmap.md`.
+
+---
+
+### 2 · New — not modelled yet
+
+#### 2.16 A character can be pushed in two directions · **change** — ✅ **Shipped**
+`direction` on `CharacterSheet.Boundary` (`:refusal | :compulsion`, defaulting to refusal), plus
+`after_release` — the mock's *and then* / *and now*, written when the line is created but withheld
+from the character's context until the gate actually releases, so she can't play the aftermath
+before earning it. `Autofill` proposes both directions; `Context` writes a compulsion as a
+compulsion rather than as a negated refusal, because a model handed "you will not not do this"
+writes a worse beat than one handed "you can't help it". `CompulsionTest` pins the axis.
+
+The bug this closed is in `Polyphony.Content`. Capping meant forcing `stance: :closed`, which for a
+compulsion means *she always does it* — so the content ceiling would have **compelled** the content
+it exists to forbid. The cap now flips direction as well as stance, per the design's own rule:
+*the ceiling always pushes toward refusal. That's the correct direction to fail in.* Original ask
+below, reconstructed from the mock.
+
+
+`ux/polyphony-character.html` §05 asks for two lists, not one: **what she won't do** and **what she
+can't stop doing**. `Boundary` modelled only the first. The design argues the split is the point —
+*direction lives in the grouping, not the wording*, so an item can never be read backwards, which
+is exactly what went wrong when everything was one list of "lines" — and that compulsions are the
+more dramatic half: *covering for her father is a better story engine than any refusal on the
+sheet.*
+
+#### 2.17 Anything in a world can be marked secret · **change** — ✅ **Shipped**
+`WorldBible.rules` and `starting_canon` are lists of `WorldBible.Entry` (statement +
+`concealed`), which is the design's *one control, three places* (`ux/polyphony-world.html`
+§04) reaching the world layer. A bare string still reads as a public entry, so stored
+payloads and generated lines need no migration.
+
+The reason it had to land with the screen is that it was a **prompt leak waiting for a
+control**. `Context.render_bible` put all of `starting_canon` into every character's prefix,
+so the moment the UI let an author mark a world fact secret it would have gone straight into
+the model's context — the one place a leak is invisible and the only symptom is a character
+who mysteriously knows something. The split is now structural, in the same shape `Visibility`
+draws for events: a character reads `public/1`, the Director reads `statements/1`, and
+anything that *writes* a character (a stub, a generated sheet, a campaign premise) is
+character-facing too, because being written from a secret is how a character comes to know it.
+Pinned by `WorldSecretsTest`.
+
+Deliberately **not** the same axis as world-arc reach: `scope` answers *where a fact landed*,
+`concealed` answers *who knows it*. Folding them together would make a local fact secret and a
+global secret impossible. **Who else** knows one is still §3.3.
+
+#### 2.3 Scene premise and location as authored fields · **new** — ✅ **Shipped (backend)**
+Location now feeds Director + character context (volatile suffix, `"Location: …"`); new
+scene-aware `Autofill.generate_scene_premise/1`. The "Set the scene" form + LiveView seed sites
+passing `location:` are frontend, deferred. `location_id` stays a reference field so it can
+become a location-entity FK later without changing the event shape. See `completed-roadmap.md`.
+
+- Both are Director context. Today the Director infers the situation from the world bible and
+  the transcript; this gives it the GM's actual intent for *this* scene.
+- **Location is authored, not inferred.** The Director should not be deciding where a scene
+  takes place. It also resolves a copy problem — with a location field the header can name
+  the place rather than guess a preposition for it.
+- **Premise wants an Expand call**, grounded in world + cast + previous scenes, matching
+  `generate_campaign_premise` (§4). New call; the campaign one isn't scene-aware.
+
+**Constraint worth flagging.** `Context.materialize` freezes a per-character prefix ordered
+stable→volatile for prefix-cache hits (§6). Scene premise and location are scene-scoped and
+change every scene — placed too early in that order, every new scene invalidates the cached
+prefix for the entire cast. They belong at the volatile end, near the verbatim recent scenes.
+
+Forward-compatible with later location authoring: the field should be able to become a
+reference to a location entity without changing the event shape.
+
+#### 2.5 Cast tiers — context residency, separate from sheet status · **new** — ✅ **Shipped (the axis)**
+`tier` on `CharacterSheet` (`:main | :recurring | :incidental`), with `tiers/0`, `resident?/1` and
+`tier_label/1`; `Polyphony.Characters` holds the operations — `set_tier/3`, symmetric `promote/2`
+and `demote/2` that step one place and saturate at the ends, `by_tier/1` for the cast list's
+sections, and `resident/1`. A walk-on written during play (`Authoring.Stub`) starts `:incidental`.
+`CharactersTest` pins that the axis stays independent of `status` and that demotion works as well
+as promotion — the design's point being that a character who has served their purpose is *demoted
+rather than deleted*.
+
+**Still open:** nothing *consumes* residency yet, because there is nothing to consume it from —
+the Director's roster is a scene's own cast (`Context.Rebuild.roster/1`), not a campaign-wide one,
+so no read currently has to choose who stays in the room when they aren't in it. That arrives with
+the rest of this entry: **autogeneration-on-admit** and its timing constraint (the scene must not
+block on the generation, but the character must). Original ask below.
+
+
+Design principle this falls out of: **no character ever plays without a full sheet.** Admitting
+a walk-on autogenerates one rather than admitting a stub — it's a real advantage of the
+engine that the bellman can have a backstory nobody asked for, and it costs the GM nothing.
+
+But that breaks the axis we currently have. `CharacterSheet.status` is `:stub | :proposed |
+:full` (§4) — if everyone who plays is `:full`, status no longer distinguishes anything
+useful, and the campaign's cast grows without bound while `Context.materialize` (§6) has no
+basis for deciding who stays resident.
+
+**Wanted: a second axis for context residency**, orthogonal to whether the sheet is written.
+Roughly: **main cast** (always resident), **recurring** (resident — a major side character
+who should remember and be remembered), **incidental** (loaded only for scenes they appear
+in). Promotion and demotion between tiers needs to be a real operation, in both directions —
+a walk-on who turns out to matter gets promoted; a character who's served their purpose gets
+demoted rather than deleted.
+
+This also gives the library and the cast list something to sort by, which they currently lack
+once autogeneration starts filling the roster.
+
+**Simplifies considerably once locations are authored** (2.3): an incidental character can be
+tied to one or more locations, and the location tells the Director who belongs in context —
+no manual tiering for the majority of them.
+
+**Timing constraint.** Autogenerating on admit puts a full-sheet generation inside a one-tap
+action during a live beat. **The scene must not block on it, but the character must.** They
+enter immediately — membership is recorded, the room knows they're there, and the beat
+proceeds around them — but they are not actionable until the sheet lands. In practice that
+means the Director skips them for turn assignment while generation is in flight, and they
+become castable on the next beat after it completes.
+
+This matters because the alternative — letting them act from the proposal's one-line premise
+— produces a character whose first turn contradicts the sheet written a moment later. Better
+that they stand there for a beat.
+
+Consequences: a character can be a scene member with a sheet in flight, so any read path that
+assumes membership implies a full sheet needs to tolerate it. And if the generation fails,
+they should stay in the scene as un-actionable with a retry, not be silently evicted —
+eviction would be a membership event the room can see, for a reason that has nothing to do
+with the fiction.
+
+#### 2.11 Pronouns are a field · **change** — ✅ **Shipped**
+`pronouns` on `CharacterSheet` (free text, never an enum — the set isn't closed), rendered into
+the character's context immediately after their name because it governs every sentence written
+about them, offered by `Autofill` with explicit guidance not to infer from the name, and
+editable on the sheet. `PronounsTest` pins the whole path. Original ask below.
+
+
+`ux/README.md` says it plainly under copy rules: *pronouns are a field. Half the copy on a
+character sheet is written about them, so those strings need parameterising rather than
+hardcoding.* `CharacterSheet` has no such field, and nothing else records one.
+
+This is not only a UI concern, which is why it's here rather than in a design note. Every
+character prompt renders a sheet, and with nothing to render the model infers pronouns from a
+name — which is a guess, gets people wrong, and gets them wrong *in the fiction*, where it
+reads as the story misgendering someone rather than as a missing setting. It also makes the
+sheet's own copy ("what she won't do") either hardcoded or awkward.
+
+Wanted: a `pronouns` field on `CharacterSheet` (free text, not an enum — the set isn't closed),
+rendered into the character's context prefix and into the authored sheet's own labels, and
+offered by `Autofill` when a sheet is generated. Cheap, and it stops being cheap to retrofit
+once there are sheets and transcripts in the world.
+
+#### 2.12 The world's cover is written, and must not spoil · **new** — ✅ **Shipped**
+`cover` on both `WorldBible` and `CharacterSheet` (a character has the same problem — a stranger
+reads a blurb before they take them), written by `Authoring.Cover.generate/2`. It is deliberately
+*not* a field in `Autofill`'s spec: every other generated field is a fold over what's in the form,
+while this one takes concealed material as input and can only be written once there is something
+to cover.
+
+The interesting half got a mechanical backstop rather than only a prompt. `Cover` checks the
+returned prose against the secrets it was shown, retries once with a sharper instruction, and
+returns `{:error, :leaked}` instead of a spoiler cover — a missing cover is recoverable, a
+published one that gives away the twist isn't. The check catches **verbatim quotation** (a whole
+statement, or a run of six consecutive words), which is the failure mode a model actually has with
+a secret sitting in its context; `CoverTest` asserts both halves, and asserts out loud that
+paraphrase is *not* caught, so nobody mistakes the floor for a ceiling. Original ask below.
+
+
+The world bible's **cover** (`ux/polyphony-world.html` §Cover) is *the only part strangers see
+before they take your world* — a short written blurb, not an image, generated from everything
+below it *including the secrets*, with instructions to give none of them away.
+
+`WorldBible` has no cover field, and `Autofill` has no such generation. The interesting half is
+the constraint: this is the one generation whose input deliberately includes concealed material
+and whose output must not contain it. That is a prompt-level obligation the rest of the system
+solves structurally (a character is never *told* what they can't know), so it needs its own
+care — and a test that a seeded secret doesn't survive into the cover.
+
+#### 2.13 Deleted things really go, on a clock · **new** — ✅ **Shipped**
+`Library.retention_days/0` is 30, `days_until_purge/2` rounds **up** (so a sliver of a day left
+never reads as none) and bottoms out at zero rather than going negative, and
+`Library.purge_expired/1` hard-deletes what is past the window. `Polyphony.Jobs.PurgeTrash` runs
+it nightly off `Oban.Plugins.Cron` — that job is the whole point of the entry, because without
+something arriving at the end of it the countdown is a claim again, which is the thing the design
+set out to avoid. `trash/2` and `archived/2` are separate reads, because they're separate
+shelves, and the library screen shows them side by side.
+
+#### 2.14 Reading a sheet as of a past scene · **new** — ✅ **Shipped**
+`Effective.sheet_as_of/4` folds only the canon arc extracted at or before a given stop, and
+`Effective.scene_stops/2` gives the stops themselves — the scenes a character has *closed*, oldest
+first, each carrying its own summary so a stop can be labelled without a second read. A summary
+row is written at scene close and only then, so its existence is what "closed" means here, and
+that is the right resolution: arc is extracted at close, so there is nothing to wind back to
+between two of them.
+
+Three edges a naive cut-off gets wrong, all pinned by `EffectiveAsOfTest`: hand-authored canon has
+no source scene and so applies at every stop (otherwise the newest stop would disagree with
+`sheet/3`, and the scrubber's right-hand end wouldn't be the sheet you have); arc from a still-open
+scene belongs after every stop that exists; and an unrecognised scene degrades toward *less* arc,
+because this backs a read-only preview where showing more than was asked for is a spoiler.
+
+Alongside it, `ReadModels.Membership.scenes_for_character/2` and `scene_count/2` — distinct scenes
+in first-entry order, so someone who leaves and comes back is counted once ("In 3 scenes" must not
+count the door twice). Original ask below.
+
+
+The character sheet's **scrubber** (`polyphony-kit.css` §9, `ux/polyphony-arc.html` "sheet time
+travel") winds a sheet back — one stop per closed scene, because arc is extracted at scene close
+and that's the only meaningful resolution.
+
+Most of the data is already there: `arc_entries` records `source_scene_id` and `beat`, so the
+history exists. What's missing is the read — `Effective.sheet/3` folds *all* canon arc with no
+"as of" parameter. Wanted: `sheet_as_of(sheet, character_id, scene_id)` that folds only entries
+canon at or before that scene, plus the ordered list of a character's closed scenes for the
+scrubber's stops. Small, and it makes the arc screen's most distinctive control possible.
+
+#### 2.5b Attaching a world copies it · **change** — ✅ **Shipped**
+`Library.copy/3` is the primitive — the one shape behind every "this is a template"
+relationship in the design — and `derived_from_id` (which the schema already had) records
+the provenance, so `copies_of/2` / `copy_count/2` make *"used in 2 campaigns"* a real count
+rather than a claim. `CampaignLive.select_world` copies on attach; re-selecting a campaign's
+own copy doesn't copy the copy. `LibraryTemplateTest` pins each consequence the design
+claims: editing the template reaches nobody already started, deleting it breaks nothing, and
+the only route back is deliberate and takes a snapshot. The world screen states which side of
+the relationship it is on rather than leaving it to be discovered. Original ask below.
+
+
+A campaign does not reference a library world, it **copies it on attach**. Forced by 2.8: a
+campaign accumulates world arc, and two campaigns cannot write different histories onto one
+bible. Consequences:
+
+- A library world is a **template**. Editing it never reaches a campaign already started from
+  it, so there is no shared-artifact hazard, no copy-on-write escape hatch, and no
+  delete-in-use problem — deleting a library world cannot break a running campaign.
+- The honest cost: fixing a typo in the library copy doesn't fix the campaigns. The UI says so
+  rather than implying live coupling.
+- The only route back is deliberate — *save a copy to your library*, which snapshots the
+  campaign's current version as a new template.
+- Same logic applies to characters and groups: campaign-owned, never shared references.
+
+#### 2.5c Finishing a campaign · **new** — ✅ **Shipped**
+
+`Polyphony.Campaigns` — `status/1` derives `:unstarted | :playing | :finished`, and only
+`finished_at` is stored, because "this story is over" is the one thing the data can't work out
+for itself. `finish/2` deliberately does **not** archive: a finished campaign is the one you most
+want to be able to find, to read back or to name as a prequel (§3.4). `reopen/2` because
+concluding something is a judgement and judgements change. Closing an open scene stays the
+caller's job through the normal path — a scene closing is an event, and this is a library write.
+
+Also here, because the library's rows needed them: `pending_review/2` (a campaign's cast's arc
+proposals plus its world's — the same number the scene gate blocks on, so the row doesn't
+surprise anyone) and `by_character/2`, which is free because characters don't cross campaigns
+(§2.7).
+
+#### 2.8 World arc — durable world change, and who knows about it · **new** — ✅ **Shipped (A–D)**
+Durable world-change entries (discovery/revision), parallel to character arc, proposed → canon
+on review, folded into the world half of context. Global facts reach everywhere; local facts
+only their scene location (§2.3); off-screen characters catch up by the fact being present in
+their next scene (facts injected, reactions played on screen — no arc extrapolation). Reuses
+`arc_entries` (`subject_type: "world"`) with `WorldArcExtractor` / `EffectiveWorldBible`;
+shipped alongside wiring canon **character** arc into generation too (it was built but only
+consumed by publishing). Review gained reject + edit. See `completed-roadmap.md`.
+
+Two follow-ups it surfaced:
+- **Arc/world-arc extraction metering** — ✅ **Done.** Both extractions now attribute to the
+  campaign owner (`Attribution.for_scene`, `SceneClose.meter/3`); also fixed a latent
+  `Costs.check` crash on a nil user id (org-owned / unattributed campaigns). "The owner owns
+  everything autonomous in their campaign."
+- **§3.0 gating** — ✅ **Shipped (MVP)**, see below.
+
+### 3 · Publishing, continuity & knowledge
+
+#### 3.1 Publication is a set of viewer perspectives · **new** — ✅ **Shipped**
+
+`Polyphony.Publication` — `perspectives` + `spectator` + `forkable`, stored **on the snapshot**
+rather than the live campaign, because the snapshot is the thing readers hold and the grant must
+not change under someone partway through. `Publication.viewer/2` is the entire seam: publication
+decides *who you may be*, `Visibility` decides what that person sees. Settings a snapshot never
+had read as spectator-only — the least-granting answer, not the most.
+
+Rather than enumerating which authoring surfaces are published, **publication names the
+perspectives a reader may adopt**, and `visible_to?/3` (§8) does the filtering it already
+does in play.
+
+- The publisher picks from the main cast plus omniscient. Publishing several perspectives is
+  the product's showcase — the same scene from three heads, switchable — and nothing else on
+  the internet reads quite like it.
+- **This is the spoiler control, not a reading preference.** Omniscient exposes every private
+  thought; if a character is secretly working against the others, publishing omniscient hands
+  that away on page one. Only the author knows which perspectives are meant to be read.
+
+**Why perspectives rather than per-surface toggles.** Triggers, events, and location state are
+all coming, and any of them can carry spoilers. Enumerating surfaces means every new feature
+ships a new toggle and the defaults rot. Filtering by perspective covers surfaces that don't
+exist yet, for free — provided one rule holds:
+
+> **Any new authoring surface must declare its visibility, and defaults to invisible.**
+> Anything that forgets to declare is unpublished rather than leaked.
+
+**Two things sit on top of perspectives, as separate opt-ins:**
+
+- **Character sheets.** "You may read as Wren" and "you may read Wren's sheet" are different
+  permissions — the sheet holds her concealed facts, her boundaries and her initial knowledge,
+  which spoil forward rather than sideways. Off by default.
+- **Forkable.** In practice this means everything, including arc, since a fork must be able to
+  continue the story. Note that a "don't fork" flag on fully visible material is unenforceable
+  — anyone can retype it. What protects an artifact is not publishing it, so forkability is
+  the top of the ladder rather than an orthogonal switch.
+
+**No per-artifact privacy for campaign contents.** Publishing is one campaign-level decision
+covering everything inside the snapshot, so nobody ever sets visibility on forty walk-ons.
+Library-entry visibility (§7) stays a *separate* system for the different job of sharing a
+single character or world on its own — the two look similar and must not be merged.
+
+**The two systems can't contend**, because they govern different objects: publication grants
+access to the frozen snapshot's embedded copies, library visibility governs the live entry.
+Reading a published campaign never reaches the author's live world. Browse should be explicit
+about which one a reader is looking at.
+
+#### 3.0 Arc review gates the next scene · **new** — ✅ **Shipped (MVP)**
+
+Opening a new scene requires that **every character being cast has no pending arc proposals**.
+World arc gates the whole campaign, since it feeds every generation in it.
+
+> **Shipped (MVP).** `Authoring.SceneGate.check/3` — per-cast (keyed by character *name*, the id
+> scenes and extraction use), world arc campaign-wide; `campaign_live` consults it before
+> `OpenScene` and redirects to arc review on a block; `ArcReviewLive` resolves cast ids → names
+> (it was querying by id and finding nothing) and gained **accept-all**. See `completed-roadmap.md`.
+> **Refinements not yet built:** the "extraction failed → block with retry" and "extraction still
+> running → not ready yet" async states (they need extraction status tracking). The proposal gate
+> is the correctness core; these are UX polish on top.
+
+**Why.** Every unreviewed proposal is a gap between who a character is on paper and who they've
+become in the story, and generation works from the paper. Let it run five scenes and the Director
+is writing someone who stopped existing in scene 2. It also keeps an author's bookkeeping current,
+which a writing tool should do regardless of any model reason.
+
+**Scoping is what makes it tolerable:**
+
+- **Per-cast, not per-backlog.** Nineteen pending across three scenes doesn't block a scene with two
+  clean characters. Evaluate against the selected cast at scene setup.
+- **Accept-all is the intended fast path, not a loophole.** The gate exists to keep state
+  consistent, not to force careful reading. One tap still produces a sheet that matches the story.
+- **A failed extraction does block, and that's fine.** No cast-anyway hatch. Extraction failures are
+  overwhelmingly provider rate limits, which means turn generation is failing too — letting someone
+  into a scene that can't run would be a worse experience than the block. Retry is the only action,
+  and the copy should say why: the model is busy, and a scene would struggle too.
+- **One escape hatch, not two.** Accept-all without reading is already the cheap path out of a
+  block. A second bypass would only be used to avoid the first.
+- **Never blocks the open scene**, only opening a new one — and the currently open scene closes
+  normally regardless.
+- **Extraction is async**, so immediately after close there is a *not ready yet* state. That's a
+  wait with an explanation, distinct from a block with nothing to act on.
+
+Depends entirely on 5.1 — scene-close fan-out has no caller today, so there is nothing to gate on
+and this cannot be built until that's wired.
+
+#### 3.0b Group arc, and how it reaches members · **new** — ✅ **Shipped**
+`Polyphony.Authoring.GroupArc`: `fan_out/3` writes one proposal against the group (filed under its
+own `subject_type: "group"`, so a pending group change doesn't block a scene the group isn't in)
+and one per current member, through the same review gate as anything else. `pending/2` and
+`counts/2` back the collapsed card; `accept_all/2` is its one fast path. Nothing propagates
+silently, which is what makes dissent free — refuse one member's and you have written the person
+who didn't go along with it. Off-screen members are included, and so is someone who joined by hand
+and was never seeded from the group. `ArcReviewTest` pins each claim. Original ask below.
+
+
+
+
+**Prerequisite shipped.** Groups existed only in the design until the frontend rebuild reached
+the campaign screen and found the Groups tab had nothing behind it — the backend-asks pass had
+recorded group *arc* without recording that groups themselves weren't built. `Polyphony.Groups`
++ `Authoring.Group` now cover the artifact: a character-shaped template stored as a library
+entry (kind `"group"`), live membership by stable id, and writing a character from a group
+(seed + join). Detail in `completed-roadmap.md`. What follows is still open.
+
+A group is a character-shaped sheet (2.5 / character authoring), so it can be revised by play the
+same way a character is — a different prompt over the same extraction.
+
+But groups **seed by copy**, so updating the template only reaches people written from it later.
+For current members, a group-targeting change **fans out**:
+
+- **One proposal against the group template** — affects future members only.
+- **One proposal per current member**, generated for that character and reviewed individually
+  through the normal path. Includes members who joined by hand rather than being seeded, since
+  membership is what matters, and members who weren't in the scene, same as a world fact.
+
+**Consequences worth keeping:**
+
+- **Nothing propagates silently**, which is the rule everywhere else.
+- **Rejecting one member's proposal while accepting the group's is how dissent gets written.** The
+  one who didn't go along with it falls out of the review UI rather than needing a feature.
+- **Review must collapse the fan-out into one card**, or a group of twelve floods the queue from a
+  single event. One unit, one accept-all, expandable per member.
+- **Gating (3.0) applies to the member proposals, not the template.** A pending template change
+  blocks nobody, since it only affects characters who don't exist yet.
+
+**Also still open: an audience that names a group.** `Group.secrets/1` gives a secret somewhere
+to point, but a `Fact` still carries only `concealed: true` — there's no audience field, so
+nothing yet *points*. Pointing one at a group and resolving it **when a character enters the
+story** (which is what makes a scene-9 walk-on arrive already knowing) is the audience-picker
+work: it needs `Visibility` in the loop, not just `Groups`. That's the piece the
+`polyphony-audience-picker.html` mock depends on, and the reason its inherited-tick treatment
+(`.chk-via`) can't be built yet.
+
+#### 3.1b Limited omniscient — the published reading mode · **new** — ✅ **Shipped**
+
+Two new viewer values on `Visibility`, and neither loosens anything: `{:readers, ids}` is a
+**union over the existing character predicate** (so it inherits default-deny and cannot drift from
+what those characters actually knew), and `:spectator` is its own default-deny clause with
+whispers denied *ahead* of the general speech clause. Both are reachable only through a published
+snapshot; nothing in play produces them.
+
+*Highest-value item in this cluster.* A reader who just wants the story shouldn't have to choose a
+character or settle for a camera. **Limited omniscient blends every published perspective** — the
+union of what the shared cast knows, and nothing beyond it.
+
+- It's how prose fiction is actually written. Narration without interiority is a screenplay, and a
+  transcript of speech and action is a worse read than either.
+- Implementation is a union over the existing predicate rather than a new projection: visible if
+  visible to *any* granted perspective. No new visibility semantics.
+- **Visually it's a character read, not an author read.** It gets the Page register, not the
+  omniscient authoring treatment — it isn't an authoring surface, it's a way of reading.
+- Should be the default offer where the publisher grants more than one perspective.
+
+**Spectator is a real option but not the expected read**, and publishers can opt out of it. It is
+the default only because it is the one setting that reveals nothing.
+
+#### 3.1c Publication is two independent settings · **change** — ✅ **Shipped**
+
+*Supersedes the four-rung ladder in an earlier draft, which conflated two unrelated decisions.*
+
+- **How it's read** — a content decision: which perspectives are offered (spectator, limited
+  omniscient, named characters). Any combination, including leaving spectator out.
+- **Forkable** — a permission decision: one checkbox. Character sheets come with it, because a fork
+  must be able to continue the story and can't from prose alone. Not a separate rung.
+
+Consequence: **characters are not publishable on their own.** They travel only inside a fork, since
+a character lifted out of their campaign has no history and knows nobody — which is the same reason
+cross-campaign import is out of scope (2.7). Browse lists stories and worlds, not people.
+
+#### 3.1c-ii Unreadable scenes must be detectable at publish time · **new** — ✅ **Shipped**
+
+`Publication.unreadable_scenes/2` + `Publication.Preflight.warning/2`, shown live on the campaign's
+publish panel as the grant changes. It warns and never blocks — sometimes a gap is the point.
+`modes_for_scene/3` keeps the reader's current perspective **last rather than removed**, so the
+control never reorders under them.
+
+Falls out of 3.1c: if spectator is off and a scene contains none of the published cast, **no reader
+can open it**. That's a legitimate authorial choice — a gap can be the point — but it must not
+happen by accident.
+
+- **Publish needs a pre-flight check** listing scenes no granted perspective can reach, with the two
+  obvious fixes offered (turn spectator on, or share one of the people who were there).
+- **Unreadable scenes still appear in contents**, marked. Silently omitting them would make the
+  numbering lie and the story jump.
+- The perspective selector on a given scene is **filtered to perspectives that can show it**, with
+  the reader's current one listed last rather than removed — so the control never reorders under
+  them.
+
+#### 3.1d Group copies by their root · **new** — ✅ **Shipped (the identity)**
+
+`root_id` on every library entry, stamped at insert (an original is its own root) and carried
+forward by `Library.copy/3` — so a fork of a fork still groups under the thing it all started
+from, which a parent pointer alone can't tell you. `Library.family/2` is one indexed read;
+`Library.provenance/2` walks back to both the parent and the original. Browse groups by it. The
+library's by-campaign version grouping is still to do.
+
+Every campaign copies its world (2.5b) and every fork copies everything, so within a year there are
+a dozen artifacts called Saltmarch. Flat lists become unusable.
+
+- Needs a **root identity** on derived artifacts, not just a `derived_from` parent pointer — walking
+  the chain per row to group a list is the wrong shape.
+- **Library groups versions by campaign**; one row that expands, not four rows with the same name.
+- **Browse groups forks by author**, because three forks share a title until someone renames one.
+- `derived_from` is already stored on every derived entry and has never been displayed. Show it: a
+  reader should always be able to walk back to where something started.
+
+#### 3.1f A campaign has one published copy, replaced on republish · **decision** — ✅ **Shipped**
+
+Publishing produced a new frozen entry each time, so republishing after playing on left every
+link, bookmark and share URL pointing at the version somebody happened to start — and browse
+showed the *oldest* publication as the story with the newest listed under it as "1 other version".
+
+**Author call:** one published copy per campaign, replaced in place. The alternative accumulates a
+copy per publish that nobody reads again, and keeping the id is what makes *carry on reading* land
+on the continuation. The entry stays `frozen: true` — that axis means *self-contained*, embedding
+pinned dependencies rather than referencing the owner's working set. What changed is that the
+published copy is **replaced**, not versioned.
+
+The accepted cost, stated rather than designed around: a reader partway through can have the story
+change under them. In the ordinary case (the campaign grew) their place is re-found by scene id —
+the event-store stream id, stable across republishes — so they simply see more of it. When a scene
+they were on is gone, the shelf says so instead of quietly starting them over.
+
+Two consequences worth keeping straight:
+
+- **Republishing is not an appeal.** A take-down hides the campaign *and* its published copy, and
+  `publish_campaign/2` returns `{:error, :hidden}` for either. Before the copy was replaced in
+  place, pressing Publish again minted a fresh public entry and put the taken-down story straight
+  back in browse — the hole this design closed rather than opened.
+- **A take-down removes the thing, not its listing.** `hidden_at` is now a default filter in
+  `LibraryEntry.visible/2` alongside archived and deleted, so a taken-down artifact is gone from
+  its owner's library, not merely from browse — the deleted experience, with copy that says why.
+  `take_down/4` hides the reported entry and everything of the **author's** it belongs to; only
+  *other people's* forks go to the review lane, since those may have diverged past anything
+  objectionable. Two reads opt back in and say so: the §C moderation grant (whose whole purpose is
+  reading what nobody else can) and an account purge (which has to be complete).
+- **`derived_from_version` is attribution, not reconstruction.** A fork is a full copy and there is
+  no version history to rebuild a source from, so a replaced publication doesn't invalidate
+  anything: the fork still records which story it came from.
+
+#### 3.1e Reading position on a published campaign · **new** — ✅ **Shipped**
+
+`Polyphony.Reading` + `Reading.Bookmark` — scene, beat and **perspective** together, because
+perspective is part of where you were: coming back into a different head is coming back to a
+different story. Stored as a `"bookmark"` library entry owned by the *reader*, one per published
+campaign (`mark/4` moves the existing one rather than stacking), pointing at the **frozen
+published entry** rather than the author's live campaign.
+
+`shelf/2` returns `:reading | :finished | :gone`, and `:gone` **keeps the row** — unpublishing is
+usually temporary and losing someone's place isn't recoverable from their side. Readability is
+default-deny: anything not positively public-or-unlisted-and-live reads as gone, so a stale row
+can never offer a link into somebody's unpublished draft.
+
+*Carry on reading* now resumes at the bookmarked scene **and perspective**: all three parts of the
+bookmark ride in the URL, and `Publication.to_param/1` / `from_param/1` are the single shared
+vocabulary so a perspective round-trips identically through storage and through a query string.
+The front page picks the bookmark over its own default, because coming back into a different head
+is coming back to a different story. The link carries an intent, never an authorization — browse
+re-checks the grant, so a perspective the author has since withdrawn falls back rather than
+opening.
+
+#### 3.3 Selective starting knowledge · **new** — ✅ **Shipped (unscoped audiences)**
+`Polyphony.Authoring.Audience` — group ids + character ids, unioned, resolved **live**.
+It hangs off `CharacterSheet.Fact` and `WorldBible.Entry`, which is the design's *one control,
+three places*, and `PolyphonyWeb.AudiencePicker` is the single implementation both editors call
+with a different header.
+
+The shape avoids the matrix the ask warns about, exactly as specified: authored **from the
+secret's side**, so it scales with the number of secrets rather than secrets × cast. "Everyone"
+is deliberately not a stored value — it is the item's `concealed: false` state, because two
+representations of one idea is how they drift apart. Additive only: an inherited tick can't be
+individually removed, and the picker says so.
+
+**Groups are named, not expanded.** Resolution reads current membership at the moment the question
+is asked, which is what makes a walk-on written into the Tidewatch in scene 9 arrive already
+knowing, with nobody assigning anything.
+
+**And it reaches the prompt**, which is the only reason it was worth building: `Context.materialize`
+takes the campaign `:cast` and tells a character the secrets their audience puts them in on —
+rendered into the same "You know:" block §6.1 already describes, so the prompt shape is unchanged
+— and `WorldBible.known_to/3` does the same for world entries. Absent a cast it is default-deny.
+`AudienceTest` pins the path end to end; the character-side read-back (§04) is a derived
+projection, so one fact keeps one home.
+
+**Still open:** *whoever was there* (needs a source scene, which nothing carrying an audience has
+yet — it goes in with audiences on arc), audiences on **arc entries**, and **location** audiences.
+The design checked the last one against the component and it needs no change to it. Original ask
+below.
+
+
+
+
+`initial_knowledge` (§4) is t=0 dramatic irony, per character. What's missing is the ability
+to say **which other characters are in on a given secret** — not everyone starts equally in
+the dark.
+
+The naive shape is a matrix of every concealed fact against every character, and it gets
+unusable immediately. The design deliberately avoids that:
+
+- **Unscoped audiences exist and matter.** `Everyone` (common knowledge, no setting attached) and
+  `whoever was there` (resolves to a scene's cast) are audiences like any other. Together they
+  make *secret* shorthand for *an audience narrower than everyone* — one mechanism, not two — and
+  they cover the world-arc reach question without waiting for locations. "The whole town" is a
+  location audience later, not a special case now.
+- **Authored from the secret's side.** A fact marked `concealed` gains one control — *who else
+  knows* — defaulting to nobody. Scales with the number of secrets, not secrets × cast, and
+  matches how people think: invent the secret, then decide who's in on it.
+- **One fact, one home.** The fact lives on the character it's about; knowledge propagates from
+  there. You never author "Ilias knows about the cargo" on Ilias, so nothing can drift.
+- **Two states only: knows or doesn't.** No "suspects," no "believes the wrong version" — a
+  false belief is simply a fact about the believer (*Ilias is certain the cargo was
+  legitimate*), which the existing model already expresses and which reads better for being
+  concrete.
+- The character-side view — what does Wren know — is a **read-only projection** of those
+  lists, not an editing surface.
+
+Nothing appears on unconcealed facts, so the sheet doesn't get heavier for the common case.
+
+### 4b · Accounts
+
+#### 4b.1 18+ is eligibility, not a content ceiling · **change** — ✅ **Shipped**
+Reframed attestation as account eligibility (not a content layer); pinned the no-row /
+no-invite-burn guarantee with a test; `Content.Floor`'s `attested` branch stays a latent
+under-18 seam. See `completed-roadmap.md`.
+
+Under-18s cannot use Polyphony at all. Supporting them would require parental controls and
+in-house filtering — a large piece of work deferred a long way out. So:
+
+- **An unchecked attestation ends the signup**, it doesn't restrict what the account can contain.
+  Everyone with an account has attested, which is what makes the floor trivially satisfied rather
+  than a no-op by accident.
+- **Refusing someone must not create a row about them.** No email, no name, no consumed invite
+  code. A local flag on the device is a sufficient best-effort block; keeping records on someone
+  just refused is the wrong trade and creates PII we have no reason to hold.
+- **A refused signup doesn't burn the invite code.**
+- The floor layer stays in the model for when under-18 support is eventually built. It just isn't
+  doing per-user work today.
+
+#### 4b.2 There is no automated safety analysis to opt out of · **change** — ✅ **Shipped**
+Removed the settings "opt out of proactive analysis" control (no automated analysis exists to
+opt out of); the §C domain seam stays latent for when the feature lands (per campaign, per the
+design). See `completed-roadmap.md`.
+
+**What will be needed later**, and shouldn't be conflated with it: an opt-in for experimental
+generation behaviour. That may belong **per campaign** rather than per account, since it changes
+how a specific story plays, and it arrives alongside a profile page.
+
+---
+
+### 5 · Pre-existing, high priority
+
+#### 5.1 Scene-close fan-out is never triggered · **wiring** — ✅ **Done**
+Not from this design pass — flagged in the catalog (§8). `SceneClose.enqueue` had no caller
+and `SceneClosed` didn't trigger it, so **per-character summaries and arc extraction never
+ran in production.** The whole memory and arc layer was dark until this was wired.
+
+**Wired** by `Polyphony.SceneClose.Handler`, a `start_from: :current` Commanded handler on
+`SceneClosed` that calls `enqueue/2` (jobs resolve the configured provider/embedder at run
+time). Supervised alongside the projectors and off in tests for the same reason (its
+`Oban.insert!` touches Postgres); tests drive `SceneClose.run/2` and the handler's `handle/2`
+directly. `start_from: :current` so a deploy doesn't re-summarize every historically-closed
+scene.
+
+Everything the design does with Arc Review was decorative until this. World arc (2.8) lands on
+top of it, so this was a prerequisite for that too.
+
+#### 5.2 Character identity is a name, not a stable id · **change** — ✅ **Shipped** (phases 1–4; §5 open)
+`character_id` in the event log is the character's **display name** — minted at
+`EnterCharacter{character_id: char_name(c)}` and keyed on with plain string equality through
+*every* play-side subsystem: scene/beat aggregates (members/cast/completed/failed sets),
+membership intervals, visibility (interior events **and** whisper `addressed_to` matching),
+`packet_id = "#{scene}-#{beat}-#{character}"` (+ reroll/next-attempt), arc `subject_id`, the
+Director roster/casting, and broadcast topics. The only id-keyed character reference in the
+codebase is `Relationship.target_id` — the pattern the rest should copy: **store the id, carry
+the name for display, resolve through the id.**
+
+**The hazard.** Renaming a character that's already in scenes silently corrupts it: cold-cache
+context rebuild (`Rebuild.find_sheet` name-matches) falls back to a bare prompt (no sheet, no
+arc, no boundaries); membership/CommitPacket guards reject the new name as `:not_a_member`;
+the character stops witnessing its pre-rename history and whispers misroute; accumulated arc is
+stranded under the old name; re-roll/edit of pre-rename turns fail on `packet_id`. Today two
+things keep the door shut: `name` is **not** in `EffectiveSheet.@overridable_scalars` (so arc
+can't rename), and there's no bulk-rename flow — **but the sheet editor writes `name`
+unconditionally with no in-play guard.**
+
+**The fix (bounded, but real).** Mint `character_id` as the library id at the single source
+(`campaign_live` scene-open + `seed_context`), add an **id↔name translation layer** where the
+fiction is rendered to / emitted by the LLM (the log stores ids; the prose still speaks names),
+simplify `find_sheet`/arc lookups to id, and provide a **dual-read shim** for legacy name-keyed
+streams/`scene_memberships`/`arc_entries.subject_id` (events are immutable — rule 6).
+
+**Design decision (author):** *every* sheet field should eventually be arc-overridable — including
+`name` — except **boundaries** (which get their own events/functionality). So the goal isn't to
+lock the rename door; it's to make identity stable enough that rename (via arc or the editor) is
+safe, then open all non-boundary fields to revision.
+
+**Phased execution** (each phase tested + committed; every translation legacy-tolerant — an
+unmapped id renders as itself and an unmapped name resolves to itself, so old name-keyed data and
+the existing suite stay green):
+
+1. **Sheet-lookup id-tolerance.** ✅ **Done.** `Rebuild.sheet_for` resolves by library id first,
+   then the legacy name match. Rename-safe lookup; no visibility impact.
+2a. **`Scene.Cast` resolver.** ✅ **Done.** id↔name maps for a scene (`render_name`, `resolve_id`)
+   with identity fallback.
+2b-render. **id→name in prompts.** ✅ **Done.** `context` (live events, recent scenes, membership)
+   and `scene_brief` (roster line, transcript, whisper addressees) render display names. Display
+   only — no routing impact; suite green on identity fallback.
+2b-emit + 3. **The atomic remainder.** ✅ **Done** (with the frontend rebuild). Emitted
+   names resolve to ids and the mint flipped in one change, because `addressed_to` could
+   only become ids once viewers were ids too. Landed: `Cast.resolve_addressees/2` at every
+   packet-production point (generation, the composer, edit, an accepted draft, a
+   user-controlled slot); the Director's cast picks resolved before `declare_turn_order`;
+   `EnterCharacter{character_id: <library id>}` at both mint sites (campaign scene-open and
+   play's admit); and an id-native `play_live` — viewer, roster `<option>` values, speaker,
+   control modes and whisper parsing all keyed by id, with names rendered at the edge.
+4. **Arc + gate by id.** ✅ **Done** (same change). `arc_entries.subject_id` is the library
+   id, so the arc-review screen and `SceneGate` dropped the name-resolution dance they used
+   to need; names are labels again.
+5. **Open the fields.** ⬜ **Open.** Make `name` (and other non-boundary scalars) freely
+   editable + arc-overridable, now that identity is stable. The rename-safety tests
+   (`PlayIdentityLiveTest`) are the guard this phase builds on.
+
+**Data.** Cleared rather than migrated — events are immutable (rule 6), so there is no
+in-place rewrite of `character_id`, and a half-keyed scene is worse than either scheme.
+`Polyphony.SceneReset` / `mix scene.reset` drops every stream and scene-derived read model
+and keeps the library (characters, worlds, campaigns).
+
+**Sequencing decision (author), as executed:** the atomic remainder was deferred to the
+frontend rebuild rather than overhauled then discarded — its biggest piece was a `play_live`
+overhaul the redesign would rewrite anyway — and landed there, built id-native. The
+corruption risk is **closed**: a rename now changes only what's displayed, pinned by
+`PlayIdentityLiveTest` (a whisper still reaches its addressee after the target is renamed,
+and a bystander still can't see it). What's left is phase 5, which is a feature rather than
+a risk. Detail in `completed-roadmap.md`.
+
+---
+
+---
+
 ## Housekeeping
 
 ### Documentation reconciliation

@@ -1,6 +1,6 @@
 defmodule Polyphony.Authoring.CoverTest do
   @moduledoc """
-  The cover (`backend-backlog.md` §2.12) — the one generation whose input
+  The cover (`completed-roadmap.md` §2.12) — the one generation whose input
   deliberately exceeds its permitted output.
 
   Everywhere else the engine keeps a secret by never putting it in the prompt: a

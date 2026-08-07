@@ -35,6 +35,10 @@ defmodule Mix.Tasks.Kit.Port do
 
   use Mix.Task
 
+  # Build tooling, not part of the layering: a mix task reaches wherever it needs to and
+  # nothing reaches back into it.
+  use Boundary, check: [in: false, out: false]
+
   @source "ux/polyphony-kit.css"
   @target "assets/css/kit.css"
 

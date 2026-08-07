@@ -1,6 +1,6 @@
 defmodule Polyphony.LibraryTemplateTest do
   @moduledoc """
-  A library world is a **template** (`backend-backlog.md` §2.5b), plus the two small
+  A library world is a **template** (`completed-roadmap.md` §2.5b), plus the two small
   library affordances the world screen needs around it.
 
   The copy is forced by world arc: a campaign accumulates history onto its world, and

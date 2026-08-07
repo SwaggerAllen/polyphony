@@ -34,15 +34,15 @@ defmodule PolyphonyWeb.DocsLive do
   @about %{
     "docs/README.md" => "Start here: what each document is for and where new writing goes.",
     "docs/architecture.md" => "How the shipped system works, section by section.",
-    "docs/roadmap.md" => "What's left to build, and in what order.",
     "docs/completed-roadmap.md" => "What's already been built, with the detail.",
-    "docs/backend-backlog.md" => "The concrete engineering worklist.",
     "docs/backend-capabilities.md" => "What the backend can already do, as a reference.",
     "docs/decisions.md" => "Post-v1 rationale — the forward argument, not the schedule.",
     "docs/deployment.md" => "Running it: the release, the host, mail, and the env vars.",
     "docs/frontend.md" => "The LiveView layer and how to run it.",
     "docs/design-thread.md" =>
       "Instructions for a normal Claude thread doing design work — what to read, and how work gets handed to the code thread.",
+    "docs/behaviors/README.md" =>
+      "What a behaviors doc is, the `rev` convention, and the index of the screens.",
     "ux/README.md" => "The design pass: information architecture, copy rules, porting notes.",
     "ux/polyphony-kit.css" => "The single source of truth for tokens and component classes.",
     "ux/polyphony-kit.html" => "The component kit, rendered — every component and its states.",
@@ -67,8 +67,20 @@ defmodule PolyphonyWeb.DocsLive do
     |> Enum.reject(&File.dir?/1)
     |> Enum.map(&Path.relative_to(&1, dir))
     |> Enum.sort()
-    |> Enum.map(&%{href: "/#{root}/#{&1}", about: Map.get(@about, "#{root}/#{&1}")})
+    |> Enum.map(&%{href: "/#{root}/#{&1}", about: about("#{root}/#{&1}")})
   end
+
+  # Hand-written where a file needs explaining, derived where it doesn't. Every screen's
+  # behaviors doc says the same thing about a different screen, and fifteen copies of that
+  # sentence in the map above is fifteen chances for one to be forgotten when a screen is
+  # added — which is the exact failure this index exists to avoid.
+  defp about("docs/behaviors/README.md" = path), do: Map.get(@about, path)
+
+  defp about("docs/behaviors/" <> file),
+    do:
+      "What the #{file |> Path.rootname() |> String.replace("_", " ")} screen does, from a user's seat."
+
+  defp about(path), do: Map.get(@about, path)
 
   def render(assigns) do
     ~H"""

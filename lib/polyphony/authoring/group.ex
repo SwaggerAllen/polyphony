@@ -18,7 +18,7 @@ defmodule Polyphony.Authoring.Group do
   whatever it knows (`Polyphony.Groups.seed_sheet/2`). Seeding is a **copy**: the
   character gets their own facts from that moment, and editing the template later
   does not reach back into people already written from it. That's what makes group
-  arc a fan-out rather than a silent propagation (`backend-backlog.md` §3.0b) —
+  arc a fan-out rather than a silent propagation (`completed-roadmap.md` §3.0b) —
   nothing propagates without review, which is the rule everywhere else.
 
   **It belongs.** Membership is a set of characters, and it is what an audience

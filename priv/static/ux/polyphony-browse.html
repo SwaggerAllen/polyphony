@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyphony — browse &amp; published</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="polyphony-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="antialiased">
+
+<header class="max-w-6xl mx-auto px-5 pt-12 pb-8">
+  <div class="wall mb-3">Polyphony · step 11 · browse &amp; published</div>
+  <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">Reading someone else's</h1>
+  <p class="mt-4 max-w-2xl text-[15px] leading-relaxed note">
+    Publishing works today and produces nothing anyone can read — Browse is bare title cards. This is
+    the missing half: a reading surface where the perspective picker is the whole draw, because no
+    other reading app can offer the same scene from three heads.
+  </p>
+</header>
+
+<!-- 00 · SCOPE -->
+<section class="max-w-6xl mx-auto px-5 pb-14">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">00 · What publishing decides</div>
+    <h2 class="text-2xl font-bold mb-3">Two separate questions, not one ladder</h2>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note mb-7">
+      <div><b style="color:var(--page-fg)">How it's meant to be read</b> is a content decision — which
+        perspectives a reader may take. Spectator isn't a lesser tier, it's one of the options, and a
+        publisher can leave it out if the story doesn't work without someone's head.</div>
+      <div><b style="color:var(--page-fg)">Whether the authoring surface is exposed</b> is a
+        permission decision, and it's a single checkbox: forkable. Sheets come with it, because a
+        fork has to be able to carry the story on and can't do that from prose alone.</div>
+    </div>
+
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="fr stage dark sheet p-4">
+        <div class="lbl dim mb-2">How it's read · pick any</div>
+        <div class="flex items-center gap-1.5 mb-1"><span class="dot" style="background:var(--bcm)"></span>
+          <span class="text-[13.5px] font-semibold">Spectator</span></div>
+        <p class="text-[12.5px] leading-relaxed dim">What a camera caught. Neutral, and the default only because it's the one option that reveals nothing — not because it's the best read.</p></div>
+      <div class="fr stage dark sheet p-4">
+        <div class="lbl dim mb-2">How it's read</div>
+        <div class="flex items-center gap-1.5 mb-1"><span class="dot" style="background:var(--lamp)"></span>
+          <span class="text-[13.5px] font-semibold">Everyone you've shared</span></div>
+        <p class="text-[12.5px] leading-relaxed dim">Every published perspective at once, and nothing beyond them. This is how novels are written — prose without interiority is a screenplay, and most people don't want to read one.</p></div>
+      <div class="fr stage dark sheet p-4">
+        <div class="lbl dim mb-2">How it's read</div>
+        <div class="flex items-center gap-1.5 mb-1"><span class="dot" style="background:var(--v1)"></span>
+          <span class="text-[13.5px] font-semibold">One person at a time</span></div>
+        <p class="text-[12.5px] leading-relaxed dim">Pick who a reader may inhabit. The spoiler control: the one secretly working against the rest stays shut unless you open her.</p></div>
+      <div class="fr stage dark sheet p-4">
+        <div class="lbl dim mb-2">Permission · one checkbox</div>
+        <div class="flex items-center gap-1.5 mb-1"><span class="dot" style="background:var(--ok)"></span>
+          <span class="text-[13.5px] font-semibold">Forkable</span></div>
+        <p class="text-[12.5px] leading-relaxed dim">Someone can take the whole thing and carry it on — world, cast, sheets, arc. Independent of how you let people read it.</p></div>
+    </div>
+
+    <p class="mt-5 max-w-2xl text-[14.5px] leading-relaxed note">
+      <b style="color:var(--page-fg)">Everyone-you've-shared is the one to build first.</b> It's the
+      mode a reader who just wants the story will pick, it needs no choice from them, and it's the
+      only one that reads like fiction rather than a record. It gets a character's visual treatment
+      rather than the author's omniscient view — it isn't an authoring surface, it's a way of reading.
+    </p>
+  </div>
+</section>
+
+<!-- 01 · LANDING -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">01 · Browse</div>
+    <h2 class="text-2xl font-bold mb-2">Stories first, materials second</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note">Same tab structure as your library, so there's nothing new to learn. Campaign cards lead with what it's about and say how you're allowed to read it.</p>
+  </div>
+  <div class="mt-7 grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr stage dark sheet"><div data-spec="browse"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr stage light sheet"><div data-spec="browse"></div></div></div>
+  </div>
+</section>
+
+<!-- 02 · FRONT PAGE -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">02 · A published campaign</div>
+    <h2 class="text-2xl font-bold mb-2">Its front page</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">Choosing how to read comes before reading — it's the first real decision, and putting it up front is what stops the perspective picker feeling like a settings menu.</p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Front page</div>
+      <div class="fr page dark sheet"><div data-spec="front"></div></div></div>
+    <div><div class="wall mb-2">Contents · the campaign Scenes list</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between gap-2">
+          <div class="min-w-0"><div class="lbl dim">The Ninth Gate</div>
+            <div class="ttl text-[15px] mt-0.5 truncate" style="font-weight:600">Scenes</div></div>
+          <span class="viewas shrink-0" style="--vc:var(--v2)"><i></i>Halden ▾</span></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="ttl text-[14.5px] min-w-0 truncate" style="font-weight:600">The stair at Ninth</div>
+            <span class="pill dim shrink-0">4 beats</span></div>
+          <div class="lbl dim mb-1.5">Halden, Ruthe</div>
+          <p class="text-[13px] leading-relaxed dim">Halden went down expecting to be back before the lamps were lit, and told nobody where he was going.</p></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="ttl text-[14.5px] min-w-0 truncate" style="font-weight:600">The counting house</div>
+            <span class="pill dim shrink-0">7 beats</span></div>
+          <div class="lbl dim mb-1.5">Halden, Ruthe, the clerk</div>
+          <p class="text-[13px] leading-relaxed dim">Somebody had been keeping a second ledger for eleven years, and the handwriting was familiar.</p></div>
+        <div class="px-4 py-3 row" style="opacity:.5">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="ttl text-[14.5px] min-w-0 truncate" style="font-weight:600">Sixth</div>
+            <span class="pill dim shrink-0">5 beats</span></div>
+          <div class="lbl dim mb-1.5">Halden wasn't here</div>
+          <p class="text-[13px] leading-relaxed dim">Ruthe went up two districts further than she meant to.</p></div>
+        <div class="px-4 py-3">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="ttl text-[14.5px] min-w-0 truncate" style="font-weight:600">The long way back</div>
+            <span class="pill dim shrink-0">6 beats</span></div>
+          <div class="lbl dim mb-1.5">Halden, Ruthe</div>
+          <p class="text-[13px] leading-relaxed dim">Whatever was going to be said had to be said before they reached the top.</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">The campaign's own Scenes list — location as heading, cast, beat count — with one substitution: the premise stands in for the summary, because a summary says how the scene turned out.</p>
+    </div>
+    <div><div class="wall mb-2">Choosing a perspective</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">How do you want to read it?</div></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5" style="background:var(--b3)">
+          <span class="dot mt-1.5" style="background:var(--lamp)"></span>
+          <div><div class="text-[13px] font-semibold">Everyone Ilse shared</div>
+            <div class="text-[11px] dim">Both their heads, all 7 scenes — reads like a novel</div></div></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5">
+          <span class="dot mt-1.5" style="background:var(--bcm)"></span>
+          <div><div class="text-[13px] font-semibold">As a spectator</div>
+            <div class="text-[11px] dim">Everything said and done, nobody's thoughts</div></div></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5">
+          <span class="dot mt-1.5" style="background:var(--v2)"></span>
+          <div><div class="text-[13px] font-semibold">As Halden Voss</div>
+            <div class="text-[11px] dim">The one who went down · 4 of 7 scenes</div></div></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5">
+          <span class="dot mt-1.5" style="background:var(--v1)"></span>
+          <div><div class="text-[13px] font-semibold">As Ruthe Kell</div>
+            <div class="text-[11px] dim">Who was already down there · 5 of 7 scenes</div></div></div>
+        <div class="px-4 py-2.5">
+          <p class="text-[11px] leading-relaxed dim">You can change your mind at any point, and it's worth doing — they don't see the same story.</p></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 03 · THE SHOWCASE -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">03 · The reason to build this</div>
+    <h2 class="text-2xl font-bold mb-2">The same scene, twice</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      One beat, two readers. Halden doesn't know what Ruthe already decided, and Ruthe doesn't hear
+      what he says to the man on the stair. Neither version is marked up or annotated — each just
+      reads as a scene, and the reader who switches finds out what they were missing.
+      <b style="color:var(--page-fg)">This is the play screen with a different bottom bar</b> — same
+      header, same perspective control, same transcript, same beat rules. Only the composer is
+      replaced, by scene navigation.
+    </p>
+  </div>
+  <div class="grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">As Halden Voss</div><div class="fr page dark sheet"><div data-spec="halden"></div></div></div>
+    <div><div class="wall mb-2">As Ruthe Kell</div><div class="fr page dark sheet"><div data-spec="ruthe"></div></div></div>
+  </div>
+  <div class="mt-5 grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">As a spectator</div>
+      <div class="fr page light sheet p-4">
+        <div class="beat-rule"><span class="ttl text-[13px]" style="font-weight:600">Beat 2</span></div>
+        <div class="m-world mb-4"><div class="ttl text-[16px] leading-[1.55]" style="font-weight:500">Somewhere below, a door that has been shut for years is opened without hurry.</div></div>
+        <div class="mb-4"><div class="ttl text-[12px] mb-1" style="font-weight:600;letter-spacing:.06em;color:var(--v1)">RUTHE KELL</div>
+          <p class="text-[15px] leading-[1.7]">She puts out the lamp before he reaches the landing, and waits in the dark for him to say something first.</p></div>
+        <div><div class="ttl text-[12px] mb-1" style="font-weight:600;letter-spacing:.06em;color:var(--v2)">HALDEN VOSS</div>
+          <p class="text-[15px] leading-[1.7]">“I know you're there. I've known since Eighth.”</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Both people, no interiority, no whisper. The safe default — and a perfectly good read.</p>
+    </div>
+    <div><div class="wall mb-2">The selector, and its info</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between gap-2" style="background:var(--b2)">
+          <span class="flex items-center gap-1.5"><span class="ttl text-[15px]" style="font-weight:600">Reading as</span><span class="info">i</span></span>
+          <span class="dim text-[17px] leading-none shrink-0">×</span></div>
+        <div class="px-4 py-3 row">
+          <p class="text-[13px] leading-relaxed">Each of these people knows different things, so the story is a different length depending on whose eyes you're behind.</p></div>
+        <div class="px-4 py-3">
+          <p class="text-[13px] leading-relaxed dim">Switching keeps your place. Things will appear and disappear — that's the point, not a fault. Nothing is hidden from you on purpose except what that person doesn't know.</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">No toast on every switch — that gets irritating by the second one. The explanation lives where someone confused would idiomatically go looking.</p>
+    </div>
+    <div><div class="wall mb-2">A scene they weren't in</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between gap-2">
+          <div class="min-w-0"><div class="lbl dim">The Ninth Gate</div>
+            <div class="ttl text-[15px] mt-0.5 truncate" style="font-weight:600">Sixth</div></div>
+          <span class="viewas shrink-0" style="--vc:var(--v2)"><i></i>Halden ▾</span></div>
+        <div class="px-4 py-8 text-center">
+          <div class="ttl text-[16px] mb-1.5" style="font-weight:500">Halden wasn't here.</div>
+          <p class="text-[13px] leading-relaxed dim">Whatever happened at Sixth, he found out about it the way you're about to — afterwards, from someone else.</p>
+        </div>
+        <div class="px-4 py-3" style="background:var(--b2);border-top:1px solid var(--rule)">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[12.5px] dim">Scene 3 of 7</span>
+            <button class="btn btn-pri btn-sm">Next scene</button></div>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">No special button. The way in is the control that's already there — and Next carries on for a reader who only wants Halden's story.</p>
+    </div>
+  </div>
+
+  <div class="mt-5 grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">The selector, filtered to this scene</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between gap-2" style="background:var(--b2)">
+          <span class="flex items-center gap-1.5"><span class="ttl text-[15px]" style="font-weight:600">Reading as</span><span class="info">i</span></span>
+          <span class="dim text-[17px] leading-none shrink-0">×</span></div>
+        <div class="px-4 py-2 row"><span class="lbl dim">Who can show you Sixth</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="dot" style="background:var(--lamp)"></span>
+          <div class="flex-1"><div class="text-[13px] font-semibold">Everyone Ilse shared</div>
+            <div class="text-[11px] dim">Ruthe's side of it</div></div></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="dot" style="background:var(--bcm)"></span>
+          <span class="text-[13px] flex-1">As a spectator</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="av" style="background:var(--v1)"></span>
+          <span class="text-[13px] flex-1">As Ruthe Kell</span></div>
+        <div class="px-4 py-2 row" style="background:var(--b2)"><span class="lbl dim">Not in this one</span></div>
+        <div class="px-4 py-2.5 flex items-center gap-2.5" style="opacity:.45">
+          <span class="av" style="background:var(--b3)"></span>
+          <span class="text-[13px] flex-1">Halden Voss</span>
+          <span class="text-[11px] dim shrink-0">wasn't there</span></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Same control, same place, sorted by what it can actually give you here. Your current perspective drops to the bottom rather than vanishing, so nothing jumps.</p>
+    </div>
+    <div><div class="wall mb-2">Nobody's side was shared</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between gap-2">
+          <div class="min-w-0"><div class="lbl dim">The Ninth Gate</div>
+            <div class="ttl text-[15px] mt-0.5 truncate" style="font-weight:600">The counting house, after</div></div>
+          <span class="viewas shrink-0" style="--vc:var(--v2)"><i></i>Halden ▾</span></div>
+        <div class="px-4 py-8 text-center">
+          <div class="ttl text-[16px] mb-1.5" style="font-weight:500">This one isn't shared.</div>
+          <p class="text-[13px] leading-relaxed dim">Something happened here between two people Ilse didn't publish. You'll pick the story back up on the other side of it.</p>
+        </div>
+        <div class="px-4 py-3" style="background:var(--b2);border-top:1px solid var(--rule)">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[12.5px] dim">Scene 5 of 7</span>
+            <button class="btn btn-pri btn-sm">Next scene</button></div>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">Possible whenever spectator is off and the published cast weren't in a scene. Shown rather than skipped — silently dropping it would make the numbering lie and the story jump.</p>
+    </div>
+    <div><div class="wall mb-2">Warned at publish time</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">Publish The Ninth Gate?</div>
+        <div class="rounded-lg p-2.5 mb-3" style="background:color-mix(in srgb,var(--lamp) 10%,transparent);border-left:2px solid var(--lamp)">
+          <div class="text-[12.5px] font-semibold mb-0.5">One scene nobody will be able to read</div>
+          <p class="text-[12px] leading-relaxed dim"><span class="ttl">The counting house, after</span> has only Ada and the clerk in it, and you haven't shared either of them. Readers will see that it happened and no more.</p></div>
+        <div class="flex flex-wrap gap-1.5">
+          <button class="btn btn-gh btn-sm">Turn spectator on</button>
+          <button class="btn btn-gh btn-sm">Share Ada too</button>
+          <button class="btn btn-pri btn-sm">Publish as is</button></div>
+        <p class="text-[11px] leading-relaxed dim mt-2.5">Sometimes a gap is the point. Worth knowing you've made one.</p>
+      </div></div>
+  </div>
+</section>
+
+<!-- 04 · TAKING IT -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">04 · Taking something with you</div>
+    <h2 class="text-2xl font-bold mb-2">Fork, or just take the world</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">Three different appetites: carry on this story, borrow the setting, or keep the person. All three are copies into your library, and all three say so plainly.</p>
+  </div>
+  <div class="grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Fork · forkable</div>
+      <div class="fr page dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">Carry this on yourself?</div>
+        <p class="text-[13px] leading-relaxed dim mb-2.5">You'll get your own copy of everything — the world, all seven people, and everything that happened to them. It picks up where this leaves off, and nothing you do touches the original.</p>
+        <div class="rounded-lg p-2.5 mb-3" style="background:var(--b3)">
+          <p class="text-[12px] leading-relaxed">Ilse's version stays exactly as it is. Yours becomes a different story from the first thing you change.</p></div>
+        <button class="btn btn-pri w-full justify-center">Make it mine</button>
+      </div></div>
+    <div><div class="wall mb-2">Fork · not offered</div>
+      <div class="fr page dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">The Ninth Gate</div>
+        <p class="text-[13px] leading-relaxed dim mb-3">Ilse has shared this to be read, not continued. You can still take the world and write your own people into it.</p>
+        <div class="flex flex-col gap-1.5">
+          <button class="btn btn-pri justify-center">Use this world</button>
+          <button class="btn btn-gh justify-center">Keep reading</button></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Not a locked door — a different offer. Nothing here says "upgrade" or "request access."</p>
+    </div>
+    <div><div class="wall mb-2">Take the world</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="lbl dim mb-1">World</div>
+          <div class="ttl text-[16px]" style="font-weight:600">The Ninth Gate</div></div>
+        <div class="px-4 py-3 row">
+          <p class="text-[13px] leading-relaxed">A city with no sky, nine districts deep, and one staircase everyone has heard of and nobody has walked twice.</p></div>
+        <div class="px-4 py-3">
+          <div class="rounded-lg p-2.5 mb-3" style="background:var(--b3)">
+            <p class="text-[12px] leading-relaxed dim">A copy goes in your library. Some of this world isn't shown — Ilse kept a few things back, and those don't come with it.</p></div>
+          <button class="btn btn-pri w-full justify-center mb-1.5">Use this world</button>
+          <p class="text-[11px] leading-relaxed dim text-center">Or take it unread and find out in play.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Nothing to take</div>
+      <div class="fr page dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">The Long Quiet</div>
+        <p class="text-[13px] leading-relaxed dim mb-3">Noor has shared this to be read. Her world isn't public and the story isn't forkable, so there's nothing here to take with you.</p>
+        <div class="flex flex-col gap-1.5">
+          <button class="btn btn-pri justify-center">Keep reading</button></div>
+        <p class="text-[11px] leading-relaxed dim mt-2.5">No greyed-out buttons and no "request access" — an action that isn't available simply isn't shown.</p>
+      </div>
+      <p class="text-[12px] mt-2 note">People can't be taken on their own at all. Characters only travel inside a fork, because a character lifted out of their campaign has no history and knows nobody.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 04b · VERSIONS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">04b · Copies everywhere</div>
+    <h2 class="text-2xl font-bold mb-2">Group by what it came from</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      Every campaign copies its world, every fork copies everything, so within a year there are a
+      dozen Saltmarches. Flat lists of near-identical names are unusable — so both Browse and your
+      library group by the original and let you open the version you actually meant. In your library
+      that's by campaign; in Browse it's by author.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Your library · one world, many copies</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="ttl text-[16px]" style="font-weight:600">Saltmarch</div>
+          <div class="lbl dim mt-0.5">Your original · 4 copies exist</div></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="dot" style="background:var(--lamp)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">The Salt Line's copy</div>
+            <div class="text-[11px] dim">3 things have become true that weren't</div></div>
+          <span class="dim text-[14px] shrink-0">›</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="dot" style="background:var(--bcm)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Low Water's copy</div>
+            <div class="text-[11px] dim">Finished · 11 changes</div></div>
+          <span class="dim text-[14px] shrink-0">›</span></div>
+        <div class="px-4 py-2.5 flex items-center gap-2.5">
+          <span class="dot" style="background:var(--bcm)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">The original</div>
+            <div class="text-[11px] dim">Unchanged since February · what new campaigns start from</div></div>
+          <span class="dim text-[14px] shrink-0">›</span></div>
+      </div>
+      <p class="text-[12px] mt-2 note">One row in the library list, expanding to versions — not four rows called Saltmarch.</p>
+    </div>
+    <div><div class="wall mb-2">Browse · one story, many authors</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="ttl text-[16px]" style="font-weight:600">Kettleworth, Second Shift</div>
+          <div class="lbl dim mt-0.5">By Aurelio Banks · 3 published forks</div></div>
+        <div class="px-4 py-2.5 row">
+          <div class="flex items-center gap-2 mb-0.5">
+            <span class="text-[13px] font-semibold">The original</span>
+            <span class="pill dim shrink-0">14 scenes</span></div>
+          <div class="text-[11px] dim">Aurelio Banks</div></div>
+        <div class="px-4 py-2.5 row">
+          <div class="flex items-center gap-2 mb-0.5">
+            <span class="text-[13px] font-semibold">Third Shift</span>
+            <span class="pill dim shrink-0">22 scenes</span></div>
+          <div class="text-[11px] dim">Noor Hadid · branched after scene 9, and went somewhere else entirely</div></div>
+        <div class="px-4 py-2.5">
+          <div class="flex items-center gap-2 mb-0.5">
+            <span class="text-[13px] font-semibold">Kettleworth, Second Shift</span>
+            <span class="pill dim shrink-0">14 scenes</span></div>
+          <div class="text-[11px] dim">Tam Ó Cadhla · same story, read as two more people</div></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Author is the delineator here, since three forks will share a title until someone renames one.</p>
+    </div>
+    <div><div class="wall mb-2">Where a copy came from</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="ttl text-[16px]" style="font-weight:600">Third Shift</div>
+          <div class="lbl dim mt-0.5">By Noor Hadid</div></div>
+        <div class="px-4 py-3 row">
+          <div class="lbl dim mb-1.5">Came from</div>
+          <div class="flex items-center gap-2">
+            <span class="mono text-[12px] dim">⑂</span>
+            <div class="min-w-0"><div class="text-[13px] font-semibold">Kettleworth, Second Shift</div>
+              <div class="text-[11px] dim">By Aurelio Banks · branched after scene 9</div></div></div></div>
+        <div class="px-4 py-2.5">
+          <p class="text-[11px] leading-relaxed dim">Attribution is recorded on every copy and shown on every one — you can always walk back to where something started.</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">The catalog already stores this on every derived entry and has never displayed it.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 05 · REPORT & EDGES -->
+<section class="max-w-6xl mx-auto px-5 pb-24">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">05 · Reporting, and the edges</div>
+    <h2 class="text-2xl font-bold mb-2">One report path, reachable from every published thing</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      The moderation queue is fully built and has never had a way in. Report targets the frozen
+      snapshot, but a take-down reaches the author's own campaign too — hiding only the listing
+      would leave them free to publish it again. It's distinct from flagging a bad generation in
+      your own scene, which goes nowhere near a human.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Reporting</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Report The Ninth Gate</div></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5">
+          <span class="dot mt-1.5" style="background:var(--rule)"></span><span class="text-[13px]">Sexual content involving minors</span></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5">
+          <span class="dot mt-1.5" style="background:var(--rule)"></span><span class="text-[13px]">Harassment of a real person</span></div>
+        <div class="px-4 py-2.5 row flex items-start gap-2.5">
+          <span class="dot mt-1.5" style="background:var(--rule)"></span><span class="text-[13px]">Content that breaks the rules another way</span></div>
+        <div class="px-4 py-3">
+          <div class="field px-3 py-2.5 text-[13px] dim mb-2.5" style="min-height:52px">Anything that would help — where in the story, and what you saw…</div>
+          <button class="btn btn-pri w-full justify-center">Send it</button>
+          <p class="text-[11px] leading-relaxed dim mt-2">A person reads every one of these.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Sent, and taken down</div>
+      <div class="fr page dark sheet p-3 flex items-center gap-2">
+        <span class="dot" style="background:var(--ok)"></span><span class="text-[13px]">Reported. Thank you.</span></div>
+      <div class="fr page dark sheet p-4 mt-2">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">This isn't available</div>
+        <p class="text-[13px] leading-relaxed dim">It was taken down after a report. If it was yours, check your email — this covers your own copy too.</p></div>
+      <div class="fr page dark sheet p-4 mt-2">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">Nothing here</div>
+        <p class="text-[13px] leading-relaxed dim">This link doesn't lead anywhere any more. It may have been unpublished.</p></div>
+    </div>
+    <div><div class="wall mb-2">Not signed in</div>
+      <div class="fr page dark sheet">
+        <div class="px-4 py-3 row"><div class="lbl dim">The Ninth Gate</div>
+          <div class="ttl text-[15px] mt-0.5" style="font-weight:600">Reading as a spectator</div></div>
+        <div class="px-4 py-3 row"><p class="text-[14px] leading-[1.7]">She puts out the lamp before he reaches the landing, and waits in the dark for him to say something first.</p></div>
+        <div class="px-4 py-3" style="background:var(--b2)">
+          <p class="text-[13px] leading-relaxed mb-2.5">Reading is open to anyone. Taking a copy, or reading it as someone in it, needs an account.</p>
+          <div class="flex gap-1.5"><button class="btn btn-pri btn-sm">Sign in</button><button class="btn btn-gh btn-sm">Keep reading</button></div></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Reading never hits a wall. Only the actions do.</p>
+    </div>
+    <div><div class="wall mb-2">Browse · nothing yet</div>
+      <div class="fr stage dark sheet">
+        <div class="tabs"><div class="tab tab-on">Stories</div><div class="tab">Worlds</div></div>
+        <div class="px-4 py-9 text-center">
+          <div class="ttl text-[16px] mb-1.5" style="font-weight:500">Nobody's published anything yet.</div>
+          <p class="text-[13px] leading-relaxed dim mb-4">When they do, it'll be here — stories you can read from the inside, and worlds you can take.</p>
+          <button class="btn btn-gh btn-sm">Go to your stuff</button></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- ========== TEMPLATES ========== -->
+<template id="spec-browse">
+  <div>
+    <div class="px-4 py-3.5 row" style="background:var(--b2)">
+      <div class="ttl text-[17px]" style="font-weight:600">Browse</div>
+      <div class="lbl dim mt-0.5">What people have shared</div>
+    </div>
+    <div class="tabs">
+      <div class="tab tab-on">Stories</div><div class="tab">Worlds</div>
+    </div>
+    <div class="px-4 py-2.5 row"><div class="field px-3 py-2 text-[13px] dim">Search…</div>
+      <div class="flex flex-wrap gap-1.5 mt-2">
+        <span class="pill" style="background:var(--b3)">Any</span><span class="pill dim">Most read</span>
+        <span class="pill dim">Newest</span><span class="pill dim">Forkable</span></div></div>
+
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[16px] min-w-0 truncate" style="font-weight:600">The Ninth Gate</div>
+        <span class="pill dim shrink-0">7 scenes</span></div>
+      <div class="lbl dim mb-1.5">By Ilse Marek</div>
+      <p class="text-[13px] leading-relaxed mb-2">Two people go down a staircase that nobody walks twice, eleven years apart, and only one of them knows the other is there.</p>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="pill" style="border-color:var(--lamp);color:var(--lamp)">Both heads</span>
+        <span class="pill dim">2 perspectives</span></div>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[16px] min-w-0 truncate" style="font-weight:600">Kettleworth, Second Shift</div>
+        <span class="pill dim shrink-0">14 scenes</span></div>
+      <div class="lbl dim mb-1.5">By Aurelio Banks</div>
+      <p class="text-[13px] leading-relaxed mb-2">A mill town where nobody has asked what the machines make, and one new hire who keeps asking.</p>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="pill" style="border-color:var(--lamp);color:var(--lamp)">All five heads</span>
+        <span class="pill" style="border-color:var(--ok);color:var(--ok)">Forkable</span>
+        <span class="pill dim">41 forks · 3 published</span></div>
+    </div>
+
+    <div class="px-4 py-3">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[16px] min-w-0 truncate" style="font-weight:600">The Long Quiet</div>
+        <span class="pill dim shrink-0">3 scenes</span></div>
+      <div class="lbl dim mb-1.5">By Noor Hadid</div>
+      <p class="text-[13px] leading-relaxed mb-2">Eleven households, one road out, and a winter that has gone on four years.</p>
+      <div class="flex flex-wrap gap-1.5"><span class="pill dim">Spectator only</span><span class="pill dim">Not forkable</span></div>
+    </div>
+  </div>
+</template>
+
+<template id="spec-front">
+  <div>
+    <div class="px-5 py-4 row">
+      <div class="lbl dim mb-1">A story in The Ninth Gate</div>
+      <div class="ttl text-[22px] leading-tight" style="font-weight:600">The Ninth Gate</div>
+      <div class="lbl dim mt-1.5">By Ilse Marek · 7 scenes</div>
+    </div>
+    <div class="px-5 py-4 row">
+      <p class="text-[15px] leading-[1.7] mb-2.5">Two people go down a staircase that nobody walks twice, eleven years apart, and only one of them knows the other is there.</p>
+      <p class="text-[15px] leading-[1.7] dim">Nothing in this story is supernatural. Everyone involved would very much like it to be.</p>
+    </div>
+    <div class="px-5 py-4 row">
+      <div class="flex items-center gap-1.5 mb-2.5"><span class="lbl dim">How you can read it</span><span class="info">i</span></div>
+      <div class="space-y-2">
+        <div class="flex items-center gap-2.5"><span class="dot" style="background:var(--lamp)"></span>
+          <div class="flex-1"><div class="text-[13.5px] font-semibold">Everyone Ilse shared</div>
+            <div class="text-[11px] dim">Both their heads at once</div></div></div>
+        <div class="flex items-center gap-2.5"><span class="dot" style="background:var(--bcm)"></span>
+          <span class="text-[13.5px] flex-1">As a spectator</span></div>
+        <div class="flex items-center gap-2.5"><span class="av" style="background:var(--v2)"></span>
+          <div class="flex-1"><div class="text-[13.5px] font-semibold">Halden Voss</div>
+            <div class="text-[11px] dim">The one who went down</div></div></div>
+        <div class="flex items-center gap-2.5"><span class="av" style="background:var(--v1)"></span>
+          <div class="flex-1"><div class="text-[13.5px] font-semibold">Ruthe Kell</div>
+            <div class="text-[11px] dim">Who was already down there</div></div></div>
+      </div>
+      <p class="text-[11px] leading-relaxed dim mt-2.5">Ilse hasn't shared everyone. Two more people are in this and you don't get their side.</p>
+    </div>
+    <div class="px-5 py-4">
+      <button class="btn btn-pri w-full justify-center mb-2">Start reading</button>
+      <div class="flex gap-1.5">
+        <button class="btn btn-gh btn-sm">Use this world</button>
+        <button class="btn btn-gh btn-sm">Save</button>
+        <button class="btn btn-gh btn-sm ml-auto">Report</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="spec-halden">
+  <div>
+    <div class="px-4 py-3 row flex items-center justify-between gap-2">
+      <div class="min-w-0"><div class="lbl dim">The Ninth Gate</div>
+        <div class="ttl text-[15px] mt-0.5 truncate" style="font-weight:600">The stair at Ninth</div></div>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <span class="viewas" style="--vc:var(--v2)"><i></i>Halden ▾</span><span class="hamb ml-2">☰</span></div>
+    </div>
+    <div class="scroller px-5 pb-3">
+      <div class="beat-rule"><span class="ttl text-[14px]" style="font-weight:600">Beat 2</span></div>
+      <div class="m-world mb-5"><div class="ttl text-[17px] leading-[1.55]" style="font-weight:500">Somewhere below, a door that has been shut for years is opened without hurry.</div></div>
+
+      <div class="mb-5">
+        <div class="ttl text-[12.5px] mb-1.5" style="font-weight:600;letter-spacing:.06em;color:var(--v1)">RUTHE KELL</div>
+        <p class="text-[16px] leading-[1.75]">She puts out the lamp before he reaches the landing, and waits in the dark for him to say something first.</p>
+      </div>
+
+      <div class="mb-5">
+        <div class="ttl text-[12.5px] mb-1.5" style="font-weight:600;letter-spacing:.06em;color:var(--v2)">HALDEN VOSS</div>
+        <p class="text-[16px] leading-[1.75]">“I know you're there. I've known since Eighth.”</p>
+        <div class="m-thought mt-2.5" style="--vc:var(--v2)">
+          <p class="text-[15px] leading-[1.7]">He does not know. He has not known since Eighth. But she has always been the sort to answer a certainty and ignore a question.</p>
+          <div class="lbl mt-1" style="color:var(--v2)">His thought</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="ttl text-[12.5px] mb-1.5" style="font-weight:600;letter-spacing:.06em;color:var(--v1)">RUTHE KELL</div>
+        <p class="text-[16px] leading-[1.75]">A long silence, and then the lamp again, closer than he expected.</p>
+      </div>
+    </div>
+    <div class="px-4 py-3" style="background:var(--b2);border-top:1px solid var(--rule)">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-[12.5px] dim">Scene 1 of 7</span>
+        <button class="btn btn-pri btn-sm">Next scene</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="spec-ruthe">
+  <div>
+    <div class="px-4 py-3 row flex items-center justify-between gap-2">
+      <div class="min-w-0"><div class="lbl dim">The Ninth Gate</div>
+        <div class="ttl text-[15px] mt-0.5 truncate" style="font-weight:600">The stair at Ninth</div></div>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <span class="viewas" style="--vc:var(--v1)"><i></i>Ruthe ▾</span><span class="hamb ml-2">☰</span></div>
+    </div>
+    <div class="scroller px-5 pb-3">
+      <div class="beat-rule"><span class="ttl text-[14px]" style="font-weight:600">Beat 2</span></div>
+      <div class="m-world mb-5"><div class="ttl text-[17px] leading-[1.55]" style="font-weight:500">Somewhere below, a door that has been shut for years is opened without hurry.</div></div>
+
+      <div class="mb-5">
+        <div class="ttl text-[12.5px] mb-1.5" style="font-weight:600;letter-spacing:.06em;color:var(--v1)">RUTHE KELL</div>
+        <p class="text-[16px] leading-[1.75]">She puts out the lamp before he reaches the landing, and waits in the dark for him to say something first.</p>
+        <div class="m-thought mt-2.5" style="--vc:var(--v1)">
+          <p class="text-[15px] leading-[1.7]">Eleven years she has had the answer ready. She decided on the wording in her second winter down here and has not changed a syllable since.</p>
+          <div class="lbl mt-1" style="color:var(--v1)">Her thought</div>
+        </div>
+      </div>
+
+      <div class="mb-5">
+        <div class="ttl text-[12.5px] mb-1.5" style="font-weight:600;letter-spacing:.06em;color:var(--v2)">HALDEN VOSS</div>
+        <p class="text-[16px] leading-[1.75]">“I know you're there. I've known since Eighth.”</p>
+      </div>
+
+      <div>
+        <div class="ttl text-[12.5px] mb-1.5" style="font-weight:600;letter-spacing:.06em;color:var(--v1)">RUTHE KELL</div>
+        <p class="text-[16px] leading-[1.75]">A long silence, and then she lights it again and steps closer than he expects.</p>
+        <div class="m-thought mt-2.5" style="--vc:var(--v1)">
+          <p class="text-[15px] leading-[1.7]">He is lying, and badly, and she finds to her surprise that she is glad of it.</p>
+          <div class="lbl mt-1" style="color:var(--v1)">Her thought</div>
+        </div>
+      </div>
+    </div>
+    <div class="px-4 py-3" style="background:var(--b2);border-top:1px solid var(--rule)">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-[12.5px] dim">Scene 1 of 7</span>
+        <button class="btn btn-pri btn-sm">Next scene</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+  document.querySelectorAll('[data-spec]').forEach(function(slot){
+    var t = document.getElementById('spec-' + slot.getAttribute('data-spec'));
+    if (!t) { slot.innerHTML = '<div style="padding:1rem;font:12px monospace;color:#E0604A">missing template: ' + slot.getAttribute('data-spec') + '</div>'; return; }
+    slot.appendChild(t.content.cloneNode(true));
+  });
+</script>
+</body>
+</html>

@@ -41,6 +41,10 @@ defmodule Mix.Tasks.Docs.Publish do
 
   use Mix.Task
 
+  # Build tooling, not part of the layering: a mix task reaches wherever it needs to and
+  # nothing reaches back into it.
+  use Boundary, check: [in: false, out: false]
+
   @trees [{"docs", "priv/static/docs"}, {"ux", "priv/static/ux"}]
 
   # Nothing a reader wants, and everything a copy of a working tree accumulates.

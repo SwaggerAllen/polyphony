@@ -1,7 +1,7 @@
 defmodule Polyphony.Authoring.Cover do
   @moduledoc """
   Generates a **cover** — the outward blurb on a character or a world
-  (`ux/polyphony-world.html` §Cover, `backend-backlog.md` §2.12).
+  (`ux/polyphony-world.html` §Cover, `completed-roadmap.md` §2.12).
 
   The cover is the only part strangers see before they take your world or your
   character: a short piece of written prose, not an image. It is written *from*

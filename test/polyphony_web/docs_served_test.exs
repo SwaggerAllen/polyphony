@@ -11,6 +11,9 @@ defmodule PolyphonyWeb.DocsServedTest do
   files. Three things have to hold, and all three are easy to break silently:
 
     * the copy is **current** — a doc edited without republishing ships the old one;
+    * every published file is **committed**, which is not the same thing: comparing two
+      working directories passes on a machine where both exist, and says nothing about
+      what a checkout gets;
     * the files are actually **served**, which needs them on `static_paths/0`;
     * `/docs` **lists** them, since `Plug.Static` has no directory listing and a file
       you can only reach by guessing its name is a file nobody reads.
@@ -33,12 +36,34 @@ defmodule PolyphonyWeb.DocsServedTest do
       end
     end
 
+    # The drift check above compares one directory against another, so it is blind to a
+    # file that exists on every working tree and in no commit. That is not hypothetical:
+    # `.gitignore` carried `/priv/static/**/*-[0-9a-f]*.*` to exclude digested assets,
+    # which also matched `polyphony-admin.html`, `design-brief.md` and seven others.
+    # Nine published files were untracked for as long as that rule existed — the
+    # deployment 404'd on them, CI failed the drift check, and every local run was green,
+    # because locally the files are right there.
+    test "is committed, not merely present on this machine" do
+      for {_source, target} <- Publish.trees() do
+        {tracked, 0} = System.cmd("git", ["ls-files", target])
+        tracked = tracked |> String.split("\n", trim: true) |> MapSet.new()
+
+        for {path, _} <- Publish.collect(target) do
+          file = Path.join(target, path)
+
+          assert MapSet.member?(tracked, file),
+                 "#{file} is published but not tracked by git — a checkout would not have " <>
+                   "it. Check `git check-ignore -v #{file}`."
+        end
+      end
+    end
+
     test "carries the files worth naming" do
       docs = Publish.collect("priv/static/docs")
       ux = Publish.collect("priv/static/ux")
 
       assert Map.has_key?(docs, "architecture.md")
-      assert Map.has_key?(docs, "roadmap.md")
+      assert Map.has_key?(docs, "completed-roadmap.md")
       assert Map.has_key?(ux, "polyphony-kit.css")
       # The brief every `§n` in the codebase cites. It lives in an archive subdirectory,
       # so it is also the check that the copy is a tree walk rather than a glob of one

@@ -1,0 +1,134 @@
+# Campaign
+
+<!-- rev: 1 -->
+
+| | |
+|---|---|
+| Route | `/campaigns/:id` |
+| Storybook | Screens → Campaign |
+| Code | `PolyphonyWeb.Screens.Campaign`, `PolyphonyWeb.CampaignLive` |
+
+Everything about one story that isn't playing it: its cast, its world, its pitch, its
+scenes, what it is allowed to contain, how it gets published, and the three ways it ends.
+Five tabs, in the order somebody meets them — Settings, World, Cast, Premise, Scenes.
+
+## Standing decisions
+
+- **Premise comes after Cast**, because the pitch is written *from* the cast and that is
+  also what the Expand button reads. The title lives with the premise rather than in
+  Settings: a title isn't configuration, it is the first line of the pitch.
+- **Quick Build is a card, not a tab.** It is a one-shot, and a tab for it would be dead
+  weight from the second day of a campaign's life. It appears only on first run — and the
+  build card that reports its progress sits *outside* it, because the build that empties
+  "first run" would otherwise take its own progress bar off the screen.
+- **Attaching a world copies it.** A campaign accumulates its own world arc, so two
+  campaigns cannot share a bible. The copy is labelled as one, so nobody edits it expecting
+  the original to change.
+- **Publishing a head is a spoiler control, not a reading preference.** Nothing is ticked by
+  default. The list is in **tier order**, not roster order — the roster is the accident of
+  how the campaign was built, the tier is the author's own statement about who the story is
+  about.
+- **The three endings are three controls, not one with a severity dial.** Archive, trash and
+  start-over are genuinely different acts with different reversals. Only start-over confirms,
+  because it is the only one that isn't reversible.
+- **The scene's premise is the scene's.** Every scene used to open on the campaign premise,
+  which is the pitch for the whole story and says nothing about what is happening now. Blank
+  still falls back to it.
+
+## The perspective control
+
+Present in the header, and it drives the **World** tab: what a character knows of the world
+resolves group membership *live*, so somebody joining a group changes this read without
+anybody touching a secret. Behaviour and placement are defined in `play.md` and must not
+diverge.
+
+## States
+
+### `settings` — What it can contain, and what writes it
+
+The content ceiling stated in the author's vocabulary rather than the config's — a ceiling,
+not a target, with each character's own limits still holding underneath it. Model tuning is
+flat rather than folded: a settings page is read by scrolling it, and a fold hides a section
+behind a guess about whether you wanted it.
+
+### `first_run` — A campaign that is nothing but a name
+
+Quick Build leads. Amber dots mark the tabs with nothing built yet; they go the moment
+anything exists anywhere.
+
+### `quick_build` — The one-shot, open
+
+A world seed and a concept per character. Two switches, both off by default because each is
+another provider call: off-screen relationships, and writing the groups the world names.
+
+### `building` — A build in progress
+
+Drawn from the build's own row rather than from socket state, so it is the same card whether
+you started it, came back on a phone, or reloaded mid-run. It says the work is on the
+server — which is the sentence that makes leaving safe.
+
+### `build_failed` — A build that stopped
+
+It **resumes** rather than restarting, so it costs only what is left to do.
+
+### `world` — The attached world
+
+Read, not edited: every field the editor has, because this is where a world gets reviewed and
+a review of half of it is a review of nothing. Each section is guarded, because a world
+attached by hand can be a name and nothing else.
+
+### `world_none` — No world attached
+
+A campaign can play without one, but the Director has much less to go on. The empty state
+offers writing one, which for a long time nothing in the app could do.
+
+### `world_as_character` — The world through one character's eyes
+
+Said out loud, in the secret tint, because the value of the control is knowing which read you
+are looking at — a page that silently drops three rules looks like a page missing three
+rules.
+
+### `cast` — The people
+
+Main cast reads as the short list you authored; walk-ons collapse behind a count. Groups sit
+beside the cast, because a group is written like a character and seeds the people it
+produces.
+
+### `cast_pending` — Stubs waiting to be written
+
+They arrive in batches from other people's relationships, so one button fills them all rather
+than twenty trips through the editor.
+
+### `cast_empty` — Nobody yet
+
+A campaign needs at least one character before a scene can open. The empty state offers the
+write rather than explaining the rule.
+
+### `publish` — What a reader gets
+
+Spectator, heads, forkable. See the standing decision.
+
+### `publish_gap` — A scene nobody will be able to read
+
+Named, before publishing rather than after. The gap can be the point; it just must not happen
+by accident.
+
+### `premise` — The pitch, and the title
+
+Expand deepens whatever is saved, grounded in the world and the cast, so it reads best once
+both exist. With no title yet, it writes one too.
+
+### `scenes` — Setting one
+
+Where it happens, what is already true when it opens, and who is in it. Who's in it is a
+choice with a cost — the roster is what turn order walks — and everyone ready is the default,
+so an author who never touches it gets exactly what they got before.
+
+### `scenes_write_in` — Writing a walk-on into the scene
+
+Offered right where you pick a cast, because sending somebody to another tab to run a batch
+they didn't ask for is not the answer. Written in, they are selected.
+
+### `scenes_empty` — Nothing has happened yet
+
+On a campaign with a cast ready to make it happen.

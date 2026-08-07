@@ -32,14 +32,14 @@ defmodule PolyphonyWeb.GroupEditorLive do
 
   require Logger
 
-  import PolyphonyWeb.BlockField
-
   alias Polyphony.{Campaigns, Groups, Library, Owner}
   alias Polyphony.Authoring.{ArcEntry, Group, GroupArc}
   alias Polyphony.Authoring.CharacterSheet.Fact
   alias Polyphony.Permissions
   alias Polyphony.Permissions
-  alias PolyphonyWeb.{Autosave, Generating, Guard, Kit, Layouts, Voice}
+  import PolyphonyWeb.BlockField
+
+  alias PolyphonyWeb.{Autosave, Generating, Guard, Screens, Voice}
 
   @prose_specs [
     {"premise", "What they are"},
@@ -48,19 +48,6 @@ defmodule PolyphonyWeb.GroupEditorLive do
     {"backstory", "Where they came from"}
   ]
   @prose_fields Enum.map(@prose_specs, &elem(&1, 0))
-
-  @stops [
-    {"name", "Name"},
-    {"premise", "What they are"},
-    {"appearance", "How they read"},
-    {"temperament", "How they behave"},
-    {"backstory", "History"},
-    {"facts", "What's true"},
-    {"members", "Members"}
-  ]
-
-  defp prose_specs, do: @prose_specs
-  defp stops, do: @stops
 
   def mount(%{"id" => id}, _session, socket) do
     entry = Library.get(id)
@@ -99,10 +86,14 @@ defmodule PolyphonyWeb.GroupEditorLive do
     owner = Owner.of(socket.assigns.current_user)
     by_id = Map.new(Library.list_for_owner(owner), &{to_string(&1.id), &1})
 
+    # `%{id, name, hue}` rather than library entries: the screen renders from assigns and
+    # may not read the library (see `PolyphonyWeb.Screens`). It used to resolve a payload
+    # per row, for a name and an avatar colour.
     members =
       for id <- socket.assigns.group.member_ids || [],
           entry = by_id[to_string(id)],
-          do: entry
+          payload = Library.payload(entry),
+          do: %{id: entry.id, name: member_name(entry.id, payload), hue: Voice.of_sheet(payload)}
 
     assign(socket, members: members, owner: owner)
   end
@@ -298,50 +289,6 @@ defmodule PolyphonyWeb.GroupEditorLive do
     assign(socket, name: params["name"] || socket.assigns.name, blocks: blocks)
   end
 
-  # Same bar as the other two editors, for the same reason: this is one long scroll and
-  # a Save at the foot of it is a Save you have to go and find. The prose autosaves, so
-  # the line says that rather than claiming there is unsaved work.
-  defp save_bar(assigns) do
-    ~H"""
-    <div
-      class="shrink-0 px-4 py-3 flex items-center gap-2"
-      style="background:var(--b2);border-top:1px solid var(--rule)"
-    >
-      <div class="min-w-0 flex-1">
-        <div :if={@dirty} class="text-[12px] dim" role="status">Saving…</div>
-        <div
-          :if={not @dirty and @saved}
-          class="text-[12px]"
-          style="color:var(--ok)"
-          role="status"
-        >
-          ✓ Saved
-        </div>
-        <div :if={not @dirty and not @saved} class="text-[12px] dim">
-          Everything here is saved as you write.
-        </div>
-      </div>
-
-      <Kit.btn kind={:primary} type="submit" form="group-form" class="shrink-0">Save</Kit.btn>
-    </div>
-    """
-  end
-
-  # A group belongs to a world, and a world belongs to one campaign (attaching copies),
-  # so the campaign is a lookup rather than a guess. Groups written outside one — or
-  # before a world was attached — keep the library.
-  defp back_to(nil), do: ~p"/library"
-  defp back_to(campaign), do: ~p"/campaigns/#{campaign.id}"
-
-  defp back_label(nil), do: "Back to library"
-
-  defp back_label(campaign) do
-    case String.trim(to_string(Map.get(Library.payload(campaign) || %{}, :name) || "")) do
-      "" -> "Back to the campaign"
-      name -> "Back to #{name}"
-    end
-  end
-
   defp blocks_from_group(group),
     do: Map.new(@prose_fields, fn f -> {f, to_blocks(Map.get(group, field_atom(f)))} end)
 
@@ -384,248 +331,33 @@ defmodule PolyphonyWeb.GroupEditorLive do
     assign(socket, generating: if(on?, do: MapSet.put(set, key), else: MapSet.delete(set, key)))
   end
 
-  defp secrets(facts), do: Enum.count(facts, & &1.concealed)
-
-  # ── Render ────────────────────────────────────────────────────────────────────
+  defp member_name(_id, %{name: n}) when is_binary(n) and n != "", do: n
+  defp member_name(id, _payload), do: "Unnamed (##{id})"
 
   def render(assigns) do
     ~H"""
-    <%!-- **`height`, not `min-height`.** A `min-h-[100dvh]` column grows with its
-          content, so `flex-1 min-h-0 overflow-y-auto` inside it never has a height to
-          be a fraction *of* — nothing scrolls, the page runs to whatever length the
-          sheet is, and the `shrink-0` bar meant to hold the bottom of the viewport
-          lands at the bottom of a document several screens tall. Play has always
-          pinned its say-bar this way; these three didn't. --%>
-    <Kit.frame class="flex flex-col min-h-0" style="height:100dvh">
-      <Kit.header
-        title={@name}
-        eyebrow="Group"
-        back={back_to(@campaign)}
-        back_label={back_label(@campaign)}
-      >
-        <:actions>
-          <Kit.pill><%= length(@members) %> in it</Kit.pill>
-          <Layouts.nav_menu current_user={@current_user} />
-        </:actions>
-      </Kit.header>
-
-      <Kit.jump class="shrink-0">
-        <:stop :for={{id, label} <- stops()}>
-          <a href={"##{id}"}><%= label %></a>
-        </:stop>
-      </Kit.jump>
-
-      <div class="flex-1 min-h-0 overflow-y-auto">
-        <Kit.sheet class="m-4" style="border-color:var(--lamp)">
-          <Kit.row class="px-4 py-3" style="background:var(--b2)">
-            <span class="lbl dim">Write it from a line</span>
-          </Kit.row>
-          <div class="px-4 py-3">
-            <form id="group-generate-all" phx-submit="generate_all">
-              <label for="brief" class="sr-only">Describe the group</label>
-              <textarea
-                id="brief"
-                name="brief"
-                rows="2"
-                placeholder="The harbour watch — half constabulary, half smugglers…"
-                class="field px-3 py-2.5 text-[13px] leading-relaxed w-full mb-2"
-              ></textarea>
-              <Kit.btn kind={:primary} type="submit" disabled={busy?(@generating, "all")}>
-                <%= if busy?(@generating, "all"), do: "✦ …", else: "✦ Write the group" %>
-              </Kit.btn>
-            </form>
-          </div>
-        </Kit.sheet>
-
-        <form id="group-form" phx-submit="save" phx-change="sync">
-          <Kit.sheet class="m-4">
-            <div class="row px-4 py-3" id="name">
-              <label for="group-name" class="lbl dim">Name</label>
-              <input
-                id="group-name"
-                type="text"
-                name="name"
-                value={@name}
-                phx-debounce="600"
-                placeholder="The Tidewatch"
-                class="field px-3 py-2.5 text-[14px] w-full mt-1.5"
-              />
-            </div>
-
-            <.block_field
-              :for={{f, label} <- prose_specs()}
-              id={f}
-              field={f}
-              label={label}
-              blocks={@blocks[f]}
-              generating={@generating}
-            />
-
-            <%!-- The same control as a world's rules and a character's facts (§04),
-                  because to a reader they are the same thing: something true that may
-                  or may not be known. Here it is also what membership *grants* — this
-                  is the list a secret pointed at the group resolves to. --%>
-            <div class="px-4 py-3" id="facts">
-              <div class="flex items-center justify-between gap-2 mb-2">
-                <span class="lbl dim">What's true about them</span>
-                <span class="lbl dim"><%= secrets(@facts) %> secret</span>
-              </div>
-
-              <p :if={@facts == []} class="text-[13px] dim">Nothing yet.</p>
-
-              <details :for={{fact, i} <- Enum.with_index(@facts)} class="py-1.5" id={"fact-#{i}"}>
-                <summary class="flex items-start gap-2 list-none cursor-pointer">
-                  <Kit.marked
-                    mark={if(fact.concealed, do: :secret, else: :plain)}
-                    class="min-w-0 flex-1"
-                  >
-                    <span class="text-[13.5px] leading-relaxed"><%= fact.statement %></span>
-                  </Kit.marked>
-                  <span class="pill shrink-0" aria-label={"Change item #{i + 1}"}>⋯</span>
-                </summary>
-
-                <nav class="sheet mt-1.5" style="background:var(--b2)">
-                  <button
-                    type="button"
-                    class="row w-full px-4 py-2.5 flex items-center justify-between gap-3 text-left"
-                    phx-click="toggle_secret"
-                    phx-value-index={i}
-                    aria-pressed={to_string(fact.concealed)}
-                  >
-                    <span>
-                      <span class="block text-[13px] font-semibold">Secret</span>
-                      <span class="block text-[11px] dim">
-                        Only people this group's membership lets in on it
-                      </span>
-                    </span>
-                    <Kit.sw on={fact.concealed} colour="var(--secret)" />
-                  </button>
-                  <button
-                    type="button"
-                    class="row w-full px-4 py-2.5 text-[13px] text-left"
-                    phx-click="tell"
-                    phx-value-index={i}
-                  >
-                    Tell the members
-                    <span class="block text-[11px] dim">
-                      Proposes it to each of them, one review at a time
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    class="w-full px-4 py-2.5 text-[13px] text-left"
-                    style="color:var(--pencil)"
-                    phx-click="remove_fact"
-                    phx-value-index={i}
-                  >
-                    Delete
-                  </button>
-                </nav>
-              </details>
-
-              <button
-                :if={@panel != "facts"}
-                type="button"
-                class="field px-3 py-2 text-[13px] dim w-full text-left mt-2"
-                phx-click="panel"
-                phx-value-panel="facts"
-              >
-                Add something that's true…
-              </button>
-
-              <div :if={@panel == "facts"} class="mt-2">
-                <label for="new-fact" class="sr-only">Add something that's true</label>
-                <div class="flex gap-1.5">
-                  <%!-- Owned by its own form, like the bible editor's: this sits inside
-                        `#group-form` and a form can't nest, so without it Enter would
-                        save the group and lose what was typed. --%>
-                  <input
-                    id="new-fact"
-                    form="group-fact-form"
-                    type="text"
-                    name="statement"
-                    autocomplete="off"
-                    phx-mounted={JS.focus()}
-                    placeholder="They keep the tide bell, and the ledger under it."
-                    class="field px-3 py-2.5 text-[13px] flex-1"
-                  />
-                  <Kit.btn kind={:primary} type="submit" form="group-fact-form">Add</Kit.btn>
-                  <Kit.btn kind={:ghost} type="button" phx-click="panel" phx-value-panel="">
-                    Cancel
-                  </Kit.btn>
-                </div>
-              </div>
-            </div>
-          </Kit.sheet>
-
-        </form>
-
-        <form id="group-fact-form" phx-submit="add_fact"></form>
-
-        <.tell_panel :if={@telling} {assigns} />
-
-        <Kit.sheet class="m-4" id="members">
-          <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
-            <span class="lbl dim">Members · <%= length(@members) %></span>
-          </Kit.row>
-
-          <Kit.row :for={m <- @members} class="px-4 py-2.5 flex items-center gap-2.5">
-            <span class="av shrink-0" style={"background:#{Voice.of_sheet(Library.payload(m))}"}></span>
-            <div class="min-w-0 flex-1">
-              <.link navigate={~p"/authoring/character/#{m.id}"} class="text-[13.5px] font-semibold">
-                <%= member_name(m) %>
-              </.link>
-            </div>
-            <Kit.btn kind={:pen} size={:sm} phx-click="remove_member" phx-value-id={m.id}>
-              Remove
-            </Kit.btn>
-          </Kit.row>
-
-          <%!-- Joining is done from the person's own sheet, where the question "who is
-                this?" is already on screen. Two places to do one thing is how they
-                drift. --%>
-          <Kit.empty :if={@members == []} headline="Nobody is in it yet." class="py-6">
-            A character joins from their own sheet. An empty group is still useful —
-            it's how you set a trap before anyone walks into it.
-          </Kit.empty>
-        </Kit.sheet>
-      </div>
-
-      <.save_bar {assigns} />
-    </Kit.frame>
+    <Screens.GroupEditor.screen
+      blocks={@blocks}
+      campaign={@campaign && %{id: @campaign.id, name: campaign_name(@campaign)}}
+      current_user={@current_user}
+      facts={@facts}
+      dirty={@dirty}
+      saved={@saved}
+      generating={@generating}
+      members={@members}
+      name={@name}
+      panel={@panel}
+      telling={@telling}
+    />
     """
   end
 
-  defp tell_panel(assigns) do
-    assigns = assign(assigns, :fact, Enum.at(assigns.facts, assigns.telling))
-
-    ~H"""
-    <Kit.sheet :if={@fact} class="mx-4 mb-4" style="border-color:var(--lamp)">
-      <Kit.row class="px-4 py-3" style="background:var(--b2)">
-        <span class="ttl text-[15px] font-semibold">Tell the members</span>
-      </Kit.row>
-      <div class="px-4 py-3">
-        <p class="text-[13px] leading-relaxed mb-2">“<%= @fact.statement %>”</p>
-        <p class="text-[12px] leading-relaxed dim mb-3">
-          <%= length(@members) %> member(s) each get this as a proposal, plus one against
-          the group itself. Nothing changes until you accept it, and refusing one is how
-          you write the person who didn't go along with it.
-        </p>
-        <div class="flex gap-1.5">
-          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="tell_members" phx-value-index={@telling}>
-            Propose it
-          </Kit.btn>
-          <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="cancel_tell">Cancel</Kit.btn>
-        </div>
-      </div>
-    </Kit.sheet>
-    """
-  end
-
-  defp member_name(entry) do
-    case Library.payload(entry) do
-      %{name: n} when is_binary(n) and n != "" -> n
-      _ -> "Unnamed (##{entry.id})"
+  # The one field the group editor needs off the campaign entry, resolved here so the
+  # screen can stay a function of assigns.
+  defp campaign_name(campaign) do
+    case String.trim(to_string(Map.get(Library.payload(campaign) || %{}, :name) || "")) do
+      "" -> nil
+      name -> name
     end
   end
 end

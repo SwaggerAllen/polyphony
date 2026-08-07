@@ -16,11 +16,11 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Authoring.{
     CharacterSheet,
     Effective,
+    Group,
     SceneGate,
     WorldBible
   }
 
-  alias Polyphony.Authoring.Group
   alias Polyphony.Events.SceneOpened
   alias Polyphony.Groups
   alias Polyphony.Builds
@@ -28,28 +28,12 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Jobs.QuickBuild, as: BuildJob
   alias Polyphony.ReadModels.BuildRun
   alias Polyphony.Campaigns
-  alias Polyphony.Characters
   alias Polyphony.Content.CampaignConfig
   alias Polyphony.Publication
   alias Polyphony.Publication.Preflight
   alias PolyphonyWeb.Guard
-  alias PolyphonyWeb.Kit
-  alias PolyphonyWeb.Layouts
+  alias PolyphonyWeb.Screens
   alias PolyphonyWeb.Voice
-
-  # The campaign's sections, in the design's order. Premise sits after Cast because
-  # the pitch is written *from* the cast (`ux/README.md`), and Quick Build is
-  # deliberately absent — it's a one-shot card, not a section.
-  @tabs [
-    {"settings", "Settings"},
-    {"world", "World"},
-    {"cast", "Cast"},
-    {"premise", "Premise"},
-    {"scenes", "Scenes"}
-  ]
-
-  @doc false
-  def tabs, do: @tabs
   alias Polyphony.Director.SceneBrief
   alias Polyphony.LLM.Settings
 
@@ -114,7 +98,9 @@ defmodule PolyphonyWeb.CampaignLive do
   # between sections of a screen that used to be one long scroll.
   def handle_params(params, _uri, socket) do
     {:noreply,
-     assign(socket, tab: tab_param(params["tab"]), viewer: viewer_param(socket, params))}
+     socket
+     |> assign(tab: tab_param(params["tab"]), viewer: viewer_param(socket, params))
+     |> assign_seen()}
   end
 
   # The perspective control's state, in the URL for the same reason play keeps it there:
@@ -126,7 +112,11 @@ defmodule PolyphonyWeb.CampaignLive do
   # way — and an id that isn't on this roster is refused rather than trusted, because
   # this is the control that decides what secrets are on the screen.
   defp viewer_param(socket, params) do
-    ids = for c <- socket.assigns.cast, full?(c), into: MapSet.new(), do: to_string(c.id)
+    ids =
+      for c <- socket.assigns.cast,
+          Screens.Campaign.full?(c),
+          into: MapSet.new(),
+          do: to_string(c.id)
 
     case params["as"] do
       id when is_binary(id) -> if MapSet.member?(ids, id), do: {:character, id}, else: :omniscient
@@ -137,6 +127,11 @@ defmodule PolyphonyWeb.CampaignLive do
   # The viewer decides what a *world* read shows. Omniscient is the author over their
   # own world and sees everything, with concealed entries marked; a character sees what
   # `Audience` says they know, resolved through their groups.
+  # The world as the current viewer knows it. A read — `for_character/2` resolves group
+  # membership live — so it is answered here and handed over as `seen`, rather than
+  # derived inside the markup where it ran on every render.
+  defp assign_seen(socket), do: assign(socket, seen: viewed_world(socket.assigns))
+
   defp viewed_world(%{world: nil}), do: nil
   defp viewed_world(%{viewer: :omniscient, world: world}), do: world
 
@@ -147,26 +142,10 @@ defmodule PolyphonyWeb.CampaignLive do
   defp viewed_world(%{viewer: {:character, id}, world: world}),
     do: WorldBible.for_character(world, id)
 
-  defp viewer_name(%{viewer: :omniscient}), do: "Omniscient"
-
-  defp viewer_name(%{viewer: {:character, id}, cast: cast}) do
-    case Enum.find(cast, &(to_string(&1.id) == id)) do
-      nil -> "Omniscient"
-      entry -> char_name(entry)
-    end
-  end
-
-  defp viewer_colour(%{viewer: :omniscient}), do: "var(--bc)"
-
-  defp viewer_colour(%{viewer: {:character, id}, cast: cast}) do
-    case Enum.find(cast, &(to_string(&1.id) == id)) do
-      nil -> "var(--bc)"
-      entry -> Voice.of_sheet(Library.payload(entry))
-    end
-  end
-
   defp tab_param(tab) do
-    if Enum.any?(@tabs, fn {slug, _} -> slug == tab end), do: tab, else: "settings"
+    if Enum.any?(Screens.Campaign.tabs(), fn {slug, _} -> slug == tab end),
+      do: tab,
+      else: "settings"
   end
 
   defp load(socket) do
@@ -214,6 +193,7 @@ defmodule PolyphonyWeb.CampaignLive do
       groups: group_rows(owner),
       published?: Library.published?(socket.assigns.entry)
     )
+    |> assign_seen()
     |> preflight()
   end
 
@@ -298,7 +278,7 @@ defmodule PolyphonyWeb.CampaignLive do
   # so turning one person off doesn't read as turning everyone else off.
   def handle_event("toggle_scene_cast", %{"id" => id}, socket) do
     cid = normalize_id(id)
-    current = scene_cast_ids(socket.assigns)
+    current = Screens.Campaign.scene_cast_ids(socket.assigns)
 
     chosen =
       if MapSet.member?(current, cid),
@@ -361,7 +341,7 @@ defmodule PolyphonyWeb.CampaignLive do
       cid = normalize_id(id)
       uid = socket.assigns.current_user && socket.assigns.current_user.id
 
-      case Enum.find(socket.assigns.cast, &(&1.id == cid and pending?(&1))) do
+      case Enum.find(socket.assigns.cast, &(&1.id == cid and Screens.Campaign.pending?(&1))) do
         nil ->
           {:noreply, put_flash(socket, :error, "They aren't waiting to be written.")}
 
@@ -380,7 +360,7 @@ defmodule PolyphonyWeb.CampaignLive do
   def handle_event("toggle_quick_build", _params, socket),
     do: {:noreply, assign(socket, quick_build_open: not socket.assigns.quick_build_open)}
 
-  # **Attaching a world copies it** (`backend-backlog.md` §2.5b). A campaign
+  # **Attaching a world copies it** (`completed-roadmap.md` §2.5b). A campaign
   # accumulates world arc, and two campaigns cannot write different histories onto one
   # bible — so what the campaign holds is its own copy, and the library entry stays a
   # template. The honest cost is stated on the screen rather than implied away: fixing
@@ -483,7 +463,7 @@ defmodule PolyphonyWeb.CampaignLive do
       context = premise_context(socket) ++ meter_attribution(socket)
 
       {op, opts} =
-        if blank?(socket.assigns.payload[:name]),
+        if Screens.Campaign.blank?(socket.assigns.payload[:name]),
           do: {"autofill.campaign_opening", context},
           else: {"autofill.premise", [current: current] ++ context}
 
@@ -586,8 +566,8 @@ defmodule PolyphonyWeb.CampaignLive do
       # Only finalized characters enter the scene; pending stubs are skipped (they
       # aren't castable until generated — bulk-generate them from the library first).
       # Of those, the ones the author picked for *this* scene.
-      {_all_ready, pending} = Enum.split_with(cast, &full?/1)
-      ready = scene_cast_entries(socket.assigns)
+      {_all_ready, pending} = Enum.split_with(cast, &Screens.Campaign.full?/1)
+      ready = Screens.Campaign.scene_cast_entries(socket.assigns)
 
       cond do
         ready == [] ->
@@ -715,7 +695,7 @@ defmodule PolyphonyWeb.CampaignLive do
   # pending ones, and the button belongs next to the pills that say so.
   def handle_event("generate_pending", _params, socket) do
     safe(socket, fn ->
-      case Enum.filter(socket.assigns.cast, &pending?/1) do
+      case Enum.filter(socket.assigns.cast, &Screens.Campaign.pending?/1) do
         [] ->
           {:noreply, socket}
 
@@ -750,7 +730,7 @@ defmodule PolyphonyWeb.CampaignLive do
       |> load()
 
     if done > 0 do
-      chosen = MapSet.put(scene_cast_ids(socket.assigns), cid)
+      chosen = MapSet.put(Screens.Campaign.scene_cast_ids(socket.assigns), cid)
       {:noreply, assign(socket, scene_cast: chosen)}
     else
       {:noreply, put_flash(socket, :error, "Couldn't write them — open them to finish by hand.")}
@@ -805,7 +785,7 @@ defmodule PolyphonyWeb.CampaignLive do
     payload = socket.assigns.payload
 
     payload =
-      if blank?(payload[:name]) and not blank?(data["name"]),
+      if Screens.Campaign.blank?(payload[:name]) and not Screens.Campaign.blank?(data["name"]),
         do: Map.put(payload, :name, data["name"]),
         else: payload
 
@@ -999,7 +979,7 @@ defmodule PolyphonyWeb.CampaignLive do
     cast =
       for c <- socket.assigns.cast do
         s = Library.payload(c)
-        %{"name" => char_name(c), "premise" => Map.get(s, :premise)}
+        %{"name" => Screens.Campaign.char_name(c), "premise" => Map.get(s, :premise)}
       end
 
     [world: world, cast: cast]
@@ -1077,1162 +1057,13 @@ defmodule PolyphonyWeb.CampaignLive do
   # otherwise stays folded away. And **Premise comes after Cast**, because the pitch
   # is written *from* the cast; ordering it earlier invites writing it twice.
 
-  def render(assigns) do
-    ~H"""
-    <Kit.frame class="flex flex-col min-h-[100dvh]">
-      <Kit.header title={campaign_title(@payload)} subtitle={campaign_meta(assigns)}>
-        <:actions>
-          <%!-- The perspective control, in the same place and the same markup it has on
-                every other surface with a viewpoint (`ux/README.md` calls its drift into
-                three treatments the worst consistency failure of the design pass). It
-                belongs here because this screen *reviews* content: the world tab is a
-                read of the bible, and "what does Wren actually know of this world"
-                is a question you can only answer by looking through her eyes. --%>
-          <form :if={scene_ready(@cast) != []} id="campaign-viewer" phx-change="view_as">
-            <Kit.viewas_select
-              id="campaign-viewer-select"
-              label="Viewing as"
-              name="as"
-              colour={viewer_colour(assigns)}
-            >
-              <option value="" selected={@viewer == :omniscient}>Omniscient</option>
-              <option
-                :for={c <- scene_ready(@cast)}
-                value={c.id}
-                selected={@viewer == {:character, to_string(c.id)}}
-              >
-                <%= char_name(c) %>
-              </option>
-            </Kit.viewas_select>
-          </form>
-          <Kit.pill><%= String.capitalize(to_string(@entry.visibility)) %></Kit.pill>
-          <Layouts.nav_menu current_user={@current_user} />
-        </:actions>
-      </Kit.header>
-
-      <Kit.tabs>
-        <:tab
-          :for={{slug, label} <- tabs()}
-          patch={~p"/campaigns/#{@entry.id}?#{[tab: slug]}"}
-          on={@tab == slug}
-          todo={unbuilt?(assigns, slug)}
-        >
-          <%= label %>
-        </:tab>
-      </Kit.tabs>
-
-      <div class="flex-1 min-h-0 overflow-y-auto">
-        <.settings_tab :if={@tab == "settings"} {assigns} />
-        <.world_tab :if={@tab == "world"} {assigns} />
-        <.cast_tab :if={@tab == "cast"} {assigns} />
-        <.premise_tab :if={@tab == "premise"} {assigns} />
-        <.scenes_tab :if={@tab == "scenes"} {assigns} />
-      </div>
-    </Kit.frame>
-    """
-  end
-
-  # ── Settings ──────────────────────────────────────────────────────────────────
-
-  defp settings_tab(assigns) do
-    ~H"""
-    <div class="px-4 py-4 space-y-4">
-      <%!-- First run only. The design's own argument for Quick Build being a card and
-            not a tab: it's a one-shot, and a tab for it would be dead weight from the
-            second day of a campaign's life. --%>
-      <div
-        :if={first_run?(assigns)}
-        class="rounded-xl p-4"
-        style="background:color-mix(in srgb,var(--lamp) 10%,transparent);border:1px solid var(--lamp)"
-      >
-        <div class="ttl text-[16px] mb-1 font-semibold">Build the whole thing at once</div>
-        <p class="text-[13px] leading-relaxed dim mb-3">
-          Say as much or as little as you like about the story and get a world, a cast who
-          already know each other, and a pitch. You can change any of it after.
-        </p>
-        <Kit.btn kind={:primary} type="button" phx-click="toggle_quick_build">
-          <%= if @quick_build_open, do: "Not now", else: "Try Quick Build" %>
-        </Kit.btn>
-      </div>
-
-      <.quick_build :if={quick_build_open?(assigns)} {assigns} />
-      <.build_card :if={@build} build={@build} />
-
-      <form id="campaign-content" phx-change="update_content">
-        <div class="lbl dim mb-2">What this campaign can contain</div>
-        <Kit.sheet class="px-3.5 py-3">
-          <label class="flex items-center justify-between gap-3 cursor-pointer">
-            <span>
-              <span class="text-[14px] font-semibold block">Adult content</span>
-              <span class="text-[11px] dim">Off by default, even though you can turn it on</span>
-            </span>
-            <input type="checkbox" name="adult_content" value="true" checked={@content.adult_content} class="sr-only peer" />
-            <Kit.sw on={@content.adult_content} />
-          </label>
-
-          <div :if={@content.adult_content} class="space-y-2.5 pt-3 mt-3" style="border-top:1px solid var(--rule)">
-            <label :for={{field, label} <- content_categories()} class="flex items-center justify-between cursor-pointer">
-              <span class="text-[13px]"><%= label %></span>
-              <input type="checkbox" name={field} value="true" checked={Map.get(@content, String.to_existing_atom(field))} class="sr-only" />
-              <Kit.sw on={Map.get(@content, String.to_existing_atom(field))} />
-            </label>
-          </div>
-
-          <%!-- The ceiling stated in the author's vocabulary, not the config's — the
-                copy rule that the model's words aren't the author's. --%>
-          <div class="rounded-lg px-3 py-2 mt-3" style="background:var(--b3)">
-            <div class="lbl dim mb-0.5">This campaign plays as</div>
-            <div class="text-[13.5px] font-semibold leading-snug"><%= CampaignConfig.label(@content) %></div>
-          </div>
-          <p class="text-[11px] leading-relaxed dim mt-2">
-            A ceiling, not a target. A character's own limits still hold underneath it, and a
-            boundary in a disabled category is forced closed in play (§A5).
-          </p>
-        </Kit.sheet>
-      </form>
-
-      <%!-- Flat, like everything else on this screen. A settings page is read by
-            scrolling it; a fold hides one of its sections behind a guess about whether
-            you want it, and the guess is wrong the moment you came here to change it. --%>
-      <div>
-        <div class="lbl dim mb-2">Model tuning</div>
-        <form id="campaign-tuning" phx-change="update_details">
-          <Kit.sheet class="px-3.5 py-3 space-y-3">
-            <label class="flex items-center justify-between gap-3 cursor-pointer">
-              <span class="text-[13px]">Director reasoning (“thinking”)</span>
-              <input type="checkbox" name="director_thinking" value="true" checked={@llm.director_thinking} class="sr-only" />
-              <Kit.sw on={@llm.director_thinking} />
-            </label>
-            <div class="flex flex-wrap gap-3">
-              <label class="flex-1 min-w-[8rem]">
-                <span class="lbl dim">Director max tokens</span>
-                <input type="number" name="director_max_tokens" value={@llm.director_max_tokens} min="256" step="128" phx-debounce="blur" class="field px-3 py-2 text-[13px] w-full mt-1" />
-              </label>
-              <label class="flex-1 min-w-[8rem]">
-                <span class="lbl dim">Character max tokens</span>
-                <input type="number" name="character_max_tokens" value={@llm.character_max_tokens} min="256" step="128" phx-debounce="blur" class="field px-3 py-2 text-[13px] w-full mt-1" />
-              </label>
-            </div>
-            <label class="block">
-              <span class="lbl dim">Model</span>
-              <input type="text" name="model" value={@llm.model} placeholder={@global_models.workhorse || "DEEPINFRA_MODEL"} phx-debounce="blur" class="field px-3 py-2 text-[13px] w-full mt-1" />
-            </label>
-            <label class="block">
-              <span class="lbl dim">Heavy fallback model</span>
-              <input type="text" name="heavy_model" value={@llm.heavy_model} placeholder={@global_models.heavy || "DEEPINFRA_MODEL_HEAVY"} phx-debounce="blur" class="field px-3 py-2 text-[13px] w-full mt-1" />
-            </label>
-            <label class="block">
-              <span class="lbl dim">Service tier</span>
-              <select name="service_tier" class="field px-3 py-2 text-[13px] w-full mt-1">
-                <option value="" selected={@llm.service_tier in [nil, ""]}>Standard</option>
-                <option value="priority" selected={@llm.service_tier == "priority"}>Priority — jump the queue</option>
-                <option value="flex" selected={@llm.service_tier == "flex"}>Flex — cheaper, slower</option>
-              </select>
-            </label>
-            <p class="text-[11px] leading-relaxed dim">
-              Point a campaign at a better-provisioned model, or set Priority, when the default
-              is overloaded. Takes effect on the next beat.
-            </p>
-          </Kit.sheet>
-        </form>
-      </div>
-
-      <%!-- Publishing is a decision about the campaign, and it lived on **Cast** — next
-            to the people, because the perspective list is people. But the list is one
-            control inside it: the panel also decides whether a spectator may read at
-            all and whether the sheets travel, neither of which is about the cast. It
-            belongs with the other things you decide about the campaign as a whole,
-            above the three ways it ends. --%>
-      <.publish_panel {assigns} />
-
-      <.ending_panel {assigns} />
-    </div>
-    """
-  end
-
-  # The three ways a campaign ends. Filing, throwing away and starting over are
-  # genuinely different acts, not one control with a severity dial, so they are three
-  # controls with the copy that tells them apart — and none of them was reachable from
-  # inside a campaign at all. The library's row menu could file and bin one; nothing
-  # anywhere could restart one.
-  defp ending_panel(assigns) do
-    ~H"""
-    <Kit.sheet>
-      <Kit.row class="px-4 py-3" style="background:var(--b2)">
-        <span class="lbl dim">Ending it</span>
-      </Kit.row>
-
-      <Kit.row class="px-4 py-3 flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <div class="text-[13px] font-semibold">Archive</div>
-          <p class="text-[11px] leading-relaxed dim">
-            Out of the way, on the archive shelf. Nothing is at risk and it comes back
-            with one button.
-          </p>
-        </div>
-        <Kit.btn size={:sm} type="button" phx-click="archive_campaign" class="shrink-0">
-          Archive
-        </Kit.btn>
-      </Kit.row>
-
-      <%!-- Deliberately *not* wrapped in a confirm: trash is on a clock and the trash
-            shelf carries the one irreversible button, where the countdown is visible.
-            The library row menu says the same thing in the same words. --%>
-      <Kit.row class="px-4 py-3 flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <div class="text-[13px] font-semibold">Move to trash</div>
-          <p class="text-[11px] leading-relaxed dim">
-            Recoverable until it expires. The world and the cast go with it.
-          </p>
-        </div>
-        <Kit.btn size={:sm} kind={:pen} type="button" phx-click="trash_campaign" class="shrink-0">
-          Trash
-        </Kit.btn>
-      </Kit.row>
-
-      <%!-- This one *does* confirm, and it is the only one here that has to: archive
-            and trash are both reversible, and this is not. --%>
-      <Kit.row class="px-4 py-3 flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <div class="text-[13px] font-semibold">Start over</div>
-          <p class="text-[11px] leading-relaxed dim">
-            Lets go of <%= played_line(assigns) %> and everything play raised about these
-            people — the arc proposals go with the scenes that made them. The world, the
-            cast and the premise are untouched.
-          </p>
-        </div>
-        <Kit.btn
-          size={:sm}
-          kind={if @scenes == [], do: :off, else: :pen}
-          type="button"
-          phx-click="restart_campaign"
-          disabled={@scenes == []}
-          data-confirm={@scenes != [] && restart_confirm(assigns)}
-          class="shrink-0"
-        >
-          Start over
-        </Kit.btn>
-      </Kit.row>
-    </Kit.sheet>
-    """
-  end
-
-  defp played_line(%{scenes: []}), do: "nothing yet"
-  defp played_line(%{scenes: scenes}), do: count_label(length(scenes), "scene", "scenes")
-
-  defp restart_confirm(assigns) do
-    "Start #{campaign_label(assigns)} over? " <>
-      "#{played_line(assigns)} and any arc proposals from them are let go of. " <>
-      "This can't be undone."
-  end
-
-  defp campaign_label(assigns) do
-    case String.trim(to_string(assigns.payload[:name] || "")) do
-      "" -> "this campaign"
-      name -> name
-    end
-  end
-
-  defp quick_build(assigns) do
-    ~H"""
-    <Kit.sheet class="px-3.5 py-3">
-      <form id="quick-build" phx-submit="quick_build" phx-change="sync_quick_build">
-        <label for="qb-world" class="lbl dim">World seed</label>
-        <textarea
-          id="qb-world"
-          name="world_seed"
-          rows="2"
-          phx-debounce="blur"
-          class="field px-3 py-2.5 text-[13px] w-full mt-1.5"
-          placeholder="A rain-drowned harbour city where debts are paid in memories."
-        ><%= @qb_world %></textarea>
-
-        <div class="lbl dim mt-3 mb-1.5">Characters — one concept each</div>
-        <div :for={{seed, i} <- Enum.with_index(@qb_seeds)} class="flex gap-1.5 mb-1.5">
-          <input
-            type="text"
-            name="char_seed[]"
-            value={seed}
-            phx-debounce="blur"
-            placeholder="a disgraced harbour-master who sold her own past"
-            class="field px-3 py-2 text-[13px] flex-1"
-          />
-          <Kit.btn kind={:pen} type="button" phx-click="remove_seed" phx-value-index={i} disabled={length(@qb_seeds) <= 1}>
-            ✕
-          </Kit.btn>
-        </div>
-        <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="add_seed">+ character</Kit.btn>
-
-        <label class="flex items-center justify-between gap-3 mt-3 cursor-pointer">
-          <span class="text-[13px]">
-            Also suggest off-screen relationships
-            <span class="text-[11px] dim block">Stubs mentors, rivals and family for each character</span>
-          </span>
-          <input type="checkbox" name="suggest_offscreen" value="true" checked={@qb_suggest} class="sr-only" />
-          <Kit.sw on={@qb_suggest} />
-        </label>
-
-        <%!-- Off by default like the one above: it is a provider call, and a two-hander
-              needs no order or watch. Where a world does name one, this is what makes
-              belonging mean something — the cast written into a group start out holding
-              its facts, secrets included, which is what `Group.seed/2` is for. --%>
-        <label class="flex items-center justify-between gap-3 mt-3 cursor-pointer">
-          <span class="text-[13px]">
-            Also write the groups this world names
-            <span class="text-[11px] dim block">
-              A crew, a household, an order — and the cast in them start out knowing what
-              it knows
-            </span>
-          </span>
-          <input type="checkbox" name="groups" value="true" checked={@qb_groups} class="sr-only" />
-          <Kit.sw on={@qb_groups} />
-        </label>
-
-        <div class="mt-3">
-          <Kit.btn kind={:primary} type="submit" disabled={building?(assigns)}>
-            <%= if building?(assigns), do: "✦ Building…", else: "✦ Quick build" %>
-          </Kit.btn>
-        </div>
-      </form>
-    </Kit.sheet>
-    """
-  end
-
-  @doc false
-  # The build's own card, drawn from the run row rather than from socket state — so it
-  # is the same card whether you started the build, came back to it on a phone, or
-  # reloaded the page while it ran. Outside the Quick Build form on purpose: the form is
-  # first-run only, and the build that empties "first run" would take its own progress
-  # off the screen with it.
-  defp build_card(assigns) do
-    ~H"""
-    <Kit.sheet class="m-4">
-      <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
-        <span class="lbl dim">Quick build</span>
-        <Kit.pill :if={@build.status == "running"} colour="var(--lamp)">Running</Kit.pill>
-        <Kit.pill :if={@build.status == "failed"} colour="var(--pencil)">Failed</Kit.pill>
-        <Kit.pill :if={@build.status == "done"} colour="var(--ok)">Done</Kit.pill>
-      </Kit.row>
-
-      <div class="px-4 py-3">
-        <Kit.bar :if={@build.status == "running"} fraction={Builds.percent(@build) / 100} />
-        <div class="text-[12px] mt-1.5 leading-relaxed">
-          <%= @build.label %><span :if={@build.status == "running"}>…</span>
-          <span :if={@build.status == "running"} class="mono dim">
-            (<%= min(@build.step + 1, @build.total) %>/<%= @build.total %>)
-          </span>
-        </div>
-        <p :if={@build.detail} class="text-[12px] leading-relaxed dim mt-1.5"><%= @build.detail %></p>
-
-        <%!-- The sentence that makes leaving safe. It is the whole point of the row:
-              the work is not in your browser, so neither is your obligation to sit
-              and watch it. --%>
-        <p :if={@build.status == "running"} class="text-[11px] leading-relaxed dim mt-2">
-          This runs on the server. You can leave this page — the world and everyone
-          written so far are already attached to this campaign.
-        </p>
-
-        <div :if={@build.status != "running"} class="mt-2.5 flex gap-1.5">
-          <%!-- A failed build has already attached its world, so the campaign is no
-                longer first-run and the card that offers Quick Build is gone. Without
-                this there is no way back to it — and this resumes rather than restarts,
-                so it costs only what is left to do. --%>
-          <Kit.btn :if={@build.status == "failed"} kind={:primary} size={:sm} type="button" phx-click="retry_build">
-            ✦ Pick up where it stopped
-          </Kit.btn>
-          <Kit.btn size={:sm} type="button" phx-click="dismiss_build">Dismiss</Kit.btn>
-        </div>
-      </div>
-    </Kit.sheet>
-    """
-  end
-
-  # ── World ─────────────────────────────────────────────────────────────────────
-
-  defp world_tab(assigns) do
-    ~H"""
-    <div>
-      <%!-- `ux/polyphony-campaign.html` §04 "Attached", which had never been ported:
-            the tab showed the picker and nothing whatever about the world it had
-            picked. A quick-built campaign therefore read as a name in a dropdown and
-            no setting at all — the world had been written, it just wasn't on screen. --%>
-      <.attached_world :if={@world} {assigns} />
-
-      <Kit.row
-        :if={is_nil(@world)}
-        class="px-4 py-2.5 flex items-center justify-between gap-2"
-        style="background:var(--b2)"
-      >
-        <span class="lbl dim">The world</span>
-      </Kit.row>
-
-      <div :if={@bibles != []} class="px-4 py-3.5">
-        <p class="text-[13px] leading-relaxed dim mb-3">
-          The world bible grounds the setting for this campaign's scenes and its published
-          snapshot. Attaching one copies it — a campaign accumulates its own world arc, so two
-          campaigns can't share a bible.
-        </p>
-        <form id="campaign-world" phx-change="select_world">
-          <label for="bible-select" class="sr-only">World</label>
-          <select id="bible-select" name="bible_id" class="field px-3 py-2.5 text-[14px] w-full">
-            <option value="">— none —</option>
-            <option :for={b <- @bibles} value={b.id} selected={@bible_id == b.id}>
-              <%= bible_label_of(b) %>
-            </option>
-          </select>
-        </form>
-
-        <%!-- Under the picker, not beside it: taking one you already have is the cheaper
-              move and it should be the one you see first. --%>
-        <Kit.btn :if={is_nil(@world)} size={:sm} type="button" phx-click="new_world" class="mt-2">
-          Write a new one instead
-        </Kit.btn>
-      </div>
-
-      <%!-- The picker was the whole tab, and **nothing in the app wrote a world** — so a
-            campaign that skipped Quick Build faced a list it had no way to add to, and
-            the only advice on offer was to go to the library, which has no world-create
-            button either. --%>
-      <Kit.empty :if={@bibles == [] and is_nil(@world)} headline="No world yet.">
-        A campaign can play without one, but the Director has much less to go on — the
-        setting, the tone and the rules all come from here.
-        <:action>
-          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="new_world">
-            Write a world
-          </Kit.btn>
-        </:action>
-      </Kit.empty>
-    </div>
-    """
-  end
-
-  # The attached world, read rather than edited — enough to know what the Director is
-  # working from without leaving the campaign. Every section is guarded, because a world
-  # attached by hand can be a name and nothing else, and a heading over an empty space
-  # reads as a bug rather than as an absence.
-  defp attached_world(assigns) do
-    assigns = assign(assigns, seen: viewed_world(assigns))
-
-    ~H"""
-    <div>
-      <Kit.row
-        class="px-4 py-3 flex items-center justify-between gap-2"
-        style="background:var(--b2)"
-      >
-        <div class="min-w-0">
-          <div class="ttl text-[15px] font-semibold truncate"><%= @bible_name %></div>
-          <%!-- Attaching **copies** (§2.5b), so this is no longer the library's world:
-                editing here can't reach back and change the template, and the label is
-                the only place that's visible. --%>
-          <div class="lbl dim mt-0.5">This campaign's copy</div>
-        </div>
-        <.link navigate={~p"/authoring/bible/#{@bible_id}"} class="btn btn-gh btn-sm shrink-0">
-          Edit
-        </.link>
-      </Kit.row>
-
-      <%!-- Said out loud, in the kit's secret tint, because the whole value of the
-            control is knowing which read you are looking at — a page that silently
-            drops three rules looks like a page missing three rules. --%>
-      <Kit.row
-        :if={@viewer != :omniscient}
-        class="px-4 py-2 flex items-center gap-2"
-        style="background:color-mix(in srgb,var(--secret) 14%,transparent)"
-      >
-        <Kit.dot colour="var(--secret)" />
-        <span class="text-[12.5px]">
-          As <b><%= viewer_name(assigns) %></b> knows it — what they haven't been told isn't here
-        </span>
-      </Kit.row>
-
-      <%!-- Every field the editor has, because this is where a world gets *reviewed*
-            and a review of half of it is a review of nothing. The cover was missing —
-            the one part a stranger reads — and so was starting canon, which is what
-            the Director opens a scene from. --%>
-      <Kit.row :if={filled(@seen.cover)} class="px-4 py-3">
-        <div class="lbl dim mb-1">Cover</div>
-        <p class="text-[13px] leading-relaxed"><%= @seen.cover %></p>
-      </Kit.row>
-
-      <Kit.row :if={filled(@seen.setting)} class="px-4 py-3">
-        <div class="lbl dim mb-1">Setting</div>
-        <p class="text-[13px] leading-relaxed"><%= @seen.setting %></p>
-      </Kit.row>
-
-      <Kit.row :if={filled(@seen.tone)} class="px-4 py-3">
-        <div class="lbl dim mb-1">Tone</div>
-        <p class="text-[13px] leading-relaxed"><%= @seen.tone %></p>
-      </Kit.row>
-
-      <.world_list label="Rules" entries={WorldBible.entries(@seen.rules)} />
-      <.world_list label="What's true at the start" entries={WorldBible.entries(@seen.starting_canon)} />
-
-      <Kit.row :if={world_empty?(@seen)} class="px-4 py-3">
-        <p class="text-[12.5px] leading-relaxed dim">
-          <%= if @viewer == :omniscient,
-            do: "Nothing written past the name yet.",
-            else: "Nothing here has been shared with them." %>
-        </p>
-      </Kit.row>
-    </div>
-    """
-  end
-
-  attr(:label, :string, required: true)
-  attr(:entries, :list, required: true)
-
-  defp world_list(assigns) do
-    ~H"""
-    <Kit.row :if={@entries != []} class="px-4 py-3">
-      <div class="lbl dim mb-1.5"><%= @label %></div>
-      <div class="space-y-1 text-[13px] leading-relaxed">
-        <%!-- Concealed entries are marked, not hidden, for the omniscient author: they
-              are omniscient over their own world, and `:secret` is the same mark the
-              bible editor gives them, so the two screens don't describe one entry two
-              ways. A character's read never reaches here concealed — `for_character/3`
-              has already dropped what they don't know. --%>
-        <Kit.marked
-          :for={{entry, i} <- Enum.with_index(@entries, 1)}
-          mark={if(entry.concealed, do: :secret, else: :plain)}
-          class="flex gap-2"
-        >
-          <span class="dim mono text-[11px] pt-0.5"><%= i %></span>
-          <span><%= entry.statement %></span>
-        </Kit.marked>
-      </div>
-    </Kit.row>
-    """
-  end
-
-  defp world_empty?(%WorldBible{} = w) do
-    not filled(w.cover) and not filled(w.setting) and not filled(w.tone) and
-      WorldBible.entries(w.rules) == [] and WorldBible.entries(w.starting_canon) == []
-  end
-
-  defp world_empty?(_), do: true
-
-  defp filled(value), do: is_binary(value) and String.trim(value) != ""
-
-  # Groups sit beside Cast because that is where they are used (§06b): a group is
-  # written like a character and used as a starting point for others.
-  defp group_rows(owner) do
-    for entry <- Groups.list(owner) do
-      group = Library.payload(entry)
-
-      %{
-        id: entry.id,
-        name: group_name(entry, group),
-        members: length(group.member_ids || []),
-        secrets: length(Group.secrets(group)),
-        colour: Voice.of_sheet(group)
-      }
-    end
-  end
-
-  defp group_name(_entry, %{name: n}) when is_binary(n) and n != "", do: n
-  defp group_name(entry, _group), do: "Unnamed group (##{entry.id})"
-
-  defp world_payload(_bibles, nil), do: nil
-
-  defp world_payload(bibles, id) do
-    # Explicitly `nil` on anything that isn't a bible. A bare `with` would hand back
-    # the unmatched payload, and the template would then read `.setting` off it.
-    case Enum.find(bibles, &(&1.id == id)) do
-      nil ->
-        nil
-
-      entry ->
-        case Library.payload(entry) do
-          %WorldBible{} = bible -> bible
-          _ -> nil
-        end
-    end
-  end
-
-  # Publishing asks **two separate questions, not one ladder** (§3.1c): how it's meant
-  # to be read — which perspectives a reader may adopt, a content decision and the
-  # spoiler control — and whether the authoring surface is exposed, which is one
-  # checkbox. Sheets come with forkable, because a fork must be able to carry the story
-  # on and can't from prose alone.
-  defp publish_panel(assigns) do
-    ~H"""
-    <Kit.row class="px-4 py-3" style="background:var(--b2)">
-      <div class="flex items-center gap-1.5 mb-2">
-        <span class="lbl dim">How it's meant to be read</span>
-        <Kit.info label="publishing" phx-click="publish_help" />
-      </div>
-
-      <Kit.info_drawer :if={@publish_help} title="About publishing" on_close="publish_help">
-        <:intro>
-          Publishing asks two separate questions, not one ladder (§3.1c): which
-          perspectives a reader may take, and whether the authoring surface comes with it.
-        </:intro>
-        <:part colour="var(--bcm)" name="As a spectator">
-          Everything said and done, and nobody's thoughts. The safe read, and the one
-          that keeps the irony intact for somebody coming to the story cold.
-        </:part>
-        <:part colour="var(--secret)" name="Behind someone's eyes">
-          Publishing a head hands over what that character knew while they knew it —
-          which is a spoiler control, not a reading preference. A reader who takes Wren's
-          view learns what Wren was hiding.
-        </:part>
-        <:part colour="var(--ok)" name="With the sheets">
-          The world and the cast travel too, so a reader can fork the story and carry it
-          on. Concealed entries never come with it — what you kept back was never shared.
-        </:part>
-      </Kit.info_drawer>
-
-      <div class="flex flex-col gap-1.5 mb-3">
-        <label class="flex items-center gap-2.5 text-[13px]">
-          <Kit.chk state={if @pub_spectator, do: :on, else: :off} phx-click="toggle_spectator" />
-          <span class="flex-1">
-            As a spectator
-            <span class="dim">— everything said and done, nobody's thoughts</span>
-          </span>
-        </label>
-
-        <%!-- The spoiler control, not a reading preference: publishing a head hands
-              away everything in it, and only the author knows which are meant to be
-              read. So nothing here is ticked by default.
-
-              **In tier order, not roster order.** The roster is the order people were
-              cast, which is an accident of how the campaign was built; the tier is the
-              author's own statement about who the story is about. Main cast first,
-              then recurring, then walk-ons — a reader offered a walk-on's head above a
-              lead's is being offered the wrong story, and a list of forty walk-ons
-              buries the two heads worth publishing. --%>
-        <label :for={c <- publish_order(@cast)} class="flex items-center gap-2.5 text-[13px]">
-          <Kit.chk
-            state={if to_string(c.id) in @pub_perspectives, do: :on, else: :off}
-            phx-click="toggle_perspective"
-            phx-value-id={c.id}
-          />
-          <span class="av shrink-0" style={"background:#{Voice.of_sheet(Library.payload(c))}"}></span>
-          <span class="flex-1">As <%= char_name(c) %></span>
-        </label>
-      </div>
-
-      <div class="lbl dim mb-1.5">And whether it can be carried on</div>
-      <label class="flex items-center gap-2.5 text-[13px] mb-3">
-        <Kit.chk state={if @pub_forkable, do: :on, else: :off} phx-click="toggle_forkable" />
-        <span class="flex-1">
-          Forkable
-          <span class="dim">— world, cast, sheets and arc, so someone can continue it</span>
-        </span>
-      </label>
-
-      <%!-- The gap can be the point; it just must not happen by accident (§3.1c-ii). --%>
-      <div
-        :if={@publish_warning}
-        class="rounded-lg p-2.5 mb-3"
-        style="background:color-mix(in srgb,var(--lamp) 10%,transparent);border-left:2px solid var(--lamp)"
-      >
-        <div class="text-[12.5px] font-semibold mb-0.5"><%= unreadable_line(@publish_warning) %></div>
-        <p class="text-[12px] leading-relaxed dim">
-          <span class="ttl"><%= warned_titles(@publish_warning) %></span>
-          — nobody you've shared was in
-          <%= if length(@publish_warning.scenes) == 1, do: "it", else: "them" %>. Readers will see
-          that it happened and no more.
-        </p>
-        <p class="text-[11px] leading-relaxed dim mt-1.5">
-          Sometimes a gap is the point. Worth knowing you've made one.
-        </p>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-1.5">
-        <Kit.btn
-          kind={:primary}
-          size={:sm}
-          phx-click="publish"
-          data-confirm={publish_confirm(assigns)}
-          disabled={@pub_perspectives == [] and not @pub_spectator}
-        >
-          <%= if @published?, do: "Update what's published", else: "Publish" %>
-        </Kit.btn>
-        <span :if={@pub_perspectives == [] and not @pub_spectator} class="text-[11px] dim">
-          Pick at least one way to read it.
-        </span>
-      </div>
-    </Kit.row>
-    """
-  end
-
-  # Said before and after, because it's the surprising half: there is one published
-  # copy, and this replaces it — including for anyone partway through reading it.
-  # The load-time assign, not a fresh read: by the time this runs the publish has
-  # happened, so asking the database would always say "updated".
-  defp publish_note(socket) do
-    if socket.assigns.published?,
-      do: "Updated the published copy. Anyone reading it gets this version.",
-      else: "Published. Anyone with the link reads this."
-  end
-
-  defp publication(socket) do
-    %Publication{
-      perspectives: socket.assigns.pub_perspectives,
-      spectator: socket.assigns.pub_spectator,
-      forkable: socket.assigns.pub_forkable
-    }
-  end
-
-  # Recomputed whenever the grant changes, so the warning tracks what's actually ticked
-  # rather than appearing once at the end. Only the reading half matters — forkable
-  # can't make a scene unreachable.
-  defp preflight(socket) do
-    scenes = Preflight.scenes(socket.assigns.scenes)
-    assign(socket, publish_warning: Preflight.warning(publication(socket), scenes))
-  end
-
-  defp unreadable_line(%{scenes: [_]}), do: "One scene nobody will be able to read"
-  defp unreadable_line(%{scenes: s}), do: "#{length(s)} scenes nobody will be able to read"
-
-  defp warned_titles(%{scenes: scenes}),
-    do: scenes |> Enum.map(&Map.get(&1, :title)) |> Enum.join(", ")
-
-  defp publish_confirm(assigns) do
-    heads = length(assigns.pub_perspectives)
-
-    read =
-      cond do
-        heads > 1 -> "#{heads} people's heads"
-        heads == 1 -> "one person's head"
-        true -> "no interiority"
-      end
-
-    fork = if assigns.pub_forkable, do: " They can also take a copy and carry it on.", else: ""
-
-    if assigns.published? do
-      "Replace what's published? Readers get #{read}, including anyone partway through — " <>
-        "there's one published copy and this becomes it." <> fork
-    else
-      "Publish a public copy? Readers get #{read}." <> fork
-    end
-  end
-
-  # ── Cast ──────────────────────────────────────────────────────────────────────
-
-  defp cast_tab(assigns) do
-    ~H"""
-    <div>
-      <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
-        <span class="lbl dim">Cast · <%= length(@cast) %></span>
-        <div class="flex gap-1.5">
-          <Kit.btn size={:sm} type="button" phx-click="new_character">✦ Write one</Kit.btn>
-          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={scene_cast_entries(assigns) == []}>
-            Set a scene
-          </Kit.btn>
-        </div>
-      </Kit.row>
-
-      <%!-- Stubs come from other people's relationships, so they arrive in batches.
-            One button fills them all rather than twenty trips through the editor. --%>
-      <Kit.row
-        :if={pending_count(@cast) > 0}
-        class="px-4 py-2.5 flex items-center justify-between gap-2"
-      >
-        <span class="text-[12px] dim">
-          <%= pending_line(pending_count(@cast)) %> — stubs from relationships, not written yet.
-        </span>
-        <Kit.btn size={:sm} type="button" phx-click="generate_pending" disabled={@generating}>
-          <%= if @generating, do: "Filling them in…", else: "Fill them in" %>
-        </Kit.btn>
-      </Kit.row>
-
-      <.cast_row :for={c <- named_cast(@cast)} entry={c} />
-
-      <%!-- Walk-ons collapse behind a count (`ux/polyphony-campaign.html` §06: "Main cast
-            reads as the short list you authored; walk-ons collapse behind a count"). A
-            quick-built campaign arrives with three people you asked for and a dozen the
-            cast introduced — a flat list buries the ones you came for. --%>
-      <details :if={walk_ons(@cast) != []}>
-        <summary
-          class="row px-4 py-3 flex items-center justify-between gap-2 cursor-pointer list-none"
-          style="background:var(--b2)"
-        >
-          <div>
-            <span class="lbl dim">Walk-ons · <%= length(walk_ons(@cast)) %></span>
-            <div class="text-[11px] dim mt-0.5">
-              Written around the cast. Only remembered in their own scenes.
-            </div>
-          </div>
-          <span class="dim text-[14px] shrink-0">⌄</span>
-        </summary>
-        <.cast_row :for={c <- walk_ons(@cast)} entry={c} />
-      </details>
-
-      <Kit.empty :if={@cast == []} headline="Nobody is in this story yet.">
-        A campaign needs at least one character before a scene can open.
-        <:action>
-          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="new_character">
-            ✦ Write a character
-          </Kit.btn>
-        </:action>
-      </Kit.empty>
-
-      <div :if={@addable != []} class="px-4 py-3" style="background:var(--b2)">
-        <form id="add-character" phx-submit="add_character" class="flex gap-1.5">
-          <label for="add-character-select" class="sr-only">Add a character</label>
-          <select id="add-character-select" name="id" class="field px-3 py-2 text-[13px] flex-1">
-            <option :for={c <- @addable} value={c.id}>
-              <%= char_name(c) %><%= if pending?(c), do: " (pending)", else: "" %>
-            </option>
-          </select>
-          <Kit.btn kind={:ghost} type="submit">Add</Kit.btn>
-        </form>
-      </div>
-
-      <p :if={@addable == [] and @cast != []} class="px-4 py-3 text-[11px] leading-relaxed dim">
-        Everyone you've written<span :if={@bible_name}> in <%= @bible_name %></span> is already
-        in the cast.
-      </p>
-
-      <%!-- Beside Cast, per §06b: groups are written with the character editor and
-            seed the people they produce, so this is where they belong rather than in
-            a corner of their own. --%>
-      <.groups_card {assigns} />
-    </div>
-    """
-  end
-
-  attr(:entry, :any, required: true)
-
-  defp cast_row(assigns) do
-    ~H"""
-    <Kit.row class="px-4 py-2.5 flex items-center gap-2.5">
-      <span class="av shrink-0" style={"background:#{Voice.of_sheet(Library.payload(@entry))}"}></span>
-      <div class="min-w-0 flex-1">
-        <div class="text-[13.5px] font-semibold"><%= char_name(@entry) %></div>
-        <div class="text-[11px] dim truncate"><%= char_blurb(@entry) %></div>
-      </div>
-      <Kit.pill :if={pending?(@entry)} colour="var(--lamp)">Pending</Kit.pill>
-      <.link navigate={~p"/authoring/character/#{@entry.id}"} class="btn btn-gh btn-sm shrink-0">
-        Edit
-      </.link>
-      <Kit.btn kind={:pen} size={:sm} phx-click="remove_character" phx-value-id={@entry.id}>
-        Remove
-      </Kit.btn>
-    </Kit.row>
-    """
-  end
-
-  # Tier, not status, is what separates the short list you authored from the people it
-  # produced (§2.5) — a main-cast member can be a half-written stub and still be one of
-  # the two people you came for.
-  defp named_cast(cast), do: Enum.reject(cast, &walk_on?/1)
-  defp walk_ons(cast), do: Enum.filter(cast, &walk_on?/1)
-
-  defp walk_on?(entry), do: Characters.tier_of(entry) == :incidental
-
-  # ── Premise ───────────────────────────────────────────────────────────────────
-
-  defp premise_tab(assigns) do
-    ~H"""
-    <div class="px-4 py-4">
-      <%!-- Premise comes after Cast in the tab order because the pitch is written
-            *from* the cast — which is also what Expand reads.
-
-            The **title lives here**, not in Settings. It was filed with the content
-            switches and the model pickers, which is where a campaign's configuration
-            goes — but a title isn't configuration, it's the first line of the pitch,
-            and it is written in the same sitting and out of the same material. Naming
-            it in one place and pitching it in another meant nothing on either screen
-            could see the other. --%>
-      <form id="campaign-premise" phx-change="update_details">
-        <label for="campaign-name" class="lbl dim">What it's called</label>
-        <input
-          id="campaign-name"
-          type="text"
-          name="name"
-          value={@payload[:name]}
-          placeholder="Name this campaign…"
-          phx-debounce="blur"
-          class="field px-3 py-2.5 text-[14px] w-full mt-1.5 mb-4"
-        />
-
-        <div class="flex items-center justify-between gap-2 mb-2">
-          <label for="premise-input" class="lbl dim">What this story is about</label>
-          <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="expand_premise" disabled={@expanding_premise}>
-            <%= if @expanding_premise, do: "✦ …", else: "✦ Expand" %>
-          </Kit.btn>
-        </div>
-
-        <textarea
-          id="premise-input"
-          name="premise"
-          rows="8"
-          phx-debounce="blur"
-          class="field px-3.5 py-3 text-[14px] leading-relaxed w-full"
-          placeholder="A shipment came in that isn't on any manifest…"
-        ><%= @payload[:premise] %></textarea>
-      </form>
-
-      <p class="text-[11px] leading-relaxed dim mt-2">
-        Expand deepens whatever's saved, grounded in the world and the cast — so it reads best
-        once both exist.<span :if={blank?(@payload[:name])}>
-          With no title yet, it writes one too.</span>
-      </p>
-    </div>
-    """
-  end
-
-  # `ux/polyphony-campaign.html` §06b, which had no implementation at all — the domain
-  # could seed from a group, resolve an audience through one, and fan its arc out to
-  # every member, and there was no way to make one.
-  defp groups_card(assigns) do
-    ~H"""
-    <Kit.sheet class="m-4">
-      <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
-        <span class="lbl dim">Groups · <%= length(@groups) %></span>
-        <Kit.btn size={:sm} type="button" phx-click="new_group">✦ Write one</Kit.btn>
-      </Kit.row>
-
-      <Kit.row :for={g <- @groups} class="px-4 py-2.5 flex items-center gap-2.5">
-        <span class="av shrink-0" style={"background:#{g.colour}"}></span>
-        <.link navigate={~p"/authoring/group/#{g.id}"} class="min-w-0 flex-1">
-          <div class="text-[13.5px] font-semibold truncate"><%= g.name %></div>
-          <div class="text-[11px] dim"><%= group_line(g) %></div>
-        </.link>
-        <span class="dim text-[14px] shrink-0">›</span>
-      </Kit.row>
-
-      <div :if={@groups != []} class="px-4 py-2.5">
-        <p class="text-[11px] leading-relaxed dim">
-          Anyone written from a group starts with its fields and knows whatever it knows.
-        </p>
-      </div>
-
-      <Kit.empty :if={@groups == []} headline="No groups yet." class="py-6">
-        A group is written like a character and used as a starting point for others — a
-        crew, a household, an order. It saves writing the same person five times, and
-        gives secrets somewhere to point.
-        <:action>
-          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="new_group">
-            ✦ Write a group
-          </Kit.btn>
-        </:action>
-      </Kit.empty>
-    </Kit.sheet>
-    """
-  end
-
-  # The design's own line: "6 members · seeds new people · 2 secrets".
-  defp group_line(g) do
-    [
-      "#{g.members} member#{if g.members == 1, do: "", else: "s"}",
-      "seeds new people",
-      g.secrets > 0 && "#{g.secrets} secret#{if g.secrets == 1, do: "", else: "s"}"
-    ]
-    |> Enum.filter(& &1)
-    |> Enum.join(" · ")
-  end
-
-  # ── Scenes ────────────────────────────────────────────────────────────────────
-
-  defp scenes_tab(assigns) do
-    ~H"""
-    <div>
-      <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
-        <span class="lbl dim"><%= length(@scenes) %> <%= if length(@scenes) == 1, do: "scene", else: "scenes" %></span>
-        <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={scene_cast_entries(assigns) == []}>
-          Set a scene
-        </Kit.btn>
-      </Kit.row>
-
-      <%!-- Who is in it. Not every scene is the whole cast, and opening one with
-            everybody present is how a two-hander becomes a crowd — the roster is what
-            turn order walks, so it is also a cost. Everyone ready is the default, so
-            an author who never touches this gets exactly what they got before. --%>
-      <Kit.row :if={@cast != []} class="px-4 py-3">
-        <div class="flex items-center justify-between gap-2">
-          <span class="lbl dim">Who's in it</span>
-          <span class="text-[11px] dim"><%= length(scene_cast_entries(assigns)) %> of <%= length(scene_ready(@cast)) %></span>
-        </div>
-        <div class="flex flex-wrap gap-1.5 mt-1.5">
-          <button
-            :for={c <- scene_ready(@cast)}
-            type="button"
-            class={["pill", not MapSet.member?(scene_cast_ids(assigns), c.id) && "dim"]}
-            style={MapSet.member?(scene_cast_ids(assigns), c.id) && "background:var(--b3)"}
-            aria-pressed={to_string(MapSet.member?(scene_cast_ids(assigns), c.id))}
-            phx-click="toggle_scene_cast"
-            phx-value-id={c.id}
-          >
-            <%= char_name(c) %>
-          </button>
-        </div>
-        <p :if={scene_cast_entries(assigns) == []} class="text-[11px] leading-relaxed mt-1.5" style="color:var(--pencil)">
-          Nobody is in it. Pick at least one.
-        </p>
-
-        <%!-- The walk-ons this story invented for itself, reachable from the screen
-              where you choose a cast. `SceneControl` refuses a non-`:full` character,
-              so offering one as a chip would be offering a choice that can't be
-              honoured — the answer is to write them, here, rather than to send the
-              author to another tab to run a batch they didn't ask for. Written in,
-              they are selected: the only reason to press this while picking a cast is
-              to use them. --%>
-        <div :if={pending_cast(@cast) != []} class="mt-3 pt-3" style="border-top:1px solid var(--rule)">
-          <div class="lbl dim mb-1.5">Not written yet</div>
-          <div class="flex flex-col gap-1.5">
-            <div
-              :for={c <- pending_cast(@cast)}
-              class="flex items-center justify-between gap-2"
-            >
-              <span class="text-[13px] min-w-0 truncate"><%= char_name(c) %></span>
-              <Kit.btn
-                size={:sm}
-                type="button"
-                phx-click="write_in"
-                phx-value-id={c.id}
-                disabled={MapSet.member?(@writing_in, c.id)}
-                class="shrink-0"
-              >
-                <%= if MapSet.member?(@writing_in, c.id), do: "✦ …", else: "✦ Write them in" %>
-              </Kit.btn>
-            </div>
-          </div>
-          <p class="text-[11px] leading-relaxed dim mt-2">
-            Stubs somebody's relationships invented. Writing one puts them in this scene.
-          </p>
-        </div>
-      </Kit.row>
-
-      <%!-- `OpenScene` has carried `location_id` since §2.3 and nothing ever passed
-            one, so every scene opened nowhere. It is a reference field on purpose — a
-            string today, a location entity later without changing the event — which is
-            why this is a line of text rather than a picker.
-
-            The premise is the scene's, not the campaign's. Every scene used to open on
-            the campaign premise, which is the pitch for the whole story and says
-            nothing about what is happening *now*. Blank still falls back to it. --%>
-      <Kit.row class="px-4 py-3">
-        <form id="scene-where" phx-change="set_scene_location">
-          <div class="flex items-center justify-between gap-2">
-            <label for="scene-location" class="lbl dim">Where the next scene happens</label>
-            <Kit.btn
-              size={:sm}
-              type="button"
-              phx-click="suggest_scene"
-              disabled={@scene_suggesting}
-            >
-              <%= if @scene_suggesting, do: "✦ …", else: "✦ Suggest" %>
-            </Kit.btn>
-          </div>
-          <input
-            id="scene-location"
-            type="text"
-            name="location"
-            value={@scene_location}
-            phx-debounce="blur"
-            placeholder="The quay, after the second bell"
-            class="field px-3 py-2.5 text-[14px] w-full mt-1.5"
-          />
-          <p class="text-[11px] leading-relaxed dim mt-1.5">
-            The Director opens there, and it grounds what everyone can see.
-          </p>
-
-          <label for="scene-premise" class="lbl dim mt-3 block">What's already true when it opens</label>
-          <textarea
-            id="scene-premise"
-            name="premise"
-            rows="2"
-            phx-debounce="blur"
-            placeholder="The ledger is due at the office by dawn and only one of them knows it."
-            class="field px-3 py-2.5 text-[13px] leading-relaxed w-full mt-1.5"
-          ><%= @scene_premise %></textarea>
-          <p class="text-[11px] leading-relaxed dim mt-1.5">
-            The pressure this scene opens under. Left blank, the campaign's premise stands in.
-          </p>
-        </form>
-      </Kit.row>
-
-      <Kit.row :for={s <- @scenes} class="px-4 py-3">
-        <.link navigate={~p"/play/#{s}"} class="flex items-center justify-between gap-2">
-          <span class="ttl text-[14.5px] font-semibold min-w-0 truncate"><%= scene_label(s) %></span>
-          <span class="dim text-[14px] shrink-0">›</span>
-        </.link>
-      </Kit.row>
-
-      <Kit.empty :if={@scenes == []} headline="Nothing has happened yet.">
-        Set a scene and the Director will open it.
-        <:action>
-          <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={scene_cast_entries(assigns) == []}>
-            Set a scene
-          </Kit.btn>
-        </:action>
-      </Kit.empty>
-
-      <Kit.row class="px-4 py-3 flex items-center justify-between gap-2">
-        <div class="min-w-0">
-          <div class="text-[13px] font-semibold">What play has changed</div>
-          <div class="text-[11px] dim">Arc the scenes proposed, waiting on you</div>
-        </div>
-        <.link navigate={~p"/arc/#{@entry.id}"} class="btn btn-gh btn-sm shrink-0">Review</.link>
-      </Kit.row>
-    </div>
-    """
-  end
-
-  # ── Render helpers ────────────────────────────────────────────────────────────
-
-  defp campaign_title(payload) do
-    case payload[:name] do
-      n when is_binary(n) and n != "" -> n
-      _ -> "Untitled campaign"
-    end
-  end
-
-  # The meta line the mock puts under the title: world, cast size, scene count. Says
-  # "Nothing built yet" on a campaign that has none of them rather than "0 · 0".
-  defp campaign_meta(assigns) do
-    parts =
-      [
-        assigns.bible_name,
-        count_label(length(assigns.cast), "cast", "cast"),
-        count_label(length(assigns.scenes), "scene", "scenes")
-      ]
-      |> Enum.reject(&is_nil/1)
-
-    if parts == [], do: "Nothing built yet", else: Enum.join(parts, " · ")
-  end
-
-  defp restart_note(0, _arcs), do: "Nothing had been played yet."
-
-  defp restart_note(scenes, arcs) do
-    "Back to the start — #{count_label(scenes, "scene", "scenes")} let go of" <>
-      if(arcs > 0,
-        do: ", and #{count_label(arcs, "arc proposal", "arc proposals")} with them.",
-        else: "."
-      )
-  end
-
-  # Owner-only, and refused rather than silently ignored: these three are the
-  # irreversible-ish ones, and `Permissions.can_edit?` is the same gate the editors use.
-  defp owned(socket, fun) do
-    safe(socket, fn ->
-      if Permissions.can_edit?(socket.assigns.entry, socket.assigns.current_user) do
-        fun.()
-      else
-        {:noreply, put_flash(socket, :error, "Not found.")}
-      end
-    end)
-  end
-
-  defp count_label(0, _one, _many), do: nil
-  defp count_label(1, one, _many), do: "1 #{one}"
-  defp count_label(n, _one, many), do: "#{n} #{many}"
-
-  # The kit's amber dot on a tab means *unbuilt*, and the mock uses it only on a
-  # campaign's first run — an invitation, not an error. So it goes once something
-  # exists anywhere.
-  defp unbuilt?(assigns, slug) do
-    first_run?(assigns) and
-      case slug do
-        "world" -> is_nil(assigns.bible_id)
-        "cast" -> assigns.cast == []
-        "premise" -> assigns.payload[:premise] in [nil, ""]
-        _ -> false
-      end
+  # With no world attached, every owned character is addable; with one attached, the
+  # roster is scoped to that world's characters plus any not yet assigned to a world.
+  defp addable_in_world?(_char, nil), do: true
+
+  defp addable_in_world?(char, world_id) do
+    wid = char |> Library.payload() |> Map.get(:world_bible_id)
+    wid in [nil, world_id]
   end
 
   # Generation on this screen is two independent buttons with a boolean each, rather
@@ -2248,179 +1079,6 @@ defmodule PolyphonyWeb.CampaignLive do
     |> assign(entry: entry, expanding_premise: false)
     |> load()
   end
-
-  defp request_generation(socket, key, op, request) do
-    Generations.request(socket.assigns.entry.id, key, op, request)
-    socket
-  end
-
-  # Applying a result consumes it, so a live delivery can't be replayed on the next mount.
-  defp forget_generation(socket, key) do
-    Generations.forget(socket.assigns.entry.id, key)
-    socket
-  end
-
-  # A reconnect can't see either of those booleans, so they come back from the rows —
-  # and anything that finished while the page was closed is re-delivered as the ordinary
-  # message the handlers below already take.
-  defp restore_generations(socket, entry) do
-    if connected?(socket) do
-      Generations.subscribe(entry.id)
-      running = Generations.running(entry.id)
-
-      for {key, result} <- Generations.take(entry.id),
-          do: send(self(), {:generation, key, result})
-
-      assign(socket,
-        expanding_premise: "premise" in running,
-        generating: "stubs" in running,
-        scene_suggesting: "scene" in running
-      )
-    else
-      socket
-    end
-  end
-
-  defp scene_ready(cast), do: Enum.filter(cast, &full?/1)
-
-  defp pending_cast(cast), do: Enum.filter(cast, &pending?/1)
-
-  # Tier first, then the roster's own order within a tier — which is cast order, and is
-  # what the voice colours key on, so two people in the same tier stay in the order they
-  # read in everywhere else.
-  @tier_rank %{main: 0, recurring: 1, incidental: 2}
-
-  defp publish_order(cast) do
-    cast
-    |> Enum.with_index()
-    |> Enum.sort_by(fn {c, i} -> {Map.get(@tier_rank, Characters.tier_of(c), 3), i} end)
-    |> Enum.map(&elem(&1, 0))
-  end
-
-  # Who is in the next scene: the author's selection, or everyone ready if they haven't
-  # made one. Always intersected with who is *currently* ready — a selection made before
-  # somebody was removed or generated must not resurrect them or hold a stub.
-  defp scene_cast_ids(assigns) do
-    ready = for c <- assigns.cast, full?(c), into: MapSet.new(), do: c.id
-
-    case assigns.scene_cast do
-      nil -> ready
-      chosen -> MapSet.intersection(chosen, ready)
-    end
-  end
-
-  defp scene_cast_entries(assigns) do
-    chosen = scene_cast_ids(assigns)
-    Enum.filter(assigns.cast, &MapSet.member?(chosen, &1.id))
-  end
-
-  defp scene_cast_summaries(assigns) do
-    for e <- scene_cast_entries(assigns) do
-      sheet = Library.payload(e)
-      %{"name" => Map.get(sheet, :name), "premise" => Map.get(sheet, :premise)}
-    end
-  end
-
-  # `world_display/1` filters `starting_canon` through `WorldBible.public/1`, which
-  # matters here: a scene premise is read by every character in the scene, so a secret
-  # that reached it would be a leak with no symptom but a character who mysteriously
-  # knows something.
-  defp scene_world(socket) do
-    case socket.assigns.bible_id && Library.get(socket.assigns.bible_id) do
-      %{} = entry -> world_display(Library.payload(entry))
-      _ -> nil
-    end
-  end
-
-  # The scenes already played, for "don't open on the same quay again".
-  defp scene_lines(assigns), do: Enum.map(Enum.reverse(assigns.scenes), &scene_label/1)
-
-  defp blank?(value), do: String.trim(to_string(value || "")) == ""
-
-  defp blank_to(value, fallback) do
-    case String.trim(to_string(value || "")) do
-      "" -> fallback
-      text -> text
-    end
-  end
-
-  # A view of the row, not a flag of its own — `building?` is only ever asked of what
-  # the database says, so a socket that reconnects mid-build gets the right answer.
-  defp building?(%{build: %BuildRun{status: "running"}}), do: true
-  defp building?(_), do: false
-
-  # Only the live socket subscribes: the first (static) mount has no process to keep.
-  defp subscribe_build(socket, entry) do
-    if connected?(socket), do: Builds.subscribe(entry.id)
-    socket
-  end
-
-  defp first_run?(assigns),
-    do: assigns.cast == [] and is_nil(assigns.bible_id) and assigns.scenes == []
-
-  # The card and the form it opens are one thing, so they ask one question. They drifted
-  # apart: the card is first-run only, but the form was shown on the open flag alone —
-  # and a successful build never cleared it. So the card vanished the moment the
-  # campaign stopped being first-run, and the form it had opened stayed on screen,
-  # offering to build a world and cast that now existed, underneath the settings for
-  # them.
-  defp quick_build_open?(assigns), do: assigns.quick_build_open and first_run?(assigns)
-
-  defp content_categories,
-    do: [
-      {"sexual", "Sex"},
-      {"graphic_violence", "Graphic violence"},
-      {"other", "Other mature themes"}
-    ]
-
-  defp char_blurb(entry) do
-    case Library.payload(entry) do
-      %CharacterSheet{premise: p} when is_binary(p) and p != "" -> p
-      _ -> "No sheet written yet"
-    end
-  end
-
-  defp scene_label(scene_id), do: "Scene " <> String.slice(to_string(scene_id), 0, 12)
-
-  defp char_name(entry) do
-    case Library.payload(entry) do
-      %{name: n} when is_binary(n) and n != "" -> n
-      _ -> "char-#{entry.id}"
-    end
-  end
-
-  defp update_cast(socket, ids, flash) do
-    payload = Map.put(socket.assigns.payload, :character_ids, ids)
-    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
-    socket |> assign(entry: entry) |> load() |> put_flash(:info, flash)
-  end
-
-  # The cast as a list of integer library ids (tolerating any legacy name entries,
-  # which simply won't resolve to a character and drop out).
-  defp cast_ids(payload) do
-    (payload[:character_ids] || []) |> Enum.map(&normalize_id/1) |> Enum.reject(&is_nil/1)
-  end
-
-  defp display_name(nil), do: "character"
-
-  defp display_name(id) do
-    case Library.get(id) do
-      nil -> "character"
-      entry -> char_name(entry)
-    end
-  end
-
-  defp full?(entry), do: match?(%CharacterSheet{status: :full}, Library.payload(entry))
-
-  defp maybe_flash_pending(socket, []), do: socket
-
-  defp maybe_flash_pending(socket, pending),
-    do:
-      put_flash(
-        socket,
-        :info,
-        "Skipped #{length(pending)} pending character(s) — generate them, then re-add to a scene."
-      )
 
   defp attach_world(_socket, ""), do: {nil, "World removed."}
 
@@ -2448,14 +1106,82 @@ defmodule PolyphonyWeb.CampaignLive do
     end
   end
 
-  defp world_name(entry) do
-    case Library.payload(entry) do
-      %{name: n} when is_binary(n) and n != "" -> n
-      _ -> "that world"
+  defp bible_label(_bibles, nil), do: nil
+
+  defp bible_label(bibles, id) do
+    case Enum.find(bibles, &(&1.id == id)) do
+      nil -> nil
+      entry -> Screens.Campaign.bible_label_of(entry)
     end
   end
 
+  defp blank_to(value, fallback) do
+    case String.trim(to_string(value || "")) do
+      "" -> fallback
+      text -> text
+    end
+  end
+
+  # A view of the row, not a flag of its own — `building?` is only ever asked of what
+  # the database says, so a socket that reconnects mid-build gets the right answer.
+
+  # The cast as a list of integer library ids (tolerating any legacy name entries,
+  # which simply won't resolve to a character and drop out).
+  defp cast_ids(payload) do
+    (payload[:character_ids] || []) |> Enum.map(&normalize_id/1) |> Enum.reject(&is_nil/1)
+  end
+
+  defp display_name(nil), do: "character"
+
+  defp display_name(id) do
+    case Library.get(id) do
+      nil -> "character"
+      entry -> Screens.Campaign.char_name(entry)
+    end
+  end
+
+  # Applying a result consumes it, so a live delivery can't be replayed on the next mount.
+  defp forget_generation(socket, key) do
+    Generations.forget(socket.assigns.entry.id, key)
+    socket
+  end
+
+  # A reconnect can't see either of those booleans, so they come back from the rows —
+  # and anything that finished while the page was closed is re-delivered as the ordinary
+  # message the handlers below already take.
+
+  defp group_name(_entry, %{name: n}) when is_binary(n) and n != "", do: n
+
+  defp group_name(entry, _group), do: "Unnamed group (##{entry.id})"
+
+  # Groups sit beside Cast because that is where they are used (§06b): a group is
+  # written like a character and used as a starting point for others.
+  defp group_rows(owner) do
+    for entry <- Groups.list(owner) do
+      group = Library.payload(entry)
+
+      %{
+        id: entry.id,
+        name: group_name(entry, group),
+        members: length(group.member_ids || []),
+        secrets: length(Group.secrets(group)),
+        colour: Voice.of_sheet(group)
+      }
+    end
+  end
+
+  defp maybe_flash_pending(socket, []), do: socket
+
+  defp maybe_flash_pending(socket, pending),
+    do:
+      put_flash(
+        socket,
+        :info,
+        "Skipped #{length(pending)} pending character(s) — generate them, then re-add to a scene."
+      )
+
   defp normalize_id(nil), do: nil
+
   defp normalize_id(id) when is_integer(id), do: id
 
   defp normalize_id(id) when is_binary(id) do
@@ -2465,23 +1191,100 @@ defmodule PolyphonyWeb.CampaignLive do
     end
   end
 
-  # With no world attached, every owned character is addable; with one attached, the
-  # roster is scoped to that world's characters plus any not yet assigned to a world.
-  defp addable_in_world?(_char, nil), do: true
-
-  defp addable_in_world?(char, world_id) do
-    wid = char |> Library.payload() |> Map.get(:world_bible_id)
-    wid in [nil, world_id]
+  # Owner-only, and refused rather than silently ignored: these three are the
+  # irreversible-ish ones, and `Permissions.can_edit?` is the same gate the editors use.
+  defp owned(socket, fun) do
+    safe(socket, fn ->
+      if Permissions.can_edit?(socket.assigns.entry, socket.assigns.current_user) do
+        fun.()
+      else
+        {:noreply, put_flash(socket, :error, "Not found.")}
+      end
+    end)
   end
 
-  defp pending?(char) do
-    match?(%CharacterSheet{status: s} when s != :full, Library.payload(char))
+  # Recomputed whenever the grant changes, so the warning tracks what's actually ticked
+  # rather than appearing once at the end. Only the reading half matters — forkable
+  # can't make a scene unreachable.
+  defp preflight(socket) do
+    scenes = Preflight.scenes(socket.assigns.scenes)
+    assign(socket, publish_warning: Preflight.warning(publication(socket), scenes))
   end
 
-  defp pending_count(cast), do: Enum.count(cast, &pending?/1)
+  defp publication(socket) do
+    %Publication{
+      perspectives: socket.assigns.pub_perspectives,
+      spectator: socket.assigns.pub_spectator,
+      forkable: socket.assigns.pub_forkable
+    }
+  end
 
-  defp pending_line(1), do: "1 pending character"
-  defp pending_line(n), do: "#{n} pending characters"
+  # Said before and after, because it's the surprising half: there is one published
+  # copy, and this replaces it — including for anyone partway through reading it.
+  # The load-time assign, not a fresh read: by the time this runs the publish has
+  # happened, so asking the database would always say "updated".
+  defp publish_note(socket) do
+    if socket.assigns.published?,
+      do: "Updated the published copy. Anyone reading it gets this version.",
+      else: "Published. Anyone with the link reads this."
+  end
+
+  defp request_generation(socket, key, op, request) do
+    Generations.request(socket.assigns.entry.id, key, op, request)
+    socket
+  end
+
+  defp restart_note(0, _arcs), do: "Nothing had been played yet."
+
+  defp restart_note(scenes, arcs) do
+    "Back to the start — #{Screens.Campaign.count_label(scenes, "scene", "scenes")} let go of" <>
+      if(arcs > 0,
+        do:
+          ", and #{Screens.Campaign.count_label(arcs, "arc proposal", "arc proposals")} with them.",
+        else: "."
+      )
+  end
+
+  defp restore_generations(socket, entry) do
+    if connected?(socket) do
+      Generations.subscribe(entry.id)
+      running = Generations.running(entry.id)
+
+      for {key, result} <- Generations.take(entry.id),
+          do: send(self(), {:generation, key, result})
+
+      assign(socket,
+        expanding_premise: "premise" in running,
+        generating: "stubs" in running,
+        scene_suggesting: "scene" in running
+      )
+    else
+      socket
+    end
+  end
+
+  defp scene_cast_summaries(assigns) do
+    for e <- Screens.Campaign.scene_cast_entries(assigns) do
+      sheet = Library.payload(e)
+      %{"name" => Map.get(sheet, :name), "premise" => Map.get(sheet, :premise)}
+    end
+  end
+
+  # `world_display/1` filters `starting_canon` through `WorldBible.public/1`, which
+  # matters here: a scene premise is read by every character in the scene, so a secret
+  # that reached it would be a leak with no symptom but a character who mysteriously
+  # knows something.
+
+  # The scenes already played, for "don't open on the same quay again".
+  defp scene_lines(assigns),
+    do: Enum.map(Enum.reverse(assigns.scenes), &Screens.Campaign.scene_label/1)
+
+  defp scene_world(socket) do
+    case socket.assigns.bible_id && Library.get(socket.assigns.bible_id) do
+      %{} = entry -> world_display(Library.payload(entry))
+      _ -> nil
+    end
+  end
 
   # What this campaign may attach: the **templates**, plus its own copy.
   #
@@ -2511,19 +1314,88 @@ defmodule PolyphonyWeb.CampaignLive do
     for e <- owned, e.kind == "world_bible", not MapSet.member?(attached, e.id), do: e
   end
 
-  defp bible_label(_bibles, nil), do: nil
+  # Only the live socket subscribes: the first (static) mount has no process to keep.
+  defp subscribe_build(socket, entry) do
+    if connected?(socket), do: Builds.subscribe(entry.id)
+    socket
+  end
 
-  defp bible_label(bibles, id) do
-    case Enum.find(bibles, &(&1.id == id)) do
-      nil -> nil
-      entry -> bible_label_of(entry)
+  defp update_cast(socket, ids, flash) do
+    payload = Map.put(socket.assigns.payload, :character_ids, ids)
+    {:ok, entry} = Library.update_payload(socket.assigns.entry.id, payload)
+    socket |> assign(entry: entry) |> load() |> put_flash(:info, flash)
+  end
+
+  defp world_name(entry) do
+    case Library.payload(entry) do
+      %{name: n} when is_binary(n) and n != "" -> n
+      _ -> "that world"
     end
   end
 
-  defp bible_label_of(entry) do
-    case Library.payload(entry) do
-      %{name: n} when is_binary(n) and n != "" -> n
-      _ -> "Untitled world (##{entry.id})"
+  defp world_payload(_bibles, nil), do: nil
+
+  defp world_payload(bibles, id) do
+    # Explicitly `nil` on anything that isn't a bible. A bare `with` would hand back
+    # the unmatched payload, and the template would then read `.setting` off it.
+    case Enum.find(bibles, &(&1.id == id)) do
+      nil ->
+        nil
+
+      entry ->
+        case Library.payload(entry) do
+          %WorldBible{} = bible -> bible
+          _ -> nil
+        end
     end
+  end
+
+  # Publishing asks **two separate questions, not one ladder** (§3.1c): how it's meant
+  # to be read — which perspectives a reader may adopt, a content decision and the
+  # spoiler control — and whether the authoring surface is exposed, which is one
+  # checkbox. Sheets come with forkable, because a fork must be able to carry the story
+  # on and can't from prose alone.
+
+  def render(assigns) do
+    ~H"""
+    <Screens.Campaign.screen
+      addable={@addable}
+      bible_id={@bible_id}
+      bible_name={@bible_name}
+      bibles={@bibles}
+      build={@build}
+      cast={@cast}
+      content={@content}
+      current_user={@current_user}
+      entry={@entry}
+      expanding_premise={@expanding_premise}
+      generating={@generating}
+      global_models={@global_models}
+      groups={@groups}
+      llm={@llm}
+      payload={@payload}
+      pub_forkable={@pub_forkable}
+      pub_perspectives={@pub_perspectives}
+      pub_spectator={@pub_spectator}
+      publish_help={@publish_help}
+      publish_warning={@publish_warning}
+      published?={@published?}
+      qb_groups={@qb_groups}
+      qb_seeds={@qb_seeds}
+      qb_suggest={@qb_suggest}
+      qb_world={@qb_world}
+      quick_build_open={@quick_build_open}
+      scene_cast={@scene_cast}
+      scene_location={@scene_location}
+      scene_premise={@scene_premise}
+      scene_suggesting={@scene_suggesting}
+      scenes={@scenes}
+      seen={@seen}
+      tab={@tab}
+      viewer={@viewer}
+      world={@world}
+      writing_in={@writing_in}
+    />
+    """
   end
 end

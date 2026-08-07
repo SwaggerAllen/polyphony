@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyphony — character sheet</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="polyphony-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="antialiased">
+
+<header class="max-w-6xl mx-auto px-5 pt-12 pb-8">
+  <div class="wall mb-3">Polyphony · step 9 · character sheet</div>
+  <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">The character sheet</h1>
+  <p class="mt-4 max-w-2xl text-[15px] leading-relaxed note">
+    The longest form in the product and the one people re-read most. Prose generation reuses the
+    world editor's states and secrets reuse the audience picker, so this covers what's new: facts,
+    relationships, the two directions a character can be pushed, groups, and the stub.
+  </p>
+</header>
+
+<!-- 00 · SHAPE -->
+<section class="max-w-6xl mx-auto px-5 pb-14">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">00 · Shape</div>
+    <h2 class="text-2xl font-bold mb-3">A sheet is read, not just filled in</h2>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note">
+      <div><b style="color:var(--page-fg)">No tabs, no accordions.</b> You come back to a sheet to
+        remember who someone is, which means reading top to bottom. A sticky jump bar handles the
+        length instead — position without hiding anything.</div>
+      <div><b style="color:var(--page-fg)">Prose first, structure after.</b> The five written fields
+        run continuously like a page. Facts, ties and pressures are lists, and sit below.</div>
+      <div><b style="color:var(--page-fg)">Nothing says "core" or "status."</b> The model's vocabulary
+        isn't the author's. <em>Always in mind</em> beats <span class="mono text-[13px]">core: true</span>
+        and actually explains the behaviour it controls.</div>
+      <div><b style="color:var(--page-fg)">One boolean pattern.</b> A small switch, right-aligned,
+        coloured by what it means — amber for always-in-mind, violet for secret. Identical in every
+        menu on every artifact.</div>
+      <div><b style="color:var(--page-fg)">Pronouns are a field, not a guess.</b> Half the copy on
+        this screen is written about the character — <em>what she won't do</em>, <em>if she's
+        pushed</em> — so the interface needs them as data. It's also what the Director and every
+        generation call should be using rather than inferring from a name.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 01 · THE SHEET -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">01 · Populated</div>
+    <h2 class="text-2xl font-bold mb-2">Wren Ashgrove, written</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note">Scroll it — the jump bar pins. Every prose field carries Rewrite and Expand; every list carries Suggest.</p>
+  </div>
+  <div class="mt-7 grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr stage dark sheet"><div data-spec="sheet"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr stage light sheet"><div data-spec="sheet"></div></div></div>
+  </div>
+</section>
+
+<!-- 02 · STUB -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">02 · Before she exists</div>
+    <h2 class="text-2xl font-bold mb-2">Brief, writing, stub, failed</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      A stub waits deliberately. Writing a character generates their relationships, which stub more
+      people, which would generate more — so stubs are written <b style="color:var(--page-fg)">when
+      you ask, or when they walk into a scene</b>, never on creation. That's what stops the whole
+      cast writing itself sideways from one button.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">From a brief</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[16px]" style="font-weight:600">Someone new</div>
+          <div class="lbl dim mt-0.5">The Salt Line · Saltmarch</div></div>
+        <div class="px-4 py-4">
+          <div class="lbl dim mb-1.5">Name</div>
+          <div class="field px-3 py-2.5 text-[14px] mb-3">Wren Ashgrove</div>
+          <div class="lbl dim mb-1.5">Pronouns</div>
+          <div class="flex flex-wrap gap-1.5 mb-3">
+            <span class="pill" style="background:var(--b3)">she / her</span><span class="pill dim">he / him</span>
+            <span class="pill dim">they / them</span><span class="pill dim">Something else</span></div>
+          <div class="lbl dim mb-1.5">Who are they, in a line</div>
+          <div class="field px-3 py-2.5 text-[13px] leading-relaxed mb-3" style="min-height:56px">The harbourmaster's daughter. Signs for more cargo than the ledger admits and has never been caught.</div>
+          <div class="lbl dim mb-1.5">They're</div>
+          <div class="flex gap-1.5 mb-3.5">
+            <span class="pill" style="background:var(--b3)">Main cast</span><span class="pill dim">Recurring</span><span class="pill dim">Walk-on</span></div>
+          <button class="btn btn-pri w-full justify-center mb-2">✦ Write her sheet</button>
+          <button class="btn btn-gh w-full justify-center">Fill it in myself</button>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Writing</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[16px]" style="font-weight:600">Writing Wren</div>
+          <div class="lbl dim mt-0.5">Half a minute</div></div>
+        <div class="px-4 py-4 space-y-2.5 text-[13px]">
+          <div class="flex items-center gap-2"><span class="dot" style="background:var(--ok)"></span><span class="dim">Premise</span></div>
+          <div class="flex items-center gap-2"><span class="dot" style="background:var(--ok)"></span><span class="dim">Appearance</span></div>
+          <div class="flex items-center gap-2"><span class="dot" style="background:var(--lamp)"></span><span>Voice</span></div>
+          <div class="flex items-center gap-2"><span class="dot" style="background:var(--b3)"></span><span class="dim">Temperament</span></div>
+          <div class="flex items-center gap-2"><span class="dot" style="background:var(--b3)"></span><span class="dim">Backstory</span></div>
+          <div class="flex items-center gap-2"><span class="dot" style="background:var(--b3)"></span><span class="dim">What's true about her</span></div>
+          <div class="flex items-center gap-2"><span class="dot" style="background:var(--b3)"></span><span class="dim">Who she knows</span></div>
+        </div>
+        <div class="px-4 pb-4"><button class="btn btn-gh btn-sm">Stop</button>
+          <p class="text-[11px] leading-relaxed dim mt-2">People she turns out to know are added as stubs, and left alone until someone needs them.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Stub · waiting</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-lg shrink-0" style="background:var(--b3)"></span>
+            <div><div class="ttl text-[15px]" style="font-weight:600">The bellman</div>
+              <div class="lbl dim">Not written yet</div></div></div>
+        </div>
+        <div class="px-4 py-3 row"><p class="text-[13px] leading-relaxed">Rings the tide bell for whoever pays him.</p></div>
+        <div class="px-4 py-3">
+          <div class="space-y-2 mb-3.5" style="opacity:.5">
+            <div class="skel" style="width:92%"></div><div class="skel" style="width:78%"></div>
+            <div class="skel" style="width:86%"></div><div class="skel" style="width:44%"></div></div>
+          <button class="btn btn-pri w-full justify-center">✦ Write him</button>
+          <p class="text-[11px] leading-relaxed dim mt-2">Or leave him. He'll be written the moment he walks into a scene, and not before.</p>
+        </div>
+      </div></div>
+    <div><div class="wall mb-2">Writing failed</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-lg shrink-0" style="background:var(--b3)"></span>
+            <div><div class="ttl text-[15px]" style="font-weight:600">The bellman</div>
+              <div class="lbl" style="color:var(--pencil)">Couldn't be written</div></div></div>
+        </div>
+        <div class="px-4 py-3">
+          <p class="text-[13px] leading-relaxed dim mb-3">Nothing came back. Your line about him is untouched, and he's still waiting.</p>
+          <div class="flex flex-col gap-1.5">
+            <button class="btn btn-pri justify-center">Try again</button>
+            <button class="btn btn-gh justify-center">Write him myself</button></div>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 03 · FACTS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">03 · Facts</div>
+    <h2 class="text-2xl font-bold mb-2">Two flags that compose</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      They're orthogonal and shouldn't be collapsed: <b style="color:var(--page-fg)">always in mind</b>
+      is whether <em>she</em> carries it, <b style="color:var(--page-fg)">secret</b> is who <em>else</em>
+      has it. A woman can have a secret she never thinks about. Only one can own the left border, so
+      secret takes the structure and always-in-mind is a chip.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">All four combinations</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+          <span class="flex items-center gap-1.5"><span class="lbl dim">What's true about her</span><span class="info">i</span></span>
+          <button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+        <div class="px-4 py-2.5 row">
+          <p class="text-[13.5px] leading-relaxed">She can read a manifest upside down across a desk.</p></div>
+        <div class="px-4 py-2.5 row">
+          <p class="text-[13.5px] leading-relaxed">She has signed the harbour register every day since she was fourteen.</p>
+          <div class="mt-1"><span class="chip-core"><span class="dot" style="background:var(--lamp);width:5px;height:5px"></span>Always in mind</span></div></div>
+        <div class="px-4 py-2.5 row"><div class="secret">
+          <p class="text-[13.5px] leading-relaxed">She's been signing for the Kestrel's cargo since March.</p>
+          <div class="flex items-center gap-1.5 mt-1"><span class="dot" style="background:var(--secret)"></span>
+            <span class="lbl" style="color:var(--secret)">Secret · Wren, Sable</span></div></div></div>
+        <div class="px-4 py-2.5"><div class="secret">
+          <p class="text-[13.5px] leading-relaxed">Her mother didn't die of the fever.</p>
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+            <span class="flex items-center gap-1.5"><span class="dot" style="background:var(--secret)"></span>
+              <span class="lbl" style="color:var(--secret)">Secret · Wren only</span></span>
+            <span class="chip-core"><span class="dot" style="background:var(--lamp);width:5px;height:5px"></span>Always in mind</span>
+          </div></div></div>
+      </div>
+      <p class="text-[12px] mt-2 note">The last one is the case that needed solving — hers alone, and never out of her head.</p>
+    </div>
+    <div><div class="wall mb-2">Item menu · one switch pattern</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <p class="text-[13px] leading-relaxed">Her mother didn't die of the fever.</p></div>
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-3">
+          <div><div class="text-[13px] font-semibold">Always in mind</div>
+            <div class="text-[11px] dim">In front of her every turn</div></div>
+          <span class="sw sw-on" style="--sc:var(--lamp)"><i></i></span></div>
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-3">
+          <div><div class="text-[13px] font-semibold">Secret</div>
+            <div class="text-[11px] dim">Nobody else starts out knowing</div></div>
+          <span class="sw sw-on" style="--sc:var(--secret)"><i></i></span></div>
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-2">
+          <span class="text-[13px]">Who starts out knowing</span>
+          <span class="pill" style="border-color:var(--secret);color:var(--secret)">Wren only</span></div>
+        <div class="py-1.5">
+          <div class="px-4 py-2 text-[13px]">Edit</div>
+          <div class="px-4 py-2 text-[13px]">Move up</div>
+          <div class="px-4 py-2 text-[13px] dim">Delete</div></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Same switch, same geometry, coloured by meaning. World canon uses the identical row for its secret toggle.</p>
+    </div>
+    <div><div class="wall mb-2">The section's info drawer</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+          <span class="ttl text-[15px]" style="font-weight:600">About facts</span>
+          <span class="dim text-[17px] leading-none">×</span></div>
+        <div class="px-4 py-3 row">
+          <p class="text-[13px] leading-relaxed">Short, flat statements that are true about her. They're what she'd never contradict, so keep them to things you'd defend rather than things you'd like.</p></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center gap-1.5 mb-1"><span class="dot" style="background:var(--lamp)"></span>
+            <span class="text-[13px] font-semibold">Always in mind</span></div>
+          <p class="text-[13px] leading-relaxed mb-1.5">She'll have this in front of her for every turn, in every scene. Use it for the handful of things she'd never stop being aware of.</p>
+          <p class="text-[13px] leading-relaxed dim">Everything else is remembered when it's relevant — she still knows it, it's just fetched rather than carried.</p></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center gap-1.5 mb-1"><span class="dot" style="background:var(--secret)"></span>
+            <span class="text-[13px] font-semibold">Secret</span></div>
+          <p class="text-[13px] leading-relaxed">Nobody starts out knowing it except the people you name. Everyone else finds out in play, if they ever do — and the two settings are independent, so she can have a secret she rarely thinks about.</p></div>
+        <div class="px-4 py-2.5 flex items-center justify-between gap-2">
+          <span class="text-[12px] dim">4 of her 11 are always in mind</span>
+          <span class="pill" style="border-color:var(--lamp);color:var(--lamp)">A few is right</span></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Nudges, not caps — twenty always-in-mind facts is a quality problem, not an error.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 04 · RELATIONSHIPS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">04 · Relationships</div>
+    <h2 class="text-2xl font-bold mb-2">Directional, and often lopsided</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+      How <em>she</em> regards <em>him</em>. The interesting cases are where the two directions don't
+      match, so both are shown — asymmetry should look deliberate, not like something you forgot.
+    </p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">The list</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+          <span class="flex items-center gap-1.5"><span class="lbl dim">Who she knows</span><span class="info">i</span></span><button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center gap-2.5 mb-1.5">
+            <span class="av" style="background:var(--v1)"></span>
+            <span class="text-[13.5px] font-semibold flex-1">Aldous Ashgrove</span>
+            <span class="pill dim shrink-0">Her father</span></div>
+          <p class="text-[13px] leading-relaxed">She has spent her whole life covering for him and has never once asked what for.</p>
+          <div class="flex items-start gap-2 mt-2 pt-2" style="border-top:1px solid var(--rule)">
+            <span class="lbl dim shrink-0 pt-0.5">He →</span>
+            <p class="text-[12.5px] leading-relaxed dim">He thinks she doesn't know, and that this is a kindness.</p></div>
+        </div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center gap-2.5 mb-1.5">
+            <span class="av" style="background:var(--v2)"></span>
+            <span class="text-[13.5px] font-semibold flex-1">Ilias Vane</span>
+            <span class="pill dim shrink-0">A stranger</span></div>
+          <p class="text-[13px] leading-relaxed">A man who counts things. She decided that within four seconds of meeting him and hasn't revised it.</p>
+          <div class="flex items-center gap-1.5 mt-2 pt-2" style="border-top:1px solid var(--rule)">
+            <span class="lbl dim">He →</span><span class="text-[12px] dim">nothing written</span>
+            <button class="btn btn-gh btn-sm ml-auto">✦ Write it</button></div>
+        </div>
+        <div class="px-4 py-2.5"><div class="field px-3 py-2 text-[13px] dim">Add someone she knows…</div></div>
+      </div></div>
+    <div><div class="wall mb-2">Adding someone who doesn't exist</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Who does she know?</div></div>
+        <div class="px-4 py-2.5 row"><div class="field px-3 py-2 text-[13px]">Marek</div></div>
+        <div class="px-4 py-2 row"><span class="lbl dim">Nobody by that name yet</span></div>
+        <div class="px-4 py-3 row">
+          <div class="lbl dim mb-1.5">How does she regard him?</div>
+          <div class="field px-3 py-2.5 text-[13px] leading-relaxed" style="min-height:52px">The only person on the quay she'd trust with a key.</div></div>
+        <div class="px-4 py-3">
+          <button class="btn btn-pri w-full justify-center mb-1.5">Add Marek</button>
+          <p class="text-[11px] leading-relaxed dim">He joins the campaign as a walk-on and stays unwritten until he's needed.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Suggested · review</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+          <span class="lbl dim">Suggested</span><span class="pill" style="color:var(--lamp);border-color:var(--lamp)">2 new</span></div>
+        <div class="px-4 py-2.5 row">
+          <div class="flex items-center gap-2.5 mb-1"><span class="av" style="background:var(--v3)"></span>
+            <span class="text-[13px] font-semibold flex-1">Mother Corrigan</span></div>
+          <p class="text-[12.5px] leading-relaxed dim mb-2">She stopped going to the chapel the year her mother died and has never explained why.</p>
+          <div class="flex gap-1.5"><button class="btn btn-pri btn-sm">Keep</button><button class="btn btn-gh btn-sm">Edit</button><button class="btn btn-gh btn-sm">No</button></div>
+        </div>
+        <div class="px-4 py-2.5">
+          <div class="flex items-center gap-2.5 mb-1"><span class="av" style="background:var(--b3)"></span>
+            <span class="text-[13px] font-semibold flex-1">Bellwether Rusk</span>
+            <span class="pill dim shrink-0">new</span></div>
+          <p class="text-[12.5px] leading-relaxed dim mb-2">Her mother's old clerk. He still calls her "miss" and it still stings.</p>
+          <div class="flex gap-1.5"><button class="btn btn-pri btn-sm">Keep</button><button class="btn btn-gh btn-sm">Edit</button><button class="btn btn-gh btn-sm">No</button></div>
+        </div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 05 · PRESSURES -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">05 · Where she can be pushed</div>
+    <h2 class="text-2xl font-bold mb-2">Two directions, and the moment each one gives</h2>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note mb-7">
+      <div><b style="color:var(--page-fg)">Direction lives in the grouping, not the wording.</b>
+        <em>Won't</em> and <em>Can't stop</em> are separate lists, so an item can never be read
+        backwards — which is exactly what went wrong when everything was one list of "lines."</div>
+      <div><b style="color:var(--page-fg)">Compulsions are as dramatic as refusals.</b> The thing she
+        can't stop doing is the same gate with the sign flipped, and it costs nothing to support.
+        Covering for her father is a better story engine than any refusal on the sheet.</div>
+      <div><b style="color:var(--page-fg)">Three lines, in sequence.</b> The item, then
+        <em>until</em>, then <em>and then</em>. Nobody needs a label explained when it reads as a
+        sentence — and <em>and then</em> is what removes the last ambiguity about which way it flipped.</div>
+      <div><b style="color:var(--page-fg)">The ceiling always pushes toward refusal.</b> A compulsion
+        flagged for content the campaign doesn't allow is held closed, meaning she doesn't do it.
+        That's the correct direction to fail in.</div>
+    </div>
+  </div>
+  <div class="grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr stage dark sheet"><div data-spec="press"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr stage light sheet"><div data-spec="press"></div></div></div>
+  </div>
+  <div class="mt-5 grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Editing one</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Something she won't do</div></div>
+        <div class="px-4 py-3 row">
+          <div class="lbl dim mb-1.5">What</div>
+          <div class="field px-3 py-2.5 text-[14px]">Name her father</div></div>
+        <div class="px-4 py-3 row">
+          <div class="lbl dim mb-2">Does anything change that?</div>
+          <div class="space-y-1.5">
+            <div class="flex items-start gap-2.5 p-2.5 rounded-lg border" style="border-color:var(--rule)">
+              <span class="dot mt-1.5" style="background:var(--rule)"></span>
+              <div><div class="text-[13px] font-semibold">Never</div><div class="text-[11px] dim">A hard line, whatever happens</div></div></div>
+            <div class="flex items-start gap-2.5 p-2.5 rounded-lg" style="background:var(--b3)">
+              <span class="dot mt-1.5" style="background:var(--lamp)"></span>
+              <div><div class="text-[13px] font-semibold">Not until…</div><div class="text-[11px] dim">A slow burn the story can earn</div></div></div>
+          </div>
+        </div>
+        <div class="px-4 py-3 row">
+          <div class="lbl dim mb-1.5">Until</div>
+          <div class="field px-3 py-2.5 text-[13px] leading-relaxed">Someone she loves is going to be hurt by the silence, and she can see it coming.</div></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center justify-between mb-1.5"><span class="lbl dim">And then</span>
+            <button class="btn btn-gh btn-sm">✦ Rewrite</button></div>
+          <div class="field px-3 py-2.5 text-[13px] leading-relaxed">She says it flatly, in public, and doesn't soften it.</div>
+          <p class="text-[11px] leading-relaxed dim mt-1.5">Written for you when the line is created. She doesn't get told this until it happens.</p></div>
+        <div class="px-4 py-3">
+          <div class="lbl dim mb-1.5">If she's pushed before then</div>
+          <div class="field px-3 py-2.5 text-[13px] leading-relaxed">She gets very polite, and very boring, and leaves.</div></div>
+      </div></div>
+    <div><div class="wall mb-2">Category &amp; the ceiling</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Anything to flag?</div></div>
+        <div class="px-4 py-3 row">
+          <div class="flex flex-wrap gap-1.5">
+            <span class="pill" style="background:var(--b3)">Nothing</span><span class="pill dim">Sex</span>
+            <span class="pill dim">Violence</span><span class="pill dim">Other</span></div>
+          <p class="text-[11px] leading-relaxed dim mt-2">Only if it's about mature content. Most aren't.</p></div>
+        <div class="px-4 py-3">
+          <div class="rounded-lg p-2.5" style="background:color-mix(in srgb,var(--pencil) 9%,transparent);border-left:2px solid var(--pencil)">
+            <div class="text-[12.5px] font-semibold mb-0.5">This campaign doesn't allow sex</div>
+            <p class="text-[12px] leading-relaxed dim">Flagged that way, it's held closed however the story goes. You can still write it — it just won't open here.</p></div>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">The catalog has this cap built but never called. Shown as a live consequence, not a static hint.</p>
+    </div>
+    <div><div class="wall mb-2">Empty</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+          <span class="lbl dim">Where she can be pushed</span><button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+        <div class="px-4 py-7 text-center">
+          <div class="ttl text-[15px] mb-1.5" style="font-weight:500">Nothing gives, and nothing drives.</div>
+          <p class="text-[13px] leading-relaxed dim mb-3.5">Which is allowed, but a character with nothing she'd refuse and nothing she can't help doing is hard to write scenes about.</p>
+          <button class="btn btn-pri btn-sm">✦ Suggest some</button></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 06 · GROUPS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">06 · Groups</div>
+    <h2 class="text-2xl font-bold mb-2">Literally a character sheet, used as a seed</h2>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note mb-7">
+      <div><b style="color:var(--page-fg)">Same fields, same editor.</b> A group has an appearance, a
+        voice, a temperament, facts, relationships and pressures — because each one seeds the
+        same-named field on anyone written from it. There is no second authoring surface and nothing
+        new to learn.</div>
+      <div><b style="color:var(--page-fg)">Every field earns its place.</b> The Tidewatch's voice
+        seeds their members' voices. Its relationships seed theirs, so a group's contempt for the
+        harbour office arrives in every member without being retyped.</div>
+      <div><b style="color:var(--page-fg)">Copied, not injected.</b> Seeding pastes the text once, so
+        a group costs nothing at context time and there's no group bible in any prompt. Editing the
+        group later doesn't rewrite existing members — a seed is a starting point.</div>
+      <div><b style="color:var(--page-fg)">Membership is the live part.</b> It's what secrets resolve
+        against, it's editable by hand, and it works for characters who were never seeded from the
+        group at all.</div>
+    </div>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">A group · same sheet</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-lg shrink-0" style="background:var(--secret)"></span>
+            <div><div class="ttl text-[15px]" style="font-weight:600">The Tidewatch</div>
+              <div class="lbl dim">Group · seeds 6 people</div></div></div></div>
+        <div class="px-4 py-2.5 row"><div class="lbl dim mb-1">Premise</div>
+          <p class="text-[13px] leading-relaxed">The people who know what the bell is actually for. They are not a cult and would be insulted by the word.</p></div>
+        <div class="px-4 py-2.5 row"><div class="lbl dim mb-1">Appearance</div>
+          <p class="text-[13px] leading-relaxed">Grey, always, and salt-stained at the hem.</p></div>
+        <div class="px-4 py-2.5 row"><div class="lbl dim mb-1">Voice</div>
+          <p class="text-[13px] leading-relaxed">Unhurried. A way of not answering that reads as politeness.</p></div>
+        <div class="px-4 py-2.5 row"><div class="lbl dim mb-1">Who they know</div>
+          <p class="text-[13px] leading-relaxed">The harbour office — contempt, carefully hidden.</p></div>
+        <div class="px-4 py-2.5"><div class="lbl dim mb-1">Won't</div>
+          <p class="text-[13px] leading-relaxed">Say what the bell is for. Never.</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Every field here lands on the same field of anyone written from it.</p>
+    </div>
+    <div><div class="wall mb-2">Seeding a character from it</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">Someone from the Tidewatch</div></div>
+        <div class="px-4 py-3 row">
+          <div class="lbl dim mb-1.5">Name</div>
+          <div class="field px-3 py-2.5 text-[14px] mb-3">The bellman</div>
+          <div class="lbl dim mb-1.5">Anything else about him</div>
+          <div class="field px-3 py-2.5 text-[13px] leading-relaxed" style="min-height:50px">Older than the rest. Rings it himself, most nights.</div></div>
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-3">
+          <div><div class="text-[13px] font-semibold">Use the group's fields as a start</div>
+            <div class="text-[11px] dim">6 fields will be seeded</div></div>
+          <span class="sw sw-on" style="--sc:var(--secret)"><i></i></span></div>
+        <div class="px-4 py-3">
+          <button class="btn btn-pri w-full justify-center">✦ Write him</button>
+          <p class="text-[11px] leading-relaxed dim mt-2">He'll be his own person after this — changing the Tidewatch later won't touch him.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Members · seeded and joined</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)"><div class="ttl text-[15px]" style="font-weight:600">The Tidewatch</div>
+          <div class="lbl dim mt-0.5">6 members · 2 secrets addressed to them</div></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="av" style="background:var(--v4)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Sable Quist</div>
+            <div class="text-[11px] dim">Seeded from this group</div></div>
+          <span class="dim text-[14px] shrink-0">⋯</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="av" style="background:var(--b3)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">The bellman</div>
+            <div class="text-[11px] dim">Seeded from this group</div></div>
+          <span class="dim text-[14px] shrink-0">⋯</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="av" style="background:var(--v3)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">Mother Corrigan</div>
+            <div class="text-[11px]" style="color:var(--lamp)">Joined by hand</div></div>
+          <span class="dim text-[14px] shrink-0">⋯</span></div>
+        <div class="px-4 py-2.5"><div class="field px-3 py-2 text-[13px] dim">Add someone…</div></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Corrigan was never seeded from it. Secrets addressed to the group don't care which.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 06b · INFO -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">06b · Explaining things</div>
+    <h2 class="text-2xl font-bold mb-3">One info affordance, one drawer</h2>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note mb-7">
+      <div><b style="color:var(--page-fg)">On the section header, never in a menu.</b> Opening an
+        overlay from inside an already-open menu is a mess, and it hides the explanation from anyone
+        who didn't already go looking. The <span class="info">i</span> sits beside the label.</div>
+      <div><b style="color:var(--page-fg)">One drawer per section, not per setting.</b> Facts get a
+        single drawer covering what facts are, what <em>always in mind</em> does and how
+        <em>secret</em> works — because those three only make sense together.</div>
+      <div><b style="color:var(--page-fg)">It replaces inline helper text.</b> Anywhere the current
+        mocks explain a concept in small grey type under a control, that prose moves into the drawer
+        and the layout gets its space back.</div>
+      <div><b style="color:var(--page-fg)">Same drawer everywhere.</b> Title, prose, a subsection per
+        concept with its own status dot. It's the sheet component already used for cast, settings and
+        beats, so there's nothing new to build.</div>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Closed · on the header</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+          <span class="flex items-center gap-1.5"><span class="lbl dim">What's true about her</span><span class="info">i</span></span>
+          <button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+        <div class="px-4 py-2.5 row"><p class="text-[13.5px] leading-relaxed">She can read a manifest upside down across a desk.</p></div>
+        <div class="px-4 py-2.5"><p class="text-[13.5px] leading-relaxed">She has done the job for eleven years.</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Quiet enough to ignore forever, obvious enough to find once.</p>
+    </div>
+    <div><div class="wall mb-2">Open · pressures</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+          <span class="ttl text-[15px]" style="font-weight:600">About being pushed</span>
+          <span class="dim text-[17px] leading-none">×</span></div>
+        <div class="px-4 py-3 row">
+          <p class="text-[13px] leading-relaxed">These are played, not filtered. A line she holds is a scene beat — something the story has to work against, and something that can give at the right moment.</p></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center gap-1.5 mb-1"><span class="dot" style="background:var(--pencil)"></span>
+            <span class="text-[13px] font-semibold">Won't, and can't stop</span></div>
+          <p class="text-[13px] leading-relaxed">Two directions. What she refuses, and what she does whether or not she means to. Both can be absolute or can turn once.</p></div>
+        <div class="px-4 py-3 row">
+          <div class="flex items-center gap-1.5 mb-1"><span class="dot" style="background:var(--lamp)"></span>
+            <span class="text-[13px] font-semibold">Until, and then</span></div>
+          <p class="text-[13px] leading-relaxed">What has to happen before it turns, and what she's like afterwards. She isn't told the second one until it's true of her.</p></div>
+        <div class="px-4 py-3">
+          <div class="flex items-center gap-1.5 mb-1"><span class="dot" style="background:var(--bcm)"></span>
+            <span class="text-[13px] font-semibold">Flagging mature content</span></div>
+          <p class="text-[13px] leading-relaxed">Only if the line is about it. A flagged item stays closed in campaigns that don't allow that content, whatever the story does.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Where they're placed</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-2.5 row" style="background:var(--b2)"><span class="lbl dim">Every one in the mocks</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Facts</span><span class="text-[11px] dim">always in mind · secret</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">What she won't do</span><span class="text-[11px] dim">played, not filtered</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Who she knows</span><span class="text-[11px] dim">both directions</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Cover</span><span class="text-[11px] dim">what strangers see</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">She belongs to</span><span class="text-[11px] dim">seed vs belonging</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Main cast <span class="dim">· the pill</span></span><span class="text-[11px] dim">who stays in mind</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Who starts out knowing</span><span class="text-[11px] dim">the audience picker</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">What's already true</span><span class="text-[11px] dim">world secrets</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Who writes his turns</span><span class="text-[11px] dim">control mode</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Say it to</span><span class="text-[11px] dim">whispering</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">What this campaign can contain</span><span class="text-[11px] dim">a cap, not a target</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Continuity</span><span class="text-[11px] dim">what a prequel carries</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Model tuning</span><span class="text-[11px] dim">what each knob costs</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Publish a copy</span><span class="text-[11px] dim">perspectives and forking</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">How you can read it</span><span class="text-[11px] dim">reading a published story</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Reading as</span><span class="text-[11px] dim">why scenes get shorter</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">What scene 3 changed</span><span class="text-[11px] dim">how arc works</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Who's in it</span><span class="text-[11px] dim">why casting can block</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Archived</span><span class="text-[11px] dim">a filter, not a place</span></div>
+        <div class="px-4 py-2 row flex items-center justify-between gap-2"><span class="text-[13px]">Trash</span><span class="text-[11px] dim">the 30-day window</span></div>
+        <div class="px-4 py-2 flex items-center justify-between gap-2"><span class="text-[13px]">Spending</span><span class="text-[11px] dim">two limits, two jobs</span></div>
+      </div>
+      <p class="text-[12px] mt-2 note">The test that produced this list: <b style="color:var(--page-fg)">does the label mean something different here than a first-time reader would assume?</b> "Rules" on a world bible doesn't need one. "Main cast" does — it secretly means context residency.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 07 · REUSED -->
+<section class="max-w-6xl mx-auto px-5 pb-24">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">07 · Borrowed, not redrawn</div>
+    <h2 class="text-2xl font-bold mb-3">What this screen gets for free</h2>
+    <div class="grid sm:grid-cols-3 gap-4 max-w-4xl">
+      <div class="sheet fr stage dark p-4">
+        <div class="lbl dim mb-1.5">Prose generation</div>
+        <p class="text-[13px] leading-relaxed">Writing, proposed, replacing-your-words, failed, expand, rewrite-one-paragraph. Identical to the world bible's — drawn there.</p></div>
+      <div class="sheet fr stage dark p-4">
+        <div class="lbl dim mb-1.5">Secrets</div>
+        <p class="text-[13px] leading-relaxed">The audience picker, unchanged. A fact here and a canon entry in a bible are the same component with a different header.</p></div>
+      <div class="sheet fr stage dark p-4">
+        <div class="lbl dim mb-1.5">Preview as</div>
+        <p class="text-[13px] leading-relaxed">Author omniscient, preview read-only. Previewing her sheet as someone else hides her secrets from you the way it hides them from them.</p></div>
+    </div>
+    <p class="mt-5 max-w-2xl text-[14.5px] leading-relaxed note">
+      And the group editor is this editor. Four of the five hardest things here were already built —
+      the return on treating the picker and the prose states as components rather than page furniture.
+    </p>
+  </div>
+</section>
+
+<!-- ========== TEMPLATES ========== -->
+<template id="spec-sheet">
+  <div>
+    <div class="px-4 py-3.5 row" style="background:var(--b2)">
+      <div class="flex items-start gap-3">
+        <span class="w-11 h-11 rounded-xl shrink-0" style="background:var(--v1)"></span>
+        <div class="min-w-0 flex-1">
+          <div class="ttl text-[18px] truncate" style="font-weight:600">Wren Ashgrove</div>
+          <div class="flex flex-wrap items-center gap-1.5 mt-1">
+            <span class="pill dim">Main cast<span class="info" style="width:12px;height:12px;font-size:8px">i</span></span><span class="pill dim">she / her</span>
+            <span class="pill dim">Saltmarch</span><span class="pill dim">In 3 scenes</span></div>
+        </div>
+        <span class="pill dim shrink-0">Preview ▾</span>
+      </div>
+    </div>
+
+    <div class="jump">
+      <span class="on">Premise</span><span>Appearance</span><span>Voice</span><span>Temperament</span>
+      <span>Backstory</span><span>Facts</span><span>Who she knows</span><span>Pushed</span><span>Groups</span>
+    </div>
+
+    <div class="scroller">
+
+      <div class="px-4 py-3 row">
+        <div class="flex items-center justify-between mb-2"><span class="flex items-center gap-1.5"><span class="lbl dim">Cover</span><span class="info">i</span></span>
+          <button class="btn btn-gh btn-sm">✦ Rewrite</button></div>
+        <p class="text-[13px] leading-relaxed dim">The harbourmaster's daughter, who has signed the register every day since she was fourteen and has never once read what she was signing.</p>
+        <p class="text-[11px] dim mt-1.5">The only part strangers see.</p>
+      </div>
+
+      <div class="px-4 py-3 row">
+        <div class="flex items-center justify-between mb-2"><span class="lbl dim">Premise</span>
+          <div class="flex gap-1.5"><button class="btn btn-gh btn-sm">✦ Rewrite</button><button class="btn btn-gh btn-sm">+ Expand</button></div></div>
+        <p class="text-[14px] leading-relaxed">A woman who has built an entire life out of not asking one question, and who is about to be asked it by someone else.</p>
+      </div>
+
+      <div class="px-4 py-3 row">
+        <div class="flex items-center justify-between mb-2"><span class="lbl dim">Appearance</span>
+          <div class="flex gap-1.5"><button class="btn btn-gh btn-sm">✦ Rewrite</button><button class="btn btn-gh btn-sm">+ Expand</button></div></div>
+        <p class="text-[14px] leading-relaxed">Tall, and stands like she's braced for weather even indoors. Ink on the side of her left hand, always, because she writes fast and doesn't wait for it to dry.</p>
+      </div>
+
+      <div class="px-4 py-3 row">
+        <div class="flex items-center justify-between mb-2"><span class="lbl dim">Voice</span>
+          <div class="flex gap-1.5"><button class="btn btn-gh btn-sm">✦ Rewrite</button><button class="btn btn-gh btn-sm">+ Expand</button></div></div>
+        <p class="text-[14px] leading-relaxed">Short sentences. She answers the question you asked and not the one you meant, and does it so plainly that it takes people a while to notice.</p>
+      </div>
+
+      <div class="px-4 py-3 row">
+        <div class="flex items-center justify-between mb-2"><span class="lbl dim">Temperament</span>
+          <div class="flex gap-1.5"><button class="btn btn-gh btn-sm">✦ Rewrite</button><button class="btn btn-gh btn-sm">+ Expand</button></div></div>
+        <p class="text-[14px] leading-relaxed">Steady to the point of being unnerving. What looks like calm is mostly practice.</p>
+      </div>
+
+      <div class="px-4 py-3 row">
+        <div class="flex items-center justify-between mb-2"><span class="lbl dim">Backstory</span>
+          <div class="flex gap-1.5"><button class="btn btn-gh btn-sm">✦ Rewrite</button><button class="btn btn-gh btn-sm">+ Expand</button></div></div>
+        <p class="text-[14px] leading-relaxed mb-2">Her mother kept the register before her and died halfway through a page. Wren finished the entry the same afternoon, in the same hand, and nobody said anything about it.</p>
+        <p class="text-[14px] leading-relaxed">She has done the job for eleven years. She is very good at it.</p>
+      </div>
+
+      <div class="px-4 py-3 row">
+        <div class="flex items-center justify-between mb-2">
+          <span class="flex items-center gap-1.5"><span class="lbl dim">What's true about her</span><span class="info">i</span></span>
+          <button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+        <div class="divide-y" style="border-color:var(--rule)">
+          <div class="pb-2.5"><p class="text-[13.5px] leading-relaxed">She has signed the harbour register every day since she was fourteen.</p>
+            <div class="mt-1"><span class="chip-core"><span class="dot" style="background:var(--lamp);width:5px;height:5px"></span>Always in mind</span></div></div>
+          <p class="text-[13.5px] leading-relaxed py-2.5">She can read a manifest upside down across a desk.</p>
+          <div class="py-2.5"><div class="secret"><p class="text-[13.5px] leading-relaxed">She's been signing for the Kestrel's cargo since March.</p>
+            <div class="flex items-center gap-1.5 mt-1"><span class="dot" style="background:var(--secret)"></span>
+              <span class="lbl" style="color:var(--secret)">Secret · Wren, Sable</span></div></div></div>
+          <div class="pt-2.5"><div class="secret"><p class="text-[13.5px] leading-relaxed">Her mother didn't die of the fever.</p>
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+              <span class="flex items-center gap-1.5"><span class="dot" style="background:var(--secret)"></span>
+                <span class="lbl" style="color:var(--secret)">Secret · Wren only</span></span>
+              <span class="chip-core"><span class="dot" style="background:var(--lamp);width:5px;height:5px"></span>Always in mind</span></div></div></div>
+        </div>
+      </div>
+
+      <div class="px-4 py-3 row">
+        <div class="flex items-center justify-between mb-2"><span class="lbl dim">Who she knows</span>
+          <button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+        <div class="mb-2.5">
+          <div class="flex items-center gap-2.5 mb-1"><span class="av" style="background:var(--v1)"></span>
+            <span class="text-[13.5px] font-semibold flex-1">Aldous Ashgrove</span><span class="pill dim shrink-0">Her father</span></div>
+          <p class="text-[13px] leading-relaxed">She has spent her whole life covering for him and has never once asked what for.</p></div>
+        <div>
+          <div class="flex items-center gap-2.5 mb-1"><span class="av" style="background:var(--v2)"></span>
+            <span class="text-[13.5px] font-semibold flex-1">Ilias Vane</span><span class="pill dim shrink-0">A stranger</span></div>
+          <p class="text-[13px] leading-relaxed">A man who counts things. She decided that within four seconds and hasn't revised it.</p></div>
+      </div>
+
+      <div class="px-4 py-3 row">
+        <div class="flex items-center justify-between mb-2"><span class="lbl dim">What she won't do</span>
+          <button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+        <div class="space-y-2.5">
+          <div class="bound">
+            <div class="flex items-center justify-between gap-2"><span class="text-[13.5px] font-semibold">Name her father</span>
+              <span class="pill shrink-0" style="border-color:var(--lamp);color:var(--lamp)">Not yet</span></div>
+            <p class="text-[12.5px] leading-relaxed dim mt-0.5"><span class="lbl">until</span> someone she loves is going to be hurt by the silence</p></div>
+          <div class="bound">
+            <div class="flex items-center justify-between gap-2"><span class="text-[13.5px] font-semibold">Leave Saltmarch</span>
+              <span class="pill shrink-0" style="border-color:var(--pencil);color:var(--pencil)">Never</span></div></div>
+        </div>
+      </div>
+
+      <div class="px-4 py-3 row">
+        <div class="lbl dim mb-2">What she can't stop doing</div>
+        <div class="space-y-2.5">
+          <div class="compel">
+            <div class="flex items-center justify-between gap-2"><span class="text-[13.5px] font-semibold">Cover for her father</span>
+              <span class="pill shrink-0" style="border-color:var(--ok);color:var(--ok)">Broke in scene 2</span></div>
+            <p class="text-[12.5px] leading-relaxed dim mt-0.5"><span class="lbl">and now</span> she lets the silences sit, and lets people draw their own conclusions</p></div>
+          <div class="compel">
+            <div class="flex items-center justify-between gap-2"><span class="text-[13.5px] font-semibold">Sign whatever is put in front of her</span>
+              <span class="pill shrink-0" style="border-color:var(--v2);color:var(--v2)">Always</span></div></div>
+        </div>
+      </div>
+
+      <div class="px-4 py-3">
+        <div class="flex items-center justify-between mb-2"><span class="flex items-center gap-1.5"><span class="lbl dim">She belongs to</span><span class="info">i</span></span>
+          <button class="btn btn-gh btn-sm">Add</button></div>
+        <div class="flex items-center gap-2.5">
+          <span class="av" style="background:var(--v1)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">The harbour office</div>
+            <div class="text-[11px] dim">Joined by hand</div></div></div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="spec-press">
+  <div>
+    <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+      <span class="flex items-center gap-1.5"><span class="lbl dim">What she won't do</span><span class="info">i</span></span>
+      <button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+
+    <div class="px-4 py-3 row"><div class="bound">
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <span class="text-[14px] font-semibold">Name her father</span>
+        <span class="pill shrink-0" style="border-color:var(--lamp);color:var(--lamp)">Not yet</span></div>
+      <div class="flex gap-2.5 mb-1"><span class="lbl dim shrink-0 pt-0.5 w-14">until</span>
+        <span class="text-[13px] leading-relaxed flex-1">Someone she loves is going to be hurt by the silence, and she can see it coming.</span></div>
+      <div class="flex gap-2.5 mb-1"><span class="lbl dim shrink-0 pt-0.5 w-14">and then</span>
+        <span class="text-[13px] leading-relaxed flex-1 dim">She says it flatly, in public, and doesn't soften it.</span></div>
+      <div class="flex gap-2.5"><span class="lbl dim shrink-0 pt-0.5 w-14">if pushed</span>
+        <span class="text-[13px] leading-relaxed flex-1 dim">She gets very polite, and very boring, and leaves.</span></div>
+      <div class="flex items-center gap-1.5 mt-2 pt-2" style="border-top:1px solid var(--rule)">
+        <span class="dot" style="background:var(--lamp)"></span>
+        <span class="text-[12px] dim">In <span class="ttl">The Salt Line</span>, the story hasn't earned this yet.</span></div>
+    </div></div>
+
+    <div class="px-4 py-3 row"><div class="bound">
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <span class="text-[14px] font-semibold">Leave Saltmarch</span>
+        <span class="pill shrink-0" style="border-color:var(--pencil);color:var(--pencil)">Never</span></div>
+      <div class="flex gap-2.5"><span class="lbl dim shrink-0 pt-0.5 w-14">if pushed</span>
+        <span class="text-[13px] leading-relaxed flex-1 dim">She'll agree to anything, and then simply not go.</span></div>
+    </div></div>
+
+    <div class="px-4 py-3 row"><div class="bound">
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <span class="text-[14px] font-semibold">Anything to do with the drowned</span>
+        <span class="pill shrink-0" style="border-color:var(--pencil);color:var(--pencil)">Never</span></div>
+      <div class="flex items-center gap-1.5">
+        <span class="dot" style="background:var(--pencil)"></span>
+        <span class="text-[12px] dim">Flagged as graphic violence — held closed by this campaign's ceiling anyway.</span></div>
+    </div></div>
+
+    <div class="px-4 py-3 row flex items-center justify-between" style="background:var(--b2)">
+      <span class="lbl dim">What she can't stop doing</span><button class="btn btn-gh btn-sm">✦ Suggest</button></div>
+
+    <div class="px-4 py-3 row"><div class="compel">
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <span class="text-[14px] font-semibold">Cover for her father</span>
+        <span class="pill shrink-0" style="border-color:var(--ok);color:var(--ok)">Broke in scene 2</span></div>
+      <div class="flex gap-2.5 mb-1"><span class="lbl dim shrink-0 pt-0.5 w-14">until</span>
+        <span class="text-[13px] leading-relaxed flex-1">She sees exactly what it has cost someone else.</span></div>
+      <div class="flex gap-2.5"><span class="lbl dim shrink-0 pt-0.5 w-14">and now</span>
+        <span class="text-[13px] leading-relaxed flex-1 dim">She lets the silences sit, and lets people draw their own conclusions.</span></div>
+      <div class="flex items-center gap-1.5 mt-2 pt-2" style="border-top:1px solid var(--rule)">
+        <span class="dot" style="background:var(--ok)"></span>
+        <span class="text-[12px] dim">Ilias counted the crates in front of her. She'll play it this way from here.</span></div>
+    </div></div>
+
+    <div class="px-4 py-3 row"><div class="compel">
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <span class="text-[14px] font-semibold">Sign whatever is put in front of her</span>
+        <span class="pill shrink-0" style="border-color:var(--v2);color:var(--v2)">Always</span></div>
+      <div class="flex gap-2.5"><span class="lbl dim shrink-0 pt-0.5 w-14">if resisted</span>
+        <span class="text-[13px] leading-relaxed flex-1 dim">She signs it later, alone, and doesn't mention it.</span></div>
+    </div></div>
+
+    <div class="px-4 py-2.5"><div class="field px-3 py-2 text-[13px] dim">Add something…</div></div>
+  </div>
+</template>
+
+<script>
+  document.querySelectorAll('[data-spec]').forEach(function(slot){
+    var t = document.getElementById('spec-' + slot.getAttribute('data-spec'));
+    if (!t) { slot.innerHTML = '<div style="padding:1rem;font:12px monospace;color:#E0604A">missing template: ' + slot.getAttribute('data-spec') + '</div>'; return; }
+    slot.appendChild(t.content.cloneNode(true));
+  });
+</script>
+</body>
+</html>

@@ -17,7 +17,16 @@ erl_crash.dump
 # build time. The undigested build outputs priv/static/assets/app.{js,css} (and
 # favicon.ico / robots.txt) ARE committed so the app serves with no build step;
 # only the hashed copies, gzips, and manifest are generated artifacts.
-/priv/static/**/*-[0-9a-f]*.*
+#
+# **Scoped to `assets/`, and it has to be.** This was `/priv/static/**/*-[0-9a-f]*.*`,
+# which reads as "a hash suffix" and actually means "a hyphen followed by any of
+# a-f or a digit, anywhere". `mix docs.publish` copies `docs/` and `ux/` under
+# `priv/static`, so that rule silently swallowed nine of them — every
+# `polyphony-admin.html`, `polyphony-browse.html`, `design-brief.md`,
+# `backend-capabilities.md`. They existed on every working tree and in no commit, so
+# the deployment 404'd on them and CI failed the drift check while every local run
+# passed. Digests only ever land in `assets/`; nothing else here is hashed.
+/priv/static/assets/*-[0-9a-f]*.*
 /priv/static/**/*.gz
 /priv/static/cache_manifest.json
 

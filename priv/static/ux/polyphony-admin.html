@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyphony — admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="polyphony-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="antialiased">
+
+<header class="max-w-6xl mx-auto px-5 pt-12 pb-8">
+  <div class="wall mb-3">Polyphony · step 14 · admin</div>
+  <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">Moderation</h1>
+  <p class="mt-4 max-w-2xl text-[15px] leading-relaxed note">
+    An internal tool for people making judgement calls under time pressure, which means density is
+    fine and ambiguity isn't. Everything here is already built except the part that lets anyone report
+    something — the queue has never had an input.
+  </p>
+</header>
+
+<!-- 00 · PRINCIPLES -->
+<section class="max-w-6xl mx-auto px-5 pb-14">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">00 · Four things this screen has to get right</div>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note">
+      <div><b style="color:var(--page-fg)">Child safety is its own lane.</b> Not a filter on a
+        general queue — a separate list that is always first, always visible, and doesn't get buried
+        under forty spam reports. Different urgency, different handling.</div>
+      <div><b style="color:var(--page-fg)">Reading a report means bypassing publication scope.</b>
+        A moderator has to see everything to judge, including perspectives the author never shared.
+        That's a real privilege and the screen should say so out loud rather than granting it
+        silently.</div>
+      <div><b style="color:var(--page-fg)">Content and people are different objects.</b> Taking down
+        a snapshot and suspending an account have different consequences and different reversals.
+        Never one button.</div>
+      <div><b style="color:var(--page-fg)">A take-down takes everything, and spreads.</b> Public
+        copy and the author's own, plus every fork descended from it — which can't be deleted blind,
+        because a fork may have diverged past anything objectionable. So a take-down opens a review
+        lane rather than firing a cascade.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 01 · QUEUE -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">01 · The queue</div>
+    <h2 class="text-2xl font-bold mb-2">Triage</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note">Oldest first within a lane, because the alternative is reports that never get looked at. The counts are the only thing that should ever be red.</p>
+  </div>
+  <div class="mt-7 grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr stage dark sheet"><div data-spec="queue"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr stage light sheet"><div data-spec="queue"></div></div></div>
+  </div>
+</section>
+
+<!-- 02 · ONE REPORT -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">02 · One report</div>
+    <h2 class="text-2xl font-bold mb-2">Enough context to decide, and a record that you looked</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">The reported passage inline, the surrounding scene one tap away, and an explicit door into everything the author didn't publish.</p>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">The report</div>
+      <div class="fr stage dark sheet"><div data-spec="report"></div></div></div>
+    <div><div class="wall mb-2">Opening what wasn't published</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="ttl text-[15px]" style="font-weight:600">See the whole thing?</div></div>
+        <div class="px-4 py-3 row">
+          <p class="text-[13px] leading-relaxed mb-2.5">Ilse published this readable as two people. Opening it as the author means seeing private thoughts, whispers and character sheets she chose not to share.</p>
+          <p class="text-[13px] leading-relaxed dim">That's yours to do when a report needs it. It gets written down with your name on it.</p></div>
+        <div class="px-4 py-3">
+          <div class="lbl dim mb-1.5">Why you need it</div>
+          <div class="field px-3 py-2.5 text-[13px] leading-relaxed dim mb-2.5" style="min-height:50px">The reported passage doesn't make sense without what's around it…</div>
+          <div class="flex gap-1.5">
+            <button class="btn btn-pri btn-sm">Open it</button><button class="btn btn-gh btn-sm">Cancel</button></div>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">A reason field turns an unlogged habit into a decision. Nobody types a reason forty times a day for something they don't need.</p>
+    </div>
+    <div><div class="wall mb-2">In context</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-2 row flex items-center justify-between gap-2" style="background:color-mix(in srgb,var(--pencil) 12%,transparent)">
+          <span class="text-[12.5px]">Reading as the author · logged</span>
+          <span class="text-[12px] shrink-0" style="color:var(--pencil)">Done</span></div>
+        <div class="px-4 py-3 row">
+          <div class="lbl dim mb-1.5">The counting house · beat 4</div>
+          <p class="text-[13.5px] leading-relaxed dim mb-2">…and the ledger went back on the shelf where she found it.</p>
+          <div class="urgent px-2.5 py-2 rounded-r-lg mb-2">
+            <p class="text-[13.5px] leading-relaxed">The reported passage sits here, in the run of the scene.</p></div>
+          <p class="text-[13.5px] leading-relaxed dim">She did not look at him again until the lamps were lit.</p></div>
+        <div class="px-4 py-2.5 flex gap-1.5">
+          <button class="btn btn-gh btn-sm">Earlier</button><button class="btn btn-gh btn-sm">Later</button>
+          <button class="btn btn-pri btn-sm ml-auto">Decide</button></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 03 · ACTIONS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">03 · Deciding</div>
+    <h2 class="text-2xl font-bold mb-2">Each action, and what it actually does</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">Four outcomes, in rough order of how often they're right. Every one names its consequence and every one is reversible except the last.</p>
+  </div>
+  <div class="grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Nothing wrong</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">Leave it up</div>
+        <p class="text-[13px] leading-relaxed dim mb-3">The report is closed and the author never hears about it. Reports on this campaign will still reach you.</p>
+        <div class="flex items-center gap-1.5 mb-3">
+          <span class="dot" style="background:var(--bcm)"></span>
+          <span class="text-[12px] dim">Three previous reports on this, all dismissed</span></div>
+        <button class="btn btn-pri btn-sm">Leave it up</button>
+      </div>
+      <p class="text-[12px] mt-2 note">Repeat dismissals shown, because the fourth report on the same thing usually means someone's campaigning rather than reporting.</p>
+    </div>
+    <div><div class="wall mb-2">A word about it</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">Warn the author</div>
+        <p class="text-[13px] leading-relaxed dim mb-2.5">It stays up. They get an email saying what was reported and what to change.</p>
+        <div class="field px-3 py-2.5 text-[13px] leading-relaxed dim mb-2.5" style="min-height:50px">What they need to know…</div>
+        <button class="btn btn-pri btn-sm">Send it</button>
+      </div></div>
+    <div><div class="wall mb-2">Take it down</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">Take down The Long Quiet</div>
+        <div class="rounded-lg p-2.5 mb-2.5" style="background:color-mix(in srgb,var(--pencil) 9%,transparent);border-left:2px solid var(--pencil)">
+          <p class="text-[12px] leading-relaxed mb-1.5"><b>The public copy and Noor's own.</b> Three scenes, five characters and a world. She loses the campaign, not just its listing.</p>
+          <p class="text-[12px] leading-relaxed dim">Her other two campaigns are untouched.</p></div>
+        <div class="rounded-lg p-2.5 mb-3" style="background:var(--b3)">
+          <div class="text-[12px] font-semibold mb-0.5">4 forks came from this</div>
+          <p class="text-[12px] leading-relaxed dim">They go in the review lane rather than down with it. Two have twenty-odd scenes of their own and may contain none of this.</p></div>
+        <div class="field px-3 py-2.5 text-[13px] leading-relaxed dim mb-2.5" style="min-height:50px">What you tell her…</div>
+        <div class="flex gap-1.5">
+          <button class="btn btn-red btn-sm">Take it down</button><button class="btn btn-gh btn-sm">Cancel</button></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Naming what's destroyed in scenes and characters rather than "a campaign" — the weight of the action should be visible at the moment of taking it.</p>
+    </div>
+    <div><div class="wall mb-2">Suspend</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">Suspend Ilse Marek</div>
+        <div class="rounded-lg p-2.5 mb-2.5" style="background:color-mix(in srgb,var(--pencil) 9%,transparent);border-left:2px solid var(--pencil)">
+          <p class="text-[12px] leading-relaxed mb-1.5">They can't sign in or publish. Nothing of theirs is deleted.</p>
+          <p class="text-[12px] leading-relaxed"><b>Everything they've shared goes dark</b> — public and unlisted both, so share links stop working too.</p></div>
+        <div class="rounded-lg p-2.5 mb-3" style="background:var(--b3)">
+          <p class="text-[12px] leading-relaxed dim">Hiding unlisted matters: otherwise a suspended person makes a new account, opens their own share link, and forks their way back in. Starting again should mean starting again.</p></div>
+        <div class="lbl dim mb-1.5">For how long</div>
+        <div class="flex flex-wrap gap-1.5 mb-2.5">
+          <span class="pill dim">7 days</span><span class="pill" style="background:var(--b3)">30 days</span>
+          <span class="pill dim">Until we say otherwise</span></div>
+        <div class="flex gap-1.5">
+          <button class="btn btn-red btn-sm">Suspend</button><button class="btn btn-gh btn-sm">Cancel</button></div>
+      </div>
+      <p class="text-[12px] mt-2 note">A person, not a thing. Separate action, separate confirm, and never on the same row as a take-down.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 04 · AUDIT, INVITES, ROLES -->
+<section class="max-w-6xl mx-auto px-5 pb-24">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">04 · The rest of it</div>
+    <h2 class="text-2xl font-bold mb-2">Audit, invites, who's an admin</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">Demotion and reinstatement have never been reachable, so an admin promoted by mistake is permanent and a suspension is one-way. Both fixed here.</p>
+  </div>
+  <div class="grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Audit</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <span class="ttl text-[15px]" style="font-weight:600">What's been done</span></div>
+        <div class="px-4 py-2.5 row">
+          <div class="flex items-center justify-between gap-2 mb-0.5">
+            <span class="text-[12.5px] font-semibold">Took down a snapshot</span>
+            <span class="mono text-[10px] dim shrink-0">14:22</span></div>
+          <div class="text-[11px] dim">tam · <span class="ttl">The Long Quiet</span> · report #4471</div></div>
+        <div class="px-4 py-2.5 row" style="background:color-mix(in srgb,var(--pencil) 6%,transparent)">
+          <div class="flex items-center justify-between gap-2 mb-0.5">
+            <span class="text-[12.5px] font-semibold">Read an unpublished perspective</span>
+            <span class="mono text-[10px] dim shrink-0">14:19</span></div>
+          <div class="text-[11px] dim">tam · <span class="ttl">The Long Quiet</span> · "passage needs surrounding context"</div></div>
+        <div class="px-4 py-2.5 row">
+          <div class="flex items-center justify-between gap-2 mb-0.5">
+            <span class="text-[12.5px] font-semibold">Dismissed a report</span>
+            <span class="mono text-[10px] dim shrink-0">13:58</span></div>
+          <div class="text-[11px] dim">noor · report #4468</div></div>
+        <div class="px-4 py-2.5">
+          <div class="flex items-center justify-between gap-2 mb-0.5">
+            <span class="text-[12.5px] font-semibold">Made someone an admin</span>
+            <span class="mono text-[10px] dim shrink-0">11:04</span></div>
+          <div class="text-[11px] dim">aurelio → tam</div></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Privilege use is tinted. It's the entry most likely to matter later and the least likely to be looked for.</p>
+    </div>
+    <div><div class="wall mb-2">Invites</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between gap-2" style="background:var(--b2)">
+          <span class="ttl text-[15px]" style="font-weight:600">Invites</span>
+          <button class="btn btn-pri btn-sm">Mint one</button></div>
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-2">
+          <div class="min-w-0"><div class="mono text-[12px]">SALT-4M2K-9QX</div>
+            <div class="text-[11px] dim">Unused · made yesterday</div></div>
+          <button class="btn btn-gh btn-sm shrink-0">Copy</button></div>
+        <div class="px-4 py-2.5 row">
+          <div class="mono text-[12px] dim">GATE-7T1P-2BW</div>
+          <div class="text-[11px] dim">Used by <b style="color:var(--bc)">wren.ashgrove</b> · 3 days ago</div></div>
+        <div class="px-4 py-2.5">
+          <div class="mono text-[12px] dim">MILL-9K4D-6RS</div>
+          <div class="text-[11px] dim">Used by <b style="color:var(--bc)">noor</b> · a week ago</div></div>
+      </div></div>
+    <div><div class="wall mb-2">Who's an admin</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <span class="ttl text-[15px]" style="font-weight:600">Admins</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="av" style="background:var(--v1)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">aurelio</div>
+            <div class="text-[11px] dim">The first account</div></div>
+          <span class="pill dim shrink-0">Can't be changed</span></div>
+        <div class="px-4 py-2.5 row flex items-center gap-2.5">
+          <span class="av" style="background:var(--v2)"></span>
+          <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">tam</div>
+            <div class="text-[11px] dim">Admin since March</div></div>
+          <button class="btn btn-pen btn-sm shrink-0">Make ordinary</button></div>
+        <div class="px-4 py-2.5">
+          <div class="field px-3 py-2 text-[13px] dim">Find someone to promote…</div></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Demotion has never existed, so an admin made by mistake was permanent. The first account stays pinned.</p>
+    </div>
+    <div><div class="wall mb-2">Someone's whole history</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <div class="flex items-center gap-2.5">
+            <span class="av" style="background:var(--v2)"></span>
+            <div class="min-w-0"><div class="ttl text-[15px]" style="font-weight:600">noor</div>
+              <div class="lbl dim">Joined January · 2 published</div></div></div></div>
+        <div class="px-4 py-2.5 row flex flex-wrap gap-1.5">
+          <span class="pill" style="border-color:var(--lamp);color:var(--lamp)">4 against them</span>
+          <span class="pill dim">2 upheld</span><span class="pill dim">7 made by them</span>
+          <span class="pill dim">1 of those upheld</span></div>
+        <div class="px-4 py-2.5 row">
+          <div class="lbl dim mb-1.5">Against them</div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-2"><span class="dot shrink-0" style="background:var(--pencil)"></span>
+              <span class="text-[12px] flex-1">Taken down · Kettleworth</span><span class="text-[11px] dim">Feb</span></div>
+            <div class="flex items-center gap-2"><span class="dot shrink-0" style="background:var(--lamp)"></span>
+              <span class="text-[12px] flex-1">Warned</span><span class="text-[11px] dim">Jan</span></div>
+            <div class="flex items-center gap-2"><span class="dot shrink-0" style="background:var(--bcm)"></span>
+              <span class="text-[12px] flex-1 dim">Dismissed ×2</span><span class="text-[11px] dim">Jan</span></div>
+          </div>
+        </div>
+        <div class="px-4 py-2.5">
+          <div class="lbl dim mb-1.5">Reports they've made</div>
+          <div class="flex items-center gap-2"><span class="dot shrink-0" style="background:var(--bcm)"></span>
+            <span class="text-[12px] flex-1 dim">6 of 7 dismissed</span></div>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">Both directions. Someone whose reports are nearly all dismissed is a signal too — reporting can be a way of getting at people.</p>
+    </div>
+    <div><div class="wall mb-2">Suspended people</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <span class="ttl text-[15px]" style="font-weight:600">Suspended</span></div>
+        <div class="px-4 py-2.5 row">
+          <div class="flex items-center gap-2.5 mb-1.5">
+            <span class="av" style="background:var(--b3)"></span>
+            <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">halden.v</div>
+              <div class="text-[11px] dim">22 days left · report #4390</div></div></div>
+          <div class="text-[11px] dim mb-1.5">3 things hidden · 1 public, 2 unlisted</div>
+          <button class="btn btn-gh btn-sm">Lift it</button></div>
+        <div class="px-4 py-2.5">
+          <div class="flex items-center gap-2.5 mb-1.5">
+            <span class="av" style="background:var(--b3)"></span>
+            <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">ruthe.k</div>
+              <div class="text-[11px]" style="color:var(--pencil)">Indefinite · report #4102</div></div></div>
+          <div class="text-[11px] dim mb-1.5">1 thing hidden · unlisted</div>
+          <button class="btn btn-gh btn-sm">Lift it</button></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Reinstatement was also unreachable. An indefinite suspension with no way back is a deletion nobody agreed to.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== TEMPLATES ========== -->
+<template id="spec-queue">
+  <div>
+    <div class="px-4 py-3.5 row" style="background:var(--b2)">
+      <div class="flex items-center justify-between gap-2">
+        <div class="ttl text-[17px]" style="font-weight:600">Moderation</div>
+        <span class="pill dim shrink-0">tam</span></div>
+    </div>
+    <div class="tabs">
+      <div class="tab tab-on">Waiting <span class="dim">16</span></div>
+      <div class="tab">Decided</div><div class="tab">Suspended</div>
+      <div class="tab">Invites</div><div class="tab">Admins</div>
+    </div>
+
+    <div class="px-4 py-2.5 row urgent">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-[12.5px] font-semibold" style="color:var(--pencil)">Child safety · 1</span>
+        <span class="mono text-[10px]" style="color:var(--pencil)">oldest 40m</span></div>
+    </div>
+    <div class="px-4 py-3 row urgent">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[14.5px] min-w-0 truncate" style="font-weight:600">Kettleworth, Second Shift</div>
+        <span class="mono text-[10px] dim shrink-0">#4482</span></div>
+      <div class="lbl dim mb-1.5">By aurelio · reported 40 minutes ago</div>
+      <p class="text-[13px] leading-relaxed">Sexual content involving minors</p>
+      <div class="flex gap-1.5 mt-2">
+        <button class="btn btn-pri btn-sm">Look at it</button></div>
+    </div>
+
+    <div class="px-4 py-2.5 row" style="background:var(--b2)">
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl dim">Forks of things taken down · 4</span>
+        <span class="mono text-[10px] dim">from #4471</span></div></div>
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[14.5px] min-w-0 truncate" style="font-weight:600">Third Shift</div>
+        <span class="mono text-[10px] dim shrink-0">fork</span></div>
+      <div class="lbl dim mb-1.5">By noor · branched after scene 9 · 22 scenes since</div>
+      <p class="text-[13px] leading-relaxed dim">Diverged a long way. May contain none of it.</p>
+      <div class="flex gap-1.5 mt-2">
+        <button class="btn btn-gh btn-sm">Check it</button><button class="btn btn-gh btn-sm">Leave it</button></div>
+    </div>
+
+    <div class="px-4 py-2.5 row" style="background:var(--b2)">
+      <span class="lbl dim">Everything else · 11</span></div>
+
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[14.5px] min-w-0 truncate" style="font-weight:600">The Long Quiet</div>
+        <span class="mono text-[10px] dim shrink-0">#4471</span></div>
+      <div class="lbl dim mb-1.5">By noor · reported 3 hours ago</div>
+      <p class="text-[13px] leading-relaxed dim">Harassment of a real person — "the mayor character is my actual neighbour and this is about her"</p>
+    </div>
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[14.5px] min-w-0 truncate" style="font-weight:600">halden.v</div>
+        <span class="mono text-[10px] dim shrink-0">#4469</span></div>
+      <div class="lbl dim mb-1.5">A person · reported yesterday</div>
+      <p class="text-[13px] leading-relaxed dim">Breaks the rules another way — third report this week</p>
+    </div>
+    <div class="px-4 py-3">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="ttl text-[14.5px] min-w-0 truncate" style="font-weight:600">The Ninth Gate</div>
+        <span class="mono text-[10px] dim shrink-0">#4468</span></div>
+      <div class="lbl dim mb-1.5">By ilse · reported 2 days ago</div>
+      <p class="text-[13px] leading-relaxed dim">Breaks the rules another way — no detail given</p>
+    </div>
+  </div>
+</template>
+
+<template id="spec-report">
+  <div>
+    <div class="px-4 py-3 row" style="background:var(--b2)">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <span class="ttl text-[16px]" style="font-weight:600">Report #4471</span>
+        <span class="pill dim shrink-0">3 hours old</span></div>
+      <div class="lbl dim">Harassment of a real person</div>
+    </div>
+    <div class="px-4 py-3 row">
+      <div class="lbl dim mb-1.5">What they said</div>
+      <p class="text-[13px] leading-relaxed">The mayor character is my actual neighbour — same name, same job, same road. Some of what she's made to say is about a real argument we had.</p>
+      <div class="text-[11px] dim mt-1.5">From <b style="color:var(--bc)">wren.ashgrove</b></div>
+    </div>
+    <div class="px-4 py-3 row">
+      <div class="lbl dim mb-1.5">What was reported</div>
+      <div class="urgent px-2.5 py-2 rounded-r-lg">
+        <p class="text-[13px] leading-relaxed">The reported passage, quoted as the reader saw it.</p>
+        <div class="text-[11px] dim mt-1">The counting house · beat 4</div></div>
+    </div>
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <span class="lbl dim">Noor's history</span>
+        <button class="btn btn-gh btn-sm">All 6</button></div>
+      <div class="flex flex-wrap gap-1.5 mb-2.5">
+        <span class="pill dim">Joined January</span><span class="pill dim">2 published</span>
+        <span class="pill" style="border-color:var(--lamp);color:var(--lamp)">4 reported</span>
+        <span class="pill dim">2 upheld</span></div>
+      <div class="space-y-1.5">
+        <div class="flex items-center gap-2">
+          <span class="dot shrink-0" style="background:var(--pencil)"></span>
+          <span class="text-[12px] flex-1">Taken down · <span class="ttl">Kettleworth</span></span>
+          <span class="text-[11px] dim shrink-0">Feb</span></div>
+        <div class="flex items-center gap-2">
+          <span class="dot shrink-0" style="background:var(--lamp)"></span>
+          <span class="text-[12px] flex-1">Warned · same reason as this</span>
+          <span class="text-[11px] dim shrink-0">Jan</span></div>
+        <div class="flex items-center gap-2">
+          <span class="dot shrink-0" style="background:var(--bcm)"></span>
+          <span class="text-[12px] flex-1 dim">Dismissed · twice</span>
+          <span class="text-[11px] dim shrink-0">Jan</span></div>
+      </div>
+    </div>
+    <div class="px-4 py-3 row">
+      <div class="lbl dim mb-1.5">Who reported it</div>
+      <div class="flex items-center gap-2.5">
+        <span class="av" style="background:var(--v1)"></span>
+        <div class="min-w-0 flex-1"><div class="text-[13px] font-semibold">wren.ashgrove</div>
+          <div class="text-[11px] dim">First report they've made</div></div>
+      </div>
+    </div>
+    <div class="px-4 py-3">
+      <div class="flex flex-wrap gap-1.5 mb-2">
+        <button class="btn btn-gh btn-sm">Read it in the scene</button>
+        <button class="btn btn-gh btn-sm">See what wasn't published</button></div>
+      <div class="flex flex-wrap gap-1.5">
+        <button class="btn btn-pri btn-sm">Leave it up</button>
+        <button class="btn btn-gh btn-sm">Warn</button>
+        <button class="btn btn-gh btn-sm">Take down</button>
+        <button class="btn btn-pen btn-sm">Suspend</button></div>
+    </div>
+  </div>
+</template>
+
+<script>
+  document.querySelectorAll('[data-spec]').forEach(function(slot){
+    var t = document.getElementById('spec-' + slot.getAttribute('data-spec'));
+    if (!t) { slot.innerHTML = '<div style="padding:1rem;font:12px monospace;color:#E0604A">missing template: ' + slot.getAttribute('data-spec') + '</div>'; return; }
+    slot.appendChild(t.content.cloneNode(true));
+  });
+</script>
+</body>
+</html>

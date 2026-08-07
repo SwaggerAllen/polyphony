@@ -5,11 +5,11 @@ the reasoning behind what's *not built yet*: monetization shape, TTRPG resolutio
 products, style material, and the ordering logic that ranks it all. This is the **forward
 rationale** half of the docs.
 
-**How it differs from its neighbours.** `roadmap.md` is the near-term *schedule* (what ships
-next, in what order); this file is the *why* behind the post-v1 horizon. `architecture.md` is
-the as-built rationale (why the shipped system is shaped the way it is); this is its forward
-mirror. `backend-backlog.md` is the concrete engineering worklist; this file is the strategy
-that worklist serves. See `docs/README.md` for the full boundary map.
+**How it differs from its neighbours.** The **Linear project `Polyphony`** is the near-term
+schedule and the concrete worklist — what ships next, in what order, one issue at a time. This
+file is the *why* behind the post-v1 horizon, and the strategy that worklist serves.
+`architecture.md` is the as-built rationale (why the shipped system is shaped the way it is);
+this is its forward mirror. See `docs/README.md` for the full boundary map.
 
 **Status:** this is a hypothesis-ordered roadmap, not a commitment. Nothing here should be built
 ahead of user feedback except the cheap/latent items and the pre-monetization harness. The real

@@ -7,6 +7,7 @@ defmodule Polyphony.MixProject do
       version: "0.1.0",
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
+      compilers: [:boundary] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
@@ -149,7 +150,11 @@ defmodule Polyphony.MixProject do
       # (XSS via raw/1, CSRF, directory traversal, config secrets).
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      # Architectural boundaries, checked by a mix compiler (CI: blocking, via
+      # --warnings-as-errors). See the boundary declarations in `Polyphony` and
+      # `PolyphonyWeb` for what is actually enforced.
+      {:boundary, "~> 0.10", runtime: false}
     ]
   end
 

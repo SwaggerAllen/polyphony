@@ -1,7 +1,7 @@
 defmodule Polyphony.Characters do
   @moduledoc """
   Characters as library entries: listing them, and moving them between **cast
-  tiers** (`backend-backlog.md` §2.5).
+  tiers** (`completed-roadmap.md` §2.5).
 
   Sits beside `Polyphony.Groups` and for the same reason — the storage, ownership,
   archiving and versioning are `Polyphony.Library`'s job, and what lives here is

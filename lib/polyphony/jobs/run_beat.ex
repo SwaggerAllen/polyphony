@@ -140,13 +140,6 @@ defmodule Polyphony.Jobs.RunBeat do
 
   defp heavy_model, do: get_in(Application.get_env(:polyphony, :llm, []), [:models, :heavy])
 
-  # A user-initiated Continue means "advance one beat, then hand back to me". When it
-  # carries an explicit `yield_to_user` hint, honor it as authoritative over the model's
-  # own `control`, so the loop doesn't self-chain further autonomous beats. Membership
-  # truncation still runs — it re-decides the *same* exchange against a changed roster,
-  # governed by the depth cap, not `control` — so a mid-beat exit is handled but the beat
-  # doesn't spawn a fresh autonomous one. A future "Auto/Play" control omits the hint and
-  # lets the Director pace up to the depth cap (see docs/roadmap.md).
   # `:go` unless this is an auto beat that shouldn't happen. A stop that came from one
   # of the run's three ends is recorded on the row and announced; a paused or absent run
   # is not an ending and says nothing.
@@ -169,6 +162,12 @@ defmodule Polyphony.Jobs.RunBeat do
 
   defp auto_gate(_args, _scene_id), do: :go
 
+  # A user-initiated Continue means "advance one beat, then hand back to me". When it
+  # carries an explicit `yield_to_user` hint, honor it as authoritative over the model's
+  # own `control`, so the loop doesn't self-chain further autonomous beats. Membership
+  # truncation still runs — it re-decides the *same* exchange against a changed roster,
+  # governed by the depth cap, not `control` — so a mid-beat exit is handled but the beat
+  # doesn't spawn a fresh autonomous one.
   defp cap_to_one_beat(resolved, args) do
     cond do
       # An auto run *is* the user for as long as it lasts, so the Director's hand-back

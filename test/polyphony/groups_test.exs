@@ -8,7 +8,7 @@ defmodule Polyphony.GroupsTest do
   **Seeding is a copy.** Anyone written from a group starts with its fields and
   knows what it knows — and editing the template afterwards reaches nobody already
   written from it. That's what makes group arc a fan-out through review
-  (`backend-backlog.md` §3.0b) rather than a silent propagation, which is the rule
+  (`completed-roadmap.md` §3.0b) rather than a silent propagation, which is the rule
   everywhere else in this system.
 
   **Membership is live, and joining doesn't backfill.** A secret pointed at the

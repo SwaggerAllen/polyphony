@@ -8,8 +8,9 @@ structural property of the data, not a prompt instruction.
 > This README covers what is **implemented so far** and how to run it. The docs are
 > indexed in [`docs/README.md`](docs/README.md) (what lives where); the ones you'll
 > reach for most are [`docs/architecture.md`](docs/architecture.md) (how it's built),
-> [`docs/roadmap.md`](docs/roadmap.md) (what's next), [`docs/decisions.md`](docs/decisions.md)
-> (why the post-v1 plan is what it is), and [`CLAUDE.md`](CLAUDE.md) (working in the repo).
+> [`docs/decisions.md`](docs/decisions.md) (why the post-v1 plan is what it is), and
+> [`CLAUDE.md`](CLAUDE.md) (working in the repo). What's *next* is not a document — it
+> is the Linear project `Polyphony`.
 
 ## Status
 
@@ -276,9 +277,11 @@ cluster backs both the read models (`public` schema) and the persistent event st
 
 ## What's next
 
-The frontend and deployment path are now in. Near-term work is scheduled in
-[`docs/roadmap.md`](docs/roadmap.md) and shaped in
-[`docs/backend-backlog.md`](docs/backend-backlog.md) (the standing worklist, with the
-milestone that gates the current design). The post-v1 tiers (deferred inspector views,
-the notify-me-later push worker, richer authoring) and their rationale live in
-[`docs/decisions.md`](docs/decisions.md). Standing cleanup: optional move to ReqLLM.
+The frontend and deployment path are now in. **Open work lives in Linear** — team
+`StrutCo`, project `Polyphony` — not in a document: prioritised, moved through
+Designing → Ready for dev → In Progress, and closed, none of which a markdown list can
+do. What shipped, and why it is shaped the way it is, stays in
+[`docs/completed-roadmap.md`](docs/completed-roadmap.md). The post-v1 tiers (deferred
+inspector views, the notify-me-later push worker, richer authoring) and their rationale
+live in [`docs/decisions.md`](docs/decisions.md). Standing cleanup: optional move to
+ReqLLM.

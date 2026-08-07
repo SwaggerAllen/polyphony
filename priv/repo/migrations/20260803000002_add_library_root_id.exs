@@ -1,6 +1,6 @@
 defmodule Polyphony.Repo.Migrations.AddLibraryRootId do
   @moduledoc """
-  Root identity on derived entries (`backend-backlog.md` §3.1d).
+  Root identity on derived entries (`completed-roadmap.md` §3.1d).
 
   Every campaign copies its world (§2.5b) and every fork copies everything, so within a
   year there are a dozen artifacts called Saltmarch. `derived_from_id` is a *parent*

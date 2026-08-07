@@ -1,8 +1,9 @@
 # CLAUDE.md
 
 Operational guide for working in this repo. `docs/README.md` indexes the docs and
-says where new writing goes; read `docs/architecture.md` for the design, `docs/roadmap.md`
-for the near-term schedule, and `docs/decisions.md` for the post-v1 rationale.
+says where new writing goes; read `docs/architecture.md` for the design and
+`docs/decisions.md` for the post-v1 rationale. **The near-term schedule is not a document** —
+open work is the Linear project `Polyphony` (team `StrutCo`); see "The worklist" below.
 
 ## What this is
 
@@ -17,14 +18,15 @@ Backend-first, but the LiveView frontend (`PolyphonyWeb`, Phoenix 1.8 / LiveView
 DigitalOcean App Platform. The whole domain still runs and is tested offline. See
 `docs/frontend.md` and `docs/deployment.md`.
 
-A **frontend redesign** is speced but not yet built: the `ux/` folder holds the
-design pass — static mocks (`polyphony-*.html`), a component kit
-(`polyphony-kit.css` + `polyphony-kit.html`), and `ux/README.md` (IA/copy/porting
-notes). `polyphony-kit.css` is the **single source of truth** for tokens and every
-component class. When that rework lands, port from the kit as directly as possible —
-lift its classes and markup rather than re-deriving them — so the shipped UI and the
-design don't drift. The backend work the redesign depends on is tracked in
-`docs/backend-backlog.md`.
+The **frontend redesign has landed**: all fifteen screens are ported from the kit and
+live in `PolyphonyWeb.Screens.*` as pure function components, each with a story in
+`/storybook` and a behaviors doc in `docs/behaviors/`. The `ux/` folder holds the design
+pass it was ported from — static mocks (`polyphony-*.html`), the component kit
+(`polyphony-kit.css` + `polyphony-kit.html`), and `ux/README.md` (IA/copy/porting notes).
+`polyphony-kit.css` remains the **single source of truth** for tokens and every component
+class: port from it as directly as possible, lifting its classes and markup rather than
+re-deriving them, so the shipped UI and the design don't drift. What is left of the
+**Frontend rebuild** milestone is in Linear.
 
 ## Commands
 
@@ -47,6 +49,8 @@ mix dialyzer                 # type analysis; first run builds the PLT (~2 min, 
 mix deps.audit               # dependency advisories (CI: blocking)
 mix sobelow --exit low --skip  # Phoenix static analysis (CI: blocking)
 mix deps.unlock --check-unused # stale mix.lock entries (CI: blocking)
+                             # architectural boundaries are checked by a mix compiler —
+                             # `mix compile --warnings-as-errors` is what blocks on them
 mix phx.server               # the LiveView frontend at :4000 (watches + rebuilds assets),
                              # the component catalogue at :4000/storybook, and the docs
                              # at :4000/docs — `docs/` and `ux/` served as files, no auth
@@ -87,8 +91,12 @@ Breaking any of these silently breaks the core guarantee. Guard them in review.
    in `Polyphony.Visibility.visible_to?/3` is invisible to characters. A forgotten
    clause makes a character know too *little*, never too much. Omniscient sees all.
 2. **No LLM in an aggregate (rule 1).** Aggregates (`Scene`, `Director.Beat`) are
-   pure — Commanded replays them. Generation happens only in Oban jobs (or the
-   inline runner), which *produce commands*.
+   pure — Commanded replays them, so a provider call would re-fire and rebuild the same
+   log into a *different story*. Generation happens only in Oban jobs (or the inline
+   runner), which *produce commands*. **Checked**, by `AggregatePurityTest`: the call
+   graph is walked from `execute/2` and `apply/2` at two floors, the repo/event-store and
+   the provider, and a further test fails when a module grows both callbacks and nobody
+   adds it to the list.
 3. **Canonical reads (rule 6 / §7).** Every read that feeds fiction to anyone —
    character conditioning, the broadcaster, scene-close — must go through
    `Polyphony.Packets.canonical/1` so re-rolled/superseded packets never reappear.
@@ -139,19 +147,51 @@ for it.
   ported screen calls those inside a `Kit.frame/1`, which sets the register and theme the
   tokens key on. `app.css` is an ordered manifest (Tailwind → kit) and the kit is last, so
   it outranks a utility it overlaps with — the precedence the mocks have. The first-cut
-  design system is **deleted**, so **screens that haven't been ported render unstyled**;
-  that's deliberate, the app has no users until the rebuild lands. Review components at
-  `/storybook`, and give any new one a story — the suite requires it.
+  design system is **deleted**, so anything not built from the kit renders unstyled. Review
+  components at `/storybook`, and give any new one a story — the suite requires it.
+- **What a screen *should* do lives in `docs/behaviors/<screen>.md`**, one section per state,
+  each named for its storybook variation. Three files answer three different questions and
+  it is easy to put a note in the wrong one: `architecture.md` says why the code is shaped
+  this way, `ux/` says what it looks like, `docs/behaviors/` says what it does from the seat
+  of the person using it. The last is the only one a design thread writes into, and the only
+  one with a `rev` — bump it whenever you change a screen's behavior, **including for a fix
+  made here with no ticket**, because those are precisely the changes nothing else records.
+  `BehaviorsDocTest` pins the state list to the storybook so the prose can't outlive what it
+  describes.
+- **A screen is a function of its assigns**, held by two guards because one tool can't
+  express the whole rule. `PolyphonyWeb.Screens` is a **boundary**, so the modules a screen
+  may name are exactly `PolyphonyWeb`'s export list — presentation only, no `Auth`, no
+  `Guard`, no `Endpoint` — plus the domain; naming anything else is a compile error. And
+  `Polyphony.Test.Purity` walks the call graph for the finer question boundary can't reach:
+  `Library.payload/1` is fine and `Library.get/1` is not, and they share a module. Read
+  `lib/polyphony.ex` before proposing to fix that with a refactor — the caller counts that
+  ruled it out are in there.
 
-## The design inbox (drain it when asked, not on every session)
+## The worklist (Linear, not a document)
 
-Design happens in a **normal Claude thread** — faster to iterate with, and it doesn't
-block this one. Its instructions are `docs/design-thread.md`. It hands work over in two
-pieces, and never writes to the repo itself:
+**Every open item is a Linear issue** in the **`Polyphony`** project (team `StrutCo`).
+That project *is* the scope: an issue outside it isn't part of this loop and isn't yours
+to act on. `docs/roadmap.md` and `docs/backend-backlog.md` used to hold this and are
+**retired** — a worklist wants a tracker, because prioritising, moving and closing are
+things a markdown list can't do. Their shipped half is in `docs/completed-roadmap.md`;
+things deliberately ruled out are the **Confirmed non-asks** project document, which is
+worth reading before building anything that looks obviously missing.
 
-- **Linear** carries the intent — an issue saying what changes and why. Every issue lives
-  in the **`Polyphony`** project (team `StrutCo`); that project *is* the scope, so an
-  issue outside it isn't part of this loop and isn't yours to act on.
+**Labels describe the work; states describe who has it.** The only labels are
+**`frontend`** / **`backend`** — which never change, because a thing doesn't stop being
+frontend work — plus `design-inbox` for provenance. Anything you'd have to *remove* when
+the work changes hands is a state wearing a label, which is why there is no `deferred`
+(that is Backlog) and no `needs-design` (that is Designing). Milestones carry the
+sequencing the roadmap used to argue for — **Frontend rebuild** (the critical path; the
+app has no users until it lands), then **Authoring quality**, then **World simulation**.
+
+Some issues arrive from elsewhere. Design happens in a **normal Claude thread** — faster
+to iterate with, and it doesn't block this one. Its instructions are
+`docs/design-thread.md`, it never writes to the repo, and it hands work over in two
+pieces:
+
+- **Linear** carries the intent — an issue saying what changes and why, tagged
+  `design-inbox`.
 - **Google Drive** carries the material — a mock HTML file in the folder
   `1y1HudA1L2Ns36Hx_CmO0BDGDp8bBmfuv`, named in the issue as `Drive: <title> (<fileId>)`.
   This is never canonical; `ux/` in the repo is.
@@ -172,7 +212,8 @@ The `design-inbox` label is provenance — *this came from the design thread* �
 worth reading for context, but it is never the queue: a label doesn't move, and two
 issues with the same label can be in completely different states.
 
-To drain it, when the author asks:
+To drain the design inbox, when the author asks — and the same first step is how you pick
+up any queued work, design-thread or not:
 
 1. **Linear** — list issues in **Ready for dev** in the **Polyphony** project. Both
    filters matter: the state is the queue, the project is the scope. Read the whole
@@ -187,22 +228,52 @@ To drain it, when the author asks:
    before doing anything with it. The transport is byte-exact when the design thread sets
    `disableConversionToGoogleType: true`; a size mismatch means it didn't, and the file
    is a Google Doc's idea of the file rather than the file.
-3. **Land it in a scratch directory first**, not `ux/`. A mock that arrives straight into
+3. **Check the base before applying anything.** For every `Base: <screen>.md rev <n>` line
+   on the issue, compare it against the file in the repo. **Equal — apply cleanly. Higher
+   in the repo — something moved while the design was being drawn**, and it will usually
+   be an undesigned fix made right here, since small changes never get an issue. Reconcile
+   by hand: keep both, unless the two touch the same behavior, in which case **the repo
+   wins and the issue goes back to Designing** with a comment saying what moved. Never
+   reconcile a design by guessing — that produces a design nobody agreed to.
+4. **Land it in a scratch directory first**, not `ux/`. A mock that arrives straight into
    the design source of truth is a design change nobody looked at. Read it, check its
    classes against `ux/polyphony-kit.css` — a class that isn't there means the mock is
    proposing a **new kit component**, which is a decision, not a port — then commit it to
-   `ux/` and run `mix docs.publish` so `/ux/` serves the new one.
-4. **Close the loop in Linear**: move the issue on, and comment with what landed and the
-   commit. Say plainly if you didn't do part of it and why. An issue that goes quiet is
-   indistinguishable from one nobody read — and an issue moved without a comment is a
-   state change nobody can audit.
+   `ux/` and run `mix docs.publish` so `/ux/` serves the new one. A kit change arrives as
+   a **fragment**, never a whole file: paste it into `ux/polyphony-kit.css`, run
+   `mix kit.port`, and if the class already exists, that collision is the conflict signal —
+   stop and ask rather than overwriting.
+5. **Docs first, then code.** Land the behaviors doc (`docs/behaviors/<screen>.md`, bumping
+   its `rev`) before implementing, so what you build against is in the repo rather than in a
+   Drive file. That ordering is also what makes the next design session's base meaningful.
+   A new `### \`state\`` section obliges a storybook variation of the same name — `BehaviorsDocTest`
+   fails while the two sets disagree, which is what stops the docs describing an app nobody
+   can look at.
+6. **Close the loop in Linear**: open the PR, move the issue to **Ready to merge**, and
+   comment with what landed and the commit. Say plainly if you didn't do part of it and
+   why. An issue that goes quiet is indistinguishable from one nobody read — and an issue
+   moved without a comment is a state change nobody can audit. The author merges; feedback
+   in scope comes back as **Ready for dev**, anything new is a **new issue**, and a merged
+   issue with nothing outstanding is **Done**.
+
+**Issues are for designed work.** A small fix — a wrong label, a broken state, a rename —
+happens right here and never gets an issue. That is the intended behaviour and it is
+precisely why behaviors docs carry a `rev`: the undesigned changes are the ones no ticket
+warns the design thread about, so the counter is the only thing that says the ground moved.
+
+**Never file an issue unless the author asks for one.** Not bugs, not findings, not work
+you noticed on the way past — say it in the conversation and let the author decide. A
+tracker is a queue somebody has committed to, so filing into it is a scheduling decision
+and it is theirs. **Bugs in particular are not issues**: they are found, fixed, and gone,
+and a bug parked in a queue is one that has been rescheduled rather than repaired.
 
 Two standing rules. A **mock is a proposal, not an instruction** — if it can't be built
 as drawn, or it contradicts something in `architecture.md`, say so on the issue and put
 it back in **Designing** rather than building a worse version of it silently. Rejecting
-one outright is **Canceled**, so the Done column stays a record of what shipped. And the design thread only ever *proposes*
-kit changes: `ux/polyphony-kit.css` is edited here, followed by `mix kit.port`, because
-`assets/css/kit.css` is generated from it and a test fails on drift.
+one outright is **Canceled**, so the Done column stays a record of what shipped. And the
+design thread only ever *proposes* kit changes: `ux/polyphony-kit.css` is edited here,
+followed by `mix kit.port`, because `assets/css/kit.css` is generated from it and a test
+fails on drift.
 
 ## Identity & numbering (easy to get wrong)
 
