@@ -29,4 +29,5 @@ defmodule Storybook.Screens do
   def entry("group_editor"), do: [name: "Group editor"]
   def entry("library"), do: [name: "Library"]
   def entry("browse"), do: [name: "Browse"]
+  def entry("sheet_editor"), do: [name: "Character sheet"]
 end
