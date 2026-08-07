@@ -68,75 +68,74 @@ defmodule PolyphonyWeb.StorybookTest do
     end
   end
 
-  # Pure display resolvers a screen may call, by **function** rather than by module.
-  #
-  # `Polyphony.Scene.Cast` is the id↔name resolver the whole codebase renders through:
-  # `character_id` is the routing key and a name is display, resolved at the edges — and
-  # a screen *is* an edge. `render_name/2` is a `Map.get` over a struct already sitting in
-  # assigns, with an identity fallback, so a story renders it from a fixture.
-  #
-  # The granularity is the point. Allowing the *module* would also allow `Cast.of/1`,
-  # which reads the event store; allowing the function allows exactly the pure lookup.
-  # Each entry was read before it was added: a string transform or a constant, no reads.
-  # The list is allowed to grow, but only one function at a time and only after looking —
-  # a module-level exemption is what would make this guard decorative.
-  @pure_display [
-    {Polyphony.Scene.Cast, :render_name, 2},
-    {Polyphony.Scene.Cast, :render_names, 2},
-    # `"wren@example.com" -> "w***@example.com"` — a `String.split` and nothing else.
-    {Polyphony.Notifications.Transport, :redact, 1},
-    # The username rule as prose and as an HTML `pattern`; both are module attributes,
-    # and both belong on the screen precisely so the browser can say it without a
-    # round trip.
-    {Polyphony.Accounts.User, :username_rule, 0},
-    {Polyphony.Accounts.User, :username_pattern, 0},
-    {Polyphony.Accounts.User, :username_length, 0},
-    # Five clauses over a struct's own fields, returning a phrase.
-    {Polyphony.Authoring.ArcEntry, :label, 1},
-    # `do: 30`. The retention window is a policy number the copy has to state, and
-    # threading a constant through assigns would say less than naming it does.
-    {Polyphony.Accounts, :deletion_window_days, 0}
-  ]
-
   test "no screen reads domain data" do
     # The property that makes `STORYBOOK=true` safe in production. A screen takes assigns
-    # and returns markup; a story that could load a campaign would quietly turn the flag
-    # into an authorization hole. Checked structurally rather than trusted, because the
-    # tempting shortcut — resolving a name inside the markup — is exactly how it breaks.
-    # It already had, once: play's character picker called `Library.payload/1` per row.
-    for {mod, _, _} <- :code.all_available(),
-        name = to_string(mod),
-        String.starts_with?(name, "Elixir.PolyphonyWeb.Screens.") do
-      mod = String.to_atom(name)
-      Code.ensure_loaded!(mod)
+    # and returns markup; a story that could load a campaign would quietly turn that flag
+    # into an authorization hole.
+    #
+    # The question is **can this reach the database**, not "does this call `Polyphony.*`".
+    # Those look alike and are not: `Library.payload/1` is `decode(bin)` and
+    # `Cast.render_name/2` is a `Map.get`, while `Audience.resolve/1` walks through
+    # `Groups.member_ids/2` to the repo. `Polyphony.Test.Purity` computes the difference
+    # from the call graph, so nothing here is exempted by hand — an earlier version kept a
+    # growing allowlist of functions somebody had read once and pronounced safe.
+    impure = Polyphony.Test.Purity.impure()
 
+    for mod <- screen_modules() do
       offenders =
         mod
         |> domain_calls()
-        |> Enum.reject(&(&1 in @pure_display))
+        |> Enum.filter(&MapSet.member?(impure, &1))
         |> Enum.uniq()
 
       assert offenders == [],
-             "#{inspect(mod)} calls #{inspect(offenders)} — a screen must render from " <>
-               "assigns alone. Resolve it in the LiveView and pass the answer in."
+             "#{inspect(mod)} can reach the database via #{inspect(offenders)} — a screen " <>
+               "renders from assigns alone. Do the read in the LiveView and pass the answer in."
     end
   end
 
-  # Every `Polyphony.*` (but not `PolyphonyWeb.*`) call a compiled module makes, as MFAs,
-  # read off its BEAM imports chunk rather than off the source.
-  defp domain_calls(mod) do
-    case :beam_lib.chunks(:code.which(mod), [:imports]) do
-      {:ok, {_, [imports: imports]}} ->
-        Enum.filter(imports, fn {m, _f, _a} ->
-          name = to_string(m)
+  test "no screen dispatches dynamically, which is what makes the check above sound" do
+    # A static call graph cannot see through `apply/3`, a protocol, or a module held in a
+    # variable — an impure function reached that way would pass the guard. Rather than
+    # accept that hole, close it from the other side: a screen is markup and has no
+    # business dispatching dynamically, so any occurrence is a failure.
+    #
+    # This is not hypothetical in general — the domain does it constantly, because the
+    # repo is injectable (`repo(opts)` then `repo.all(q)`). It is what made the first run
+    # of the analysis call `Library.get/1` pure. It just has no place on a screen.
+    for mod <- screen_modules() do
+      dynamic = for {:dynamic, _, _} = d <- all_calls(mod), do: d
 
-          String.starts_with?(name, "Elixir.Polyphony.") and
-            not String.starts_with?(name, "Elixir.PolyphonyWeb.")
-        end)
-
-      _ ->
-        []
+      assert dynamic == [],
+             "#{inspect(mod)} dispatches dynamically (#{inspect(dynamic)}). The purity " <>
+               "check cannot see through that, so a screen may not do it."
     end
+  end
+
+  defp screen_modules do
+    for {mod, _, _} <- :code.all_available(),
+        name = to_string(mod),
+        String.starts_with?(name, "Elixir.PolyphonyWeb.Screens."),
+        name != "Elixir.PolyphonyWeb.Screens",
+        do: String.to_atom(name)
+  end
+
+  # Every `Polyphony.*` (but not `PolyphonyWeb.*`) call a compiled module makes, as MFAs.
+  defp domain_calls(mod) do
+    Enum.filter(all_calls(mod), fn {m, _f, _a} ->
+      name = to_string(m)
+
+      String.starts_with?(name, "Elixir.Polyphony.") and
+        not String.starts_with?(name, "Elixir.PolyphonyWeb.")
+    end)
+  end
+
+  # Read off the **abstract code**, not the `:imports` chunk. A call on a module held in
+  # a variable leaves no trace in imports at all — not even an `:erlang.apply/3` — so a
+  # check built on that chunk silently passes the one thing it exists to catch.
+  defp all_calls(mod) do
+    Code.ensure_loaded!(mod)
+    Polyphony.Test.Purity.calls_in(mod)
   end
 
   test "every kit component has a page in the catalogue" do
