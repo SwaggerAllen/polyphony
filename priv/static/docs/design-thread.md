@@ -88,6 +88,12 @@ question you'll want answered later when something looks odd.
 The current design is *live*, not remembered. Fetch it:
 
 - `BASE/docs` — index of everything, with a line on what each file is for.
+- **`BASE/docs/behaviors/<screen>.md` — what that screen is supposed to do, state by state.**
+  This is the file you design against and the file your change lands in. Read
+  `BASE/docs/behaviors/README.md` once for the convention. Every state section in it is
+  named for a storybook variation and a test fails when the two sets disagree, so the list
+  of states is trustworthy in a way prose usually isn't — if a state is in the doc, you can
+  go and look at it.
 - `BASE/ux/polyphony-kit.css` — **the single source of truth** for tokens and component
   classes. Every class you use in a mock must already exist here, or your mock is
   proposing a new component and should say so in as many words.
@@ -119,6 +125,11 @@ Everything else — a state added to a screen that exists, a rule that changed, 
 component — travels as **the part that changes**, quoted with enough surrounding text to
 place it.
 
+For a behaviors doc that means: the `### \`state\`` sections you are adding or rewriting,
+plus the standing decision if the change touches one. **A new state is a new storybook
+variation** — the code session has to build both, and a test makes sure it does — so name
+it the way a variation would be named (`cap_reached`, not "the cap-reached state").
+
 The reason is worth understanding rather than just following, because it decides the
 edge cases:
 
@@ -135,7 +146,7 @@ collision announces itself as a class that already exists when the code thread p
 
 ### The `rev` line
 
-Every behaviors file carries one near the top:
+Every behaviors file carries one near the top, on its own line:
 
 ```
 <!-- rev: 7 -->

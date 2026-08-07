@@ -18,14 +18,15 @@ Backend-first, but the LiveView frontend (`PolyphonyWeb`, Phoenix 1.8 / LiveView
 DigitalOcean App Platform. The whole domain still runs and is tested offline. See
 `docs/frontend.md` and `docs/deployment.md`.
 
-A **frontend redesign** is speced but not yet built: the `ux/` folder holds the
-design pass — static mocks (`polyphony-*.html`), a component kit
-(`polyphony-kit.css` + `polyphony-kit.html`), and `ux/README.md` (IA/copy/porting
-notes). `polyphony-kit.css` is the **single source of truth** for tokens and every
-component class. When that rework lands, port from the kit as directly as possible —
-lift its classes and markup rather than re-deriving them — so the shipped UI and the
-design don't drift. The backend work the redesign depends on is the **Frontend rebuild**
-milestone in Linear.
+The **frontend redesign has landed**: all fifteen screens are ported from the kit and
+live in `PolyphonyWeb.Screens.*` as pure function components, each with a story in
+`/storybook` and a behaviors doc in `docs/behaviors/`. The `ux/` folder holds the design
+pass it was ported from — static mocks (`polyphony-*.html`), the component kit
+(`polyphony-kit.css` + `polyphony-kit.html`), and `ux/README.md` (IA/copy/porting notes).
+`polyphony-kit.css` remains the **single source of truth** for tokens and every component
+class: port from it as directly as possible, lifting its classes and markup rather than
+re-deriving them, so the shipped UI and the design don't drift. What is left of the
+**Frontend rebuild** milestone is in Linear.
 
 ## Commands
 
@@ -142,9 +143,17 @@ for it.
   ported screen calls those inside a `Kit.frame/1`, which sets the register and theme the
   tokens key on. `app.css` is an ordered manifest (Tailwind → kit) and the kit is last, so
   it outranks a utility it overlaps with — the precedence the mocks have. The first-cut
-  design system is **deleted**, so **screens that haven't been ported render unstyled**;
-  that's deliberate, the app has no users until the rebuild lands. Review components at
-  `/storybook`, and give any new one a story — the suite requires it.
+  design system is **deleted**, so anything not built from the kit renders unstyled. Review
+  components at `/storybook`, and give any new one a story — the suite requires it.
+- **What a screen *should* do lives in `docs/behaviors/<screen>.md`**, one section per state,
+  each named for its storybook variation. Three files answer three different questions and
+  it is easy to put a note in the wrong one: `architecture.md` says why the code is shaped
+  this way, `ux/` says what it looks like, `docs/behaviors/` says what it does from the seat
+  of the person using it. The last is the only one a design thread writes into, and the only
+  one with a `rev` — bump it whenever you change a screen's behavior, **including for a fix
+  made here with no ticket**, because those are precisely the changes nothing else records.
+  `BehaviorsDocTest` pins the state list to the storybook so the prose can't outlive what it
+  describes.
 
 ## The worklist (Linear, not a document)
 
@@ -222,9 +231,12 @@ up any queued work, design-thread or not:
    a **fragment**, never a whole file: paste it into `ux/polyphony-kit.css`, run
    `mix kit.port`, and if the class already exists, that collision is the conflict signal —
    stop and ask rather than overwriting.
-5. **Docs first, then code.** Land the behaviors doc (bumping its `rev`) before
-   implementing, so what you build against is in the repo rather than in a Drive file.
-   That ordering is also what makes the next design session's base meaningful.
+5. **Docs first, then code.** Land the behaviors doc (`docs/behaviors/<screen>.md`, bumping
+   its `rev`) before implementing, so what you build against is in the repo rather than in a
+   Drive file. That ordering is also what makes the next design session's base meaningful.
+   A new `### \`state\`` section obliges a storybook variation of the same name — `BehaviorsDocTest`
+   fails while the two sets disagree, which is what stops the docs describing an app nobody
+   can look at.
 6. **Close the loop in Linear**: open the PR, move the issue to **Ready to merge**, and
    comment with what landed and the commit. Say plainly if you didn't do part of it and
    why. An issue that goes quiet is indistinguishable from one nobody read — and an issue
