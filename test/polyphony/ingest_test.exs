@@ -4,8 +4,8 @@ defmodule Polyphony.IngestTest do
 
   alias Polyphony.Ingest
   alias Polyphony.Ingest.Segment
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.SelfState
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.SelfState
 
   describe "verbatim integrity (§11: never rewrite)" do
     test "verbatim spans in order pass" do

@@ -4,7 +4,7 @@ defmodule Polyphony.Costs.AttributionTest do
 
   alias Polyphony.{App, Library, Repo}
   alias Polyphony.Costs.Attribution
-  alias Polyphony.Commands.OpenScene
+  alias PolyphonyCore.Commands.OpenScene
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)

@@ -9,7 +9,7 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
   alias Polyphony.{App, Library}
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, ProposeIntroduction}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, ProposeIntroduction}
 
   setup :register_and_log_in_user
 

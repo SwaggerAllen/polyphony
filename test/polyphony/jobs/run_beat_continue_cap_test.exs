@@ -10,7 +10,7 @@ defmodule Polyphony.Jobs.RunBeatContinueCapTest do
   alias Polyphony.{App, Context}
   alias Polyphony.Context.Store
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
   alias PolyphonyCore.Events.TurnOrderDeclared
   alias Polyphony.Jobs.RunBeat
 

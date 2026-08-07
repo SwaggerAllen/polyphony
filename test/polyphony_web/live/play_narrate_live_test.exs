@@ -21,8 +21,8 @@ defmodule PolyphonyWeb.PlayNarrateLiveTest do
   alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
   alias Polyphony.Authoring.WorldBible.Entry
-  alias Polyphony.Commands.{CommitPacket, EnterCharacter, OpenScene, RecordWorldEvent}
-  alias Polyphony.TurnPacket
+  alias PolyphonyCore.Commands.{CommitPacket, EnterCharacter, OpenScene, RecordWorldEvent}
+  alias PolyphonyCore.TurnPacket
   alias PolyphonyCore.Events.WorldEventOccurred
 
   setup :register_and_log_in_user

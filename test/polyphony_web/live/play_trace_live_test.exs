@@ -5,7 +5,7 @@ defmodule PolyphonyWeb.PlayTraceLiveTest do
   alias Polyphony.{App, Context, DebugFlags, DebugTap}
   alias Polyphony.Context.Store
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Jobs.RunBeat
 
   @mock "Elixir.Polyphony.LLM.Mock"

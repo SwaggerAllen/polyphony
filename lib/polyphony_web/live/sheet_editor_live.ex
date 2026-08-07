@@ -58,6 +58,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
   alias Polyphony.Owner
   alias Polyphony.Authoring.{Audience, CharacterSheet, Stub, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.{Boundary, Fact, Relationship}
+  alias Polyphony.Authoring.BoundaryGate
+  alias PolyphonyCore.Content
+  alias PolyphonyCore.Content.CampaignConfig
   alias Polyphony.ReadModels.Membership
   alias Polyphony.Permissions
   alias PolyphonyWeb.{AudiencePicker, Autosave, Generating, Guard, Screens, Voice}
@@ -111,6 +114,9 @@ defmodule PolyphonyWeb.SheetEditorLive do
          # Index of the fact whose audience is open, or nil.
          audience_at: nil,
          campaign: campaign,
+         # The campaign's content ceiling (§A5 layer 2), so the editor can't be used to
+         # open a boundary the campaign forbids — see `content_ceiling/1`.
+         content_ceiling: content_ceiling(campaign),
          ensemble_context: ensemble_context(owner, campaign, entry.id),
          world_id: world_id,
          world_context: world_context_for(worlds, world_id),
@@ -354,11 +360,19 @@ defmodule PolyphonyWeb.SheetEditorLive do
           {:noreply, put_flash(socket, :error, "Give the boundary a topic.")}
 
         _topic ->
+          # §V8a: the ceiling is applied *here*, not only at scene assembly, so an author
+          # never saves an open boundary that play would silently hold closed. Capping is
+          # toward refusal — a compulsion the campaign forbids becomes a line against the
+          # same topic, since the alternative is a ceiling that compels what it forbids.
+          {status, boundary} =
+            params |> Boundary.from_map() |> constrain(socket.assigns.content_ceiling)
+
           {:noreply,
            socket
-           |> assign(boundaries: socket.assigns.boundaries ++ [Boundary.from_map(params)])
+           |> assign(boundaries: socket.assigns.boundaries ++ [boundary])
            |> touch()
-           |> view_patch(panel: nil)}
+           |> view_patch(panel: nil)
+           |> constrained_flash(status, boundary)}
       end
     end)
   end
@@ -675,7 +689,15 @@ defmodule PolyphonyWeb.SheetEditorLive do
         {:noreply, put_flash(socket, :info, "No boundaries suggested.")}
 
       list ->
-        boundaries = Enum.map(list, &Boundary.from_map/1)
+        # A suggestion is the likeliest way an over-the-ceiling boundary arrives, since
+        # nothing told the model what the campaign permits.
+        constrained =
+          Enum.map(list, fn s ->
+            s |> Boundary.from_map() |> constrain(socket.assigns.content_ceiling)
+          end)
+
+        boundaries = Enum.map(constrained, &elem(&1, 1))
+        capped = Enum.count(constrained, &match?({:constrained, _}, &1))
 
         {:noreply,
          socket
@@ -683,7 +705,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
          |> touch()
          |> put_flash(
            :info,
-           "Added #{length(boundaries)} suggested boundary(ies). Review and Save."
+           "Added #{length(boundaries)} suggested boundary(ies)#{capped_note(capped)}. Review and Save."
          )}
     end
   end
@@ -1216,6 +1238,52 @@ defmodule PolyphonyWeb.SheetEditorLive do
   # and re-picked. `world_bible_id` on the sheet is still written on save, so the stored
   # value converges on the campaign's, and a character with no campaign keeps whatever
   # it was given.
+  @doc """
+  The categories this character's campaign permits, or `:unbounded`.
+
+  §A5 layer 2 is a property of the **campaign**, not of the person looking, so the floor is
+  taken as attested here: capping an author's own sheet differently depending on whether
+  they had attested would make the stored data depend on the viewer.
+
+  A character in no campaign is `:unbounded` rather than the all-off default. The default
+  config means *this campaign permits nothing*, which is the right answer for a campaign
+  and exactly the wrong one for a character who does not have one — it would cap every
+  categorized boundary on a standalone sheet.
+  """
+  @spec content_ceiling(map() | nil) :: [PolyphonyCore.Content.category()] | :unbounded
+  def content_ceiling(nil), do: :unbounded
+
+  def content_ceiling(campaign) do
+    campaign
+    |> Library.payload()
+    |> CampaignConfig.from_payload()
+    |> Content.register(attested: true)
+  end
+
+  # Cap a boundary against the ceiling, or leave it alone when there is none to cap
+  # against. Returns `{:ok, b}` / `{:constrained, b}` the way `constrain_boundary/2` does,
+  # so the caller counts the same shape either way.
+  defp constrain(boundary, :unbounded), do: {:ok, boundary}
+  defp constrain(boundary, register), do: BoundaryGate.constrain_boundary(boundary, register)
+
+  # A silent cap would read as the form losing what was typed. Say what happened and where
+  # to change it, since the fix is on the campaign screen rather than this one.
+  defp constrained_flash(socket, :ok, _boundary), do: socket
+
+  defp constrained_flash(socket, :constrained, boundary) do
+    put_flash(
+      socket,
+      :info,
+      "Saved as a line she holds: this campaign doesn't allow #{Content.label(boundary.category)}. " <>
+        "Turn the category on in the campaign's content settings to open it."
+    )
+  end
+
+  defp capped_note(0), do: ""
+
+  defp capped_note(n),
+    do: " (#{n} held closed — the campaign doesn't allow that content)"
+
   defp world_of(campaign, sheet) do
     from_campaign =
       case campaign && Library.payload(campaign) do

@@ -30,7 +30,7 @@ defmodule Polyphony.Context do
   alias PolyphonyCore.Content
   alias PolyphonyCore.Content.CampaignConfig
   alias Polyphony.Context.{Rebuild, SceneContext, StaticRetriever}
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
   alias PolyphonyCore.Visibility
 
   alias PolyphonyCore.Events.{

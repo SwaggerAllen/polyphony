@@ -1,12 +1,12 @@
-defmodule Polyphony.Scene.CastTest do
+defmodule PolyphonyCore.Scene.CastTest do
   @moduledoc "The scene id↔name resolver at the LLM boundary (§5.2)."
   use ExUnit.Case, async: false
 
   alias Polyphony.{App, Library, Repo}
   alias Polyphony.Context.Rebuild
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)

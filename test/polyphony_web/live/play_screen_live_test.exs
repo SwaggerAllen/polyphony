@@ -23,7 +23,7 @@ defmodule PolyphonyWeb.PlayScreenLiveTest do
   alias Polyphony.{App, Library}
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
+  alias PolyphonyCore.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
   alias PolyphonyCore.Events.WorldEventOccurred
   alias Polyphony.Director.BeatOps
 

@@ -2,11 +2,13 @@ defmodule PolyphonyCore do
   @moduledoc """
   The functional core: the rules of the fiction, as data in and data out.
 
-  No code here — this module names the layer. Eight modules live under it and none of
-  them can reach an effect of any kind: not the repo, not the event store, not a
-  provider, not PubSub, not mail, not ETS.
+  No code here — this module names the layer. Everything under it is data in, data out:
+  it can reach no effect of any kind — not the repo, not the event store, not a provider,
+  not PubSub, not mail, not ETS — and nothing in it reads a clock, rolls a die or mints an
+  id either, because the log is replayed and all three of those make a rebuild disagree
+  with the story it is rebuilding.
 
-  ## Why these eight
+  ## Why these
 
   They were already here. `Visibility` is three public functions with a fan-in of seven;
   `Packets` is six with a fan-in of eleven. They sat in a flat root namespace of
@@ -44,9 +46,21 @@ defmodule PolyphonyCore do
   to the obvious objection: organising by purity would scatter one concept across two
   namespaces, and organising by subject *within* each layer does not.
 
-  It also settles invariant 2. `Director.Beat` is replayed, so a provider call inside it
-  would rebuild the same log into a different story — and now that is a compile error
-  rather than something a test notices.
+  It also settles invariant 2, for **both** aggregates. `Scene` and `Director.Beat` are
+  replayed, so a provider call inside either would rebuild the same log into a different
+  story — and now that is a compile error rather than something a test notices.
+
+  `Scene` came with the data it arbitrates over: `Commands`, `TurnPacket` and
+  `Scene.Cast`. Each was measured first — none reaches an effect, none is nondeterministic,
+  and none names anything outside the layer — so the move cost nothing but the rename.
+  `Cast` is the interesting one: it is the id ↔ display-name resolver, which is to say it
+  is where §5.2 is kept, and a routing key turning into a display name is the exact class
+  of bug that ends with a whisper in the wrong ear.
+
+  The rename was not free of *data* risk, which is the lesson of the commit before it: a
+  pending user packet is a `%TurnPacket{}` in `packet_drafts.packet`, and Erlang term
+  format spells the module out. `PolyphonyCore.Blob`'s rename table is what makes moving a
+  stored struct an ordinary refactor rather than a silent loss.
 
   ## Why it is `PolyphonyCore` and not `Polyphony.Core`
 

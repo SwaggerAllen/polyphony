@@ -13,7 +13,7 @@ defmodule Polyphony.TurnOrderTest do
   alias Polyphony.Director.BeatWalk
   alias PolyphonyCore.Director.Beat
 
-  alias Polyphony.Commands.{
+  alias PolyphonyCore.Commands.{
     OpenScene,
     EnterCharacter,
     CommitPacket,
@@ -23,8 +23,8 @@ defmodule Polyphony.TurnOrderTest do
 
   alias PolyphonyCore.Director.Commands.{OpenBeat, RecordPacket, RecordPass}
   alias PolyphonyCore.Events.{ThoughtOccurred, ControlModeSet, TurnOrderDeclared}
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
 
   defp stored(s), do: App |> Commanded.EventStore.stream_forward(s) |> Enum.map(& &1.data)
   defp canonical(s), do: s |> stored() |> Packets.canonical()

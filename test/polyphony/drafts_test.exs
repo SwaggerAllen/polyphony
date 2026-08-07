@@ -10,10 +10,10 @@ defmodule Polyphony.DraftsTest do
   alias PolyphonyCore.Packets
   alias Polyphony.LLM.Mock
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
   alias PolyphonyCore.Events.ThoughtOccurred
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)

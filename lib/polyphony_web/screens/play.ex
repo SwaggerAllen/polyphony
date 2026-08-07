@@ -16,7 +16,7 @@ defmodule PolyphonyWeb.Screens.Play do
   ## What it may and may not do
 
   It renders from assigns. The one domain call it makes is
-  `Polyphony.Scene.Cast.render_name/2`, which is a `Map.get` over a struct already in
+  `PolyphonyCore.Scene.Cast.render_name/2`, which is a `Map.get` over a struct already in
   assigns — `character_id` is the routing key everywhere and a name is display, resolved
   at the edges, and this is an edge. Anything that needs a *read* happens in
   `PolyphonyWeb.PlayLive` and arrives as an assign; the character picker used to resolve
@@ -29,7 +29,7 @@ defmodule PolyphonyWeb.Screens.Play do
   """
   use PolyphonyWeb, :html
 
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
   alias PolyphonyWeb.{Kit, Layouts, Transcript, TurnEdit, Voice}
 
   # Who the beat loop is generating right now, if anyone — the strip's live slot.
@@ -294,7 +294,7 @@ defmodule PolyphonyWeb.Screens.Play do
 
   attr(:cast, :any,
     required: true,
-    doc: "%Polyphony.Scene.Cast{} — the id↔name map, for display only"
+    doc: "%PolyphonyCore.Scene.Cast{} — the id↔name map, for display only"
   )
 
   attr(:scene_title, :string, required: true, doc: "the authored location; never generated")

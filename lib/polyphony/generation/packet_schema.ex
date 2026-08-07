@@ -101,12 +101,12 @@ defmodule Polyphony.Generation.PacketSchema do
   end
 
   @doc """
-  Cast, validate, and convert to a domain `Polyphony.TurnPacket`.
+  Cast, validate, and convert to a domain `PolyphonyCore.TurnPacket`.
 
   Returns `{:ok, %TurnPacket{}}` or `{:error, changeset}` (whose errors feed the
   corrective retry in `Polyphony.Generation`).
   """
-  @spec parse(map()) :: {:ok, Polyphony.TurnPacket.t()} | {:error, Ecto.Changeset.t()}
+  @spec parse(map()) :: {:ok, PolyphonyCore.TurnPacket.t()} | {:error, Ecto.Changeset.t()}
   def parse(data) do
     changeset = changeset(data)
 
@@ -118,10 +118,10 @@ defmodule Polyphony.Generation.PacketSchema do
   end
 
   defp to_turn_packet(%__MODULE__{moves: moves, self_state: state}) do
-    %Polyphony.TurnPacket{
+    %PolyphonyCore.TurnPacket{
       moves:
         Enum.map(moves, fn m ->
-          %Polyphony.TurnPacket.Move{
+          %PolyphonyCore.TurnPacket.Move{
             seq: m.seq,
             type: m.type,
             content: m.content,
@@ -136,7 +136,7 @@ defmodule Polyphony.Generation.PacketSchema do
   defp to_self_state(nil), do: nil
 
   defp to_self_state(s) do
-    %Polyphony.TurnPacket.SelfState{
+    %PolyphonyCore.TurnPacket.SelfState{
       mood_felt: s.mood_felt,
       demeanor: s.demeanor,
       intention: s.intention,

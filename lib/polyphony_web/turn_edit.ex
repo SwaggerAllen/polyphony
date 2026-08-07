@@ -18,8 +18,8 @@ defmodule PolyphonyWeb.TurnEdit do
   through `SayParser` so aloud/whisper is inferred from the text exactly as in the
   composer. Move ordering follows line order (`seq` renumbered on parse).
   """
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
   alias PolyphonyWeb.SayParser
 
   @doc """

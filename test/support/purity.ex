@@ -22,6 +22,14 @@ defmodule Polyphony.Test.Purity do
   merits; `Audience.resolve/1` comes out impure because it reaches `Groups.member_ids/2`
   and from there the repo. Nothing is exempted by hand.
 
+  ## Four floors, because "pure" means four different things here
+
+  The same walk answers four questions, and each has a caller that cares about exactly one
+  of them: `impure/0` (the database), `reaches_effects/0` (anything outside the process at
+  all — the floor `PolyphonyCore` is held to), `reaches_llm/0` (a provider call, which is
+  invariant 2), and `reaches_nondeterminism/0` (a clock, a die, a fresh id — the floor
+  **replay** needs, and the only one whose members are not effects at all).
+
   ## What it does not see
 
   Dynamic dispatch — `apply/3`, a protocol, a module in a variable — is invisible to a
@@ -29,10 +37,34 @@ defmodule Polyphony.Test.Purity do
   from the other side: `PolyphonyWeb.StorybookTest` fails a screen module that contains
   any dynamic dispatch at all, which is cheap because screens are markup and have no
   business doing it. Together the two make the analysis sound for the code it governs.
+
+  ## And when this stops seeing anything
+
+  Every guard built on this asserts that a set comes back **empty**, which passes just as
+  happily when the walk has gone blind — as it did, for its whole life, on function
+  captures. `Polyphony.Test.Canary` and `Polyphony.PurityCanaryTest` are the other half:
+  a deliberately impure function per evasion, plus pure ones that must stay clean.
   """
 
-  @db ~w(Elixir.Ecto Elixir.Postgrex Elixir.Polyphony.Repo Elixir.Polyphony.EventStore
-         Elixir.Commanded Elixir.Oban)
+  # `Elixir.Ecto` is the database, minus the parts of it that are a data library. A
+  # changeset, a schema, a cast, a query struct — none of them go anywhere, and calling
+  # them a read is not merely imprecise: it puts `Generation.PacketSchema.parse/1` and
+  # `Director.Decision.parse/1` on the impure side, which are pure validators of model
+  # output and exactly the kind of thing that wants to live in the core. 41 functions
+  # come back clean, and every one of them is a parser or a changeset builder.
+  #
+  # `unsafe_validate_unique/3,4` is the exception the exception needs: it lives on
+  # `Ecto.Changeset` and takes a repo. Named exactly, it outranks the prefix that excuses
+  # its module — which is the whole reason roots can be MFAs and not just namespaces.
+  @ecto_pure ~w(Elixir.Ecto.Changeset Elixir.Ecto.Schema Elixir.Ecto.Type Elixir.Ecto.Enum
+                Elixir.Ecto.Query)
+
+  @db {~w(Elixir.Ecto Elixir.Postgrex Elixir.Polyphony.Repo Elixir.Polyphony.EventStore
+          Elixir.Commanded Elixir.Oban) ++
+         [
+           {Ecto.Changeset, :unsafe_validate_unique, 3},
+           {Ecto.Changeset, :unsafe_validate_unique, 4}
+         ], @ecto_pure}
 
   # Everything under `Polyphony.LLM` is a call out to a provider — except `LLM.Settings`,
   # which is the per-campaign config struct read off a payload and reaches nothing.
@@ -50,7 +82,7 @@ defmodule Polyphony.Test.Purity do
   # `PolyphonyCore`'s membership and it is not academic: under a repo-only floor
   # `Broadcast`, `Mailer` and `DebugLog` all score clean, and they publish, send mail and
   # write ETS respectively.
-  @effects @db ++
+  @effects elem(@db, 0) ++
              ~w(Elixir.Phoenix.PubSub Elixir.Polyphony.Mailer Elixir.Swoosh Elixir.Logger
                 Elixir.File Elixir.System Elixir.Task Elixir.GenServer Elixir.Agent
                 Elixir.Process ets persistent_term Elixir.Polyphony.LLM
@@ -61,7 +93,66 @@ defmodule Polyphony.Test.Purity do
   Everything that can reach an effect of any kind — the floor `PolyphonyCore` is held to.
   """
   @spec reaches_effects() :: MapSet.t({module(), atom(), arity()})
-  def reaches_effects, do: reaching({@effects, ~w(Elixir.Polyphony.LLM.Settings)})
+  def reaches_effects,
+    do: reaching({@effects, @ecto_pure ++ ~w(Elixir.Polyphony.LLM.Settings)})
+
+  # Reading the clock, rolling a die, minting an id. None of these is an *effect* — they
+  # touch nothing and would pass every floor above — and all three break replay, which is
+  # the property the event log is for. An aggregate that stamps `DateTime.utc_now()` into
+  # an event rebuilds into a different log every time it is replayed, and a core that
+  # decides visibility from `:rand` decides it differently on the second read.
+  #
+  # Named by MFA rather than by module, because the modules are otherwise pure and heavily
+  # used: `DateTime.compare/2` is fine and `DateTime.utc_now/0` is not, and banning the
+  # namespace would ban both. `:rand` is the one exception — the whole module is a source
+  # of randomness, so the bare prefix is right.
+  @nondeterministic [
+                      {DateTime, :utc_now, 0},
+                      {DateTime, :utc_now, 1},
+                      {DateTime, :now, 1},
+                      {DateTime, :now!, 1},
+                      {NaiveDateTime, :utc_now, 0},
+                      {NaiveDateTime, :utc_now, 1},
+                      {NaiveDateTime, :local_now, 0},
+                      {Date, :utc_today, 0},
+                      {Date, :utc_today, 1},
+                      {Time, :utc_now, 0},
+                      {Time, :utc_now, 1},
+                      {Ecto.UUID, :generate, 0},
+                      {Ecto.UUID, :bingenerate, 0},
+                      {System, :system_time, 0},
+                      {System, :system_time, 1},
+                      {System, :monotonic_time, 0},
+                      {System, :monotonic_time, 1},
+                      {System, :os_time, 0},
+                      {System, :os_time, 1},
+                      {System, :unique_integer, 0},
+                      {System, :unique_integer, 1},
+                      {:erlang, :now, 0},
+                      {:erlang, :timestamp, 0},
+                      {:erlang, :monotonic_time, 0},
+                      {:erlang, :monotonic_time, 1},
+                      {:erlang, :system_time, 0},
+                      {:erlang, :system_time, 1},
+                      {:erlang, :unique_integer, 0},
+                      {:erlang, :unique_integer, 1},
+                      {:erlang, :make_ref, 0},
+                      {:os, :timestamp, 0},
+                      {:os, :system_time, 0},
+                      {:os, :system_time, 1},
+                      {:crypto, :strong_rand_bytes, 1},
+                      {:crypto, :rand_bytes, 1},
+                      {:crypto, :rand_uniform, 2}
+                    ] ++ ~w(rand)
+
+  @doc """
+  Everything that can reach a clock, a die or a fresh id — the floor **replay** needs.
+
+  Distinct from `reaches_effects/0` on purpose: none of these touches anything outside the
+  process, so they are pure by every ordinary test and still make a stream unreplayable.
+  """
+  @spec reaches_nondeterminism() :: MapSet.t({module(), atom(), arity()})
+  def reaches_nondeterminism, do: reaching(@nondeterministic)
 
   @doc """
   The same question for a different floor: what can reach a **provider call**?
@@ -74,13 +165,19 @@ defmodule Polyphony.Test.Purity do
   def reaches_llm, do: reaching(@llm)
 
   @doc """
-  Every `Polyphony.*` function that can reach a module named by `roots`.
+  Every `Polyphony.*` function that can reach something named by `roots`.
 
-  `roots` is a list of module-name prefixes, or a `{included, excluded}` pair when a
-  namespace has an exception in it. Results are cached per root set — several tests want
-  the same answer and the walk is a second or so.
+  A root is a **module-name prefix** (`"Elixir.Ecto"`) or an exact
+  **`{module, function, arity}`** — the latter for a namespace that is mostly pure and has
+  one or two functions that are not, like `DateTime.utc_now/0`. `roots` is a list of those,
+  or an `{included, excluded}` pair when a namespace needs an exception carved out of it;
+  an exactly-named function in `included` outranks a prefix in `excluded`, so an exception
+  can itself have one.
+
+  Results are cached per root set — several tests want the same answer and the walk is a
+  second or so.
   """
-  @spec reaching([String.t()] | {[String.t()], [String.t()]}) ::
+  @spec reaching([term()] | {[term()], [term()]}) ::
           MapSet.t({module(), atom(), arity()})
   def reaching(roots) do
     key = {__MODULE__, roots}
@@ -117,14 +214,25 @@ defmodule Polyphony.Test.Purity do
     if MapSet.size(grown) == MapSet.size(known), do: known, else: close(graph, grown)
   end
 
+  # An exactly-named function outranks a namespace that excuses its module. Without that
+  # precedence `Ecto.Changeset.unsafe_validate_unique/4` — which takes a repo — would be
+  # excused along with the rest of `Ecto.Changeset`, and there would be no way to say so
+  # short of putting the whole data library back on the impure side.
   defp root?(mfa, {included, excluded}) do
-    root?(mfa, included) and not root?(mfa, excluded)
+    named?(mfa, included) or (root?(mfa, included) and not root?(mfa, excluded))
   end
 
-  defp root?({m, _f, _a}, prefixes) when is_list(prefixes) do
+  # An entry is either a module-name prefix or an exact `{module, function, arity}`.
+  defp root?({m, _f, _a} = mfa, entries) when is_list(entries) do
     name = to_string(m)
-    Enum.any?(prefixes, &String.starts_with?(name, &1))
+
+    Enum.any?(entries, fn
+      prefix when is_binary(prefix) -> String.starts_with?(name, prefix)
+      entry -> entry == mfa
+    end)
   end
+
+  defp named?(mfa, entries), do: Enum.any?(entries, &(&1 == mfa))
 
   @doc "Every `Polyphony.*` function, mapped to the MFAs it calls."
   @spec call_graph() :: %{{module(), atom(), arity()} => [{module(), atom(), arity()}]}

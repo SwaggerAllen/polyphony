@@ -3,7 +3,7 @@ defmodule PolyphonyWeb.TurnEditTest do
   use ExUnit.Case, async: true
 
   alias PolyphonyWeb.TurnEdit
-  alias Polyphony.TurnPacket.Move
+  alias PolyphonyCore.TurnPacket.Move
 
   defp msg(kind, payload), do: %{kind: kind, payload: payload}
 

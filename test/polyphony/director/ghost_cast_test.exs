@@ -19,7 +19,7 @@ defmodule Polyphony.Director.GhostCastTest do
   alias Polyphony.{App, Context}
   alias Polyphony.Context.Store
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, DeclareTurnOrder}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, DeclareTurnOrder}
   alias Polyphony.Director.{BeatOps, BeatWalk}
   alias PolyphonyCore.Director.Commands.OpenBeat
   alias Polyphony.Jobs.{GeneratePacket, RunBeat}

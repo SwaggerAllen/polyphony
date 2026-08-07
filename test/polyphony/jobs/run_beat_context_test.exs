@@ -8,7 +8,7 @@ defmodule Polyphony.Jobs.RunBeatContextTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.App
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Jobs.RunBeat
 
   defp setup_scene(members) do

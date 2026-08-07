@@ -1,6 +1,6 @@
 # Character sheet
 
-<!-- rev: 1 -->
+<!-- rev: 2 -->
 
 | | |
 |---|---|
@@ -23,6 +23,14 @@ missing here is what a model will invent.
   removed, and the picker says so rather than offering a control that silently does nothing.
 - **A relationship targets an id, with a name rendered beside it.** A name is display, and two
   people can share one.
+- **The campaign's content ceiling is applied here, not only in play.** A boundary flagged
+  for content the campaign doesn't allow is saved **held** — and held as a *refusal*, so a
+  compulsion becomes a line against the same topic rather than something she always does.
+  Play would cap it either way; capping it in the editor is what stops an author saving an
+  open boundary and believing it. The screen says which category and where to change it,
+  because the fix is on the campaign screen. A character in **no** campaign has no ceiling
+  and nothing is capped — the all-off default means *this campaign permits nothing*, which
+  is the right reading for a campaign and the wrong one for a character without one.
 - **The save bar is pinned to the frame, not to the document.** On a phone, a save control at
   the bottom of a long form is a save control nobody finds.
 
@@ -51,6 +59,10 @@ decision.
 And which way the pressure runs: a **refusal** is a line she holds, a **compulsion** is one
 she can't help crossing. Same gate, two directions, and both are enforced in play rather than
 suggested to a model.
+
+Adding one applies the campaign's ceiling on the spot — see the standing decision. A
+suggestion is the likeliest way an over-the-ceiling item arrives, since nothing tells the
+model what the campaign permits, so a batch of them reports how many came back held.
 
 ### `relationships` — Who she's connected to
 

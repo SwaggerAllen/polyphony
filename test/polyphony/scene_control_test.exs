@@ -8,7 +8,7 @@ defmodule Polyphony.SceneControlTest do
 
   alias Polyphony.{App, SceneControl}
   alias PolyphonyCore.MembershipSet
-  alias Polyphony.Commands.OpenScene
+  alias PolyphonyCore.Commands.OpenScene
   alias PolyphonyCore.Events.{CharacterEntered, CharacterExited}
 
   defp stored(scene), do: App |> Commanded.EventStore.stream_forward(scene) |> Enum.map(& &1.data)

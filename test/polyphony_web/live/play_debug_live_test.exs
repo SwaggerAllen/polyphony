@@ -3,7 +3,7 @@ defmodule PolyphonyWeb.PlayDebugLiveTest do
   use PolyphonyWeb.ConnCase, async: false
 
   alias Polyphony.{App, DebugFlags}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
 
   setup :register_and_log_in_user
 

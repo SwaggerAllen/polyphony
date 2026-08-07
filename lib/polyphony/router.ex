@@ -2,11 +2,11 @@ defmodule Polyphony.Router do
   @moduledoc "Routes commands to aggregates by their identity field."
   use Commanded.Commands.Router
 
-  alias Polyphony.Scene
+  alias PolyphonyCore.Scene
   # The Beat aggregate is in the core (`deps: []`); the rest of `Director` is not.
   alias PolyphonyCore.Director
 
-  alias Polyphony.Commands.{
+  alias PolyphonyCore.Commands.{
     OpenScene,
     CloseScene,
     EnterCharacter,

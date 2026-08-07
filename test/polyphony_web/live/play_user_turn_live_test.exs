@@ -18,7 +18,7 @@ defmodule PolyphonyWeb.PlayUserTurnLiveTest do
 
   alias Polyphony.{App, Broadcast}
   alias PolyphonyCore.TurnOrder
-  alias Polyphony.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
+  alias PolyphonyCore.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
   alias Polyphony.Director.BeatOps
   alias PolyphonyCore.Director.Commands.OpenBeat
 

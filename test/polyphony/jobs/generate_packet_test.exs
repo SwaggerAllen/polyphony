@@ -10,7 +10,7 @@ defmodule Polyphony.Jobs.GeneratePacketTest do
   alias Polyphony.App
   alias PolyphonyCore.{MembershipSet, Visibility}
   alias Polyphony.Jobs.GeneratePacket
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
   alias PolyphonyCore.Events.{ThoughtOccurred, SpeechUttered}
   alias Polyphony.LLM.Stub
 

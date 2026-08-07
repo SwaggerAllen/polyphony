@@ -1,7 +1,7 @@
 defmodule Storybook.Screens.Play do
   use PhoenixStorybook.Story, :component
 
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
 
   def container, do: {:div, style: "width:100%"}
 

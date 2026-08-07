@@ -12,7 +12,7 @@ defmodule Polyphony.Director.BeatOps do
   alias Polyphony.{App, Context}
   alias PolyphonyCore.{MembershipSet, Packets}
   alias Polyphony.Context.{Rebuild, Store}
-  alias Polyphony.Commands.{RecordWorldEvent, ExitCharacter, CloseScene, ProposeIntroduction}
+  alias PolyphonyCore.Commands.{RecordWorldEvent, ExitCharacter, CloseScene, ProposeIntroduction}
   alias PolyphonyCore.Director.Proposal
 
   @typedoc "An event-store stream id — a scene, standing in for a branch."
@@ -118,7 +118,7 @@ defmodule Polyphony.Director.BeatOps do
     case PolyphonyCore.TurnOrder.for_beat(events, beat) do
       nil ->
         :ok =
-          App.dispatch(%Polyphony.Commands.DeclareTurnOrder{
+          App.dispatch(%PolyphonyCore.Commands.DeclareTurnOrder{
             scene_id: scene_id,
             beat: beat,
             order: default_cast_ids

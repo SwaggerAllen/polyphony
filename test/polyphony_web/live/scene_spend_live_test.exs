@@ -21,7 +21,7 @@ defmodule PolyphonyWeb.SceneSpendLiveTest do
   alias Polyphony.{App, Costs, Library}
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{EnterCharacter, OpenScene}
+  alias PolyphonyCore.Commands.{EnterCharacter, OpenScene}
 
   setup :register_and_log_in_user
 

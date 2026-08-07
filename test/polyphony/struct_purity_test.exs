@@ -16,9 +16,14 @@ defmodule Polyphony.StructPurityTest do
   `Knowledge.for_character/3`, and that is exactly why it ended up there.
 
   These modules are not in `PolyphonyCore`: they reference structs that live outside it
-  (`TurnPacket`, `Snapshot`, `CharacterSheet`), so joining the layer is a further move
-  with its own cost. Being pure and being in the core are different claims, and this one
-  is the smaller of the two.
+  (`Snapshot`, `CharacterSheet`), so joining the layer is a further move with its own
+  cost. Being pure and being in the core are different claims, and this one is the smaller
+  of the two.
+
+  `Scene.Cast` was on this list and is in the core now — it named only `TurnPacket`, which
+  went with it. Held to the wider floor by `PolyphonyCoreTest` from here, so it is checked
+  more strictly rather than less; it is off this list because a module cannot be covered
+  twice without one of the two claims going stale.
   """
   use ExUnit.Case, async: true
 
@@ -27,8 +32,7 @@ defmodule Polyphony.StructPurityTest do
   @modules [
     Polyphony.Authoring.Audience,
     Polyphony.Authoring.WorldBible,
-    Polyphony.Reading.Session,
-    Polyphony.Scene.Cast
+    Polyphony.Reading.Session
   ]
 
   test "none of them can reach an effect" do

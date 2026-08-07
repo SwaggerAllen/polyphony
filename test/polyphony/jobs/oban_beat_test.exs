@@ -11,7 +11,7 @@ defmodule Polyphony.Jobs.ObanBeatTest do
   alias PolyphonyCore.{MembershipSet, Visibility}
   alias Polyphony.Context.Store
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Jobs.RunBeat
 
   alias PolyphonyCore.Events.{

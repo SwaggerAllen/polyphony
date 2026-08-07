@@ -17,7 +17,7 @@ defmodule PolyphonyWeb.FeatureCase do
       import PolyphonyWeb.FeatureCase
 
       alias Polyphony.App
-      alias Polyphony.Commands.{OpenScene, EnterCharacter}
+      alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
     end
   end
 
@@ -53,11 +53,13 @@ defmodule PolyphonyWeb.FeatureCase do
   @doc "Open a scene with a three-character cast; returns the scene id."
   def scene_with_cast do
     scene = "feat-" <> Integer.to_string(System.unique_integer([:positive]))
-    :ok = Polyphony.App.dispatch(%Polyphony.Commands.OpenScene{scene_id: scene, opened_beat: 0})
+
+    :ok =
+      Polyphony.App.dispatch(%PolyphonyCore.Commands.OpenScene{scene_id: scene, opened_beat: 0})
 
     for c <- ~w(mira otto cara) do
       :ok =
-        Polyphony.App.dispatch(%Polyphony.Commands.EnterCharacter{
+        Polyphony.App.dispatch(%PolyphonyCore.Commands.EnterCharacter{
           scene_id: scene,
           character_id: c,
           beat: 1

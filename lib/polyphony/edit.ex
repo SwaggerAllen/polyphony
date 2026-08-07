@@ -23,11 +23,11 @@ defmodule Polyphony.Edit do
   private thought stays private.
   """
 
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
   alias Polyphony.Context.Rebuild
   alias Polyphony.{App, Fork}
   alias PolyphonyCore.Packets
-  alias Polyphony.Commands.{SupersedePacket, CommitPacket}
+  alias PolyphonyCore.Commands.{SupersedePacket, CommitPacket}
   alias Polyphony.Director.BeatOps
 
   @doc """

@@ -30,7 +30,7 @@ defmodule Polyphony.Director.SceneBrief do
   alias Polyphony.Director.BeatOps
   alias PolyphonyCore.Packets
   alias Polyphony.ReadModels.SceneSummary
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
 
   alias PolyphonyCore.Events.{
     SpeechUttered,

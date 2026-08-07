@@ -20,10 +20,10 @@ defmodule Polyphony.Drafts do
 
   alias PolyphonyCore.Blob
   alias Polyphony.Context.Rebuild
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
   alias Polyphony.{App, Repo, Broadcast}
   alias Polyphony.ReadModels.PacketDraft
-  alias Polyphony.Commands.CommitPacket
+  alias PolyphonyCore.Commands.CommitPacket
   alias Polyphony.Director.BeatOps
 
   @pubsub Polyphony.PubSub

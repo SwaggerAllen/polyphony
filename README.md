@@ -121,19 +121,19 @@ Key modules:
 
 | Module | Responsibility |
 |--------|----------------|
-| `Polyphony.Events` | The event catalog (§7) — immutable facts in the log |
-| `Polyphony.Scene` | Scene aggregate: lifecycle, membership, packet decomposition (§6.4) |
-| `Polyphony.Commands` / `Polyphony.Router` | Command structs and dispatch |
-| `Polyphony.Visibility` | `visible_to?/3` + `project/3` — **the core guarantee** (§8) |
+| `PolyphonyCore.Events` | The event catalog (§7) — immutable facts in the log |
+| `PolyphonyCore.Scene` | Scene aggregate: lifecycle, membership, packet decomposition (§6.4) |
+| `PolyphonyCore.Commands` / `Polyphony.Router` | Command structs and dispatch |
+| `PolyphonyCore.Visibility` | `visible_to?/3` + `project/3` — **the core guarantee** (§8) |
 | `Polyphony.LLM.Provider` / `DeepInfra` / `Stub` | Provider adapter boundary (§2, §3) |
 | `Polyphony.Generation` / `Generation.PacketSchema` | Structured output + §12 failure classification |
 | `Polyphony.Jobs.GeneratePacket` | Oban job: generation → `CommitPacket` (rules 1–2) |
 | `Polyphony.Context` / `Context.SceneContext` | Stable→volatile assembler; frozen prefix is the cache unit (§9) |
 | `Polyphony.Authoring.*` | WorldBible, CharacterSheet, ArcEntry, EffectiveSheet (§5–6) |
-| `Polyphony.Director.Arbitration` / `Options` / `Proposal` | Stage-1 mechanical arbitration (§10) |
+| `PolyphonyCore.Director.Arbitration` / `Options` / `Proposal` | Stage-1 mechanical arbitration (§10) |
 | `Polyphony.Director` / `Director.Decision` | Stage-2 judgment call + merged plan (§10) |
-| `Polyphony.Director.BeatPolicy` / `Fairness` | Beat-loop stopping rule; casting fairness (§10) |
-| `Polyphony.Director.Beat` | Beat-lifecycle aggregate — the §12 synchronization unit |
+| `PolyphonyCore.Director.BeatPolicy` / `Fairness` | Beat-loop stopping rule; casting fairness (§10) |
+| `PolyphonyCore.Director.Beat` | Beat-lifecycle aggregate — the §12 synchronization unit |
 | `Polyphony.Director.BeatWalk` / `BeatDriver` | The beat walk: shared decision (next slot + mode) + the Oban-driven acting (§A1/§A2) |
 | `Polyphony.Jobs.RunBeat` / `GeneratePacket` | The Oban beat loop; shared plumbing in `Director.BeatOps` |
 | `Polyphony.Context.Store` | ETS cache of materialized contexts for job-side lookup |
@@ -147,10 +147,10 @@ Key modules:
 | `Polyphony.Authoring.Studio` + `FieldStore` / `DraftSchema` | Character authoring: generate then field-level regenerate; metadata out of the schema (§15) |
 | `Polyphony.ReadModels.SceneSummary` / `ArcEntry` | Character-scoped pgvector summaries; proposed-arc authoring table |
 | `Polyphony.Context.PgvectorRetriever` | Fetches a character's own distant summaries at scene open — the memory gradient's live link |
-| `Polyphony.MembershipSet` | Pure interval fold — reference membership implementation |
+| `PolyphonyCore.MembershipSet` | Pure interval fold — reference membership implementation |
 | `Polyphony.ReadModels.Membership` | Postgres interval read model (write path + queries) |
 | `Polyphony.Projectors.SceneMemberships` | Commanded projector wiring the two together |
-| `Polyphony.TurnPacket` | A character's turn before decomposition (§6.4) |
+| `PolyphonyCore.TurnPacket` | A character's turn before decomposition (§6.4) |
 
 ### Invariants enforced here (foundational rules, §4)
 

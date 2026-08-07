@@ -7,7 +7,7 @@ defmodule PolyphonyWeb.PlayProgressLiveTest do
   use PolyphonyWeb.ConnCase, async: false
 
   alias Polyphony.{App, Broadcast}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
 
   setup :register_and_log_in_user
 

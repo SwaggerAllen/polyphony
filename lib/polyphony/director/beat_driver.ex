@@ -24,10 +24,10 @@ defmodule Polyphony.Director.BeatDriver do
 
   require Logger
 
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
   alias Polyphony.Context.Rebuild
   alias Polyphony.{App, Drafts, Broadcast}
-  alias Polyphony.Commands.CommitPacket
+  alias PolyphonyCore.Commands.CommitPacket
   alias Polyphony.Director.{Auto, BeatWalk, BeatOps}
   alias PolyphonyCore.Director.BeatPolicy
   alias PolyphonyCore.Director.Commands.{CloseBeat, RecordPacket, RecordPass}

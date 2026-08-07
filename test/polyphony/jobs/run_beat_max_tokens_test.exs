@@ -3,7 +3,7 @@ defmodule Polyphony.Jobs.RunBeatMaxTokensTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.{App, Library, Repo}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Jobs.RunBeat
 
   defmodule CapturingDirector do

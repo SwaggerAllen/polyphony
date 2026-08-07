@@ -1,4 +1,4 @@
-defmodule Polyphony.Scene.Cast do
+defmodule PolyphonyCore.Scene.Cast do
   @moduledoc """
   A scene's character **id ↔ display name** map (§5.2 identity migration).
 
@@ -16,8 +16,8 @@ defmodule Polyphony.Scene.Cast do
   Names are unique within a scene by construction (a duplicate name would already have
   collided when `character_id` *was* the name), so `name_to_id` is unambiguous.
   """
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.Move
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.Move
 
   defstruct id_to_name: %{}, name_to_id: %{}, id_to_hue: %{}
 

@@ -50,6 +50,16 @@ config :polyphony, Polyphony.App,
   pubsub: :local,
   registry: :local
 
+# What an event is stored *as*. Commanded's default writes the Elixir module name into
+# `event_type`, which quietly makes every module path part of the stored data — a rename
+# then orphans every row already written, and a suite that only round-trips fresh events
+# cannot see it happen. `PolyphonyCore.Events.TypeProvider` writes stable names instead,
+# and still reads both historical module-name spellings. This is global `:commanded`
+# config, not per-application: it applies to the in-memory adapter in dev/test and to the
+# persistent store in prod, which is what makes the fixtures in `TypeProviderTest`
+# meaningful in every env.
+config :commanded, type_provider: PolyphonyCore.Events.TypeProvider
+
 # Job dispatch (§2). Generation runs in Oban jobs — never in an aggregate
 # (foundational rule 1) — so a job produces commands.
 config :polyphony, Oban,

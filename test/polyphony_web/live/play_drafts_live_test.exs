@@ -15,11 +15,11 @@ defmodule PolyphonyWeb.PlayDraftsLiveTest do
   use PolyphonyWeb.ConnCase, async: false
 
   alias Polyphony.{App, Drafts}
-  alias Polyphony.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
+  alias PolyphonyCore.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
   alias Polyphony.Director.BeatOps
   alias PolyphonyCore.Director.Commands.OpenBeat
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.Move
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.Move
 
   setup :register_and_log_in_user
 

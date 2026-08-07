@@ -18,7 +18,7 @@ defmodule Polyphony.Fork do
 
   alias Polyphony.App
   alias PolyphonyCore.Packets
-  alias Polyphony.Commands.ForkScene
+  alias PolyphonyCore.Commands.ForkScene
   alias Polyphony.Director.BeatOps
   alias PolyphonyCore.Events.{SceneOpened, SceneClosed}
 

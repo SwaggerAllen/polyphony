@@ -15,10 +15,10 @@ defmodule PolyphonyWeb.BrowseScreenLiveTest do
   alias Polyphony.{App, Library, Moderation, Reading}
   alias Polyphony.Owner
   alias Polyphony.Authoring.WorldBible
-  alias Polyphony.Commands.{CommitPacket, EnterCharacter, OpenScene}
+  alias PolyphonyCore.Commands.{CommitPacket, EnterCharacter, OpenScene}
   alias Polyphony.Library.Snapshot
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
 
   @halden "c-halden"
   @ruthe "c-ruthe"

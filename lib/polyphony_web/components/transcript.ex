@@ -21,12 +21,12 @@ defmodule PolyphonyWeb.Transcript do
 
   ## Ids in, names out
 
-  Every payload names its character by **id** (§5.2). `Polyphony.Scene.Cast`
+  Every payload names its character by **id** (§5.2). `PolyphonyCore.Scene.Cast`
   resolves them at this edge and nowhere else; nothing that routes ever sees a name.
   """
   use Phoenix.Component
 
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
   alias PolyphonyWeb.{Kit, Voice}
 
   @doc """

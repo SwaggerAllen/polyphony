@@ -1,4 +1,4 @@
-defmodule Polyphony.Commands do
+defmodule PolyphonyCore.Commands do
   @moduledoc """
   Commands — requests to change state. A command is validated by an aggregate,
   which either emits events or rejects it. Generation never happens here or in

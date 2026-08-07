@@ -36,10 +36,10 @@ defmodule Polyphony.Jobs.GeneratePacket do
 
   require Logger
 
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
   alias Polyphony.Context.Rebuild
   alias Polyphony.{App, Drafts, Generation, Failures}
-  alias Polyphony.Commands.CommitPacket
+  alias PolyphonyCore.Commands.CommitPacket
   alias Polyphony.Director.{BeatOps, BeatDriver}
   alias PolyphonyCore.Director.BeatPolicy
   alias PolyphonyCore.Director.Commands.{RecordPacket, RecordFailure}

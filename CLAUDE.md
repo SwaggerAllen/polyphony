@@ -94,14 +94,17 @@ Breaking any of these silently breaks the core guarantee. Guard them in review.
    there may call the rest of the app at all, so a read inside the visibility rules is a
    compile error rather than a review catch. `PolyphonyCoreTest` holds the same namespace
    to a wider floor per-function: no repo, event store, provider, PubSub, mail, files,
-   processes or ETS.
+   processes or ETS — and separately to a **replay** floor, since a clock or a die inside
+   a projection is not an effect and still makes the answer depend on when you asked.
 2. **No LLM in an aggregate (rule 1).** Aggregates (`Scene`, `Director.Beat`) are
    pure — Commanded replays them, so a provider call would re-fire and rebuild the same
    log into a *different story*. Generation happens only in Oban jobs (or the inline
-   runner), which *produce commands*. **`Director.Beat` is in `PolyphonyCore`** (`deps: []`),
-   so a read or a provider call inside it is a compile error. `Scene` is not yet, so
-   `AggregatePurityTest` still walks the call graph from `execute/2` and `apply/2` at two
-   floors — the repo/event-store and the provider — and a further test fails when a module
+   runner), which *produce commands*. **Both aggregates are in `PolyphonyCore`** (`deps: []`),
+   so a read or a provider call inside either is a compile error — `Scene` moved there with
+   the data it arbitrates over (`Commands`, `TurnPacket`, `Scene.Cast`). `AggregatePurityTest`
+   still walks the call graph from `execute/2` and `apply/2` at three floors — the
+   repo/event-store, the provider, and **replay** (clocks, randomness, generated ids, which
+   are not effects and break a rebuild anyway) — and a further test fails when a module
    grows both callbacks and nobody adds it to the list.
 3. **Canonical reads (rule 6 / §7).** Every read that feeds fiction to anyone —
    character conditioning, the broadcaster, scene-close — must go through
@@ -288,7 +291,7 @@ fails on drift.
 - `character_id` is the character's **library entry id** — never their display name.
   It is the routing key everywhere: membership, visibility (including a whisper's
   `addressed_to`), `packet_id`, arc `subject_id`, control modes, broadcast topics.
-  Names are *display*, resolved at the edges by `Polyphony.Scene.Cast` —
+  Names are *display*, resolved at the edges by `PolyphonyCore.Scene.Cast` —
   `render_name/2` on the way out (prompts, the transcript, any label), and
   `resolve_addressees/2` on the way in, immediately before `CommitPacket`. Both have
   an identity fallback, so an unmapped value passes through as itself. **Never put a
