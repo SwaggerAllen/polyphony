@@ -68,7 +68,6 @@ defmodule Polyphony.Jobs.GeneratePacket do
     case Generation.generate(messages, opts) do
       {:ok, packet} ->
         commit(scene_id, character_id, beat, packet_id, packet)
-        :committed
 
       {:error, {:refusal, _text}} ->
         retry_on_heavy_model(messages, opts, ids)
@@ -93,7 +92,6 @@ defmodule Polyphony.Jobs.GeneratePacket do
     case Generation.generate(messages, Keyword.put(provider_opts, :model, heavy)) do
       {:ok, packet} ->
         commit(scene_id, character_id, beat, packet_id, packet)
-        :committed
 
       {:error, reason} ->
         Logger.warning("refusal persisted after model swap for #{character_id}@#{beat}")
@@ -105,20 +103,36 @@ defmodule Polyphony.Jobs.GeneratePacket do
   # that's what its prompt renders (§5.2 phase 2b-render). Resolve them to character
   # ids before the packet enters the log, so `addressed_to` routes on identity rather
   # than on a string that can be renamed out from under it.
+  #
+  # The aggregate's verdict is the outcome — a generation the scene *refuses* (§6.5:
+  # `:not_a_member`, a closed scene) is a failed slot, not a completed one. Reporting
+  # it as committed is worse than losing the packet: the walk re-derives progress from
+  # the scene stream, where nothing was written, so the slot stays actionable and the
+  # same generation is paid for again, forever.
   defp commit(scene_id, character_id, beat, packet_id, packet) do
-    App.dispatch(%CommitPacket{
-      scene_id: scene_id,
-      character_id: character_id,
-      beat: beat,
-      packet_id: packet_id,
-      packet: Cast.resolve_addressees(scene_id, packet)
-    })
+    case App.dispatch(%CommitPacket{
+           scene_id: scene_id,
+           character_id: character_id,
+           beat: beat,
+           packet_id: packet_id,
+           packet: Cast.resolve_addressees(scene_id, packet)
+         }) do
+      :ok ->
+        :committed
+
+      {:error, reason} ->
+        Logger.warning("commit rejected for #{character_id}@#{beat}: #{inspect(reason)}")
+        {:failed, {:rejected, reason}}
+    end
   end
 
   # ── Standalone mode: map the outcome to an Oban result ───────────────────────
 
   defp standalone(:committed), do: :ok
   defp standalone({:cancelled, reason}), do: {:cancel, reason}
+  # A rejection is the aggregate's ruling, not a flaky call — the identical retry
+  # earns the identical refusal, so cancel rather than burn Oban's attempts.
+  defp standalone({:failed, {:rejected, _} = reason}), do: {:cancel, reason}
   defp standalone({:failed, reason}), do: {:error, reason}
 
   # ── Chained mode: generate one slot, then walk the beat on (§A1/§A2) ──────────
@@ -215,6 +229,7 @@ defmodule Polyphony.Jobs.GeneratePacket do
   # standalone (no chain), idempotent on packet_id.
   defp record_failure(args, character_id, {kind, reason}, messages) do
     refusal? = kind == :cancelled and match?({:refusal, _}, reason)
+    rejected? = match?({:rejected, _}, reason)
 
     Failures.record(
       worker: __MODULE__,
@@ -222,9 +237,12 @@ defmodule Polyphony.Jobs.GeneratePacket do
       beat: args["beat"],
       subject: character_id,
       operation: :packet,
-      kind: if(refusal?, do: :refusal, else: :transport),
+      kind: failure_kind(refusal?, rejected?),
       reason: inspect(reason),
       editable: refusal?,
+      # Re-running the same command against the same aggregate state is futile: the
+      # user has to change the scene (admit the character, re-open it) first.
+      retryable: not rejected?,
       args: %{
         "scene_id" => args["scene_id"],
         "character_id" => character_id,
@@ -235,6 +253,10 @@ defmodule Polyphony.Jobs.GeneratePacket do
       }
     )
   end
+
+  defp failure_kind(true, _rejected?), do: :refusal
+  defp failure_kind(_refusal?, true), do: :rejected
+  defp failure_kind(_refusal?, _rejected?), do: :transport
 
   defp parse_control("continue"), do: :continue
   defp parse_control(:continue), do: :continue
