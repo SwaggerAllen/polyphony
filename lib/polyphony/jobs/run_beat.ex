@@ -210,12 +210,53 @@ defmodule Polyphony.Jobs.RunBeat do
     # The Director casts from the omniscient brief, which renders display names
     # (§5.2 phase 2b-render) — so its picks come back as names. Resolve them to
     # character ids before they become the beat's declared turn order, because the
-    # walk, packet ids and membership guards all key on ids. An unrecognised name
-    # resolves to itself and is dropped by the membership check downstream.
+    # walk, packet ids and membership guards all key on ids.
     cast = Cast.for_scene(scene_id)
-    cast_ids = Enum.map(resolved.cast, &Cast.resolve_id(cast, &1.character_id))
-    order = BeatOps.declare_turn_order(scene_id, beat, cast_ids)
+    members = BeatOps.members_now(scene_id, beat)
 
+    {cast_ids, uncast} =
+      resolved.cast
+      |> Enum.map(&Cast.resolve_id(cast, &1.character_id))
+      |> Enum.uniq()
+      |> Enum.split_with(&(&1 in members))
+
+    # A pick that resolves to nobody present is the Director inventing a character —
+    # `resolve_id` has an identity fallback, so a hallucinated *name* comes back as
+    # itself and would otherwise become a routing key (§5.2: never put a name where an
+    # id belongs). It can only fail from there: their packets are rejected
+    # `:not_a_member`, so they generate and print nothing. Introducing somebody is a
+    # separate, author-approved act (§B7) — so route the pick to the introduction
+    # queue and leave them out of this beat's order.
+    propose_uncast(uncast, scene_id, beat)
+
+    # The same filter over the *declared* order, because a user-set (or previously
+    # recorded) order is read back verbatim and may name someone who has since left.
+    order =
+      scene_id |> BeatOps.declare_turn_order(beat, cast_ids) |> Enum.filter(&(&1 in members))
+
+    if order == [] do
+      Logger.info("beat #{beat}: nobody castable is present; yielding to user")
+      Broadcast.announce_progress(scene_id, :idle, beat: beat)
+    else
+      open_and_walk(order, resolved, args, scene_id, beat, depth, max_depth)
+    end
+  end
+
+  defp propose_uncast([], _scene_id, _beat), do: :ok
+
+  defp propose_uncast(names, scene_id, beat) do
+    Logger.info(
+      "beat #{beat}: cast picks not present, queued as introductions: #{inspect(names)}"
+    )
+
+    BeatOps.author_introductions(
+      Enum.map(names, &%{name: &1, reason: "the Director cast them into this scene"}),
+      scene_id,
+      beat
+    )
+  end
+
+  defp open_and_walk(order, resolved, args, scene_id, beat, depth, max_depth) do
     :ok =
       App.dispatch(%OpenBeat{
         beat_ref: BeatOps.beat_ref(scene_id, beat),

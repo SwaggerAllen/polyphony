@@ -10,9 +10,16 @@ defmodule Polyphony.Director.BeatWalk do
   Progress is re-derived from the log every call — committed packets (canonical
   scene stream) plus passed/failed (beat stream) — so the walk resumes after a
   pause without holding any state.
+
+  A slot is only actionable for someone who is **a member at that beat**. Membership
+  is the projection over the log (rule 4), so this needs no extra state — and it is
+  the backstop that keeps a turn order naming someone who isn't in the scene from
+  becoming an unbounded loop: their `CommitPacket` can only ever be rejected
+  (`:not_a_member`), which leaves the slot non-terminal, so without this guard the
+  walk would re-enqueue the same generation forever.
   """
 
-  alias Polyphony.{Packets, TurnOrder}
+  alias Polyphony.{MembershipSet, Packets, TurnOrder}
   alias Polyphony.Events.{PacketPassed, PacketFailed}
   alias Polyphony.Director.BeatOps
 
@@ -24,11 +31,19 @@ defmodule Polyphony.Director.BeatWalk do
     events = scene_id |> BeatOps.stored_events() |> Packets.canonical()
     order = TurnOrder.for_beat(events, beat) || []
     done = terminal_chars(scene_id, beat, events)
+    present = members_at(events, scene_id, beat)
 
-    case Enum.find(order, &(&1 not in done)) do
+    case Enum.find(order, &(MapSet.member?(present, &1) and &1 not in done)) do
       nil -> :settled
       character_id -> {mode(events, character_id), character_id}
     end
+  end
+
+  defp members_at(events, scene_id, beat) do
+    events
+    |> MembershipSet.from_events()
+    |> MembershipSet.members_at(scene_id, beat)
+    |> MapSet.new()
   end
 
   @doc "Characters whose slot is terminal: committed (canonical packet), passed, or failed."
