@@ -124,6 +124,39 @@ defmodule PolyphonyWeb.PlayTurnsLiveTest do
     assert html =~ ~r{ttl[^>]*>\s*Lydia\s*<}
   end
 
+  describe "a supersession arriving over the wire" do
+    # The author's own delete re-derives the scene, so this path — somebody *else's*
+    # client learning a packet is gone — is only reached by the broadcast. It is also the
+    # hot one: a re-roll emits a marker per turn dropped, which is the re-rolled turn and
+    # every turn after it in the beat.
+    test "drops the packet's lines without re-deriving the scene", %{conn: conn} do
+      scene = two_turn_scene()
+      pid = BeatOps.packet_id(scene, 1, "mira")
+
+      {:ok, view, html} = live(conn, ~p"/play/#{scene}")
+      assert html =~ "She agrees."
+      assert html =~ "Then we sail."
+
+      send(view.pid, {:polyphony_event, %{type: "packet.superseded", packet_id: pid}})
+
+      html = render(view)
+      refute html =~ "She agrees."
+
+      # Only that packet. A marker is emitted per dropped turn, so one dropping the whole
+      # beat would look identical right up until the author noticed a turn missing.
+      assert html =~ "Then we sail."
+    end
+
+    test "a packet this viewer never saw is a no-op", %{conn: conn} do
+      scene = scene_with_turn("Still here.")
+
+      {:ok, view, _} = live(conn, ~p"/play/#{scene}")
+      send(view.pid, {:polyphony_event, %{type: "packet.superseded", packet_id: "nobody-1-x"}})
+
+      assert render(view) =~ "Still here."
+    end
+  end
+
   test "turn controls are author-only", %{conn: conn} do
     scene = scene_with_turn("Original line.")
 

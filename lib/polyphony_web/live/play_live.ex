@@ -131,7 +131,6 @@ defmodule PolyphonyWeb.PlayLive do
        composing: false,
        debug_events: DebugFlags.get(:events),
        debug_trace: DebugFlags.get(:trace),
-       raw_events: [],
        traces: [],
        debug_feed: [],
        debug_feed_text: "",
@@ -210,7 +209,6 @@ defmodule PolyphonyWeb.PlayLive do
 
     assign(socket,
       messages: messages,
-      raw_events: events,
       traces: traces,
       roster: roster,
       joinable: joinable(socket, roster),
@@ -1236,8 +1234,23 @@ defmodule PolyphonyWeb.PlayLive do
     {:noreply, assign(socket, progress: %{phase: phase, subject: p[:subject], beat: p[:beat]})}
   end
 
+  # A re-roll/edit/delete dropped a packet. The transcript is the *only* assign a
+  # supersession changes — the strip reads beat events (a supersession emits none), the
+  # roster, cast, drafts and failures are all untouched — so this drops the packet's lines
+  # in place rather than re-deriving the scene.
+  #
+  # It used to `reload/1`, which is a full stream read plus four repo reads, and a re-roll
+  # emits **one of these per packet dropped**: the re-rolled turn and every turn after it
+  # in the beat. So the cost was the whole scene re-read once per turn being replaced,
+  # right at the moment the author is waiting to see the new one.
+  def handle_info({:polyphony_event, %{type: "packet.superseded", packet_id: id}}, socket)
+      when is_binary(id) do
+    {:noreply, assign(socket, messages: drop_packet(socket.assigns.messages, id))}
+  end
+
+  # No `packet_id` to drop. Nothing emits this, and if something starts to, re-deriving is
+  # the answer that is still correct.
   def handle_info({:polyphony_event, %{type: "packet.superseded"}}, socket) do
-    # A re-roll/edit/delete dropped a packet — re-derive canonical rather than append.
     {:noreply, reload(socket)}
   end
 
@@ -1621,6 +1634,12 @@ defmodule PolyphonyWeb.PlayLive do
           "turn, keeping their intent and any specifics:\n\n" <> text
     end
   end
+
+  # Every line decomposed from one packet carries its `packet_id`, which is what makes a
+  # supersession a filter rather than a re-derivation. Matches `Broadcast.replay/4`'s own
+  # rule for a reconnecting client, so the live path and the replay path drop the same set.
+  defp drop_packet(messages, packet_id),
+    do: Enum.reject(messages, &(get_in(&1, [:payload, :packet_id]) == packet_id))
 
   defp append(socket, msg) do
     seq = msg[:seq]
