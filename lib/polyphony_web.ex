@@ -1,4 +1,16 @@
 defmodule PolyphonyWeb do
+  # The web layer may call the domain; the domain may not call back — that direction is
+  # a compile error, and `Polyphony`'s own declaration explains why `exports: :all` is
+  # still the loose half of this.
+  #
+  # There is deliberately **no `PolyphonyWeb.Screens` sub-boundary yet.** It could only
+  # declare `deps: [Polyphony, PolyphonyWeb]`, which permits everything and would read as
+  # a guarantee that isn't there. The rule screens actually live under — they may not
+  # reach the database — is finer than a module and is enforced by
+  # `Polyphony.Test.Purity` until the domain's pure projections are split off the context
+  # modules they sit on.
+  use Boundary, deps: [Polyphony], exports: :all
+
   @moduledoc """
   The web layer entrypoint: `use PolyphonyWeb, :controller` / `:live_view` / `:html`
   / `:router` pull in the shared imports. Kept lean and hand-written (no generators).

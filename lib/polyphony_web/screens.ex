@@ -20,6 +20,16 @@ defmodule PolyphonyWeb.Screens do
   state from fixture assigns, and the design thread reads composed screens over HTTP
   instead of being handed a session token for the real app.
 
+  ## Why this isn't a boundary of its own
+
+  `boundary` is the tool for architectural rules in Elixir, and it checks cross-*module*
+  calls. This rule is finer than a module: a screen may call `Library.payload/1`, which
+  is `decode(bin)`, and may not call `Library.get/1`, which reads — and they live in the
+  same module. So a `Screens` boundary could only permit everything, and the rule is
+  enforced by `Polyphony.Test.Purity` instead, which computes what can reach the repo
+  from the call graph. Once the domain's pure projections move off their context modules,
+  module granularity becomes enough and this becomes a boundary declaration.
+
   ## The property that keeps it safe
 
   **A screen component reads no domain data.** It takes assigns and returns markup — no

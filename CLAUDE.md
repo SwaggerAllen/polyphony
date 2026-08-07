@@ -48,6 +48,8 @@ mix dialyzer                 # type analysis; first run builds the PLT (~2 min, 
 mix deps.audit               # dependency advisories (CI: blocking)
 mix sobelow --exit low --skip  # Phoenix static analysis (CI: blocking)
 mix deps.unlock --check-unused # stale mix.lock entries (CI: blocking)
+                             # architectural boundaries are checked by a mix compiler —
+                             # `mix compile --warnings-as-errors` is what blocks on them
 mix phx.server               # the LiveView frontend at :4000 (watches + rebuilds assets),
                              # the component catalogue at :4000/storybook, and the docs
                              # at :4000/docs — `docs/` and `ux/` served as files, no auth
@@ -234,6 +236,12 @@ up any queued work, design-thread or not:
 happens right here and never gets an issue. That is the intended behaviour and it is
 precisely why behaviors docs carry a `rev`: the undesigned changes are the ones no ticket
 warns the design thread about, so the counter is the only thing that says the ground moved.
+
+**Never file an issue unless the author asks for one.** Not bugs, not findings, not work
+you noticed on the way past — say it in the conversation and let the author decide. A
+tracker is a queue somebody has committed to, so filing into it is a scheduling decision
+and it is theirs. **Bugs in particular are not issues**: they are found, fixed, and gone,
+and a bug parked in a queue is one that has been rescheduled rather than repaired.
 
 Two standing rules. A **mock is a proposal, not an instruction** — if it can't be built
 as drawn, or it contradicts something in `architecture.md`, say so on the issue and put

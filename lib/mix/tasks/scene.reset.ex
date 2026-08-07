@@ -17,6 +17,10 @@ defmodule Mix.Tasks.Scene.Reset do
 
   use Mix.Task
 
+  # Build tooling, not part of the layering: a mix task reaches wherever it needs to and
+  # nothing reaches back into it.
+  use Boundary, check: [in: false, out: false]
+
   @impl Mix.Task
   def run(argv) do
     Mix.Task.run("app.start")
