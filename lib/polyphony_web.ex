@@ -3,13 +3,17 @@ defmodule PolyphonyWeb do
   # a compile error, and `Polyphony`'s own declaration explains why `exports: :all` is
   # still the loose half of this.
   #
-  # There is deliberately **no `PolyphonyWeb.Screens` sub-boundary yet.** It could only
-  # declare `deps: [Polyphony, PolyphonyWeb]`, which permits everything and would read as
-  # a guarantee that isn't there. The rule screens actually live under — they may not
-  # reach the database — is finer than a module and is enforced by
-  # `Polyphony.Test.Purity` until the domain's pure projections are split off the context
-  # modules they sit on.
-  use Boundary, deps: [Polyphony], exports: :all
+  # **The export list is what constrains `PolyphonyWeb.Screens`**, which is a sub-boundary
+  # and therefore reaches this one only through its exports. Everything listed is
+  # presentation: components and pure formatting. Everything not listed — `Auth`, `Guard`,
+  # `SafeEvent`, `Endpoint`, `Telemetry`, every LiveView — is out of a screen's reach, and
+  # naming one is a compile error rather than a review comment.
+  #
+  # LiveViews and controllers are *inside* this boundary, so none of this constrains them;
+  # they call whatever they need. The list exists for the one sub-boundary.
+  use Boundary,
+    deps: [Polyphony],
+    exports: [AudiencePicker, BlockField, Kit, Layouts, Transcript, TurnEdit, Voice]
 
   @moduledoc """
   The web layer entrypoint: `use PolyphonyWeb, :controller` / `:live_view` / `:html`

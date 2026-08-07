@@ -1,63 +1,33 @@
 defmodule PolyphonyWeb.Screens do
   @moduledoc """
-  Whole screens as **function components**, one module per screen, markup only.
+  Every screen, as markup. No code here — this module carries a **boundary declaration**.
 
-  ## Why the markup lives apart from the LiveView
+  A screen is a function of its assigns and nothing else. That is what makes it
+  renderable from fixtures in `/storybook`, and it is what makes `STORYBOOK=true` safe in
+  production: a story that could load a campaign would quietly turn that flag into an
+  authorization hole.
 
-  A LiveView owns three things at once: how data is loaded, how events are handled, and
-  what gets drawn. The first two need a session, a database and a running socket. The
-  third needs neither — it is a function of assigns — but while it sits inside the
-  LiveView it inherits all of those dependencies, and the consequence is that **there is
-  no way to look at a screen except by driving the real app into that state**.
+  ## What this declaration can say, and what it can't
 
-  That is fine for the states a live app falls into on its own. It is useless for the
-  ones that matter most: empty, failed, mid-generation, spend-cap reached, socket
-  disconnected. Those are exactly the states a design session needs to see and exactly
-  the ones a live site will never happen to be in.
+  `deps` is the list of modules a screen may name at all, and it is short on purpose —
+  the four helpers below plus the domain. It is what stops a screen from reaching
+  `Endpoint` to broadcast, `Auth` to read a session, or `Guard` to make an authorization
+  decision. Those are all module-level facts, so boundary can hold them.
 
-  So each screen's markup moves here as a public, `attr`-declared function component, and
-  the LiveView's `render/1` becomes a single call into it. Then `/storybook` renders every
-  state from fixture assigns, and the design thread reads composed screens over HTTP
-  instead of being handed a session token for the real app.
+  What it **cannot** say is the rule that matters most: a screen may call
+  `Library.payload/1` (which is `decode(bin)`) and may not call `Library.get/1` (which
+  reads). Those are the same module, and boundary checks cross-*module* calls.
 
-  ## Why this isn't a boundary of its own
+  Splitting them was the obvious answer and the measurement killed it: `Library.payload/1`
+  has thirteen callers in the domain against twelve in the web layer, `Cast.render_name/2`
+  is three against three, `WorldBible.entries/1` three against three. Moving them onto
+  view-shaped modules would rewrite more domain call sites than web ones to satisfy a
+  declaration — the domain made worse so a tool can check something a test already checks
+  better.
 
-  `boundary` is the tool for architectural rules in Elixir, and it checks cross-*module*
-  calls. This rule is finer than a module: a screen may call `Library.payload/1`, which
-  is `decode(bin)`, and may not call `Library.get/1`, which reads — and they live in the
-  same module. So a `Screens` boundary could only permit everything, and the rule is
-  enforced by `Polyphony.Test.Purity` instead, which computes what can reach the repo
-  from the call graph. Once the domain's pure projections move off their context modules,
-  module granularity becomes enough and this becomes a boundary declaration.
-
-  ## The property that keeps it safe
-
-  **A screen component reads no domain data.** It takes assigns and returns markup — no
-  repo calls, no context calls, no `Polyphony.*` lookups. That is what makes it renderable
-  from fixtures, and it is also the reason `STORYBOOK=true` is safe in production. A story
-  that loaded a campaign would quietly turn that flag into an authorization hole, so the
-  discipline is load-bearing rather than stylistic: **do the work in the LiveView, pass
-  the answer in.**
-
-  A useful side effect is that a screen becomes directly testable with
-  `Phoenix.LiveViewTest.render_component/2` — no session, no database, no LiveView
-  lifecycle — which is what makes pinning a behaviors doc against tests affordable.
-
-  ## The shape
-
-      # lib/polyphony_web/screens/login.ex
-      def screen(assigns), do: ~H"..."
-
-      # lib/polyphony_web/live/login_live.ex
-      def render(assigns) do
-        ~H"<Screens.Login.screen sent_to={@sent_to} dev_link={@dev_link} />"
-      end
-
-  Pass named attrs rather than `{assigns}`. Splatting works and hides the screen's real
-  dependency surface — which is the number worth seeing, because a screen taking thirty
-  attrs is telling you something true about how much state it needs.
-
-  Every screen module here has a story under `storybook/screens/`, and a test fails if one
-  doesn't.
+  So the per-function rule stays with `Polyphony.Test.Purity`, which computes what can
+  reach the repo from the call graph rather than declaring it, and boundary takes the
+  coarser half it is actually good at.
   """
+  use Boundary, deps: [Polyphony, PolyphonyWeb], exports: :all
 end

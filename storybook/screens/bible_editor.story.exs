@@ -15,7 +15,7 @@ defmodule Storybook.Screens.BibleEditor do
       audience: opts[:audience]
     }
 
-  defp bible(opts \\ []),
+  defp bible(opts),
     do: %WorldBible{
       name: "Saltmarch",
       cover: opts[:cover],

@@ -91,8 +91,12 @@ Breaking any of these silently breaks the core guarantee. Guard them in review.
    in `Polyphony.Visibility.visible_to?/3` is invisible to characters. A forgotten
    clause makes a character know too *little*, never too much. Omniscient sees all.
 2. **No LLM in an aggregate (rule 1).** Aggregates (`Scene`, `Director.Beat`) are
-   pure — Commanded replays them. Generation happens only in Oban jobs (or the
-   inline runner), which *produce commands*.
+   pure — Commanded replays them, so a provider call would re-fire and rebuild the same
+   log into a *different story*. Generation happens only in Oban jobs (or the inline
+   runner), which *produce commands*. **Checked**, by `AggregatePurityTest`: the call
+   graph is walked from `execute/2` and `apply/2` at two floors, the repo/event-store and
+   the provider, and a further test fails when a module grows both callbacks and nobody
+   adds it to the list.
 3. **Canonical reads (rule 6 / §7).** Every read that feeds fiction to anyone —
    character conditioning, the broadcaster, scene-close — must go through
    `Polyphony.Packets.canonical/1` so re-rolled/superseded packets never reappear.
@@ -154,6 +158,14 @@ for it.
   made here with no ticket**, because those are precisely the changes nothing else records.
   `BehaviorsDocTest` pins the state list to the storybook so the prose can't outlive what it
   describes.
+- **A screen is a function of its assigns**, held by two guards because one tool can't
+  express the whole rule. `PolyphonyWeb.Screens` is a **boundary**, so the modules a screen
+  may name are exactly `PolyphonyWeb`'s export list — presentation only, no `Auth`, no
+  `Guard`, no `Endpoint` — plus the domain; naming anything else is a compile error. And
+  `Polyphony.Test.Purity` walks the call graph for the finer question boundary can't reach:
+  `Library.payload/1` is fine and `Library.get/1` is not, and they share a module. Read
+  `lib/polyphony.ex` before proposing to fix that with a refactor — the caller counts that
+  ruled it out are in there.
 
 ## The worklist (Linear, not a document)
 

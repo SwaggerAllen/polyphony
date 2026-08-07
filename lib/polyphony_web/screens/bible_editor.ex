@@ -45,6 +45,13 @@ defmodule PolyphonyWeb.Screens.BibleEditor do
   attr(:current_user, :map, default: nil)
   attr(:entry, :any, required: true, doc: "the library entry being edited")
   attr(:campaign, :any, default: nil, doc: "%{id, name} — resolved in the LiveView")
+
+  attr(:share_url, :string,
+    default: nil,
+    doc:
+      "the unlisted link, built in the LiveView. The host comes from the endpoint's config, which is ambient rather than an assign — a screen that reads it renders differently depending on where it is mounted"
+  )
+
   attr(:name, :string, default: "")
   attr(:name_error, :any, default: nil)
   attr(:name_clash, :any, default: nil, doc: "another world of the same name; flagged on save")
@@ -396,7 +403,7 @@ defmodule PolyphonyWeb.Screens.BibleEditor do
                 class="field px-3 py-2.5 mono text-[12px] leading-relaxed mb-2"
                 style="word-break:break-all"
               >
-                <%= share_url(@entry) %>
+                <%= @share_url %>
               </div>
               <Kit.btn
                 kind={:pen}
@@ -772,8 +779,6 @@ defmodule PolyphonyWeb.Screens.BibleEditor do
       {"public", "Anyone", "Listed in Browse for people to find"}
     ]
   end
-
-  defp share_url(entry), do: "#{PolyphonyWeb.Endpoint.url()}/s/#{entry.share_token}"
 
   defp panel_placeholder("rules"), do: "No magic. What looks like it is a bribe."
   defp panel_placeholder(_), do: "Nobody in Saltmarch has seen a customs inspector in nine years."

@@ -363,8 +363,8 @@ defmodule PolyphonyWeb.BrowseLive do
 
   # ── Render ───────────────────────────────────────────────────────────────────
 
-  defp author_of(nil), do: "someone"
-
+  # No `nil` clause: both callers map over `Library.list_public/1`, so the entry is always
+  # a row. The catch-all below still answers for one without a user owner.
   defp author_of(%{owner_type: "user", owner_id: id}) do
     case Accounts.get(id) do
       %{username: name} when is_binary(name) and name != "" -> "@" <> name

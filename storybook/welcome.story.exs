@@ -1,6 +1,12 @@
 defmodule Storybook.Welcome do
   use PhoenixStorybook.Story, :page
 
+  # Same as every index module here: the catalogue is a reviewing surface, not part of
+  # the app's layering. This page sits directly under `Storybook` rather than under one
+  # of the index modules, so it needs its own declaration or it is the one module in the
+  # tree belonging to no boundary — which is a warning on every compile.
+  use Boundary, check: [in: false, out: false]
+
   def doc, do: "The design kit, as it actually renders."
 
   def render(assigns) do

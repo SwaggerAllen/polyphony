@@ -806,6 +806,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
       current_user={@current_user}
       entry={@entry}
       campaign={@campaign && %{id: @campaign.id, name: campaign_name(@campaign)}}
+      share_url={share_url(@entry)}
       name={@name}
       name_error={@name_error}
       name_clash={@name_clash}
@@ -832,6 +833,14 @@ defmodule PolyphonyWeb.BibleEditorLive do
     />
     """
   end
+
+  # The host is the endpoint's, which is configuration rather than data — a screen that
+  # reads it renders one thing under `mix phx.server` and another in production, and a
+  # third in the storybook. So it is answered here.
+  defp share_url(%{share_token: token}) when is_binary(token),
+    do: "#{PolyphonyWeb.Endpoint.url()}/s/#{token}"
+
+  defp share_url(_entry), do: nil
 
   # The one field the editor needs off the campaign entry, resolved here so the screen
   # can stay a function of assigns.

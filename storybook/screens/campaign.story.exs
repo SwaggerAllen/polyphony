@@ -16,7 +16,7 @@ defmodule Storybook.Screens.Campaign do
   # of the stored sheet — so the fixtures carry a real encoded payload rather than a map
   # that merely looks like one. Anything less and the story would be exercising a
   # different code path from the app.
-  defp character(id, name, opts \\ []),
+  defp character(id, name, opts),
     do: %LibraryEntry{
       id: id,
       kind: "character",

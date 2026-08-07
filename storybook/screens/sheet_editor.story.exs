@@ -17,7 +17,7 @@ defmodule Storybook.Screens.SheetEditor do
       audience: opts[:audience]
     }
 
-  defp boundary(topic, opts \\ []),
+  defp boundary(topic, opts),
     do: %Boundary{
       topic: topic,
       stance: opts[:stance] || :conditional,

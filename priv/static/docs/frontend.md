@@ -39,13 +39,10 @@ The redesign speced in `ux/` is being ported screen by screen. Two files carry i
 the kit is last so it outranks a utility it overlaps with, which is the precedence the mocks
 have (they link the kit after the Tailwind CDN).
 
-**The first-cut design system is gone**, and with it any styling for the screens that
-haven't been ported: they render as unstyled markup until each is rebuilt from the kit. That
-is deliberate rather than an oversight — the app has no users until the rebuild lands, so
-there's no reason to carry 400 lines of superseded CSS, and no reason for the shipped
-stylesheet to be anything other than the design file. The screens themselves and their
-tests **are** kept, as the record of how each one drives the domain; each goes when its
-replacement lands.
+**The first-cut design system is gone.** There is no reason to carry 400 lines of
+superseded CSS, and no reason for the shipped stylesheet to be anything other than the
+design file — so anything not built from the kit renders as unstyled markup. All fifteen
+screens are ported, so nothing does today.
 
 **The shell is thin, by design.** There is no persistent global chrome: a screen fills the
 viewport and carries its own header (`Kit.header/1` — context small, title, controls top
@@ -71,6 +68,51 @@ scope, because nothing on the compile-time path read it. The stories themselves 
 compile-time — `phoenix_storybook` bakes them into `PolyphonyWeb.Storybook` outside dev —
 so a release build has to copy `storybook/` (the Dockerfile does; the module raises if it
 is missing, because an absent content path is otherwise a silently empty catalogue).
+
+## The humble view, and the two guards on it
+
+Markup does not live in a LiveView. Every screen is a **function component** in
+`PolyphonyWeb.Screens.*` taking declared `attr`s, and the LiveView's `render/1` is a
+delegation to it. That is what makes `/storybook` able to render a whole composed screen
+in any state from fixtures — including the states a live site would never happen to be in,
+which are the ones a design review most needs and a live URL can never show.
+
+The rule underneath it is sharper than "no database reads": **a screen takes the answer,
+not the thing to derive it from.** A count resolved per row inside markup is an N+1 whether
+or not the guard can see it, and the fix is the same either way — resolve it once in the
+LiveView and pass it in.
+
+Two guards hold what is mechanically checkable, and it takes two because neither tool can
+express the whole rule:
+
+- **`PolyphonyWeb.Screens` is a `Boundary`.** Its `deps` are the domain plus
+  `PolyphonyWeb`, and it reaches the latter only through that boundary's `exports` — a
+  short list of presentation modules. `Auth`, `Guard`, `SafeEvent`, `Endpoint`, `Telemetry`
+  and every LiveView are outside a screen's reach, and naming one is a compile error.
+  LiveViews are *inside* `PolyphonyWeb` and unaffected; the export list exists for the one
+  sub-boundary.
+- **`Polyphony.Test.Purity` computes what can reach the repo.** Boundary checks
+  cross-module calls, and the rule that matters is per-function: `Library.payload/1` is
+  `decode(bin)` and is fine, `Library.get/1` reads and is not, and they are the same
+  module. So the guard builds a call graph from every module's abstract code, seeds it at
+  the repo and the event store, and propagates. Nothing is exempted by hand.
+
+Splitting the pure projections onto their own modules — which would have let boundary say
+the whole thing — was measured and rejected: `Library.payload/1` has thirteen domain
+callers against twelve in the web layer, and moving it would rewrite more domain call sites
+than web ones to satisfy a declaration. The argument is in `lib/polyphony.ex`.
+
+Two known limits, both closed rather than tolerated. A **dynamic call** is invisible to a
+static walk, so `StorybookTest` fails a screen containing any dynamic dispatch at all —
+cheap, because screens are markup. And a call reached through a **function capture**
+(`Enum.map(ids, &Library.get/1)`) was invisible until it wasn't: a capture is not a call
+node in abstract code, the walk descended into it as an anonymous tuple and produced no
+edge. It is an edge now, found by writing that line into a screen and watching the suite
+stay green.
+
+`Polyphony.AggregatePurityTest` runs the same walk from the other end, at two floors —
+the repo and the LLM provider — to pin invariant 2: an aggregate is replayed, so a
+generation inside `execute/2` would rebuild the same log into a different story.
 
 ## Design choices worth knowing
 

@@ -31,8 +31,12 @@ defmodule Polyphony.Test.Purity do
   business doing it. Together the two make the analysis sound for the code it governs.
   """
 
-  @roots ~w(Elixir.Ecto Elixir.Postgrex Elixir.Polyphony.Repo Elixir.Polyphony.EventStore
-            Elixir.Commanded Elixir.Oban)
+  @db ~w(Elixir.Ecto Elixir.Postgrex Elixir.Polyphony.Repo Elixir.Polyphony.EventStore
+         Elixir.Commanded Elixir.Oban)
+
+  # Everything under `Polyphony.LLM` is a call out to a provider — except `LLM.Settings`,
+  # which is the per-campaign config struct read off a payload and reaches nothing.
+  @llm {~w(Elixir.Polyphony.LLM), ~w(Elixir.Polyphony.LLM.Settings)}
 
   @doc """
   `MapSet` of `{module, function, arity}` in the `Polyphony.*` tree that can reach the
@@ -40,11 +44,34 @@ defmodule Polyphony.Test.Purity do
   and several tests want the same answer.
   """
   @spec impure() :: MapSet.t({module(), atom(), arity()})
-  def impure do
-    case :persistent_term.get(__MODULE__, nil) do
+  def impure, do: reaching(@db)
+
+  @doc """
+  The same question for a different floor: what can reach a **provider call**?
+
+  Aggregates are replayed, so a generation inside `execute/2` would re-fire every time
+  the stream is rebuilt — invariant 2 in `CLAUDE.md`, and until this existed it rested
+  entirely on somebody noticing in review.
+  """
+  @spec reaches_llm() :: MapSet.t({module(), atom(), arity()})
+  def reaches_llm, do: reaching(@llm)
+
+  @doc """
+  Every `Polyphony.*` function that can reach a module named by `roots`.
+
+  `roots` is a list of module-name prefixes, or a `{included, excluded}` pair when a
+  namespace has an exception in it. Results are cached per root set — several tests want
+  the same answer and the walk is a second or so.
+  """
+  @spec reaching([String.t()] | {[String.t()], [String.t()]}) ::
+          MapSet.t({module(), atom(), arity()})
+  def reaching(roots) do
+    key = {__MODULE__, roots}
+
+    case :persistent_term.get(key, nil) do
       nil ->
-        set = compute()
-        :persistent_term.put(__MODULE__, set)
+        set = compute(roots)
+        :persistent_term.put(key, set)
         set
 
       set ->
@@ -52,16 +79,16 @@ defmodule Polyphony.Test.Purity do
     end
   end
 
-  defp compute do
+  defp compute(roots) do
     graph = call_graph()
 
     seeds =
-      for {mfa, calls} <- graph, Enum.any?(calls, &root?/1), into: MapSet.new(), do: mfa
+      for {mfa, calls} <- graph, Enum.any?(calls, &root?(&1, roots)), into: MapSet.new(), do: mfa
 
     close(graph, seeds)
   end
 
-  # Fixpoint: keep adding callers of anything already known to be impure.
+  # Fixpoint: keep adding callers of anything already known to reach the roots.
   defp close(graph, known) do
     grown =
       for {mfa, calls} <- graph,
@@ -73,9 +100,13 @@ defmodule Polyphony.Test.Purity do
     if MapSet.size(grown) == MapSet.size(known), do: known, else: close(graph, grown)
   end
 
-  defp root?({m, _f, _a}) do
+  defp root?(mfa, {included, excluded}) do
+    root?(mfa, included) and not root?(mfa, excluded)
+  end
+
+  defp root?({m, _f, _a}, prefixes) when is_list(prefixes) do
     name = to_string(m)
-    Enum.any?(@roots, &String.starts_with?(name, &1))
+    Enum.any?(prefixes, &String.starts_with?(name, &1))
   end
 
   @doc "Every `Polyphony.*` function, mapped to the MFAs it calls."
@@ -150,6 +181,22 @@ defmodule Polyphony.Test.Purity do
 
   defp walk({:call, _, {:atom, _, f}, args}, acc, mod),
     do: walk(args, [{mod, f, length(args)} | acc], mod)
+
+  # `&Mod.fun/1` is an edge, and it did not used to be one. A capture is not a `:call`
+  # node, so the walk above never saw it and descended into it as an anonymous tuple,
+  # producing nothing — which meant a screen could reach the repo through
+  # `Enum.map(ids, &Library.get/1)` and every guard here passed. Found by writing that
+  # line into a screen and watching the suite stay green.
+  defp walk({:fun, _, {:function, {:atom, _, m}, {:atom, _, f}, {:integer, _, a}}}, acc, _mod),
+    do: [{m, f, a} | acc]
+
+  # The same thing with any part computed — `&mod.fun/1` — is a module this walk cannot
+  # name, and gets the same treatment as a dynamic call.
+  defp walk({:fun, _, {:function, _m, _f, _a}}, acc, _mod),
+    do: [{Ecto, :__dynamic_dispatch__, 0} | acc]
+
+  defp walk({:fun, _, {:function, f, a}}, acc, mod) when is_atom(f) and is_integer(a),
+    do: [{mod, f, a} | acc]
 
   defp walk(list, acc, mod) when is_list(list),
     do: Enum.reduce(list, acc, &walk(&1, &2, mod))
