@@ -13,7 +13,8 @@ defmodule Polyphony.LibraryFamilyTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{Library, Owner, Repo}
+  alias Polyphony.{Library, Repo}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.WorldBible
 
   setup do

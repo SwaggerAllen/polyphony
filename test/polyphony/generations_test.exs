@@ -13,7 +13,8 @@ defmodule Polyphony.GenerationsTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Generations, Library, Owner}
+  alias Polyphony.{Generations, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.WorldBible
   alias Polyphony.ReadModels.GenerationRun
   alias Polyphony.Repo

@@ -44,7 +44,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   import PolyphonyWeb.BlockField
 
-  alias Polyphony.{Campaigns, Characters, Groups, Library, Owner}
+  alias Polyphony.{Campaigns, Characters, Groups, Library}
+  alias Polyphony.Owner
   alias Polyphony.Permissions
   alias Polyphony.Authoring.{Audience, WorldBible}
   alias Polyphony.Authoring.WorldBible.Entry

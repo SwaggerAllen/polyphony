@@ -18,7 +18,8 @@ defmodule PolyphonyWeb.GroupEditorLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Groups, Library, Owner}
+  alias Polyphony.{Groups, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, Group}
   alias Polyphony.Authoring.CharacterSheet.Fact
   alias Polyphony.ReadModels.ArcEntry, as: ArcEntryRepo

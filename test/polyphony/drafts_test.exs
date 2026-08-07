@@ -6,7 +6,8 @@ defmodule Polyphony.DraftsTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, Repo, Context, Drafts, Packets, Suggest}
+  alias Polyphony.{App, Repo, Context, Drafts, Suggest}
+  alias Polyphony.Core.Packets
   alias Polyphony.LLM.Mock
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter}

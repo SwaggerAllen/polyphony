@@ -21,7 +21,8 @@ defmodule PolyphonyWeb.AudiencePickerFeatureTest do
 
   import Wallaby.Query
 
-  alias Polyphony.{Library, Owner}
+  alias Polyphony.Library
+  alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Authoring.CharacterSheet.Fact
 

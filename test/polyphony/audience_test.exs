@@ -22,7 +22,8 @@ defmodule Polyphony.AudienceTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{Context, Groups, Library, Owner, Repo}
+  alias Polyphony.{Context, Groups, Library, Repo}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{Audience, CharacterSheet, Group, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.Fact
   alias Polyphony.Authoring.WorldBible.Entry

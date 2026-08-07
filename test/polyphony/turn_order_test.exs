@@ -7,7 +7,8 @@ defmodule Polyphony.TurnOrderTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, TurnOrder, Packets, Reroll}
+  alias Polyphony.{App, Reroll}
+  alias Polyphony.Core.{TurnOrder, Packets}
   alias Polyphony.LLM.Mock
   alias Polyphony.Director.{Beat, BeatWalk}
 

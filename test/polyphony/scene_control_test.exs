@@ -6,7 +6,8 @@ defmodule Polyphony.SceneControlTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, SceneControl, MembershipSet}
+  alias Polyphony.{App, SceneControl}
+  alias Polyphony.Core.MembershipSet
   alias Polyphony.Commands.OpenScene
   alias Polyphony.Events.{CharacterEntered, CharacterExited}
 

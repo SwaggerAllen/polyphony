@@ -12,7 +12,8 @@ defmodule Polyphony.IntegrationTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, MembershipSet, Visibility}
+  alias Polyphony.App
+  alias Polyphony.Core.{MembershipSet, Visibility}
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}

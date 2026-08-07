@@ -15,7 +15,8 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Campaigns, Characters, Library, Owner, Reading}
+  alias Polyphony.{Campaigns, Characters, Library, Reading}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
 
   setup :register_and_log_in_user

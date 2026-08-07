@@ -15,7 +15,8 @@ defmodule Polyphony.BuildsTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Builds, Library, Owner}
+  alias Polyphony.{Builds, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, QuickBuild, WorldBible}
   alias Polyphony.Jobs.QuickBuild, as: BuildJob
 

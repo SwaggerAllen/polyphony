@@ -29,19 +29,9 @@ defmodule PolyphonyWeb.PlayLive do
 
   require Logger
 
-  alias Polyphony.{
-    App,
-    Broadcast,
-    Context,
-    DebugFlags,
-    Drafts,
-    Failures,
-    Library,
-    MembershipSet,
-    Owner,
-    SceneControl,
-    TurnOrder
-  }
+  alias Polyphony.{App, Broadcast, Context, DebugFlags, Drafts, Failures, Library, SceneControl}
+  alias Polyphony.Owner
+  alias Polyphony.Core.{MembershipSet, TurnOrder}
 
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Director.{Auto, BeatDriver}

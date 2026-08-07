@@ -761,7 +761,7 @@ defmodule Polyphony.Authoring.Autofill do
   which is why `opts[:world]` should be the public read and why `opts[:recent]` must
   carry only moves everyone present has already seen. Seeded with somebody's interior
   thought or a whisper, a drafting aid narrates it out loud, and the author's own
-  transcript is where they would find out. `Polyphony.Visibility` is not in this path;
+  transcript is where they would find out. `Polyphony.Core.Visibility` is not in this path;
   the caller choosing what to pass is.
 
   Opts: `:world` (world display map), `:cast` (who is present, `[%{"name"}]`),

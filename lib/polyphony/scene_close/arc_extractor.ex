@@ -16,7 +16,8 @@ defmodule Polyphony.SceneClose.ArcExtractor do
   Everything comes back `:proposed` — the review gate decides canon.
   """
 
-  alias Polyphony.{Visibility, EventText, LLM.Provider}
+  alias Polyphony.LLM.Provider
+  alias Polyphony.Core.{Visibility, EventText}
   alias Polyphony.SceneClose.ArcSchema
 
   @doc "Extract proposed arc entries for `character_id`. Returns `{:ok, [ArcEntry]}`."

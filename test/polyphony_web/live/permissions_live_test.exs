@@ -22,7 +22,8 @@ defmodule PolyphonyWeb.PermissionsLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Groups, Library, Owner, Permissions}
+  alias Polyphony.{Groups, Library, Permissions}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, Group, WorldBible}
 
   setup :register_and_log_in_user

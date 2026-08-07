@@ -7,7 +7,8 @@ defmodule Polyphony.Jobs.ObanBeatTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, Context, MembershipSet, Visibility}
+  alias Polyphony.{App, Context}
+  alias Polyphony.Core.{MembershipSet, Visibility}
   alias Polyphony.Context.Store
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter}

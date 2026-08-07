@@ -30,7 +30,8 @@ defmodule Polyphony.SceneClose do
 
   require Logger
 
-  alias Polyphony.{App, Embeddings, Repo, Packets}
+  alias Polyphony.{App, Embeddings, Repo}
+  alias Polyphony.Core.Packets
   alias Polyphony.Costs.Attribution
   alias Polyphony.SceneClose.{Summarizer, ArcExtractor, WorldArcExtractor}
   alias Polyphony.ReadModels.{SceneSummary, ArcEntry}

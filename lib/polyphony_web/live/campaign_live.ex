@@ -8,7 +8,8 @@ defmodule PolyphonyWeb.CampaignLive do
 
   require Logger
 
-  alias Polyphony.{Library, Owner, Context, App}
+  alias Polyphony.{Library, Context, App}
+  alias Polyphony.Owner
   alias Polyphony.Permissions
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
@@ -28,9 +29,9 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Jobs.QuickBuild, as: BuildJob
   alias Polyphony.ReadModels.BuildRun
   alias Polyphony.Campaigns
-  alias Polyphony.Content.CampaignConfig
-  alias Polyphony.Publication
-  alias Polyphony.Publication.Preflight
+  alias Polyphony.Core.Content.CampaignConfig
+  alias Polyphony.Core.Publication
+  alias Polyphony.Preflight
   alias PolyphonyWeb.Guard
   alias PolyphonyWeb.Screens
   alias PolyphonyWeb.Voice

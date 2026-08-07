@@ -16,7 +16,8 @@ defmodule Polyphony.LibraryShelfTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{Campaigns, Library, Owner, Repo}
+  alias Polyphony.{Campaigns, Library, Repo}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{ArcEntry, CharacterSheet, WorldArcEntry, WorldBible}
   alias Polyphony.ReadModels.ArcEntry, as: ArcRM
 

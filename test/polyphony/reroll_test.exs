@@ -7,7 +7,8 @@ defmodule Polyphony.RerollTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, Reroll, Packets, MembershipSet, Visibility}
+  alias Polyphony.{App, Reroll}
+  alias Polyphony.Core.{Packets, MembershipSet, Visibility}
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}

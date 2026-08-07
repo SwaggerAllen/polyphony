@@ -6,10 +6,11 @@ defmodule PolyphonyWeb.CampaignContentLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Library, Owner}
+  alias Polyphony.Library
+  alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Authoring.CharacterSheet.Boundary
-  alias Polyphony.Content.CampaignConfig
+  alias Polyphony.Core.Content.CampaignConfig
   alias Polyphony.Context.Store
 
   setup :register_and_log_in_user

@@ -53,7 +53,8 @@ defmodule PolyphonyWeb.SheetEditorLive do
 
   import PolyphonyWeb.BlockField
 
-  alias Polyphony.{Campaigns, Characters, Groups, Library, Owner, Repo}
+  alias Polyphony.{Campaigns, Characters, Groups, Library, Repo}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{Audience, CharacterSheet, Stub, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.{Boundary, Fact, Relationship}
   alias Polyphony.ReadModels.Membership

@@ -18,7 +18,8 @@ defmodule Polyphony.ModerationLanesTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{Accounts, Campaigns, Library, Moderation, Owner, Repo}
+  alias Polyphony.{Accounts, Campaigns, Library, Moderation, Repo}
+  alias Polyphony.Owner
   alias Polyphony.Accounts.User
 
   setup do

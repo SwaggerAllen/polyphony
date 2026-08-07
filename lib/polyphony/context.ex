@@ -17,7 +17,7 @@ defmodule Polyphony.Context do
   Two guarantees are structural here:
 
     * **Filtered view only (§8, §9).** Live history and verbatim recent scenes
-      are passed as *raw* events and filtered through `Polyphony.Visibility`
+      are passed as *raw* events and filtered through `Polyphony.Core.Visibility`
       inside this module — a caller cannot accidentally feed the omniscient
       transcript and leak whispers or offscreen moves.
     * **The prefix is independent of live history.** `materialize/1` never sees
@@ -26,11 +26,11 @@ defmodule Polyphony.Context do
 
   alias Polyphony.Authoring.{Audience, WorldBible, CharacterSheet, BoundaryGate}
   alias Polyphony.Authoring.CharacterSheet.Boundary
-  alias Polyphony.Content
-  alias Polyphony.Content.CampaignConfig
+  alias Polyphony.Core.Content
+  alias Polyphony.Core.Content.CampaignConfig
   alias Polyphony.Context.{SceneContext, StaticRetriever}
   alias Polyphony.Scene.Cast
-  alias Polyphony.Visibility
+  alias Polyphony.Core.Visibility
 
   alias Polyphony.Events.{
     ThoughtOccurred,
@@ -265,7 +265,7 @@ defmodule Polyphony.Context do
   # **The character-facing read, and the only one that may be.** `known_to/3` gives
   # the public statements plus the concealed ones this character's audience puts them
   # in on; `statements/1` would hand them the world's secrets wholesale, which is the
-  # world-level version of the leak `Polyphony.Visibility` exists to prevent — and it
+  # world-level version of the leak `Polyphony.Core.Visibility` exists to prevent — and it
   # would leak into a *prompt*, where nobody can see it happen. The Director reads the
   # unfiltered list, in `Director.SceneBrief`, because the Director is omniscient.
   defp render_bible(%WorldBible{} = b, character_id, opts) do

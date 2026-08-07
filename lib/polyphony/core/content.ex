@@ -1,11 +1,11 @@
-defmodule Polyphony.Content do
+defmodule Polyphony.Core.Content do
   @moduledoc """
   Content governance as **three nested layers** (§A5), not one flat flag:
 
-    1. **App-wide 18+ floor** (`Polyphony.Content.Floor`) — non-configurable; the
+    1. **App-wide 18+ floor** (`Polyphony.Core.Content.Floor`) — non-configurable; the
        widest ceiling, a property of the account (18+ attestation, A9/B2). Adult
        categories exist at all only because the account cleared this floor.
-    2. **Per-campaign content config** (`Polyphony.Content.CampaignConfig`) — the
+    2. **Per-campaign content config** (`Polyphony.Core.Content.CampaignConfig`) — the
        author's `adult_content` master toggle plus per-category sub-toggles. Shapes
        the generation register and the published content label.
     3. **Per-character boundaries** (§A3, `CharacterSheet.Boundary`) —
@@ -33,7 +33,7 @@ defmodule Polyphony.Content do
   """
 
   alias Polyphony.Authoring.CharacterSheet.Boundary
-  alias Polyphony.Content.{CampaignConfig, Floor}
+  alias Polyphony.Core.Content.{CampaignConfig, Floor}
 
   @type category :: :sexual | :graphic_violence | :other
 

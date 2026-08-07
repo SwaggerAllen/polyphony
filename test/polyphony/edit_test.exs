@@ -6,7 +6,8 @@ defmodule Polyphony.EditTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, Edit, Packets, MembershipSet, Visibility}
+  alias Polyphony.{App, Edit}
+  alias Polyphony.Core.{Packets, MembershipSet, Visibility}
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}

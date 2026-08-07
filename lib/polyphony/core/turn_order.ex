@@ -1,4 +1,4 @@
-defmodule Polyphony.TurnOrder do
+defmodule Polyphony.Core.TurnOrder do
   @moduledoc """
   Reading the declarative §A1 turn-order and control-mode facts off a scene's log.
 

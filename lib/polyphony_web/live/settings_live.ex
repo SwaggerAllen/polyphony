@@ -39,7 +39,8 @@ defmodule PolyphonyWeb.SettingsLive do
   """
   use PolyphonyWeb, :live_view
 
-  alias Polyphony.{Accounts, Campaigns, Costs, Library, Owner}
+  alias Polyphony.{Accounts, Campaigns, Costs, Library}
+  alias Polyphony.Owner
   alias Polyphony.Notifications.Prefs
   alias PolyphonyWeb.Screens
 

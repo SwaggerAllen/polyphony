@@ -2,7 +2,8 @@ defmodule PolyphonyWeb.CampaignSceneGateLiveTest do
   @moduledoc "The arc-review gate on starting a scene from the campaign overview (§3.0)."
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Library, Owner, Repo}
+  alias Polyphony.{Library, Repo}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, ArcEntry}
   alias Polyphony.ReadModels.ArcEntry, as: ArcRM
 

@@ -1,4 +1,4 @@
-defmodule Polyphony.Blob do
+defmodule Polyphony.Core.Blob do
   @moduledoc """
   Storing a term in a `:binary` column, and reading it back safely.
 

@@ -14,7 +14,8 @@ defmodule Polyphony.SnapshotShapeTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{Campaigns, Library, Owner, Repo}
+  alias Polyphony.{Campaigns, Library, Repo}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
   alias Polyphony.Library.Snapshot
 

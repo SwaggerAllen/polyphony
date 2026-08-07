@@ -35,7 +35,8 @@ defmodule PolyphonyWeb.ArcReviewLive do
   """
   use PolyphonyWeb, :live_view
 
-  alias Polyphony.{Groups, Library, Owner, Repo}
+  alias Polyphony.{Groups, Library, Repo}
+  alias Polyphony.Owner
   alias Polyphony.ReadModels.ArcEntry, as: ArcEntryRepo
   alias Polyphony.Permissions
   alias PolyphonyWeb.{Guard, Screens}

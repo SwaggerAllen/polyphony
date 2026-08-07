@@ -20,7 +20,7 @@ defmodule Polyphony.Authoring.CompulsionTest do
   """
   use ExUnit.Case, async: true
 
-  alias Polyphony.Content
+  alias Polyphony.Core.Content
   alias Polyphony.Authoring.BoundaryGate
   alias Polyphony.Authoring.CharacterSheet.Boundary
 

@@ -46,6 +46,23 @@ defmodule Polyphony.Test.Purity do
   @spec impure() :: MapSet.t({module(), atom(), arity()})
   def impure, do: reaching(@db)
 
+  # Everything an effect can be, not just a database read. The distinction decides
+  # `Polyphony.Core`'s membership and it is not academic: under a repo-only floor
+  # `Broadcast`, `Mailer` and `DebugLog` all score clean, and they publish, send mail and
+  # write ETS respectively.
+  @effects @db ++
+             ~w(Elixir.Phoenix.PubSub Elixir.Polyphony.Mailer Elixir.Swoosh Elixir.Logger
+                Elixir.File Elixir.System Elixir.Task Elixir.GenServer Elixir.Agent
+                Elixir.Process ets persistent_term Elixir.Polyphony.LLM
+                Elixir.Polyphony.Broadcast Elixir.Polyphony.DebugLog
+                Elixir.Polyphony.Notifications)
+
+  @doc """
+  Everything that can reach an effect of any kind — the floor `Polyphony.Core` is held to.
+  """
+  @spec reaches_effects() :: MapSet.t({module(), atom(), arity()})
+  def reaches_effects, do: reaching({@effects, ~w(Elixir.Polyphony.LLM.Settings)})
+
   @doc """
   The same question for a different floor: what can reach a **provider call**?
 

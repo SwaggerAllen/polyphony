@@ -5,7 +5,7 @@ defmodule Polyphony.Projectors.SceneMemberships do
 
   A thin Commanded wrapper: the actual writes and queries live in
   `Polyphony.ReadModels.Membership`, so the SQL exercised by the test suite is
-  the SQL that runs here. `member_at_fun/0` hands `Polyphony.Visibility` the
+  the SQL that runs here. `member_at_fun/0` hands `Polyphony.Core.Visibility` the
   same `(scene_id, char_id, beat) -> boolean` closure the pure `MembershipSet`
   exposes, so the visibility predicate is oblivious to which side answers.
   """
@@ -39,7 +39,7 @@ defmodule Polyphony.Projectors.SceneMemberships do
   @spec members_at(term(), integer()) :: [String.t()]
   def members_at(scene_id, beat), do: Membership.members_at(Repo, scene_id, beat)
 
-  @doc "A `member_at?/3` closure for `Polyphony.Visibility`, backed by Postgres."
+  @doc "A `member_at?/3` closure for `Polyphony.Core.Visibility`, backed by Postgres."
   @spec member_at_fun() :: (term(), term(), integer() -> boolean())
   def member_at_fun, do: &member_at?/3
 end

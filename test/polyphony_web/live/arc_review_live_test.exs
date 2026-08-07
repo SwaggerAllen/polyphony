@@ -8,7 +8,8 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Library, Owner, Repo}
+  alias Polyphony.{Library, Repo}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, ArcEntry, WorldArcEntry}
   alias Polyphony.ReadModels.ArcEntry, as: ArcRM
 

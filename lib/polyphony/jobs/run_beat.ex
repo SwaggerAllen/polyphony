@@ -25,8 +25,9 @@ defmodule Polyphony.Jobs.RunBeat do
   require Logger
 
   alias Polyphony.Scene.Cast
-  alias Polyphony.{App, Broadcast, Content, Library}
-  alias Polyphony.Content.CampaignConfig
+  alias Polyphony.{App, Broadcast, Library}
+  alias Polyphony.Core.Content
+  alias Polyphony.Core.Content.CampaignConfig
   alias Polyphony.Costs.Attribution
   alias Polyphony.Director
   alias Polyphony.Director.{Auto, BeatDriver, BeatOps, BeatPolicy, Proposal, SceneBrief}
@@ -330,7 +331,9 @@ defmodule Polyphony.Jobs.RunBeat do
   def director_system_message(args) do
     base = "You are the Director. Cast and pace the scene."
 
-    case Polyphony.Content.render_register(Polyphony.Content.cast_categories(register_arg(args))) do
+    case Polyphony.Core.Content.render_register(
+           Polyphony.Core.Content.cast_categories(register_arg(args))
+         ) do
       nil -> base
       line -> base <> "\n\n" <> line
     end

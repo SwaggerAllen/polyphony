@@ -17,7 +17,8 @@ defmodule Polyphony.AccountSettingsTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{Accounts, Costs, Library, Owner, Repo}
+  alias Polyphony.{Accounts, Costs, Library, Repo}
+  alias Polyphony.Owner
   alias Polyphony.Accounts.Consent
   alias Polyphony.Costs.Ledger
 

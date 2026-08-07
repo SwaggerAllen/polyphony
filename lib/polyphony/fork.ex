@@ -16,7 +16,8 @@ defmodule Polyphony.Fork do
   dropped from the copy — a fork inherits the canonical story, not its dead takes.
   """
 
-  alias Polyphony.{App, Packets}
+  alias Polyphony.App
+  alias Polyphony.Core.Packets
   alias Polyphony.Commands.ForkScene
   alias Polyphony.Director.BeatOps
   alias Polyphony.Events.{SceneOpened, SceneClosed}

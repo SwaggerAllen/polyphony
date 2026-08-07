@@ -16,7 +16,8 @@ defmodule PolyphonyWeb.PlayUserTurnLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Broadcast, TurnOrder}
+  alias Polyphony.{App, Broadcast}
+  alias Polyphony.Core.TurnOrder
   alias Polyphony.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
   alias Polyphony.Director.BeatOps
   alias Polyphony.Director.Commands.OpenBeat

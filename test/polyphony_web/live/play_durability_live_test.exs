@@ -25,7 +25,8 @@ defmodule PolyphonyWeb.PlayDurabilityLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Generations, Library, Owner, SceneControl}
+  alias Polyphony.{App, Generations, Library, SceneControl}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
   alias Polyphony.Director.BeatOps

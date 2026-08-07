@@ -9,7 +9,8 @@ defmodule Polyphony.SceneResetTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{Library, Owner, Repo, SceneReset}
+  alias Polyphony.{Library, Repo, SceneReset}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{ArcEntry, CharacterSheet}
   alias Polyphony.ReadModels.ArcEntry, as: ArcRM
 

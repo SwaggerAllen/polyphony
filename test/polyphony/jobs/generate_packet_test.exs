@@ -7,7 +7,8 @@ defmodule Polyphony.Jobs.GeneratePacketTest do
   use ExUnit.Case, async: false
   use Oban.Testing, repo: Polyphony.Repo
 
-  alias Polyphony.{App, MembershipSet, Visibility}
+  alias Polyphony.App
+  alias Polyphony.Core.{MembershipSet, Visibility}
   alias Polyphony.Jobs.GeneratePacket
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Events.{ThoughtOccurred, SpeechUttered}

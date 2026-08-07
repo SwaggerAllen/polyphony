@@ -11,7 +11,7 @@ defmodule Polyphony.ReadModels.MembershipTest do
   import Polyphony.Test.Scenario
 
   alias Polyphony.Repo
-  alias Polyphony.MembershipSet
+  alias Polyphony.Core.MembershipSet
   alias Polyphony.ReadModels.Membership
   alias Polyphony.Events.{CharacterEntered, CharacterExited}
 

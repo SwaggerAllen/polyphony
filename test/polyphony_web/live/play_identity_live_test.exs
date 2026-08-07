@@ -27,7 +27,9 @@ defmodule PolyphonyWeb.PlayIdentityLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Library, Owner, Packets}
+  alias Polyphony.{App, Library}
+  alias Polyphony.Owner
+  alias Polyphony.Core.Packets
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Events.SpeechUttered

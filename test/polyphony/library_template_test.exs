@@ -11,7 +11,8 @@ defmodule Polyphony.LibraryTemplateTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{Library, Owner, Repo}
+  alias Polyphony.{Library, Repo}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
 
   setup do

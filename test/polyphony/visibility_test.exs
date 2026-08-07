@@ -9,7 +9,7 @@ defmodule Polyphony.VisibilityTest do
 
   import Polyphony.Test.Scenario
 
-  alias Polyphony.Visibility
+  alias Polyphony.Core.Visibility
   alias Polyphony.Events.{ArcEntryProposed, SceneOpened, BeatClosed}
 
   # A shared scene the size of a real beat sequence.

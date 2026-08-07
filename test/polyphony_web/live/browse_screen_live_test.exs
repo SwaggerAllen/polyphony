@@ -12,7 +12,8 @@ defmodule PolyphonyWeb.BrowseScreenLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Library, Moderation, Owner, Reading}
+  alias Polyphony.{App, Library, Moderation, Reading}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.WorldBible
   alias Polyphony.Commands.{CommitPacket, EnterCharacter, OpenScene}
   alias Polyphony.Library.Snapshot

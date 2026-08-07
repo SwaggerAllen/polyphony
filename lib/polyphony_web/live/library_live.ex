@@ -42,7 +42,8 @@ defmodule PolyphonyWeb.LibraryLive do
   """
   use PolyphonyWeb, :live_view
 
-  alias Polyphony.{Campaigns, Characters, Groups, Library, Owner, Reading}
+  alias Polyphony.{Campaigns, Characters, Groups, Library, Reading}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, Group}
   alias Polyphony.Reading.Session
   alias Polyphony.Permissions

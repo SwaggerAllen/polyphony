@@ -17,7 +17,8 @@ defmodule PolyphonyWeb.WaitingStatesLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Library, Owner}
+  alias Polyphony.{App, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{EnterCharacter, OpenScene}
 

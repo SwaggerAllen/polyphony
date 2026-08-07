@@ -3,7 +3,7 @@ defmodule Polyphony.PacketsTest do
   use ExUnit.Case, async: true
 
   import Polyphony.Test.Scenario
-  alias Polyphony.Packets
+  alias Polyphony.Core.Packets
 
   describe "canonical/1" do
     test "drops superseded packets and the markers themselves" do

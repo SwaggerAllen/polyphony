@@ -3,8 +3,8 @@ defmodule Storybook.Screens.Campaign do
 
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Authoring.WorldBible
-  alias Polyphony.Blob
-  alias Polyphony.Content.CampaignConfig
+  alias Polyphony.Core.Blob
+  alias Polyphony.Core.Content.CampaignConfig
   alias Polyphony.LLM.Settings
   alias Polyphony.ReadModels.{BuildRun, LibraryEntry}
 

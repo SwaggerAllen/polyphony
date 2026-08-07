@@ -28,7 +28,7 @@ defmodule Polyphony.Library do
   """
 
   alias Polyphony.Repo
-  alias Polyphony.Blob
+  alias Polyphony.Core.Blob
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.ReadModels.LibraryEntry
@@ -839,7 +839,7 @@ defmodule Polyphony.Library do
   defp repo(opts), do: Keyword.get(opts, :repo, Repo)
 
   # Every embedded struct (CharacterSheet, WorldBible, Snapshot, …) is a term nobody
-  # queries, so it is stored whole — see `Polyphony.Blob`, which owns the `:safe` read.
+  # queries, so it is stored whole — see `Polyphony.Core.Blob`, which owns the `:safe` read.
   defp encode(payload), do: Blob.encode(payload)
   defp decode(bin), do: Blob.decode(bin)
 

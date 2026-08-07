@@ -1,10 +1,10 @@
-defmodule Polyphony.EventText do
+defmodule Polyphony.Core.EventText do
   @moduledoc """
   Renders (already-filtered) events to plain lines for LLM prompts — shared by
   the summarizer and arc extractor so a scene reads the same way to both.
 
   Interior events appear here only for the viewer whose they are (callers filter
-  through `Polyphony.Visibility` first), so rendering them is safe.
+  through `Polyphony.Core.Visibility` first), so rendering them is safe.
   """
 
   alias Polyphony.Events.{

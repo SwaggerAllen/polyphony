@@ -6,8 +6,8 @@ defmodule Polyphony.ContentTest do
   """
   use ExUnit.Case, async: true
 
-  alias Polyphony.Content
-  alias Polyphony.Content.{CampaignConfig, Floor}
+  alias Polyphony.Core.Content
+  alias Polyphony.Core.Content.{CampaignConfig, Floor}
   alias Polyphony.Authoring.CharacterSheet.Boundary
 
   describe "CampaignConfig.enabled/1 — the master toggle gates the sub-toggles" do

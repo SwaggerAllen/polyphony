@@ -1,4 +1,4 @@
-defmodule Polyphony.MembershipSet do
+defmodule Polyphony.Core.MembershipSet do
   @moduledoc """
   A pure, in-memory materialization of scene membership as intervals (§8).
 
@@ -96,7 +96,7 @@ defmodule Polyphony.MembershipSet do
   end
 
   @doc """
-  Return a `member_at?/3` closure suitable for `Polyphony.Visibility`.
+  Return a `member_at?/3` closure suitable for `Polyphony.Core.Visibility`.
 
   This is the seam that lets the *pure* set and the *Postgres* read model be
   used interchangeably — both expose the same `(scene_id, char_id, beat) ->

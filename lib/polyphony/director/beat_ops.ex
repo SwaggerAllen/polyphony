@@ -9,7 +9,8 @@ defmodule Polyphony.Director.BeatOps do
   before the cast generates.
   """
 
-  alias Polyphony.{App, Context, MembershipSet, Packets}
+  alias Polyphony.{App, Context}
+  alias Polyphony.Core.{MembershipSet, Packets}
   alias Polyphony.Context.{Rebuild, Store}
   alias Polyphony.Commands.{RecordWorldEvent, ExitCharacter, CloseScene, ProposeIntroduction}
   alias Polyphony.Director.Proposal
@@ -114,7 +115,7 @@ defmodule Polyphony.Director.BeatOps do
   def declare_turn_order(scene_id, beat, default_cast_ids) do
     events = canonical_events(scene_id)
 
-    case Polyphony.TurnOrder.for_beat(events, beat) do
+    case Polyphony.Core.TurnOrder.for_beat(events, beat) do
       nil ->
         :ok =
           App.dispatch(%Polyphony.Commands.DeclareTurnOrder{

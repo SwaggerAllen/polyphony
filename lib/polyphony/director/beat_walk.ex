@@ -19,7 +19,7 @@ defmodule Polyphony.Director.BeatWalk do
   walk would re-enqueue the same generation forever.
   """
 
-  alias Polyphony.{MembershipSet, Packets, TurnOrder}
+  alias Polyphony.Core.{MembershipSet, Packets, TurnOrder}
   alias Polyphony.Events.{PacketPassed, PacketFailed}
   alias Polyphony.Director.BeatOps
 

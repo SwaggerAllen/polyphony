@@ -1,4 +1,4 @@
-defmodule Polyphony.Packets do
+defmodule Polyphony.Core.Packets do
   @moduledoc """
   Packet-level helpers over a raw event stream — the one place that knows how a
   re-roll's `PacketSuperseded` markers reshape what a projection sees (§7, §12).

@@ -21,7 +21,8 @@ defmodule PolyphonyWeb.NavReachTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Library, Owner, Reading}
+  alias Polyphony.{Library, Reading}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, Group, WorldBible}
   alias Polyphony.Commands.OpenScene
 

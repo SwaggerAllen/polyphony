@@ -18,7 +18,7 @@ defmodule Polyphony.Context.Rebuild do
   alias Polyphony.{App, Context, Library}
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Authoring.Effective
-  alias Polyphony.Content.CampaignConfig
+  alias Polyphony.Core.Content.CampaignConfig
   alias Polyphony.Context.PgvectorRetriever
   alias Polyphony.Events.SceneOpened
 

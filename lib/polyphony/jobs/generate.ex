@@ -26,7 +26,8 @@ defmodule Polyphony.Jobs.Generate do
 
   require Logger
 
-  alias Polyphony.{Generations, Library, Owner}
+  alias Polyphony.{Generations, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{Autofill, Cover, StubGen}
   alias Polyphony.Suggest
   alias Polyphony.ReadModels.GenerationRun

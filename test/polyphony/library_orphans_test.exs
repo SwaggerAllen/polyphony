@@ -16,7 +16,8 @@ defmodule Polyphony.LibraryOrphansTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Library, Owner}
+  alias Polyphony.Library
+  alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
 
   setup do

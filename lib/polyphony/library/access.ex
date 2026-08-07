@@ -2,7 +2,7 @@ defmodule Polyphony.Library.Access do
   @moduledoc """
   The **pure** access predicate for owned entities (§B1). Access is a property of
   the data — visibility + ownership + share token — decided here and nowhere else,
-  the same discipline `Polyphony.Visibility` applies to fiction.
+  the same discipline `Polyphony.Core.Visibility` applies to fiction.
 
   A **viewer** is `%{actor_id: id | nil, token: token | nil}`; `anonymous/0` is the
   signed-out viewer. The rules (§B1 "Anonymous access"):

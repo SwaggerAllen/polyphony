@@ -13,7 +13,7 @@ defmodule Polyphony.BlobTest do
   """
   use ExUnit.Case, async: true
 
-  alias Polyphony.Blob
+  alias Polyphony.Core.Blob
 
   describe "round trip" do
     test "a struct comes back as itself" do

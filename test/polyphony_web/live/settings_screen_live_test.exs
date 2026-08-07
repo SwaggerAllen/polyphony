@@ -9,7 +9,8 @@ defmodule PolyphonyWeb.SettingsScreenLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Accounts, Costs, Library, Owner}
+  alias Polyphony.{Accounts, Costs, Library}
+  alias Polyphony.Owner
   alias Polyphony.Notifications.Prefs
 
   setup :register_and_log_in_user

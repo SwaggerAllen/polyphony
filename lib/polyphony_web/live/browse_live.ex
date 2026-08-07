@@ -41,7 +41,9 @@ defmodule PolyphonyWeb.BrowseLive do
   """
   use PolyphonyWeb, :live_view
 
-  alias Polyphony.{Accounts, Library, Moderation, Owner, Publication, Reading}
+  alias Polyphony.{Accounts, Library, Moderation, Reading}
+  alias Polyphony.Owner
+  alias Polyphony.Core.Publication
   alias Polyphony.Authoring.WorldBible
   alias Polyphony.Reading.Session
   alias PolyphonyWeb.Screens

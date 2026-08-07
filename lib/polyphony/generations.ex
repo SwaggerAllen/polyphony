@@ -43,7 +43,7 @@ defmodule Polyphony.Generations do
 
   require Logger
 
-  alias Polyphony.Blob
+  alias Polyphony.Core.Blob
   alias Polyphony.ReadModels.GenerationRun
   alias Polyphony.Repo
 

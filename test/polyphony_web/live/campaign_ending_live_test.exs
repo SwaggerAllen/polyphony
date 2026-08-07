@@ -16,7 +16,8 @@ defmodule PolyphonyWeb.CampaignEndingLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Campaigns, Library, Owner}
+  alias Polyphony.{App, Campaigns, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{EnterCharacter, OpenScene}
   alias Polyphony.Authoring.ArcEntry, as: ArcProposal

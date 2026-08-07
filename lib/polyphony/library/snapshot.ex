@@ -26,11 +26,11 @@ defmodule Polyphony.Library.Snapshot do
   A published campaign exposes the **omniscient** log — private thoughts, private
   state, and both arcs, including concealed facts that became canon. That is
   inherent to publishing an omniscient story; `omniscient_log/1` guarantees the
-  published projection is exactly `Polyphony.Visibility`'s omniscient one, never an
+  published projection is exactly `Polyphony.Core.Visibility`'s omniscient one, never an
   accidental firehose of raw events.
   """
 
-  alias Polyphony.Visibility
+  alias Polyphony.Core.Visibility
 
   @derive Jason.Encoder
   defstruct campaign_id: nil,
@@ -62,7 +62,7 @@ defmodule Polyphony.Library.Snapshot do
           bible: map() | nil,
           characters: [pinned_character()],
           arc: [map()],
-          publication: Polyphony.Publication.t() | nil,
+          publication: Polyphony.Core.Publication.t() | nil,
           scenes: [map()],
           include_proposed: boolean(),
           derived_from_id: integer() | nil,
@@ -89,7 +89,7 @@ defmodule Polyphony.Library.Snapshot do
       characters: Map.get(attrs, :characters, []),
       arc: resolve_arc(Map.get(attrs, :arc, []), published_beat, include_proposed),
       content: Map.get(attrs, :content),
-      publication: Polyphony.Publication.from(Map.get(attrs, :publication)),
+      publication: Polyphony.Core.Publication.from(Map.get(attrs, :publication)),
       scenes: Map.get(attrs, :scenes, []),
       include_proposed: include_proposed
     }

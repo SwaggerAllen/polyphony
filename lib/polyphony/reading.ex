@@ -186,7 +186,7 @@ defmodule Polyphony.Reading do
   # The reading modes share one vocabulary with the URL and with `Publication`, so the
   # label comes from there rather than from a second table that could disagree with it.
   def perspective_label(%Bookmark{perspective: p}, names) do
-    Polyphony.Publication.label(Polyphony.Publication.from_param(p), nil, names)
+    Polyphony.Core.Publication.label(Polyphony.Core.Publication.from_param(p), nil, names)
   end
 
   # ── Internals ───────────────────────────────────────────────────────────────

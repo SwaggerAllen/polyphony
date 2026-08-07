@@ -12,7 +12,8 @@ defmodule Polyphony.ReadingSessionTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, Publication, Repo}
+  alias Polyphony.{App, Repo}
+  alias Polyphony.Core.Publication
   alias Polyphony.Commands.{CommitPacket, EnterCharacter, OpenScene}
   alias Polyphony.Library.Snapshot
   alias Polyphony.Reading.Session

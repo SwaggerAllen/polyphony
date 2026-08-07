@@ -21,14 +21,14 @@ defmodule Polyphony.Director.SceneBrief do
   Without this the Director saw only a roster of names and a keyhole of recent
   events — a continuity bug in any scene that ran longer than the window or leaned
   on the world or prior scenes. The transcript is read through
-  `Polyphony.Packets.canonical/1` (rule 6) so a re-rolled take never reappears.
+  `Polyphony.Core.Packets.canonical/1` (rule 6) so a re-rolled take never reappears.
   """
 
   alias Polyphony.Authoring.{WorldBible, CharacterSheet, Effective}
   alias Polyphony.Context
   alias Polyphony.Context.{Rebuild, SceneContext, Store, StaticRetriever}
   alias Polyphony.Director.BeatOps
-  alias Polyphony.Packets
+  alias Polyphony.Core.Packets
   alias Polyphony.ReadModels.SceneSummary
   alias Polyphony.Scene.Cast
 

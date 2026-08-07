@@ -6,7 +6,8 @@ defmodule Polyphony.LibraryOwnerTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{Library, Owner, Repo}
+  alias Polyphony.{Library, Repo}
+  alias Polyphony.Owner
   alias Polyphony.Library.Access
 
   setup do
