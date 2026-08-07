@@ -30,33 +30,99 @@ defmodule PolyphonyWeb.Transcript do
   alias PolyphonyWeb.{Kit, Voice}
 
   @doc """
-  Group a flat message stream into blocks and mark where each beat opens.
+  Group a flat message stream into **beats, each holding its blocks**.
 
   A character's turn is one committed packet and all its moves; everything else — a
   world beat, an entrance — is a plain block with no attribution, because it is
-  nobody's turn.
+  nobody's turn. Blocks then group into the beat they happened in.
+
+  ## Why a tree rather than a flat list
+
+  This used to return a flat list of blocks, each stamped with an `eff_beat` copied
+  down from the last turn, and each consumer then walked that list a second time
+  deciding where a beat divider opened. Both of those were the same workaround: a flat
+  list has nowhere to hang a divider, so the beat had to be duplicated onto every block
+  and re-derived by looking at neighbours.
+
+  In a tree the position *is* the beat. A block with no beat of its own belongs to the
+  beat it arrived in — an append target rather than an inherited field — and the divider
+  is the beat's own header, so there is nothing to mark and nothing to walk. Two derived
+  fields and two walks disappear, one of them duplicated across both consumers.
+
+  It also fixes the divider's stickiness for free. `.beat-rule` is `position: sticky`,
+  which holds only while its containing block is on screen — nested in the *first block*
+  of a beat it unstuck the moment that one turn scrolled past. Nested in the beat, it
+  stays for as long as the beat does, which is what a sticky heading is for.
+
+  And it is the shape a LiveView stream needs: a beat is a bounded DOM unit (cast size
+  × moves per turn) that can be re-inserted under a stable id when one of its moves
+  lands, where a message is a fragment of a block and a whole transcript is unbounded.
+
+  Beat `0` is everything before the first beat opened — scene framing — and renders no
+  divider.
   """
-  @spec blocks([map()]) :: [map()]
-  def blocks(messages), do: messages |> turn_blocks() |> mark_block_beats()
+  @type beat :: %{beat: non_neg_integer(), blocks: [map()], failures: [map()]}
 
-  # A block with no beat of its own inherits the last turn's, so it keeps its place.
-  defp mark_block_beats(blocks) do
-    {marked, _} =
-      Enum.map_reduce(blocks, 0, fn b, last ->
-        eff = b.beat || last
-        {Map.put(b, :eff_beat, eff), eff}
-      end)
+  @spec beats([map()]) :: [beat()]
+  def beats(messages), do: messages |> turn_blocks() |> group_by_beat()
 
-    marked
+  defp group_by_beat(blocks) do
+    blocks
+    |> Enum.reduce([], fn block, acc ->
+      beat = block.beat || open_beat(acc)
+
+      case acc do
+        [%{beat: ^beat} = head | rest] -> [%{head | blocks: head.blocks ++ [block]} | rest]
+        _ -> [%{beat: beat, blocks: [block], failures: []} | acc]
+      end
+    end)
+    |> Enum.reverse()
+  end
+
+  # The beat currently being filled. Nothing yet means scene framing, which is beat 0 —
+  # the same floor the old `eff_beat` inheritance started from.
+  defp open_beat([%{beat: beat} | _]), do: beat
+  defp open_beat([]), do: 0
+
+  @doc """
+  File each failure into the beat it happened in, after that beat's turns.
+
+  A failure without a beat is a scene-close operation (arc extraction, summarization),
+  emitted at the scene's current beat — so it defaults to `current_beat` and lands with
+  the latest action rather than at the top.
+
+  A beat in which *every* turn failed has no blocks and so no container of its own; it
+  gets one here, which means it now draws its divider. That is a change, and the right
+  one: the beat happened, and a row of failures under no heading reads as though they
+  belong to the beat above.
+  """
+  @spec with_failures([beat()], [map()], non_neg_integer()) :: [beat()]
+  def with_failures(beats, [], _current_beat), do: beats
+
+  def with_failures(beats, failures, current_beat) do
+    by_beat = Enum.group_by(failures, &(&1.beat || current_beat))
+
+    beats
+    |> Enum.map(&%{&1 | failures: Map.get(by_beat, &1.beat, [])})
+    |> add_missing_beats(by_beat)
+    |> Enum.sort_by(& &1.beat)
+  end
+
+  defp add_missing_beats(beats, by_beat) do
+    held = MapSet.new(beats, & &1.beat)
+
+    beats ++
+      for {beat, failures} <- by_beat,
+          not MapSet.member?(held, beat),
+          do: %{beat: beat, blocks: [], failures: failures}
   end
 
   @doc """
   A read-only transcript — the published reading view, and any surface that shows
   the story without offering to change it.
 
-  Beat rules are decided by walking the blocks and noticing where the beat changes,
-  never by each block guessing whether it's first, which is how the same rule ends
-  up drawn three times.
+  Beat rules are the beat container's own heading rather than a flag on whichever block
+  happened to come first — see `beats/1` for why that stopped being a walk.
   """
   attr(:events, :list, required: true, doc: "projected events, in order")
   attr(:register, :atom, default: :page, values: [:stage, :page])
@@ -69,14 +135,16 @@ defmodule PolyphonyWeb.Transcript do
     assigns =
       assigns
       |> assign(:cast, Cast.from_names(assigns.names))
-      |> assign(:blocks, assigns.events |> Enum.map(&to_message/1) |> blocks())
+      |> assign(:beats, assigns.events |> Enum.map(&to_message/1) |> beats())
 
     ~H"""
     <div class="transcript">
-      <%= for {b, rule} <- with_beat_rules(@blocks) do %>
-        <div class="turn-block">
-          <Kit.beat_rule :if={rule} beat={rule} />
+      <%= for beat <- @beats do %>
+        <div class="beat">
+          <Kit.beat_rule :if={beat.beat > 0} beat={beat.beat} />
 
+          <%= for b <- beat.blocks do %>
+        <div class="turn-block">
           <div :if={b.type == :event} class="py-1">
             <div :for={m <- b.msgs}><%= render_move(m, @cast, @register, @voices) %></div>
           </div>
@@ -104,9 +172,11 @@ defmodule PolyphonyWeb.Transcript do
             </div>
           </div>
         </div>
+          <% end %>
+        </div>
       <% end %>
 
-      <p :if={@blocks == []} class="text-[13px] leading-relaxed dim py-6 text-center">
+      <p :if={@beats == []} class="text-[13px] leading-relaxed dim py-6 text-center">
         <%= @empty %>
       </p>
     </div>
@@ -179,20 +249,6 @@ defmodule PolyphonyWeb.Transcript do
   end
 
   defp filled(text), do: is_binary(text) and String.trim(text) != ""
-
-  # Pair each block with the beat it opens, or nil.
-  defp with_beat_rules(blocks) do
-    {pairs, _} =
-      Enum.map_reduce(blocks, nil, fn b, previous ->
-        beat = b.eff_beat
-
-        if is_integer(beat) and beat > 0 and beat != previous,
-          do: {{b, beat}, beat},
-          else: {{b, nil}, previous}
-      end)
-
-    pairs
-  end
 
   @doc """
   Turn a domain event into the `%{kind:, payload:}` shape the movers render.
