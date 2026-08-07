@@ -63,12 +63,51 @@ defmodule Polyphony.PurityCanaryTest do
            "broadcasting now counts as a database read — the two floors have collapsed"
   end
 
+  test "a clock, a die and a fresh id are seen at the replay floor" do
+    nondeterministic = Purity.reaches_nondeterminism()
+
+    for {mfa, what} <- [
+          {{Canary, :reads_the_clock, 0}, "reading the clock"},
+          {{Canary, :rolls_a_die, 0}, "rolling a die"},
+          {{Canary, :mints_an_id, 0}, "minting an id"}
+        ] do
+      assert MapSet.member?(nondeterministic, mfa), """
+      #{what} is no longer counted against replay.
+
+      None of these is an effect — they touch nothing and pass every other floor — and each
+      one makes an event stream rebuild into something the log doesn't justify.
+      """
+    end
+  end
+
+  test "the replay floor stays MFA-precise, so the pure half of a module survives" do
+    nondeterministic = Purity.reaches_nondeterminism()
+
+    refute MapSet.member?(nondeterministic, {Canary, :pure_datetime, 2}),
+           "DateTime.compare/2 is being counted as nondeterministic — the deny list has " <>
+             "widened from functions to namespaces, and half the date handling in the app " <>
+             "with it"
+  end
+
+  test "the database floor sees a changeset function that takes a repo" do
+    # `Ecto.Changeset` is excused wholesale as a data library, which is right for all but
+    # this one function — and getting it wrong is invisible, because the call looks like
+    # every other validation on the pipeline.
+    assert MapSet.member?(Purity.impure(), {Canary, :changeset_that_queries, 2}),
+           "unsafe_validate_unique/4 no longer outranks the excuse for its namespace"
+
+    refute MapSet.member?(Purity.impure(), {Canary, :pure_changeset, 1}),
+           "building a changeset counts as a read again — that is 41 pure parsers back " <>
+             "on the wrong side of every guard"
+  end
+
   test "a pure function is clean at every floor" do
     # The direction that gets an over-eager guard deleted rather than fixed.
     for {name, set} <- [
           {"the repo floor", Purity.impure()},
           {"the effects floor", Purity.reaches_effects()},
-          {"the provider floor", Purity.reaches_llm()}
+          {"the provider floor", Purity.reaches_llm()},
+          {"the replay floor", Purity.reaches_nondeterminism()}
         ] do
       refute MapSet.member?(set, {Canary, :pure, 1}),
              "#{name} flags a function that only calls Enum.map/2 — the analysis is over-broad"

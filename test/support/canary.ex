@@ -63,6 +63,38 @@ defmodule Polyphony.Test.Canary do
     do: Phoenix.PubSub.broadcast(Polyphony.PubSub, topic, message)
 
   @doc """
+  Reads the clock. Not an effect by any ordinary test — it touches nothing outside the
+  process — and it is what makes a stream unreplayable, which is what the log is for.
+  """
+  def reads_the_clock, do: DateTime.utc_now()
+
+  @doc "Rolls a die. The other half of the replay floor."
+  def rolls_a_die, do: :rand.uniform(6)
+
+  @doc "Mints an id, which is the same problem wearing a third hat."
+  def mints_an_id, do: Ecto.UUID.generate()
+
+  @doc """
+  Queries through `Ecto.Changeset`, which is otherwise excused as a data library. If the
+  MFA-level deny stops outranking the namespace-level excuse, this goes quiet.
+  """
+  def changeset_that_queries(changeset, repo),
+    do: Ecto.Changeset.unsafe_validate_unique(changeset, [:email], repo)
+
+  @doc """
+  Builds a changeset and nothing else. Must come back **clean** — calling this a read is
+  what put every schema parser in the app on the impure side.
+  """
+  def pure_changeset(changeset), do: Ecto.Changeset.validate_required(changeset, [:name])
+
+  @doc """
+  Compares two timestamps. Must come back clean at the replay floor: the deny list is
+  MFA-level precisely so `DateTime.compare/2` stays usable while `DateTime.utc_now/0`
+  does not.
+  """
+  def pure_datetime(a, b), do: DateTime.compare(a, b)
+
+  @doc """
   The negative control. Data in, data out, calling only `Enum` — it must come back clean
   from every floor, or the guards are passing on noise rather than on purity.
   """

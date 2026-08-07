@@ -51,6 +51,18 @@ defmodule Polyphony.AggregatePurityTest do
     end
   end
 
+  test "an aggregate cannot read a clock, roll a die or mint an id" do
+    nondeterministic = Purity.reaches_nondeterminism()
+
+    for aggregate <- @aggregates, mfa <- callbacks(aggregate) do
+      refute MapSet.member?(nondeterministic, mfa),
+             "#{inspect(mfa)} is not deterministic. This is the quietest way to break replay: " <>
+               "nothing is read and nothing is written, but a timestamp or a generated id " <>
+               "stamped into an event differs on every rebuild, so the aggregate's state " <>
+               "stops being a function of its stream. Stamp it in the command."
+    end
+  end
+
   test "every aggregate is listed, so this test can't quietly cover nothing" do
     found =
       :code.all_available()
