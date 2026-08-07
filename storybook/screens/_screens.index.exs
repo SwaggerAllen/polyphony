@@ -30,4 +30,5 @@ defmodule Storybook.Screens do
   def entry("library"), do: [name: "Library"]
   def entry("browse"), do: [name: "Browse"]
   def entry("sheet_editor"), do: [name: "Character sheet"]
+  def entry("bible_editor"), do: [name: "World bible"]
 end
