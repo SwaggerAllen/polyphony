@@ -108,6 +108,8 @@ defmodule Storybook.Screens.Campaign do
       quick_build_open: false,
       qb_seeds: [""],
       qb_world: "",
+      qb_premise: "",
+      qb_bible_id: nil,
       qb_groups: false,
       qb_suggest: true,
       build: nil,
@@ -163,14 +165,27 @@ defmodule Storybook.Screens.Campaign do
       ),
       v(
         :quick_build,
-        "The one-shot, open. A world seed and a concept per character, and two switches that are both off by default because each is another provider call — off-screen relationships, and the groups the world names.",
+        "The one-shot, open. A world — written fresh or one you already have — a premise that is **this story's** rather than the setting's, a concept per character, and two switches that are both off by default because each is another provider call.",
         Map.merge(first_run(), %{
           quick_build_open: true,
           qb_world: "A rain-drowned harbour city where debts are paid in memories.",
+          qb_premise:
+            "A shipment came in that isn't on any manifest, and one of them signed for it.",
           qb_seeds: [
             "a disgraced harbour-master who sold her own past",
             "the clerk who bought it"
           ]
+        })
+      ),
+      v(
+        :quick_build_existing_world,
+        "Building on a world already written. The world seed goes away rather than greying out — a brief for a world nobody is going to write is a field whose text is silently discarded. This is the second campaign in a setting, which is the case the builder could not serve at all: it only ever invented a world, so reusing one meant paying to have it invented again.",
+        Map.merge(first_run(), %{
+          quick_build_open: true,
+          qb_bible_id: 21,
+          bibles: [%LibraryEntry{id: 21, kind: "world_bible", payload: Blob.encode(bible())}],
+          qb_premise: "The second crew to work this coast, and the first one is still owed.",
+          qb_seeds: ["a smuggler who keeps her own ledger"]
         })
       ),
       v(
@@ -288,6 +303,28 @@ defmodule Storybook.Screens.Campaign do
           scene_location: "The quay, after the second bell",
           scene_premise: "The ledger is due at the office by dawn and only one of them knows it.",
           scenes: ["c1-s1", "c1-s2"],
+          # Numbered by position and titled by place — the row used to render twelve
+          # characters of a stream id, which is not a name a person can hold. Oldest
+          # first here; the screen reverses it, so the list reads newest at the top and
+          # the numbers count down.
+          scene_rows: [
+            %{
+              id: "c1-s1",
+              number: 1,
+              title: "The dock, before first light",
+              premise: "The manifest is short by one crate and nobody has said so.",
+              beats: 4,
+              cast: ["11", "12"]
+            },
+            %{
+              id: "c1-s2",
+              number: 2,
+              title: "The quay, after the second bell",
+              premise: nil,
+              beats: 2,
+              cast: ["11"]
+            }
+          ],
           payload: %{
             name: "The Salt Line",
             kind: :campaign,

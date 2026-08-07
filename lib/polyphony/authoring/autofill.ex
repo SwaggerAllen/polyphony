@@ -608,11 +608,14 @@ defmodule Polyphony.Authoring.Autofill do
             "The premise is one vivid paragraph naming the central tension and what is at " <>
             "stake for this cast. It says what the story is *about*; it does not decide how " <>
             "it ends.\n\n" <>
+            given_premise_rule(opts[:premise]) <>
             "Return ONLY a JSON object with exactly these keys: name, premise."
       },
       %{
         role: "user",
-        content: world_block(opts[:world]) <> campaign_cast_block(opts[:cast] || [])
+        content:
+          world_block(opts[:world]) <>
+            campaign_cast_block(opts[:cast] || []) <> given_premise_block(opts[:premise])
       }
     ]
 
@@ -900,6 +903,21 @@ defmodule Polyphony.Authoring.Autofill do
       "\n\nOpen somewhere this story has not " <>
       "already been, unless returning is the point.\n\n"
   end
+
+  # The author already wrote the premise. The caller keeps theirs verbatim regardless of
+  # what comes back — this is here so the **title** is a read on their story rather than on
+  # the world in general, which is the whole reason a title and a premise are one call.
+  defp given_premise_rule(premise) when is_binary(premise) and premise != "",
+    do:
+      "The author has already written the premise, below. Do not rewrite it — return it " <>
+        "unchanged in the `premise` key, and make the name a title for *that* story.\n\n"
+
+  defp given_premise_rule(_), do: ""
+
+  defp given_premise_block(premise) when is_binary(premise) and premise != "",
+    do: "The premise, as the author wrote it:\n" <> premise <> "\n\n"
+
+  defp given_premise_block(_), do: ""
 
   defp campaign_cast_block([]), do: ""
 

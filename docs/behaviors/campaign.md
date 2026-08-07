@@ -1,6 +1,6 @@
 # Campaign
 
-<!-- rev: 1 -->
+<!-- rev: 2 -->
 
 | | |
 |---|---|
@@ -31,6 +31,20 @@ Five tabs, in the order somebody meets them — Settings, World, Cast, Premise, 
 - **The three endings are three controls, not one with a severity dial.** Archive, trash and
   start-over are genuinely different acts with different reversals. Only start-over confirms,
   because it is the only one that isn't reversible.
+- **A premise is not a setting.** Quick Build takes them as two fields because one box
+  produced a specific failure: "a smuggler owes the harbour-master a favour" typed as a
+  world seed goes into the bible's *canon*, and every later campaign in that world inherits
+  it as permanent truth. A world is where stories happen; a premise happens to one cast,
+  once. An author's premise is kept verbatim — only the title is generated from it, because
+  a generated title is worth having and a generated rewrite of what you just typed is not.
+- **A scene is a chapter, so it is named by number and place.** *Scene 2 · The quay* rather
+  than twelve characters of a stream id. The id is still the routing key and still the link
+  target; it was never a name a person could hold, and a list of them read as a column of
+  near-identical hex. A number is a **position**, so deleting one renumbers the rest.
+- **Deleting a scene takes the arc proposals it raised.** The same asymmetry restart has: a
+  question play asked about a character, left behind after the scene that asked it is gone,
+  is a review item nobody can answer. The event stream is abandoned, not erased — events are
+  immutable, and nothing reads a stream no campaign names.
 - **The scene's premise is the scene's.** Every scene used to open on the campaign premise,
   which is the pitch for the whole story and says nothing about what is happening now. Blank
   still falls back to it.
@@ -58,8 +72,20 @@ anything exists anywhere.
 
 ### `quick_build` — The one-shot, open
 
-A world seed and a concept per character. Two switches, both off by default because each is
-another provider call: off-screen relationships, and writing the groups the world names.
+A world, a premise, and a concept per character. Two switches, both off by default because
+each is another provider call: off-screen relationships, and writing the groups the world
+names.
+
+The premise field is **separate from the world seed**, and that separation is the point —
+see the standing decision. Left blank, one is still written from the world and the cast.
+
+### `quick_build_existing_world` — Building on a world you already wrote
+
+The world seed disappears rather than greying out: a brief for a world nobody is going to
+write is a field whose text is silently discarded. The chosen world is attached to the
+campaign **before the build starts**, following the same rule the build uses for a world it
+writes itself — associate the moment the thing exists, so an interrupted build leaves a
+half-built campaign rather than loose parts.
 
 ### `building` — A build in progress
 
@@ -123,6 +149,11 @@ both exist. With no title yet, it writes one too.
 Where it happens, what is already true when it opens, and who is in it. Who's in it is a
 choice with a cost — the roster is what turn order walks — and everyone ready is the default,
 so an author who never touches it gets exactly what they got before.
+
+Below the form, the scenes already played: **newest first, numbered by position**, each with
+its beat count and the premise it opened on. The numbers therefore count down, which is what
+a reverse-chronological list of chapters looks like. Each row carries a delete that names
+what goes with it — see the standing decision.
 
 ### `scenes_write_in` — Writing a walk-on into the scene
 
