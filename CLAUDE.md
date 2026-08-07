@@ -186,13 +186,29 @@ things a markdown list can't do. Their shipped half is in `docs/completed-roadma
 things deliberately ruled out are the **Confirmed non-asks** project document, which is
 worth reading before building anything that looks obviously missing.
 
-**Labels describe the work; states describe who has it.** The only labels are
-**`frontend`** / **`backend`** — which never change, because a thing doesn't stop being
-frontend work — plus `design-inbox` for provenance. Anything you'd have to *remove* when
-the work changes hands is a state wearing a label, which is why there is no `deferred`
-(that is Backlog) and no `needs-design` (that is Designing). Milestones carry the
-sequencing the roadmap used to argue for — **Frontend rebuild** (the critical path; the
-app has no users until it lands), then **Authoring quality**, then **World simulation**.
+**Labels describe the work; states describe who has it.** The labels are
+**`frontend`** / **`backend`** / **`tech-debt`** — none of which ever change, because a
+thing doesn't stop being frontend work and debt doesn't stop being debt, it gets paid —
+plus `design-inbox` for provenance. Anything you'd have to *remove* when the work changes
+hands is a state wearing a label, which is why there is no `deferred` (that is Backlog)
+and no `needs-design` (that is Designing).
+
+Milestones carry the sequencing the roadmap used to argue for, and **alternate**: a
+tech-debt milestone before each product one, so the debt that gates a milestone is
+scheduled rather than remembered.
+
+| | |
+|---|---|
+| **Tech debt · before Frontend rebuild** | Debt users would pay for, before the milestone that gives the app users. |
+| **Frontend rebuild** | The critical path; the app has no users until it lands. |
+| **Tech debt · before Authoring quality** | Deliberately thin — an honest empty beats a padded one. |
+| **Authoring quality** | A6: the review panel and its gate. |
+| **Tech debt · before World simulation** | Guards, while the invariants are still small enough to state. |
+| **World simulation** | B11 → B10 → B12. |
+
+A tech-debt issue is **undesigned by definition** — nothing about the product changes, so
+there is nothing to draw. That is the one place issues get filed without a design pass,
+and it is still only on the author's ask.
 
 Some issues arrive from elsewhere. Design happens in a **normal Claude thread** — faster
 to iterate with, and it doesn't block this one. Its instructions are
