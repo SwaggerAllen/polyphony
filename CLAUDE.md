@@ -206,6 +206,12 @@ scheduled rather than remembered.
 | **Tech debt · before World simulation** | Guards, while the invariants are still small enough to state. |
 | **World simulation** | B11 → B10 → B12. |
 
+That table is the **argument**, not the roster. What each milestone is for is worth writing
+down; which ones exist is not, because a list here goes stale silently and nothing would say
+so. Read the current set off the project when it matters. (Linear sorts the tech-debt ones to
+the bottom today, so the displayed order is not the intended one until somebody drags them —
+the names carry the sequence in the meantime.)
+
 A tech-debt issue is **undesigned by definition** — nothing about the product changes, so
 there is nothing to draw. That is the one place issues get filed without a design pass,
 and it is still only on the author's ask.
