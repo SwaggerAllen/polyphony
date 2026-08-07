@@ -233,7 +233,13 @@ answers it differently — which is the test for whether a state earns its place
 | **Ready for dev** | **The queue. This is what you drain.** |
 | In Progress | You, now. |
 | Ready to merge | The author. A PR is open. (Linear's default `In Review`, renamed.) |
+| **Reconciling** | The design thread. Merged and deployed, being checked against what was asked for. **Never yours** — an issue here is one you have finished with. |
 | Done / Canceled | Nobody. A rejected proposal is **Canceled**, never Done. |
+
+**You never write Done.** A merged issue goes to Reconciling, and the design thread closes
+it from there or sends it back. That is deliberate: the person who wrote the argument is the
+only one positioned to tell that the paragraph which landed isn't the one they meant, and
+they cannot tell that from a PR — only from the served site after a merge.
 
 The `design-inbox` label is provenance — *this came from the design thread* — and is
 worth reading for context, but it is never the queue: a label doesn't move, and two
@@ -250,11 +256,25 @@ up any queued work, design-thread or not:
    column is the only place an unmerged PR is visible. If the Linear connector isn't
    attached to this session, say so and ask for the issue to be pasted rather than
    guessing at what's queued.
+
+   **Check the issue's relations before starting.** `blocked-by` means what it says. Two
+   open issues rewriting the same behaviors file is the one collision nothing here can
+   reconcile — a `rev` catches a base that moved, but not a second design landing in the
+   same section an hour later. If you find one and neither is marked, say so rather than
+   picking.
 2. **Drive** — for each issue with a `Drive:` line, `download_file_content` on that
    `fileId`, base64-decode it, and **check the byte count against Drive's `fileSize`**
    before doing anything with it. The transport is byte-exact when the design thread sets
    `disableConversionToGoogleType: true`; a size mismatch means it didn't, and the file
    is a Google Doc's idea of the file rather than the file.
+
+   Files are **named for their issue** and that is what tells you where they go:
+   `play-STR-123.md` → `docs/behaviors/play.md`, `polyphony-play-STR-123.html` →
+   `ux/polyphony-play.html`, `kit-additions-STR-123.css` → a fragment pasted into
+   `ux/polyphony-kit.css`. The ticket in the name is load-bearing: two issues can touch play,
+   and it also makes the link bidirectional, so a mistyped `fileId` is recoverable by name.
+   A revision keeps the same name and uploads a *new* file, so **most recent wins** — see
+   *A ticket that comes back*.
 3. **Check the base before applying anything.** For every `Base: <screen>.md rev <n>` line
    on the issue, compare it against the file in the repo. **Equal — apply cleanly. Higher
    in the repo — something moved while the design was being drawn**, and it will usually
@@ -276,16 +296,54 @@ up any queued work, design-thread or not:
    A new `### \`state\`` section obliges a storybook variation of the same name — `BehaviorsDocTest`
    fails while the two sets disagree, which is what stops the docs describing an app nobody
    can look at.
-6. **Close the loop in Linear**: open the PR, move the issue to **Ready to merge**, and
+6. **Hand it back in Linear**: open the PR, move the issue to **Ready to merge**, and
    comment with what landed and the commit. Say plainly if you didn't do part of it and
-   why. An issue that goes quiet is indistinguishable from one nobody read — and an issue
-   moved without a comment is a state change nobody can audit. The author merges; feedback
-   in scope comes back as **Ready for dev**, anything new is a **new issue**, and a merged
-   issue with nothing outstanding is **Done**.
+   why — and if you resolved an open question the issue left open, say what you decided,
+   because that resolution is now the design and a PR is not where the design lives. An
+   issue that goes quiet is indistinguishable from one nobody read, and an issue moved
+   without a comment is a state change nobody can audit.
 
-**Issues are for designed work.** A small fix — a wrong label, a broken state, a rename —
-happens right here and never gets an issue. That is the intended behaviour and it is
-precisely why behaviors docs carry a `rev`: the undesigned changes are the ones no ticket
+   Then you are done with it. The author merges, the issue goes to **Reconciling**, and
+   what happens next is the design thread's. It comes back to you or it doesn't.
+
+## A ticket that comes back
+
+An issue can return to **Ready for dev** from Reconciling, and it does not look different
+from a fresh one in the queue. Read it differently anyway — this is the one case where
+taking the issue at face value rebuilds the wrong thing.
+
+**The description still describes the original change.** Reconciling writes *comments*, not
+edits, because the argument in the description is what the merged work is being measured
+against and rewriting it would destroy the measurement. So on a returned ticket:
+
+- **The newest comment is the scope**, not the description. The description is context for
+  why the change exists; the comment is what is still missing. Building the description
+  again is the specific failure this section exists to prevent — it is work that was already
+  merged, and re-landing it will conflict with itself.
+- **Read every comment, oldest to newest.** Your own hand-back comment is in there, and so
+  is the reason the design thread disagreed with it. A ticket can round-trip more than once.
+- **`Base:` is stale by definition.** The rev it names is what the design was drawn against
+  *before* your first pass; the merged file is higher because you bumped it. Compare against
+  the file in the repo now and treat the difference as yours, not as somebody else's edit.
+- **Re-check Drive before reusing a `fileId`.** A revised artifact keeps the **same
+  ticket-scoped filename** and is a *new file* — Drive has no in-place edit — so the
+  `fileId` on the description may point at the version that was already landed. Most recent
+  upload of that name wins. If a comment says *reapply the fragment already named on this
+  issue*, that is exactly this: the file didn't change, the paste dropped something.
+
+The commonest return is not a missing feature but a missing **paragraph** — a standing
+decision that didn't land, a state named differently from the way the issue named it, copy
+that was argued for and then paraphrased. Those are cheap, and they are cheap only if you go
+looking for the comment rather than diffing the description.
+
+If the comment asks for something you have a reason not to do — the design can't work as
+drawn, or it contradicts something in `architecture.md` — say so on the issue and move it to
+**Designing**. Don't silently do a third thing.
+
+## Issues are for designed work
+
+A small fix — a wrong label, a broken state, a rename — happens right here and never gets an
+issue. That is the intended behaviour and it is precisely why behaviors docs carry a `rev`: the undesigned changes are the ones no ticket
 warns the design thread about, so the counter is the only thing that says the ground moved.
 
 **Never file an issue unless the author asks for one.** Not bugs, not findings, not work
