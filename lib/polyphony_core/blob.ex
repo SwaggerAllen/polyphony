@@ -63,7 +63,18 @@ defmodule PolyphonyCore.Blob do
     :"Elixir.Polyphony.Publication" => PolyphonyCore.Publication,
     :"Elixir.Polyphony.Core.Publication" => PolyphonyCore.Publication,
     :"Elixir.Polyphony.Content.CampaignConfig" => PolyphonyCore.Content.CampaignConfig,
-    :"Elixir.Polyphony.Core.Content.CampaignConfig" => PolyphonyCore.Content.CampaignConfig
+    :"Elixir.Polyphony.Core.Content.CampaignConfig" => PolyphonyCore.Content.CampaignConfig,
+
+    # A pending user packet is a whole `TurnPacket` in `packet_drafts.packet` — the moves
+    # and the self-state with it — so all three names moved when the aggregate did.
+    :"Elixir.Polyphony.TurnPacket" => PolyphonyCore.TurnPacket,
+    :"Elixir.Polyphony.TurnPacket.Move" => PolyphonyCore.TurnPacket.Move,
+    :"Elixir.Polyphony.TurnPacket.SelfState" => PolyphonyCore.TurnPacket.SelfState
+    #
+    # `Scene.Cast` moved in the same commit and is deliberately **not** here: it lives on
+    # a `SceneContext`, which only ever reaches `Context.Store` — ETS, holding live terms,
+    # wiped on restart and never serialized. An entry for it would be a guess, and a table
+    # of guesses is one nobody can audit against what is actually in a column.
   }
 
   @legacy_names Enum.map(@renames, fn {old, _} -> Atom.to_string(old) end)

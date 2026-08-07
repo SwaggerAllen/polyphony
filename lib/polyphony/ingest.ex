@@ -23,8 +23,8 @@ defmodule Polyphony.Ingest do
   """
 
   alias Polyphony.Ingest.{Segment, HeuristicSegmenter}
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
 
   defmodule ProposedParse do
     @moduledoc "A segmentation awaiting user confirmation (§13 `parse.proposed`)."

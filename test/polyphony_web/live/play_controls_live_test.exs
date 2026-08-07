@@ -4,7 +4,7 @@ defmodule PolyphonyWeb.PlayControlsLiveTest do
 
   alias Polyphony.App
   alias PolyphonyCore.TurnOrder
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
 
   setup :register_and_log_in_user
 

@@ -8,7 +8,7 @@ defmodule Polyphony.GenerationTest do
 
   alias Polyphony.Generation
   alias Polyphony.LLM.Stub
-  alias Polyphony.TurnPacket
+  alias PolyphonyCore.TurnPacket
 
   @messages [%{role: "user", content: "your turn"}]
 

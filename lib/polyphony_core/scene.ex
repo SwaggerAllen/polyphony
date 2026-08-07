@@ -1,4 +1,4 @@
-defmodule Polyphony.Scene do
+defmodule PolyphonyCore.Scene do
   @moduledoc """
   The Scene aggregate — arbiter of scene lifecycle and membership (§6.5).
 
@@ -13,7 +13,7 @@ defmodule Polyphony.Scene do
   replay. Generation lives in jobs that *produce* these commands.
   """
 
-  alias Polyphony.Commands.{
+  alias PolyphonyCore.Commands.{
     OpenScene,
     CloseScene,
     EnterCharacter,
@@ -47,7 +47,7 @@ defmodule Polyphony.Scene do
     IntroductionDismissed
   }
 
-  alias Polyphony.TurnPacket
+  alias PolyphonyCore.TurnPacket
 
   @type status :: :pending | :open | :closed
 

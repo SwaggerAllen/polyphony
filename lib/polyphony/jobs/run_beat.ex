@@ -24,7 +24,7 @@ defmodule Polyphony.Jobs.RunBeat do
 
   require Logger
 
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
   alias Polyphony.Context.Rebuild
   alias Polyphony.{App, Broadcast, Library}
   alias PolyphonyCore.Content

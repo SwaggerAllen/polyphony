@@ -37,7 +37,7 @@ defmodule Polyphony.Generation do
       passed through to the provider
   """
   @spec generate([Provider.message()], keyword()) ::
-          {:ok, Polyphony.TurnPacket.t()} | {:error, term()}
+          {:ok, PolyphonyCore.TurnPacket.t()} | {:error, term()}
   def generate(messages, opts \\ []) do
     provider = Keyword.get(opts, :provider, Provider.default())
     # Hint to structure-aware providers (e.g. the Mock) which shape to emit.

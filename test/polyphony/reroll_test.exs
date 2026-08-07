@@ -9,9 +9,9 @@ defmodule Polyphony.RerollTest do
 
   alias Polyphony.{App, Reroll}
   alias PolyphonyCore.{Packets, MembershipSet, Visibility}
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, CommitPacket}
   alias PolyphonyCore.Events.{ThoughtOccurred, SpeechUttered, PacketSuperseded}
   alias Polyphony.LLM.Mock
 

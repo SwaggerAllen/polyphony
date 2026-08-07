@@ -5,9 +5,9 @@ defmodule PolyphonyWeb.PlayMentionsLiveTest do
   alias Polyphony.{App, Library}
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, CommitPacket}
   alias Polyphony.Director.BeatOps
 
   setup :register_and_log_in_user

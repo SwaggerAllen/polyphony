@@ -7,7 +7,7 @@ defmodule Polyphony.Jobs.RunBeatCampaignModelTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.{App, Library, Repo}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Director.BeatOps
   alias PolyphonyCore.Events.TurnOrderDeclared
   alias Polyphony.Jobs.RunBeat

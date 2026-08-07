@@ -9,9 +9,9 @@ defmodule Polyphony.SerializationTest do
 
   alias Polyphony.App
   alias PolyphonyCore.{MembershipSet, Visibility}
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, CommitPacket}
   alias PolyphonyCore.Events.SpeechUttered
 
   defp stored(s), do: App |> Commanded.EventStore.stream_forward(s) |> Enum.map(& &1.data)

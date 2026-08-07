@@ -31,7 +31,7 @@ defmodule Polyphony.Context.Rebuild do
   alias Polyphony.Authoring.Effective
   alias PolyphonyCore.Content.CampaignConfig
   alias Polyphony.Context.PgvectorRetriever
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
   alias PolyphonyCore.Events.{CharacterEntered, SceneOpened}
 
   @doc """

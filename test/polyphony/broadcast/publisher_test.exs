@@ -7,10 +7,10 @@ defmodule Polyphony.Broadcast.PublisherTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.{App, Broadcast}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, CommitPacket}
   alias PolyphonyCore.Director.Commands.{OpenBeat, CloseBeat}
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
 
   defp collect(acc \\ []) do
     receive do

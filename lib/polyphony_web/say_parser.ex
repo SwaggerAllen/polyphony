@@ -13,7 +13,7 @@ defmodule PolyphonyWeb.SayParser do
 
   yields an aloud line and a private line addressed to Bram.
   """
-  alias Polyphony.TurnPacket.Move
+  alias PolyphonyCore.TurnPacket.Move
 
   # (whisper [to] NAME[, NAME…]: content) — dotall + case-insensitive; content is
   # non-greedy up to the closing paren.

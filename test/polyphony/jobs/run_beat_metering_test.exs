@@ -10,7 +10,7 @@ defmodule Polyphony.Jobs.RunBeatMeteringTest do
   alias Polyphony.Context.Store
   alias Polyphony.Costs.Ledger
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Jobs.RunBeat
 
   @mock "Elixir.Polyphony.LLM.Mock"

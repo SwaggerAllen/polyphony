@@ -23,8 +23,8 @@ defmodule PolyphonyWeb.WhoLiveTest do
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Authoring.CharacterSheet.Fact
-  alias Polyphony.Commands.{CommitPacket, EnterCharacter, OpenScene}
-  alias Polyphony.TurnPacket
+  alias PolyphonyCore.Commands.{CommitPacket, EnterCharacter, OpenScene}
+  alias PolyphonyCore.TurnPacket
 
   setup :register_and_log_in_user
 

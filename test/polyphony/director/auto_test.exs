@@ -17,7 +17,7 @@ defmodule Polyphony.Director.AutoTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.{App, Repo}
-  alias Polyphony.Commands.{CloseScene, EnterCharacter, ExitCharacter, OpenScene}
+  alias PolyphonyCore.Commands.{CloseScene, EnterCharacter, ExitCharacter, OpenScene}
   alias Polyphony.Director.Auto
 
   setup do

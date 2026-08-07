@@ -5,11 +5,11 @@ defmodule Polyphony.SceneTest do
   """
   use ExUnit.Case, async: true
 
-  alias Polyphony.Scene
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.Scene
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
 
-  alias Polyphony.Commands.{
+  alias PolyphonyCore.Commands.{
     OpenScene,
     CloseScene,
     EnterCharacter,

@@ -19,7 +19,7 @@ defmodule PolyphonyWeb.CampaignEndingLiveTest do
   alias Polyphony.{App, Campaigns, Library}
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{EnterCharacter, OpenScene}
+  alias PolyphonyCore.Commands.{EnterCharacter, OpenScene}
   alias Polyphony.Authoring.ArcEntry, as: ArcProposal
   alias Polyphony.ReadModels.{ArcEntry, Membership}
   alias Polyphony.Repo

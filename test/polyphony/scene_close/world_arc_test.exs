@@ -9,9 +9,9 @@ defmodule Polyphony.SceneClose.WorldArcTest do
   alias Polyphony.{App, Repo, SceneClose, Library, Costs}
   alias Polyphony.ReadModels.ArcEntry
   alias Polyphony.LLM.{Mock, Stub}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, CommitPacket}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)

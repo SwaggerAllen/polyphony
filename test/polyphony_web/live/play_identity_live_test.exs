@@ -31,7 +31,7 @@ defmodule PolyphonyWeb.PlayIdentityLiveTest do
   alias Polyphony.Owner
   alias PolyphonyCore.Packets
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
   alias PolyphonyCore.Events.SpeechUttered
   alias Polyphony.Director.BeatOps
 

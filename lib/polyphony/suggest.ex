@@ -28,7 +28,7 @@ defmodule Polyphony.Suggest do
   Options: `:context` (the character's `SceneContext`), `:live_events` (raw —
   filtered here), `:members`, `:count` (default 3), `:steer`, `:provider`.
   """
-  @spec variants(keyword() | map()) :: {:ok, [Polyphony.TurnPacket.t()]} | {:error, term()}
+  @spec variants(keyword() | map()) :: {:ok, [PolyphonyCore.TurnPacket.t()]} | {:error, term()}
   def variants(opts) do
     opts = Map.new(opts)
     ctx = fetch_context!(opts)

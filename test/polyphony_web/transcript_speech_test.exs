@@ -18,7 +18,7 @@ defmodule PolyphonyWeb.TranscriptSpeechTest do
 
   import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
 
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
   alias PolyphonyWeb.Transcript
 
   defp move(kind, payload), do: %{kind: kind, payload: payload}

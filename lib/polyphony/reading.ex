@@ -176,7 +176,7 @@ defmodule Polyphony.Reading do
   @doc """
   The perspective badge: *As Halden* for a character, *All N* for omniscient.
 
-  `names` maps character id to display name — `Polyphony.Scene.Cast`'s job everywhere
+  `names` maps character id to display name — `PolyphonyCore.Scene.Cast`'s job everywhere
   else, and passed in here for the same reason: this module routes by id and never
   stores a name.
   """

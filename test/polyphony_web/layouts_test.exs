@@ -131,7 +131,10 @@ defmodule PolyphonyWeb.LayoutsTest do
 
   defp open_scene do
     scene = "shell-" <> Integer.to_string(System.unique_integer([:positive]))
-    :ok = Polyphony.App.dispatch(%Polyphony.Commands.OpenScene{scene_id: scene, opened_beat: 0})
+
+    :ok =
+      Polyphony.App.dispatch(%PolyphonyCore.Commands.OpenScene{scene_id: scene, opened_beat: 0})
+
     scene
   end
 

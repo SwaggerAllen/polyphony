@@ -13,7 +13,7 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Owner
   alias Polyphony.Permissions
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
 
   alias Polyphony.Authoring.{
     CharacterSheet,

@@ -12,9 +12,9 @@ defmodule Polyphony.SceneClose.HandlerTest do
   alias Polyphony.SceneClose.Handler
   alias PolyphonyCore.Events.SceneClosed
   alias Polyphony.Jobs.{SummarizeScene, ExtractArc}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket, CloseScene}
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, CommitPacket, CloseScene}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)

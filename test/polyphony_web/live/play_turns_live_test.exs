@@ -4,9 +4,9 @@ defmodule PolyphonyWeb.PlayTurnsLiveTest do
 
   alias Polyphony.App
   alias PolyphonyCore.Packets
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, CommitPacket}
   alias Polyphony.Director.BeatOps
   alias PolyphonyCore.Events.{SpeechUttered, ThoughtOccurred, ActionTaken}
 

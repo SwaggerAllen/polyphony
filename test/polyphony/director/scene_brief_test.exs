@@ -8,9 +8,9 @@ defmodule Polyphony.Director.SceneBriefTest do
   alias Polyphony.{App, Library, Repo}
   alias Polyphony.Authoring.{WorldBible, CharacterSheet}
   alias Polyphony.Director.SceneBrief
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, CommitPacket}
   alias Polyphony.Context.PgvectorRetriever
   alias Polyphony.Director.BeatOps
   alias Polyphony.ReadModels.SceneSummary

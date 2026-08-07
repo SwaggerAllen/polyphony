@@ -14,12 +14,12 @@ defmodule Polyphony.ReadingSessionTest do
 
   alias Polyphony.{App, Repo}
   alias PolyphonyCore.Publication
-  alias Polyphony.Commands.{CommitPacket, EnterCharacter, OpenScene}
+  alias PolyphonyCore.Commands.{CommitPacket, EnterCharacter, OpenScene}
   alias Polyphony.Library.Snapshot
   alias Polyphony.Reading
   alias Polyphony.Reading.Session
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
 
   @halden "c-halden"
   @ruthe "c-ruthe"

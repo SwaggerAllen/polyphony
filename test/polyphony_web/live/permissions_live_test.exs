@@ -145,7 +145,7 @@ defmodule PolyphonyWeb.PermissionsLiveTest do
       scene = "sc-" <> Integer.to_string(System.unique_integer([:positive]))
 
       :ok =
-        Polyphony.App.dispatch(%Polyphony.Commands.OpenScene{
+        Polyphony.App.dispatch(%PolyphonyCore.Commands.OpenScene{
           scene_id: scene,
           campaign_id: camp.id,
           opened_beat: 0
@@ -174,7 +174,7 @@ defmodule PolyphonyWeb.PermissionsLiveTest do
       scene = "sc-" <> Integer.to_string(System.unique_integer([:positive]))
 
       :ok =
-        Polyphony.App.dispatch(%Polyphony.Commands.OpenScene{
+        Polyphony.App.dispatch(%PolyphonyCore.Commands.OpenScene{
           scene_id: scene,
           campaign_id: camp.id,
           opened_beat: 0

@@ -118,6 +118,32 @@ defmodule PolyphonyCore.BlobTest do
       assert %CampaignConfig{graphic_violence: true} = decoded.content_config
     end
 
+    test "a pending draft written before the aggregate moved still opens" do
+      # `packet_drafts.packet` is a whole `TurnPacket`, so all three names moved together.
+      # A draft is somebody's half-written turn — losing one is losing their work.
+      packet = %{
+        __struct__: :"Elixir.Polyphony.TurnPacket",
+        moves: [
+          %{
+            __struct__: :"Elixir.Polyphony.TurnPacket.Move",
+            seq: 1,
+            type: :speech,
+            content: "psst",
+            addressed_to: ["ilias"],
+            audibility: :private
+          }
+        ],
+        self_state: %{__struct__: :"Elixir.Polyphony.TurnPacket.SelfState", mood_felt: "wary"}
+      }
+
+      decoded = Blob.decode(:erlang.term_to_binary(packet))
+
+      assert %PolyphonyCore.TurnPacket{
+               moves: [%PolyphonyCore.TurnPacket.Move{audibility: :private, content: "psst"}],
+               self_state: %PolyphonyCore.TurnPacket.SelfState{mood_felt: "wary"}
+             } = decoded
+    end
+
     test "a legacy struct inside a list inside a struct is reached" do
       inner = %{__struct__: :"Elixir.Polyphony.Publication", perspectives: ["mira"]}
       bin = :erlang.term_to_binary(%{scenes: [%{pubs: [inner]}]})

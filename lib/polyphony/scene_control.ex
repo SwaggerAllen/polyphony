@@ -15,7 +15,7 @@ defmodule Polyphony.SceneControl do
   """
 
   alias Polyphony.App
-  alias Polyphony.Commands.{EnterCharacter, ExitCharacter}
+  alias PolyphonyCore.Commands.{EnterCharacter, ExitCharacter}
   alias Polyphony.Jobs.RunBeat
 
   @doc """

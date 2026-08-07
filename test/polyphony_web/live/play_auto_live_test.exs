@@ -13,7 +13,7 @@ defmodule PolyphonyWeb.PlayAutoLiveTest do
   alias Polyphony.{App, Library}
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{EnterCharacter, ExitCharacter, OpenScene}
+  alias PolyphonyCore.Commands.{EnterCharacter, ExitCharacter, OpenScene}
   alias Polyphony.Director.{Auto, BeatOps}
   alias PolyphonyCore.Events.SpeechUttered
 

@@ -1,4 +1,4 @@
-defmodule Polyphony.TurnPacket do
+defmodule PolyphonyCore.TurnPacket do
   @moduledoc """
   A character's turn (§6.4) — the unit a character emits per beat, before it is
   decomposed into individual events by the Scene aggregate.

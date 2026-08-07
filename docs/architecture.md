@@ -21,13 +21,17 @@ nothing in it may call the rest of the application. The event vocabulary
 (`PolyphonyCore.Events`) lives there too, because the core is the rules *over* the log and
 cannot be a leaf without the shapes of the facts it reasons about. `PolyphonyCoreTest`
 holds the namespace to a wider floor than the compiler can see — no repo, event store,
-provider, PubSub, mail, files, processes or ETS — walking the call graph per function.
+provider, PubSub, mail, files, processes or ETS — walking the call graph per function, and
+to a second **replay** floor of clocks, randomness and generated ids, which are effects
+by no ordinary definition and make a rebuilt stream disagree with the one it rebuilt from.
 
 `PolyphonyCore` **mirrors the shell's subsystems** rather than being a flat bag:
 `PolyphonyCore.Director.*` is the Beat aggregate, its commands and its policy, while
 `Polyphony.Director.*` is the driver and the ops, which read. That is what settles
 invariant 2 — an aggregate is replayed, so a provider call inside one would rebuild the
-same log into a different story, and `deps: []` makes it a compile error.
+same log into a different story, and `deps: []` makes it a compile error. It settles it
+for **both** aggregates: `PolyphonyCore.Scene` moved in with the data it arbitrates over
+(`Commands`, `TurnPacket`, `Scene.Cast`), each measured clean at every floor first.
 
 The rest: `visible_to?/3` decides whether
 one event reaches one viewer, and `project/3` filters a stream. The **same
@@ -86,7 +90,7 @@ the transport can never leak more than the projection.
 
 ## 4. The Scene aggregate
 
-`Polyphony.Scene` owns lifecycle and membership (the facts that change what everyone
+`PolyphonyCore.Scene` owns lifecycle and membership (the facts that change what everyone
 can witness), and decomposes a committed `TurnPacket` into typed move events (§6.4).
 State it folds: `members`, `committed_packets` (idempotency), `superseded_packets`
 (canonical filter), `forked_from`.

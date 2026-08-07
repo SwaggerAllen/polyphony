@@ -3,7 +3,7 @@ defmodule Polyphony.Generation.PacketSchemaTest do
   use ExUnit.Case, async: true
 
   alias Polyphony.Generation.PacketSchema
-  alias Polyphony.TurnPacket
+  alias PolyphonyCore.TurnPacket
 
   defp valid_moves,
     do: [%{"seq" => 1, "type" => "thought", "content" => "hmm"}]

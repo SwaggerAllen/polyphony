@@ -15,10 +15,10 @@ defmodule Polyphony.PersistentEventStoreTest do
   @moduletag :event_store
 
   alias Polyphony.PersistentApp
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, CommitPacket}
   alias PolyphonyCore.Events.{SceneOpened, CharacterEntered, ThoughtOccurred, SpeechUttered}
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
 
   @schema "eventstore_test"
 

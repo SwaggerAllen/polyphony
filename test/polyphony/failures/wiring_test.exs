@@ -9,7 +9,7 @@ defmodule Polyphony.Failures.WiringTest do
   alias Polyphony.Context.Store
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.ReadModels.Failure
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Jobs.RunBeat
 
   # Casts everyone for the beat, but refuses every character generation.

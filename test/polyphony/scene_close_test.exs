@@ -9,9 +9,9 @@ defmodule Polyphony.SceneCloseTest do
   alias Polyphony.{App, Repo, SceneClose}
   alias Polyphony.ReadModels.{SceneSummary, ArcEntry}
   alias Polyphony.SceneClose.MockEmbedder
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, CommitPacket}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)

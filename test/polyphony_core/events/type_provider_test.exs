@@ -90,8 +90,11 @@ defmodule PolyphonyCore.Events.TypeProviderTest do
   test "a struct that is not an event falls back to its module name" do
     # Snapshots and process-manager state go through the same provider. This app uses
     # neither, and a provider that raised would make enabling one fail somewhere strange.
-    assert TypeProvider.to_string(%Polyphony.TurnPacket{}) == "Elixir.Polyphony.TurnPacket"
-    assert TypeProvider.to_struct("Elixir.Polyphony.TurnPacket") == %Polyphony.TurnPacket{}
+    assert TypeProvider.to_string(%PolyphonyCore.TurnPacket{}) ==
+             "Elixir.PolyphonyCore.TurnPacket"
+
+    assert TypeProvider.to_struct("Elixir.PolyphonyCore.TurnPacket") ==
+             %PolyphonyCore.TurnPacket{}
   end
 
   describe "stored bytes" do

@@ -21,7 +21,7 @@ defmodule Polyphony.AggregatePurityTest do
 
   alias Polyphony.Test.Purity
 
-  @aggregates [Polyphony.Scene, PolyphonyCore.Director.Beat]
+  @aggregates [PolyphonyCore.Scene, PolyphonyCore.Director.Beat]
 
   defp callbacks(module) do
     module.module_info(:exports)

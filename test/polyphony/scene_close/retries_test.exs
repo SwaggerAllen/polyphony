@@ -11,9 +11,9 @@ defmodule Polyphony.SceneClose.RetriesTest do
   alias Polyphony.LLM.{Mock, Stub}
   alias Polyphony.SceneClose.MockEmbedder
   alias Polyphony.Jobs.{SummarizeScene, ExtractArc}
-  alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
-  alias Polyphony.TurnPacket
-  alias Polyphony.TurnPacket.{Move, SelfState}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter, CommitPacket}
+  alias PolyphonyCore.TurnPacket
+  alias PolyphonyCore.TurnPacket.{Move, SelfState}
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)

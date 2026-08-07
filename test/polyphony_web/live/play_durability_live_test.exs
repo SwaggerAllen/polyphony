@@ -28,7 +28,7 @@ defmodule PolyphonyWeb.PlayDurabilityLiveTest do
   alias Polyphony.{App, Generations, Library, SceneControl}
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
+  alias PolyphonyCore.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
   alias Polyphony.Director.BeatOps
   alias PolyphonyCore.Events.{SpeechUttered, ThoughtOccurred}
 

@@ -24,7 +24,7 @@ defmodule PolyphonyWeb.NavReachTest do
   alias Polyphony.{Library, Reading}
   alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, Group, WorldBible}
-  alias Polyphony.Commands.OpenScene
+  alias PolyphonyCore.Commands.OpenScene
 
   setup :register_and_log_in_user
 

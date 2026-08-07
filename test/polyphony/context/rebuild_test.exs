@@ -12,7 +12,7 @@ defmodule Polyphony.Context.RebuildTest do
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Authoring.{ArcEntry, WorldArcEntry}
   alias Polyphony.ReadModels.ArcEntry, as: ArcRM
-  alias Polyphony.Commands.{OpenScene, EnterCharacter}
+  alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Director.BeatOps
 
   setup do

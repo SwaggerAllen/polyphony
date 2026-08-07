@@ -15,7 +15,7 @@ defmodule PolyphonyWeb.PlayLive do
   This view is **id-native**. Everything that routes — the viewer, the roster, the
   speaker, control modes, packet ids, whisper addressees — is a stable character id
   (the library entry's id, minted at `EnterCharacter`). Everything a person reads or
-  types is a display name, resolved through `Polyphony.Scene.Cast` at the edge:
+  types is a display name, resolved through `PolyphonyCore.Scene.Cast` at the edge:
   `render_name/2` on the way out, `resolve_addressees/2` on the way in, immediately
   before `CommitPacket`.
 
@@ -39,7 +39,7 @@ defmodule PolyphonyWeb.PlayLive do
   alias Polyphony.Edit
   alias Polyphony.Generations
   alias Polyphony.Permissions
-  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Scene.Cast
   alias PolyphonyWeb.Play.Strip
   alias PolyphonyWeb.Screens.Play
   alias PolyphonyWeb.Voice
@@ -47,7 +47,7 @@ defmodule PolyphonyWeb.PlayLive do
   alias Polyphony.DebugTap
   alias Polyphony.Director.{BeatOps, SceneBrief}
 
-  alias Polyphony.Commands.{
+  alias PolyphonyCore.Commands.{
     CommitPacket,
     DeclareTurnOrder,
     EnterCharacter,
@@ -69,7 +69,7 @@ defmodule PolyphonyWeb.PlayLive do
     WorldEventOccurred
   }
 
-  alias Polyphony.TurnPacket
+  alias PolyphonyCore.TurnPacket
   alias PolyphonyWeb.TurnEdit
 
   def mount(%{"scene_id" => scene_id}, _session, socket) do

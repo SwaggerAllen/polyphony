@@ -6,7 +6,7 @@ defmodule Polyphony.SuggestTest do
   alias Polyphony.{Context, Suggest}
   alias Polyphony.LLM.Mock
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.TurnPacket
+  alias PolyphonyCore.TurnPacket
 
   defp context do
     sheet = %CharacterSheet{name: "You", premise: "The user's character.", voice: "plain"}
