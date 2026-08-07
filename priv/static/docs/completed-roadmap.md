@@ -687,7 +687,7 @@ of field as one: setting and tone are prose with Rewrite and Expand; rules and w
 are **items** with their own menu — secret, move up, delete. The old editor made both stacks of
 textareas, which is exactly why reordering and the secret control had nowhere to live.
 
-**The preview renders through the same filter the context path uses** (`WorldBible.for_character/1`),
+**The preview renders through the same filter the context path uses** (`Authoring.Knowledge.for_character/3`),
 not a second implementation of "what a character sees" — that's how a preview ends up telling you
 something reassuring that isn't true. It's read-only per §3.2, and it says how much is held back
 without saying what. There's no per-character list yet, and there shouldn't be: without audiences

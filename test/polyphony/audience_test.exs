@@ -23,6 +23,7 @@ defmodule Polyphony.AudienceTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.{Context, Groups, Library, Repo}
+  alias Polyphony.Authoring.Knowledge
   alias Polyphony.Owner
   alias Polyphony.Authoring.{Audience, CharacterSheet, Group, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.Fact
@@ -54,8 +55,8 @@ defmodule Polyphony.AudienceTest do
   describe "the default" do
     test "nobody, and a payload written before audiences existed reads the same way" do
       assert Audience.empty?(Audience.empty())
-      assert Audience.resolve(nil) == []
-      refute Audience.knows?(nil, "anyone")
+      assert Knowledge.resolve(nil) == []
+      refute Knowledge.knows?(nil, "anyone")
       assert Audience.summary(nil) == "nobody knows"
     end
   end
@@ -76,7 +77,7 @@ defmodule Polyphony.AudienceTest do
         |> Audience.add_group(group.id)
         |> Audience.add_character(corrigan.id)
 
-      resolved = Audience.resolve(audience)
+      resolved = Knowledge.resolve(audience)
 
       assert Enum.sort(resolved) ==
                Enum.sort(Enum.map([sable.id, bellman.id, corrigan.id], &to_string/1))
@@ -88,14 +89,14 @@ defmodule Polyphony.AudienceTest do
       sable = character(owner, "Sable Quist")
       audience = Audience.add_group(Audience.empty(), group.id)
 
-      refute Audience.knows?(audience, sable.id)
+      refute Knowledge.knows?(audience, sable.id)
 
       # The load-bearing one: written into the Tidewatch later, and now they know.
       {:ok, _} = Groups.add_member(group.id, sable.id)
-      assert Audience.knows?(audience, sable.id)
+      assert Knowledge.knows?(audience, sable.id)
 
       {:ok, _} = Groups.remove_member(group.id, sable.id)
-      refute Audience.knows?(audience, sable.id)
+      refute Knowledge.knows?(audience, sable.id)
     end
 
     test "an empty group is not an error — it's how you set a trap first" do
@@ -103,12 +104,12 @@ defmodule Polyphony.AudienceTest do
       audience = Audience.add_group(Audience.empty(), tidewatch(owner).id)
 
       refute Audience.empty?(audience)
-      assert Audience.resolve(audience) == []
+      assert Knowledge.resolve(audience) == []
     end
 
     test "the owner always knows, whether or not anyone ticked them" do
-      assert Audience.knows?(Audience.empty(), "wren", owner: "wren")
-      assert "wren" in Audience.resolve(nil, owner: "wren")
+      assert Knowledge.knows?(Audience.empty(), "wren", owner: "wren")
+      assert "wren" in Knowledge.resolve(nil, owner: "wren")
     end
 
     test "nobody is named twice, however many ways they got in" do
@@ -120,7 +121,7 @@ defmodule Polyphony.AudienceTest do
       audience =
         Audience.empty() |> Audience.add_group(group.id) |> Audience.add_character(sable.id)
 
-      assert Audience.resolve(audience, owner: sable.id) == [to_string(sable.id)]
+      assert Knowledge.resolve(audience, owner: sable.id) == [to_string(sable.id)]
     end
   end
 
@@ -142,10 +143,10 @@ defmodule Polyphony.AudienceTest do
       {:ok, _} = Groups.add_member(group.id, sable.id)
 
       a = Audience.toggle_group(Audience.empty(), group.id)
-      assert Audience.knows?(a, sable.id)
+      assert Knowledge.knows?(a, sable.id)
 
       a = Audience.toggle_group(a, group.id)
-      refute Audience.knows?(a, sable.id)
+      refute Knowledge.knows?(a, sable.id)
     end
 
     test "named/1 separates a solid tick from an inherited one" do
@@ -156,7 +157,7 @@ defmodule Polyphony.AudienceTest do
 
       inherited = Audience.add_group(Audience.empty(), group.id)
       assert Audience.named(inherited) == []
-      assert Audience.knows?(inherited, sable.id)
+      assert Knowledge.knows?(inherited, sable.id)
 
       # There is no way to un-tick an inherited one, which is what "no exceptions" costs.
       assert Audience.remove_character(inherited, sable.id) == inherited
@@ -216,8 +217,8 @@ defmodule Polyphony.AudienceTest do
     test "a stranger sees no secret at all — default-deny, and §3.2's unassigned viewer" do
       bible = %WorldBible{starting_canon: [%Entry{statement: @bell, concealed: true}]}
 
-      assert WorldBible.statements(WorldBible.for_character(bible).starting_canon) == []
-      assert WorldBible.known_to(bible.starting_canon, nil) == []
+      assert WorldBible.statements(Knowledge.for_character(bible).starting_canon) == []
+      assert Knowledge.known_to(bible.starting_canon, nil) == []
     end
   end
 

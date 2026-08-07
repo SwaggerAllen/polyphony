@@ -54,6 +54,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
   import PolyphonyWeb.BlockField
 
   alias Polyphony.{Campaigns, Characters, Groups, Library, Repo}
+  alias Polyphony.Authoring.Knowledge
   alias Polyphony.Owner
   alias Polyphony.Authoring.{Audience, CharacterSheet, Stub, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.{Boundary, Fact, Relationship}
@@ -961,7 +962,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
           source = knowledge_source(entry),
           do: source
 
-    assign(socket, knows: Audience.known_by(me, sources))
+    assign(socket, knows: Knowledge.known_by(me, sources))
   end
 
   defp knowledge_source(entry) do
@@ -1334,7 +1335,7 @@ defmodule PolyphonyWeb.SheetEditorLive do
        when is_integer(i) do
     case Enum.at(facts, i) do
       nil -> []
-      fact -> Audience.resolve(fact.audience, owner: entry.id)
+      fact -> Knowledge.resolve(fact.audience, owner: entry.id)
     end
   end
 

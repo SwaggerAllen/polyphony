@@ -118,7 +118,7 @@ defmodule Polyphony.Director.SceneBrief do
   @spec messages(term(), [term()], keyword()) :: [%{role: String.t(), content: String.t()}]
   def messages(scene_id, members, opts \\ []) do
     # Translate stored character ids → display names for the Director (§5.2).
-    cast = Cast.for_scene(scene_id)
+    cast = Rebuild.cast_for(scene_id)
 
     user =
       [

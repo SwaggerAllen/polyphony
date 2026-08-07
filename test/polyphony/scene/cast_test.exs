@@ -3,6 +3,7 @@ defmodule Polyphony.Scene.CastTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.{App, Library, Repo}
+  alias Polyphony.Context.Rebuild
   alias Polyphony.Scene.Cast
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
@@ -27,7 +28,7 @@ defmodule Polyphony.Scene.CastTest do
     :ok = App.dispatch(%OpenScene{scene_id: scene, campaign_id: campaign.id, opened_beat: 0})
     :ok = App.dispatch(%EnterCharacter{scene_id: scene, character_id: id, beat: 1})
 
-    cast = Cast.for_scene(scene)
+    cast = Rebuild.cast_for(scene)
     assert Cast.render_name(cast, id) == "Mira"
     assert Cast.resolve_id(cast, "Mira") == id
   end
@@ -50,7 +51,7 @@ defmodule Polyphony.Scene.CastTest do
 
     Library.update_payload(mira.id, %CharacterSheet{name: "Miranda", status: :full})
 
-    cast = Cast.for_scene(scene)
+    cast = Rebuild.cast_for(scene)
     # Same stable id; the display name now follows the sheet.
     assert Cast.render_name(cast, id) == "Miranda"
     assert Cast.resolve_id(cast, "Miranda") == id
@@ -60,7 +61,7 @@ defmodule Polyphony.Scene.CastTest do
     scene = "cast-" <> Integer.to_string(System.unique_integer([:positive]))
     :ok = App.dispatch(%OpenScene{scene_id: scene, opened_beat: 0})
 
-    cast = Cast.for_scene(scene)
+    cast = Rebuild.cast_for(scene)
     assert Cast.render_name(cast, "whoever") == "whoever"
     assert Cast.resolve_id(cast, "Nobody") == "Nobody"
   end

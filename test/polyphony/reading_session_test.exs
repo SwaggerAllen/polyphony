@@ -16,6 +16,7 @@ defmodule Polyphony.ReadingSessionTest do
   alias PolyphonyCore.Publication
   alias Polyphony.Commands.{CommitPacket, EnterCharacter, OpenScene}
   alias Polyphony.Library.Snapshot
+  alias Polyphony.Reading
   alias Polyphony.Reading.Session
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
@@ -94,8 +95,8 @@ defmodule Polyphony.ReadingSessionTest do
       scene = stair()
       snap = snapshot(scene, %{perspectives: [@halden, @ruthe]})
 
-      {:ok, as_halden} = Session.scene(snap, scene, {:character, @halden})
-      {:ok, as_ruthe} = Session.scene(snap, scene, {:character, @ruthe})
+      {:ok, as_halden} = Reading.scene(snap, scene, {:character, @halden})
+      {:ok, as_ruthe} = Reading.scene(snap, scene, {:character, @ruthe})
 
       assert "He does not know. He has not known." in texts(as_halden)
       refute "Eleven years she has had the answer ready." in texts(as_halden)
@@ -108,8 +109,8 @@ defmodule Polyphony.ReadingSessionTest do
       scene = stair()
       snap = snapshot(scene, %{perspectives: [@halden, @ruthe]})
 
-      {:ok, as_halden} = Session.scene(snap, scene, {:character, @halden})
-      {:ok, as_ruthe} = Session.scene(snap, scene, {:character, @ruthe})
+      {:ok, as_halden} = Reading.scene(snap, scene, {:character, @halden})
+      {:ok, as_ruthe} = Reading.scene(snap, scene, {:character, @ruthe})
 
       assert "Say nothing to her." in texts(as_halden)
       refute "Say nothing to her." in texts(as_ruthe)
@@ -120,7 +121,7 @@ defmodule Polyphony.ReadingSessionTest do
       snap = snapshot(scene, %{perspectives: [@halden, @ruthe]})
 
       for mode <- [{:character, @halden}, {:character, @ruthe}, :spectator, :limited] do
-        {:ok, events} = Session.scene(snap, scene, mode)
+        {:ok, events} = Reading.scene(snap, scene, mode)
 
         assert "I know you're there." in texts(events),
                "aloud speech missing from #{inspect(mode)}"
@@ -133,7 +134,7 @@ defmodule Polyphony.ReadingSessionTest do
       scene = stair()
       snap = snapshot(scene, %{perspectives: [@halden, @ruthe]})
 
-      {:ok, events} = Session.scene(snap, scene, :limited)
+      {:ok, events} = Reading.scene(snap, scene, :limited)
 
       assert "He does not know. He has not known." in texts(events)
       assert "Eleven years she has had the answer ready." in texts(events)
@@ -143,7 +144,7 @@ defmodule Polyphony.ReadingSessionTest do
       scene = stair()
       only_halden = snapshot(scene, %{perspectives: [@halden], spectator: false})
 
-      {:ok, events} = Session.scene(only_halden, scene, {:character, @halden})
+      {:ok, events} = Reading.scene(only_halden, scene, {:character, @halden})
 
       refute "Eleven years she has had the answer ready." in texts(events)
     end
@@ -154,7 +155,7 @@ defmodule Polyphony.ReadingSessionTest do
       scene = stair()
       snap = snapshot(scene, %{perspectives: [@halden, @ruthe]})
 
-      {:ok, events} = Session.scene(snap, scene, :spectator)
+      {:ok, events} = Reading.scene(snap, scene, :spectator)
       said = texts(events)
 
       assert "I know you're there." in said
@@ -171,18 +172,18 @@ defmodule Polyphony.ReadingSessionTest do
       snap = snapshot(scene, %{perspectives: [@halden]})
 
       # Ruthe is in the story. Her head was kept back.
-      assert {:error, :not_offered} = Session.scene(snap, scene, {:character, @ruthe})
+      assert {:error, :not_offered} = Reading.scene(snap, scene, {:character, @ruthe})
       # Someone who isn't in it at all, likewise.
-      assert {:error, :not_offered} = Session.scene(snap, scene, {:character, @ada})
+      assert {:error, :not_offered} = Reading.scene(snap, scene, {:character, @ada})
     end
 
     test "a snapshot published before perspectives existed reads as spectator only" do
       scene = stair()
       snap = snapshot(scene, nil)
 
-      assert {:ok, events} = Session.scene(snap, scene, :spectator)
+      assert {:ok, events} = Reading.scene(snap, scene, :spectator)
       refute "He does not know. He has not known." in texts(events)
-      assert {:error, :not_offered} = Session.scene(snap, scene, {:character, @halden})
+      assert {:error, :not_offered} = Reading.scene(snap, scene, {:character, @halden})
     end
   end
 

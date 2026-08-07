@@ -27,6 +27,7 @@ defmodule Polyphony.WorldSecretsTest do
   use ExUnit.Case, async: true
 
   alias Polyphony.{Context, Director}
+  alias Polyphony.Authoring.Knowledge
   alias Polyphony.Authoring.{CharacterSheet, WorldBible, WorldArcEntry, EffectiveWorldBible}
   alias Polyphony.Authoring.WorldBible.Entry
 
@@ -136,7 +137,7 @@ defmodule Polyphony.WorldSecretsTest do
     end
 
     test "for_character/1 is the same filter, so a preview shows what a prompt gets" do
-      previewed = WorldBible.for_character(bible())
+      previewed = Knowledge.for_character(bible())
 
       assert WorldBible.statements(previewed.starting_canon) == [@public]
 

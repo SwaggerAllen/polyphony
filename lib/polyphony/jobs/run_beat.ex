@@ -25,6 +25,7 @@ defmodule Polyphony.Jobs.RunBeat do
   require Logger
 
   alias Polyphony.Scene.Cast
+  alias Polyphony.Context.Rebuild
   alias Polyphony.{App, Broadcast, Library}
   alias PolyphonyCore.Content
   alias PolyphonyCore.Content.CampaignConfig
@@ -211,7 +212,7 @@ defmodule Polyphony.Jobs.RunBeat do
     # (§5.2 phase 2b-render) — so its picks come back as names. Resolve them to
     # character ids before they become the beat's declared turn order, because the
     # walk, packet ids and membership guards all key on ids.
-    cast = Cast.for_scene(scene_id)
+    cast = Rebuild.cast_for(scene_id)
     members = BeatOps.members_now(scene_id, beat)
 
     {cast_ids, uncast} =

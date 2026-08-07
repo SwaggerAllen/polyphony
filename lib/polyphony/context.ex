@@ -24,11 +24,12 @@ defmodule Polyphony.Context do
       the live events, so the cached portion cannot drift turn to turn.
   """
 
-  alias Polyphony.Authoring.{Audience, WorldBible, CharacterSheet, BoundaryGate}
+  alias Polyphony.Authoring.{WorldBible, CharacterSheet, BoundaryGate}
+  alias Polyphony.Authoring.Knowledge
   alias Polyphony.Authoring.CharacterSheet.Boundary
   alias PolyphonyCore.Content
   alias PolyphonyCore.Content.CampaignConfig
-  alias Polyphony.Context.{SceneContext, StaticRetriever}
+  alias Polyphony.Context.{Rebuild, SceneContext, StaticRetriever}
   alias Polyphony.Scene.Cast
   alias PolyphonyCore.Visibility
 
@@ -175,7 +176,7 @@ defmodule Polyphony.Context do
 
     # Translate stored character ids → display names for the LLM (§5.2). Identity
     # fallback makes a name-keyed scene (tests / pre-migration) a no-op.
-    cast = Cast.for_scene(ctx.scene_id)
+    cast = Rebuild.cast_for(ctx.scene_id)
 
     live =
       opts
@@ -248,7 +249,7 @@ defmodule Polyphony.Context do
   defp render_recent_scenes(scenes, character_id) do
     Enum.map(scenes, fn %{scene_id: sid, events: events} ->
       # Each recent scene resolves names against its own cast (§5.2).
-      cast = Cast.for_scene(sid)
+      cast = Rebuild.cast_for(sid)
 
       body =
         events
@@ -269,8 +270,8 @@ defmodule Polyphony.Context do
   # would leak into a *prompt*, where nobody can see it happen. The Director reads the
   # unfiltered list, in `Director.SceneBrief`, because the Director is omniscient.
   defp render_bible(%WorldBible{} = b, character_id, opts) do
-    rules = WorldBible.known_to(b.rules, character_id, opts)
-    canon = WorldBible.known_to(b.starting_canon, character_id, opts)
+    rules = Knowledge.known_to(b.rules, character_id, opts)
+    canon = Knowledge.known_to(b.starting_canon, character_id, opts)
 
     [
       b.name && "World: #{b.name}",
@@ -323,7 +324,7 @@ defmodule Polyphony.Context do
     for {owner_id, %CharacterSheet{} = sheet} <- cast,
         to_string(owner_id) != me,
         %CharacterSheet.Fact{concealed: true} = fact <- sheet.facts || [],
-        Audience.knows?(fact.audience, me, Keyword.put(opts, :owner, owner_id)) do
+        Knowledge.knows?(fact.audience, me, Keyword.put(opts, :owner, owner_id)) do
       case sheet.name do
         n when is_binary(n) and n != "" -> "#{n}: #{fact.statement}"
         _ -> fact.statement

@@ -197,7 +197,7 @@ defmodule PolyphonyWeb.BrowseLive do
     gap = scene && Session.gap(snapshot, scene, mode)
 
     events =
-      case scene && gap == nil && Session.scene(snapshot, scene_id, mode) do
+      case scene && gap == nil && Reading.scene(snapshot, scene_id, mode) do
         {:ok, events} -> events
         _ -> []
       end

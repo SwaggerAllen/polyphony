@@ -9,6 +9,7 @@ defmodule PolyphonyWeb.CampaignLive do
   require Logger
 
   alias Polyphony.{Library, Context, App}
+  alias Polyphony.Authoring.Knowledge
   alias Polyphony.Owner
   alias Polyphony.Permissions
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
@@ -141,7 +142,7 @@ defmodule PolyphonyWeb.CampaignLive do
   # `group_ids` live, which is the whole reason a group is somewhere for a secret to
   # point rather than a list of names frozen at writing time.
   defp viewed_world(%{viewer: {:character, id}, world: world}),
-    do: WorldBible.for_character(world, id)
+    do: Knowledge.for_character(world, id)
 
   defp tab_param(tab) do
     if Enum.any?(Screens.Campaign.tabs(), fn {slug, _} -> slug == tab end),
