@@ -98,4 +98,113 @@ defmodule PolyphonyWeb.CampaignContentLiveTest do
     assert ctx.prefix =~ "Content register enabled"
     assert ctx.prefix =~ "intimacy: you will not — not until trust"
   end
+
+  describe "the ceiling reaches the sheet editor (§V8a)" do
+    defp blank_char(user), do: character(user, %CharacterSheet{name: "Mira", status: :full})
+
+    # Adding to a list opens a panel below the sheet — the form doesn't exist until then.
+    defp add_boundary(view, attrs) do
+      view
+      |> element("button[phx-click=panel][phx-value-panel=pressure]")
+      |> render_click()
+
+      view
+      |> form("form[phx-submit=add_boundary]", Map.merge(%{"topic" => "intimacy"}, attrs))
+      |> render_submit()
+    end
+
+    defp save(view), do: view |> form("form[phx-submit=save]", %{name: "Mira"}) |> render_submit()
+
+    test "an open boundary the campaign forbids is saved held", %{conn: conn, user: user} do
+      mira = blank_char(user)
+      # Adult content off — the default — so `:sexual` is not in the register.
+      _camp = campaign(user, %{character_ids: [mira.id]})
+
+      {:ok, view, _} = live(conn, ~p"/authoring/character/#{mira.id}")
+
+      html =
+        add_boundary(view, %{
+          "direction" => "compulsion",
+          "stance" => "open",
+          "category" => "sexual"
+        })
+
+      assert html =~ "this campaign doesn&#39;t allow explicit sexual content"
+
+      save(view)
+      [saved] = Library.payload(Library.get(mira.id)).boundaries
+
+      # Capped toward **refusal**, not merely closed. A closed compulsion is one she
+      # always acts on, so a cap that only set the stance would make the ceiling compel
+      # the content it exists to forbid.
+      assert %Boundary{stance: :closed, direction: :refusal, category: :sexual} = saved
+    end
+
+    test "the same boundary is untouched when the campaign allows it", %{conn: conn, user: user} do
+      mira = blank_char(user)
+
+      _camp =
+        campaign(user, %{
+          character_ids: [mira.id],
+          content_config: %CampaignConfig{adult_content: true, sexual: true}
+        })
+
+      {:ok, view, _} = live(conn, ~p"/authoring/character/#{mira.id}")
+
+      html =
+        add_boundary(view, %{
+          "direction" => "compulsion",
+          "stance" => "open",
+          "category" => "sexual"
+        })
+
+      # Not the bare phrase — the panel's own note already contains it, and matching that
+      # would make this pass whatever the code did.
+      refute html =~ "this campaign doesn&#39;t allow"
+
+      save(view)
+      [saved] = Library.payload(Library.get(mira.id)).boundaries
+      assert %Boundary{stance: :open, direction: :compulsion} = saved
+    end
+
+    test "a character in no campaign has no ceiling to cap against", %{conn: conn, user: user} do
+      # The all-off config means *this campaign permits nothing*, which is right for a
+      # campaign and exactly wrong for a character who hasn't got one — reading it as the
+      # default would cap every categorized boundary on a standalone sheet.
+      mira = blank_char(user)
+
+      {:ok, view, _} = live(conn, ~p"/authoring/character/#{mira.id}")
+
+      add_boundary(view, %{
+        "direction" => "compulsion",
+        "stance" => "open",
+        "category" => "sexual"
+      })
+
+      save(view)
+      [saved] = Library.payload(Library.get(mira.id)).boundaries
+      assert %Boundary{stance: :open, direction: :compulsion} = saved
+    end
+
+    test "an uncategorized boundary is never capped", %{conn: conn, user: user} do
+      mira = blank_char(user)
+      _camp = campaign(user, %{character_ids: [mira.id]})
+
+      {:ok, view, _} = live(conn, ~p"/authoring/character/#{mira.id}")
+
+      add_boundary(view, %{
+        "topic" => "naming her father",
+        "direction" => "refusal",
+        "stance" => "open",
+        "category" => ""
+      })
+
+      save(view)
+      [saved] = Library.payload(Library.get(mira.id)).boundaries
+
+      # Pure characterization. Most boundaries are this, and the ceiling is about content
+      # categories rather than about how firm a line is.
+      assert %Boundary{stance: :open, category: nil} = saved
+    end
+  end
 end

@@ -85,7 +85,13 @@ defmodule PolyphonyCore.Content do
   defp to_category(v) when is_binary(v), do: Enum.find(@categories, &(to_string(&1) == v))
   defp to_category(_), do: nil
 
-  defp label(:sexual), do: "explicit sexual content"
-  defp label(:graphic_violence), do: "graphic violence"
-  defp label(:other), do: "other mature themes"
+  @doc """
+  How a category is named to a person or a model. One wording, so the sentence a
+  character's prompt is framed with and the sentence the sheet editor explains a cap with
+  cannot drift apart.
+  """
+  @spec label(category()) :: String.t()
+  def label(:sexual), do: "explicit sexual content"
+  def label(:graphic_violence), do: "graphic violence"
+  def label(:other), do: "other mature themes"
 end

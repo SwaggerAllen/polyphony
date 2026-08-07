@@ -20,7 +20,26 @@ defmodule Polyphony.Jobs.RunBeat do
   ordering falls out of enqueue-next-on-completion. Tests drive it synchronously
   under `Oban.Testing.with_testing_mode(:inline, …)`.
   """
-  use Oban.Worker, queue: :director, max_attempts: 3
+  # **One coordinator per scene-beat at a time.** A firing makes the Director judgment
+  # call — an LLM call — and then opens the beat, so two of them for the same
+  # `{scene_id, beat}` is two payments for one exchange and two `OpenBeat`s racing to
+  # declare a turn order. Nothing in the design produces that, but four things enqueue
+  # here (`SceneControl`, `Auto`, `BeatDriver`, and truncation) and a double-click, a
+  # retry landing beside a fresh trigger, or two nodes reaching the same auto row all
+  # arrive as an ordinary duplicate insert.
+  #
+  # Only the in-flight states, and never `:completed`: the constraint is "don't run two
+  # at once", not "never run this beat again" — a re-roll re-runs a beat that has already
+  # finished, and pinning `:completed` would refuse it silently and stall the loop. The
+  # legitimate chain is safe either way: every self-enqueue moves to `beat + 1`.
+  use Oban.Worker,
+    queue: :director,
+    max_attempts: 3,
+    unique: [
+      keys: [:scene_id, :beat],
+      period: :infinity,
+      states: [:available, :scheduled, :executing, :retryable]
+    ]
 
   require Logger
 
