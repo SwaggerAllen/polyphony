@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyphony — settings &amp; auth</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="polyphony-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="antialiased">
+
+<header class="max-w-6xl mx-auto px-5 pt-12 pb-8">
+  <div class="wall mb-3">Polyphony · step 13 · settings &amp; auth</div>
+  <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">Account, money, and getting in</h1>
+  <p class="mt-4 max-w-2xl text-[15px] leading-relaxed note">
+    Not glamorous, but two things here are load-bearing: spending caps you can actually change, and
+    a signup that asks for an age attestation and then <em>uses</em> it.
+  </p>
+</header>
+
+<!-- 00 · NOTES -->
+<section class="max-w-6xl mx-auto px-5 pb-14">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">00 · Two things worth fixing here</div>
+    <div class="grid sm:grid-cols-2 gap-x-8 gap-y-4 max-w-4xl text-[14.5px] leading-relaxed note">
+      <div><b style="color:var(--page-fg)">Caps are referenced but not editable.</b> Error copy
+        already says "you can raise it in Settings" and there is nothing in Settings to raise. Two
+        limits, both real: a rolling daily one on you, and a lifetime one per campaign.</div>
+      <div><b style="color:var(--page-fg)">18+ is eligibility, not a content setting.</b> Under-18s
+        can't use Polyphony at all — supporting them would mean parental controls and in-house
+        filtering, which is a large piece of work deferred a long way out. So an unchecked box ends
+        signup rather than limiting it.</div>
+      <div><b style="color:var(--page-fg)">Spend is split by who it's for.</b> Your daily limit
+        protects you from a runaway loop. A campaign's lifetime limit protects you from one story
+        quietly eating the month. They fail differently and belong in different places — the
+        campaign one lives in campaign settings.</div>
+      <div><b style="color:var(--page-fg)">Turning someone away costs us nothing to store.</b> A
+        blocked signup should keep no personal data at all — a local flag on the device is enough
+        for a best-effort block, and holding anything else about someone we've just refused would be
+        the wrong trade.</div>
+      <div><b style="color:var(--page-fg)">Magic link only.</b> No passwords to store, reset, or
+        leak. The cost is a longer first-time flow, so the check-your-email state has to be good.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 01 · SETTINGS -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">01 · Settings</div>
+    <h2 class="text-2xl font-bold mb-2">Everything about you, not your stories</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note">Reading preferences live in play, campaign spend lives in the campaign. This is the account itself.</p>
+  </div>
+  <div class="mt-7 grid lg:grid-cols-2 gap-5">
+    <div><div class="wall mb-2">Dark</div><div class="fr stage dark sheet"><div data-spec="settings"></div></div></div>
+    <div><div class="wall mb-2">Light</div><div class="fr stage light sheet"><div data-spec="settings"></div></div></div>
+  </div>
+</section>
+
+<!-- 02 · SPEND -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">02 · Spending</div>
+    <h2 class="text-2xl font-bold mb-2">A number you can change</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">Three states worth drawing, because hitting a cap mid-scene is the worst moment to meet a control you've never seen.</p>
+  </div>
+  <div class="grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Comfortable</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-baseline justify-between mb-2">
+          <span class="text-[13px] dim">Today</span><span class="mono text-[15px]">$0.86</span></div>
+        <div class="bar mb-1.5"><i style="width:17%"></i></div>
+        <div class="flex items-baseline justify-between mb-3.5">
+          <span class="text-[11px] dim">of $5.00 · resets at midnight</span></div>
+        <div class="lbl dim mb-1.5">Your daily limit</div>
+        <div class="flex gap-1.5"><div class="field px-3 py-2 text-[14px] mono flex-1">5.00</div>
+          <button class="btn btn-gh btn-sm">Save</button></div>
+      </div></div>
+    <div><div class="wall mb-2">Getting close</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-baseline justify-between mb-2">
+          <span class="text-[13px] dim">Today</span><span class="mono text-[15px]" style="color:var(--lamp)">$4.30</span></div>
+        <div class="bar mb-1.5"><i style="width:86%"></i></div>
+        <div class="flex items-start gap-1.5 mb-3.5">
+          <span class="dot mt-1.5 shrink-0" style="background:var(--lamp)"></span>
+          <span class="text-[11.5px] leading-relaxed">About fourteen more turns at what today has cost.</span></div>
+        <div class="lbl dim mb-1.5">Your daily limit</div>
+        <div class="flex gap-1.5"><div class="field px-3 py-2 text-[14px] mono flex-1">5.00</div>
+          <button class="btn btn-gh btn-sm">Save</button></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Turns remaining, not a percentage. Nobody knows what 86% of their budget feels like.</p>
+    </div>
+    <div><div class="wall mb-2">Spent</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="flex items-baseline justify-between mb-2">
+          <span class="text-[13px] dim">Today</span><span class="mono text-[15px]" style="color:var(--pencil)">$5.00</span></div>
+        <div class="bar mb-2"><i style="width:100%;background:var(--pencil)"></i></div>
+        <div class="rounded-lg p-2.5 mb-3" style="background:color-mix(in srgb,var(--pencil) 9%,transparent);border-left:2px solid var(--pencil)">
+          <div class="text-[12.5px] font-semibold mb-0.5">That's today's limit</div>
+          <p class="text-[12px] leading-relaxed dim">Nothing will generate until midnight, or until you raise it. Your scenes are exactly where you left them.</p></div>
+        <div class="lbl dim mb-1.5">Your daily limit</div>
+        <div class="flex gap-1.5"><div class="field px-3 py-2 text-[14px] mono flex-1" style="border-color:var(--lamp)">10.00</div>
+          <button class="btn btn-pri btn-sm">Save</button></div>
+      </div></div>
+    <div><div class="wall mb-2">Where it went</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row" style="background:var(--b2)">
+          <span class="ttl text-[15px]" style="font-weight:600">This month</span>
+          <div class="lbl dim mt-0.5">$21.14</div></div>
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-2">
+          <div class="min-w-0"><div class="text-[13px] font-semibold ttl">The Salt Line</div>
+            <div class="text-[11px] dim">Playing · $12.60 all time of $20.00</div></div>
+          <span class="mono text-[13px]">$14.02</span></div>
+        <div class="px-4 py-2.5 row flex items-center justify-between gap-2">
+          <div class="min-w-0"><div class="text-[13px] font-semibold ttl">Low Water</div>
+            <div class="text-[11px] dim">Finished</div></div>
+          <span class="mono text-[13px]">$5.90</span></div>
+        <div class="px-4 py-2.5 flex items-center justify-between gap-2">
+          <div class="min-w-0"><div class="text-[13px] font-semibold">Writing characters and worlds</div>
+            <div class="text-[11px] dim">Outside any scene</div></div>
+          <span class="mono text-[13px]">$1.22</span></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Per-campaign spend has never been shown anywhere. Each row links to that campaign's own limit.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 03 · AUTH -->
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">03 · Getting in</div>
+    <h2 class="text-2xl font-bold mb-2">Invite, attestation, magic link</h2>
+    <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">Signup is gated three ways and each one has to be honest about why it's there. The attestation especially — it's a real control, so it shouldn't read as a formality.</p>
+  </div>
+  <div class="grid md:grid-cols-4 gap-4">
+    <div><div class="wall mb-2">Sign in</div>
+      <div class="fr stage dark sheet">
+        <div class="px-5 py-6 text-center row">
+          <div class="ttl text-[22px] mb-1" style="font-weight:600">Polyphony</div>
+          <p class="text-[13px] leading-relaxed dim">Write a world, cast some people, and find out what they do.</p></div>
+        <div class="px-5 py-5">
+          <div class="lbl dim mb-1.5">Email</div>
+          <div class="field px-3 py-2.5 text-[14px] dim mb-3">you@example.com</div>
+          <button class="btn btn-pri w-full justify-center mb-3">Send me a link</button>
+          <p class="text-[12px] leading-relaxed dim text-center">No password to remember. We'll email you a link that signs you in.</p></div>
+        <!-- Its own field and its own submit, not one input that takes either: keeping
+             type=email on the address means the browser's validation still catches a
+             typo'd domain before it becomes a silent no-match. Sign-in moved to
+             email-only, and an account older than that is reachable only by handle. -->
+        <div class="px-5 py-4 row" style="background:var(--b2)">
+          <div class="lbl dim mb-1.5">Or your username</div>
+          <div class="flex gap-1.5">
+            <div class="field px-3 py-2.5 text-[14px] dim mono flex-1">yourhandle</div>
+            <button class="btn btn-gh">Send</button></div>
+          <p class="text-[11.5px] leading-relaxed dim mt-2">The link still goes to the email on that account.</p></div>
+        <div class="px-5 py-3 row" style="background:var(--b2);border-top:1px solid var(--rule);border-bottom:none">
+          <p class="text-[12.5px] text-center dim">Got an invite? <span style="color:var(--bc)">Use it here</span></p></div>
+      </div></div>
+    <div><div class="wall mb-2">Check your email</div>
+      <div class="fr stage dark sheet">
+        <div class="px-5 py-8 text-center">
+          <div class="ttl text-[19px] mb-2" style="font-weight:600">Have a look in your inbox</div>
+          <p class="text-[13.5px] leading-relaxed mb-1">We've sent a link to <b>wren@example.com</b>.</p>
+          <p class="text-[13px] leading-relaxed dim mb-5">It works once and lasts fifteen minutes.</p>
+          <div class="flex flex-col gap-1.5">
+            <button class="btn btn-gh justify-center">Send it again</button>
+            <button class="btn btn-gh justify-center">Use a different address</button></div>
+          <p class="text-[11.5px] leading-relaxed dim mt-4">Nothing there? It's worth checking spam — and worth checking you typed it right.</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">The cost of no passwords is that this screen is the whole experience. Both escape routes, and the spam line before it's needed.</p>
+    </div>
+    <div><div class="wall mb-2">Signing up · the gates</div>
+      <div class="fr stage dark sheet">
+        <div class="px-5 py-4 row" style="background:var(--b2)">
+          <div class="ttl text-[17px]" style="font-weight:600">Make an account</div></div>
+        <div class="px-5 py-4 row">
+          <div class="lbl dim mb-1.5">Invite code</div>
+          <div class="field px-3 py-2.5 mono text-[13px]">SALT-4M2K-9QX</div>
+          <p class="text-[11px] leading-relaxed dim mt-1.5">Polyphony is invite-only while it's young.</p></div>
+        <div class="px-5 py-4 row">
+          <div class="lbl dim mb-1.5">Email</div>
+          <div class="field px-3 py-2.5 text-[14px] dim">you@example.com</div></div>
+        <div class="px-5 py-4 row">
+          <div class="lbl dim mb-1.5">What should we call you</div>
+          <div class="field px-3 py-2.5 text-[14px] dim">A name other people will see</div></div>
+        <div class="px-5 py-4">
+          <div class="flex items-start gap-2.5 mb-3">
+            <span class="chk chk-on">✓</span>
+            <div><div class="text-[13px] leading-snug">I'm 18 or over</div>
+              <div class="text-[11px] leading-relaxed dim mt-0.5">Polyphony is for adults. We can't offer it to under-18s yet.</div></div></div>
+          <div class="flex items-start gap-2.5 mb-4">
+            <span class="chk"></span>
+            <div class="text-[13px] leading-snug">I've read the <span style="text-decoration:underline">terms</span> and the <span style="text-decoration:underline">privacy notice</span></div></div>
+          <button class="btn btn-pri w-full justify-center">Make my account</button></div>
+      </div>
+      <p class="text-[12px] mt-2 note">This isn't a content preference. Leaving it unchecked ends the signup rather than restricting it — see the next column.</p>
+    </div>
+    <div><div class="wall mb-2">Rejected states</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="lbl dim mb-1.5">Invite code</div>
+        <div class="field px-3 py-2.5 mono text-[13px] mb-1.5" style="border-color:var(--pencil)">SALT-4M2K-9QX</div>
+        <div class="flex items-start gap-1.5"><span class="dot mt-1.5 shrink-0" style="background:var(--pencil)"></span>
+          <span class="text-[12px] leading-relaxed" style="color:var(--pencil)">This one's been used. Invites work once — ask whoever sent it for another.</span></div>
+      </div>
+      <div class="fr stage dark sheet p-4 mt-2">
+        <div class="lbl dim mb-1.5">What should we call you</div>
+        <div class="field px-3 py-2.5 text-[14px] mb-1.5" style="border-color:var(--pencil)">wren</div>
+        <div class="flex items-start gap-1.5"><span class="dot mt-1.5 shrink-0" style="background:var(--pencil)"></span>
+          <span class="text-[12px] leading-relaxed" style="color:var(--pencil)">Taken. Try something else.</span></div>
+      </div>
+      <div class="fr stage dark sheet p-4 mt-2">
+        <div class="flex items-start gap-2.5 mb-2">
+          <span class="chk" style="border-color:var(--pencil)"></span>
+          <div class="text-[13px] leading-snug">I'm 18 or over</div></div>
+        <div class="flex items-start gap-1.5"><span class="dot mt-1.5 shrink-0" style="background:var(--pencil)"></span>
+          <span class="text-[12px] leading-relaxed" style="color:var(--pencil)">We can't make you an account without this.</span></div>
+      </div>
+      <div class="fr stage dark sheet p-4 mt-2">
+        <div class="ttl text-[14px] mb-1" style="font-weight:600">That link has expired</div>
+        <p class="text-[12.5px] leading-relaxed dim mb-2.5">They last fifteen minutes and work once. Nothing's wrong with your account.</p>
+        <button class="btn btn-pri btn-sm">Send a new one</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-5 grid md:grid-cols-3 gap-4">
+    <div><div class="wall mb-2">Turned away</div>
+      <div class="fr stage dark sheet">
+        <div class="px-5 py-9 text-center">
+          <div class="ttl text-[19px] mb-2" style="font-weight:600">Polyphony is for adults</div>
+          <p class="text-[13.5px] leading-relaxed mb-1">We can't offer accounts to people under 18.</p>
+          <p class="text-[13px] leading-relaxed dim">One day we'd like to, properly — with the safeguards that would need. That's a long way off, and we'd rather say no than do it badly.</p>
+        </div>
+      </div>
+      <p class="text-[12px] mt-2 note">No retry button, no "go back and change your answer." A door that reopens on the same screen isn't a door.</p>
+    </div>
+    <div><div class="wall mb-2">Nothing kept</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">What we stored</div>
+        <p class="text-[13px] leading-relaxed dim mb-2.5">Nothing. No email, no name, no invite code consumed — the account was never made, so there's nothing about them to hold.</p>
+        <div class="rounded-lg p-2.5" style="background:var(--b3)">
+          <p class="text-[12px] leading-relaxed">A flag on the device stops the form coming straight back. That's a best-effort block and it's meant to be — the alternative is keeping records on someone we've just refused.</p></div>
+      </div>
+      <p class="text-[12px] mt-2 note">Worth stating plainly for the coding thread: refusing someone must not create a row about them.</p>
+    </div>
+    <div><div class="wall mb-2">The invite survives</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">Invite codes</div>
+        <p class="text-[13px] leading-relaxed dim">A refused signup doesn't burn the code. Whoever sent it can pass it on, and nobody has to ask us for a replacement they shouldn't have needed.</p>
+      </div></div>
+  </div>
+</section>
+
+<!-- 04 · ACCOUNT EDGES -->
+<section class="max-w-6xl mx-auto px-5 pb-24">
+  <div class="border-t pt-8" style="border-color:var(--page-rule)">
+    <div class="wall mb-2">04 · The rest of the account</div>
+    <h2 class="text-2xl font-bold mb-2">Name changes, data, leaving</h2>
+  </div>
+  <div class="mt-6 grid md:grid-cols-3 lg:grid-cols-5 gap-4">
+    <div><div class="wall mb-2">Changing your name</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="lbl dim mb-1.5">What people see</div>
+        <div class="field px-3 py-2.5 text-[14px] mb-2">wren.ashgrove</div>
+        <div class="flex items-start gap-1.5 mb-3">
+          <span class="dot mt-1.5 shrink-0" style="background:var(--bcm)"></span>
+          <span class="text-[11.5px] leading-relaxed dim">You can change this once a month. Next change available in 22 days.</span></div>
+        <button class="btn w-full justify-center" style="background:var(--b3);color:var(--bcm)">Save</button>
+      </div></div>
+    <div><div class="wall mb-2">Data</div>
+      <div class="fr stage dark sheet">
+        <div class="px-4 py-3 row flex items-center justify-between gap-3">
+          <div><div class="text-[13px] font-semibold">Take everything with you</div>
+            <div class="text-[11px] leading-relaxed dim mt-0.5">Every campaign, world, character and transcript, as files.</div></div>
+          <button class="btn btn-gh btn-sm shrink-0">Export</button></div>
+        <div class="px-4 py-3">
+          <button class="btn btn-pen btn-sm -ml-1">Delete my account</button>
+          <p class="text-[11px] leading-relaxed dim mt-1">Everything goes, after 30 days. Published copies are removed too.</p></div>
+      </div></div>
+    <div><div class="wall mb-2">Deleting · confirm</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">Delete your account?</div>
+        <p class="text-[13px] leading-relaxed dim mb-2.5">Three campaigns, two worlds, forty-one characters and eleven scenes. All of it, gone in 30 days.</p>
+        <div class="rounded-lg p-2.5 mb-3" style="background:var(--b3)">
+          <p class="text-[12px] leading-relaxed">Anyone who forked <span class="ttl">The Ninth Gate</span> keeps their copy — it's theirs now. Your original goes.</p></div>
+        <p class="text-[12.5px] leading-relaxed dim mb-2.5">Sign back in within 30 days and none of this happens.</p>
+        <div class="flex gap-1.5"><button class="btn btn-pen btn-sm">Delete it</button><button class="btn btn-gh btn-sm">Keep it</button></div>
+      </div></div>
+    <div><div class="wall mb-2">Later, not now</div>
+      <div class="fr stage dark sheet p-4">
+        <div class="ttl text-[15px] mb-1.5" style="font-weight:600">Deliberately absent</div>
+        <p class="text-[13px] leading-relaxed dim mb-2.5">No automated-analysis toggle. There's nothing to toggle — scene analysis is part of the under-18 work that isn't happening, and a switch for a feature that doesn't exist is worse than no switch.</p>
+        <p class="text-[13px] leading-relaxed dim">An opt-in for testing different generation behaviour will be needed eventually, and it may belong per campaign rather than per account. That arrives with a profile page.</p>
+      </div></div>
+    <div><div class="wall mb-2">Toasts</div>
+      <div class="fr stage dark sheet p-3 flex items-center gap-2">
+        <span class="dot" style="background:var(--ok)"></span><span class="text-[13px]">Limit raised to $10.00</span></div>
+      <div class="fr stage dark sheet p-3 mt-2 flex items-center gap-2">
+        <span class="dot" style="background:var(--ok)"></span><span class="text-[13px]">Export on its way to your email</span></div>
+      <div class="fr stage dark sheet p-3 mt-2 flex items-center justify-between gap-2">
+        <span class="text-[13px]">Signed out everywhere</span></div>
+      <div class="fr stage dark sheet p-3 mt-2 flex items-center gap-2">
+        <span class="dot" style="background:var(--pencil)"></span><span class="text-[13px]">That didn't save — try again</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== TEMPLATE ========== -->
+<template id="spec-settings">
+  <div>
+    <div class="px-4 py-3.5 row" style="background:var(--b2)">
+      <div class="flex items-center gap-2.5">
+        <span class="w-10 h-10 rounded-xl shrink-0" style="background:var(--b3)"></span>
+        <div class="min-w-0"><div class="ttl text-[17px] truncate" style="font-weight:600">wren.ashgrove</div>
+          <div class="lbl dim mt-0.5">wren@example.com</div></div>
+      </div>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="flex items-center justify-between mb-2.5">
+        <span class="flex items-center gap-1.5"><span class="lbl dim">Spending</span><span class="info">i</span></span>
+        <span class="text-[12px] dim">$21.14 this month</span></div>
+      <div class="flex items-baseline justify-between mb-1.5">
+        <span class="text-[13px] dim">Today</span><span class="mono text-[14px]">$0.86 of $5.00</span></div>
+      <div class="bar mb-2.5"><i style="width:17%"></i></div>
+      <div class="flex gap-1.5">
+        <button class="btn btn-gh btn-sm">Change the limit</button>
+        <button class="btn btn-gh btn-sm">Where it went</button></div>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="lbl dim mb-2">You</div>
+      <div class="sheet">
+        <div class="px-3.5 py-2.5 row flex items-center justify-between gap-2">
+          <div><div class="text-[13px] font-semibold">What people see</div>
+            <div class="text-[11px] dim">wren.ashgrove</div></div>
+          <span class="dim text-[14px]">›</span></div>
+        <div class="px-3.5 py-2.5 row flex items-center justify-between gap-2">
+          <div><div class="text-[13px] font-semibold">Email</div>
+            <div class="text-[11px] dim">wren@example.com</div></div>
+          <span class="dim text-[14px]">›</span></div>
+        <div class="px-3.5 py-2.5 flex items-center justify-between gap-2">
+          <div><div class="text-[13px] font-semibold">Age</div>
+            <div class="text-[11px] dim">Confirmed 18 or over</div></div>
+          <span class="pill dim shrink-0">Locked</span></div>
+      </div>
+      <p class="text-[11px] leading-relaxed dim mt-2">Everyone here has confirmed this — it's what having an account means, so there's nothing to change.</p>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="lbl dim mb-2">Look</div>
+      <div class="seg mb-2"><div class="dim">Light</div><div class="seg-on">Dark</div><div class="dim">Match my phone</div></div>
+      <p class="text-[11px] leading-relaxed dim">How the transcript reads — typeface, size, spacing — is set while you're reading it.</p>
+    </div>
+
+    <div class="px-4 py-3 row">
+      <div class="lbl dim mb-2">Signed in on</div>
+      <div class="sheet">
+        <div class="px-3.5 py-2.5 row flex items-center justify-between gap-2">
+          <div><div class="text-[13px] font-semibold">This phone</div>
+            <div class="text-[11px] dim">Now</div></div>
+          <span class="dot" style="background:var(--ok)"></span></div>
+        <div class="px-3.5 py-2.5 flex items-center justify-between gap-2">
+          <div><div class="text-[13px] font-semibold">A laptop in Bristol</div>
+            <div class="text-[11px] dim">Three days ago</div></div>
+          <button class="btn btn-pen btn-sm">Sign out</button></div>
+      </div>
+    </div>
+
+    <div class="px-4 py-3">
+      <div class="lbl dim mb-2">Data</div>
+      <div class="sheet">
+        <div class="px-3.5 py-2.5 row flex items-center justify-between gap-2">
+          <span class="text-[13px] font-semibold">Take everything with you</span>
+          <button class="btn btn-gh btn-sm">Export</button></div>
+        <div class="px-3.5 py-2.5">
+          <button class="btn btn-pen btn-sm -ml-1">Delete my account</button></div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+  document.querySelectorAll('[data-spec]').forEach(function(slot){
+    var t = document.getElementById('spec-' + slot.getAttribute('data-spec'));
+    if (!t) { slot.innerHTML = '<div style="padding:1rem;font:12px monospace;color:#E0604A">missing template: ' + slot.getAttribute('data-spec') + '</div>'; return; }
+    slot.appendChild(t.content.cloneNode(true));
+  });
+</script>
+</body>
+</html>
