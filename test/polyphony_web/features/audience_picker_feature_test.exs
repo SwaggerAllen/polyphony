@@ -75,7 +75,16 @@ defmodule PolyphonyWeb.AudiencePickerFeatureTest do
     # clicking the summary unconditionally would shut it on the second call.
     session = if has?(session, css("#fact-0[open]")), do: session, else: click(session, summary())
 
-    click(session, css("button[phx-click='open_audience'][phx-value-index='0']", count: 1))
+    # **Wait for it to actually be open before handing the session back.** Wallaby's
+    # `click/2` returns once the click is dispatched, and the picker arrives on a
+    # LiveView round-trip — so a caller that goes straight to `elementFromPoint` is
+    # racing the DOM patch. That is not hypothetical: "tapping away closes it" failed in
+    # CI probing (width/2, 8) and getting back the header's `row`, because the scrim was
+    # not in the document yet. `assert_has/2` retries to Wallaby's timeout, which is the
+    # synchronisation the other assertions here were getting by accident from `has?/2`.
+    session
+    |> click(css("button[phx-click='open_audience'][phx-value-index='0']", count: 1))
+    |> assert_has(css(".modal", visible: true))
   end
 
   defp summary, do: css("#fact-0 summary", count: 1)
