@@ -41,7 +41,9 @@ defmodule PolyphonyWeb.BrowseLive do
   """
   use PolyphonyWeb, :live_view
 
-  alias Polyphony.{Accounts, Library, Moderation, Owner, Publication, Reading}
+  alias Polyphony.{Accounts, Library, Moderation, Reading}
+  alias Polyphony.Owner
+  alias PolyphonyCore.Publication
   alias Polyphony.Authoring.WorldBible
   alias Polyphony.Reading.Session
   alias PolyphonyWeb.Screens
@@ -195,7 +197,7 @@ defmodule PolyphonyWeb.BrowseLive do
     gap = scene && Session.gap(snapshot, scene, mode)
 
     events =
-      case scene && gap == nil && Session.scene(snapshot, scene_id, mode) do
+      case scene && gap == nil && Reading.scene(snapshot, scene_id, mode) do
         {:ok, events} -> events
         _ -> []
       end

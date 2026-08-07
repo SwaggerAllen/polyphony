@@ -10,7 +10,8 @@ defmodule Polyphony.SceneClose.WorldArcExtractor do
   Everything comes back `:proposed`; the review gate decides canon.
   """
 
-  alias Polyphony.{EventText, LLM.Provider}
+  alias Polyphony.LLM.Provider
+  alias PolyphonyCore.EventText
   alias Polyphony.SceneClose.WorldArcSchema
 
   @doc """

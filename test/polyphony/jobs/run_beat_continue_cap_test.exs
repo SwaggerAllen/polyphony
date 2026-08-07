@@ -11,7 +11,7 @@ defmodule Polyphony.Jobs.RunBeatContinueCapTest do
   alias Polyphony.Context.Store
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
-  alias Polyphony.Events.TurnOrderDeclared
+  alias PolyphonyCore.Events.TurnOrderDeclared
   alias Polyphony.Jobs.RunBeat
 
   # Always wants to keep going: the Director decision returns control: continue; character

@@ -15,7 +15,21 @@ character furious inside but composed outside; a secret one party holds) is
 therefore a property of *the data and its projection*, not a prompt instruction and
 not something a model can accidentally reveal.
 
-The load-bearing module is `Polyphony.Visibility`: `visible_to?/3` decides whether
+The load-bearing module is `PolyphonyCore.Visibility`, and **`PolyphonyCore` is a boundary
+declared `deps: []`** — a sibling of `Polyphony` rather than a namespace inside it, so
+nothing in it may call the rest of the application. The event vocabulary
+(`PolyphonyCore.Events`) lives there too, because the core is the rules *over* the log and
+cannot be a leaf without the shapes of the facts it reasons about. `PolyphonyCoreTest`
+holds the namespace to a wider floor than the compiler can see — no repo, event store,
+provider, PubSub, mail, files, processes or ETS — walking the call graph per function.
+
+`PolyphonyCore` **mirrors the shell's subsystems** rather than being a flat bag:
+`PolyphonyCore.Director.*` is the Beat aggregate, its commands and its policy, while
+`Polyphony.Director.*` is the driver and the ops, which read. That is what settles
+invariant 2 — an aggregate is replayed, so a provider call inside one would rebuild the
+same log into a different story, and `deps: []` makes it a compile error.
+
+The rest: `visible_to?/3` decides whether
 one event reaches one viewer, and `project/3` filters a stream. The **same
 predicate** drives character conditioning contexts *and* the client broadcaster, so
 the transport can never leak more than the projection.
@@ -52,7 +66,7 @@ the transport can never leak more than the projection.
   schema in the same managed Postgres that backs the read models (`public`). The
   aggregates are identical either way. Postgres otherwise backs only the Ecto **read
   models**.
-- `Polyphony.Events` is the catalog; every event derives `Jason.Encoder`.
+- `PolyphonyCore.Events` is the catalog; every event derives `Jason.Encoder`.
 
 ### Event catalog shape
 
@@ -87,7 +101,7 @@ State it folds: `members`, `committed_packets` (idempotency), `superseded_packet
 
 ## 5. Visibility & the canonical filter
 
-`Polyphony.Visibility.visible_to?/3`:
+`PolyphonyCore.Visibility.visible_to?/3`:
 
 - interior (`ThoughtOccurred`, `PrivateStateReported`) → the owning character only;
 - private speech (whispers) → speaker + `addressed_to` only;
@@ -95,7 +109,7 @@ State it folds: `members`, `committed_packets` (idempotency), `superseded_packet
   `WorldEventOccurred`, membership) → members at the event's beat;
 - everything else → default-deny to characters; omniscient sees all.
 
-`Polyphony.Packets.canonical/1` sits *before* visibility on every fiction-bearing
+`PolyphonyCore.Packets.canonical/1` sits *before* visibility on every fiction-bearing
 read: it drops packets named by `PacketSuperseded` markers (and the markers
 themselves), so a re-rolled or edited-away turn disappears from every projection at
 once — even omniscient. Applied at the four stream-read sites (`Director.BeatOps`,
@@ -105,7 +119,7 @@ once — even omniscient. Applied at the four stream-read sites (`Director.BeatO
 
 Two implementations that must agree:
 
-- `Polyphony.MembershipSet` — pure interval fold from the event stream (reference).
+- `PolyphonyCore.MembershipSet` — pure interval fold from the event stream (reference).
 - `Polyphony.ReadModels.Membership` + `Projectors.SceneMemberships` — Postgres
   half-open `[entered, exited)` interval index (materialized twin).
 

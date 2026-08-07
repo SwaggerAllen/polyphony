@@ -10,11 +10,12 @@ defmodule PolyphonyWeb.PlayAutoLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Library, Owner}
+  alias Polyphony.{App, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{EnterCharacter, ExitCharacter, OpenScene}
   alias Polyphony.Director.{Auto, BeatOps}
-  alias Polyphony.Events.SpeechUttered
+  alias PolyphonyCore.Events.SpeechUttered
 
   setup :register_and_log_in_user
 

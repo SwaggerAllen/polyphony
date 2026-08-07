@@ -18,9 +18,10 @@ defmodule Polyphony.Context.Rebuild do
   alias Polyphony.{App, Context, Library}
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Authoring.Effective
-  alias Polyphony.Content.CampaignConfig
+  alias PolyphonyCore.Content.CampaignConfig
   alias Polyphony.Context.PgvectorRetriever
-  alias Polyphony.Events.SceneOpened
+  alias Polyphony.Scene.Cast
+  alias PolyphonyCore.Events.{CharacterEntered, SceneOpened}
 
   @doc """
   The retriever a cold-cache rebuild (character or Director) pulls long-tail memory
@@ -217,4 +218,51 @@ defmodule Polyphony.Context.Rebuild do
   end
 
   defp normalize_id(_), do: nil
+
+  @doc """
+  The scene's cast, built from the characters that have entered it.
+
+  Was `Scene.Cast.for_scene/1`, and it is the read that made `Cast` look like a query
+  module — everything else on that struct maps ids to names and back, from data the
+  caller already has. It belongs here, beside `sheet_for/2`, which it calls for every id
+  it finds.
+
+  Callers that used to hand a `scene_id` straight to `Cast.resolve_addressees/2` now
+  compose the two, which is the point: the read is visible at the call site instead of
+  hiding inside something that reads as pure.
+  """
+  @spec cast_for(term()) :: Cast.t()
+  def cast_for(scene_id) do
+    sheets =
+      for id <- entered_ids(scene_id),
+          %CharacterSheet{name: n} = sheet <- [sheet_for(scene_id, id)],
+          is_binary(n) and n != "",
+          do: {to_string(id), sheet}
+
+    pairs = for {id, sheet} <- sheets, do: {id, sheet.name}
+
+    %Cast{
+      id_to_name: Map.new(pairs),
+      name_to_id: Map.new(pairs, fn {id, name} -> {name, id} end),
+      # The voice colour is stored on the sheet, so it comes along with the name —
+      # same read, and a rename or a cast change can't move it.
+      id_to_hue: Map.new(sheets, fn {id, sheet} -> {id, sheet.hue} end)
+    }
+  end
+
+  defp entered_ids(scene_id) do
+    scene_id
+    |> stored_events()
+    |> Enum.flat_map(fn
+      %CharacterEntered{character_id: id} -> [to_string(id)]
+      _ -> []
+    end)
+    |> Enum.uniq()
+  end
+
+  defp stored_events(scene_id) do
+    App |> Commanded.EventStore.stream_forward(scene_id) |> Enum.map(& &1.data)
+  rescue
+    _ -> []
+  end
 end

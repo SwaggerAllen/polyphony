@@ -1,4 +1,4 @@
-defmodule Polyphony.Events do
+defmodule PolyphonyCore.Events do
   @moduledoc """
   The event catalog (§7).
 
@@ -19,7 +19,7 @@ defmodule Polyphony.Events do
                     filtering stays event-type based, never field based (§6.4).
     * `seq`       — position of the originating `Move` within its packet.
 
-  Visibility is decided structurally in `Polyphony.Visibility`, keyed off these
+  Visibility is decided structurally in `PolyphonyCore.Visibility`, keyed off these
   fields — never by a prompt instruction and never self-reported (rule 4).
   """
 

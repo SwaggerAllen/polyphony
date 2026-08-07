@@ -6,7 +6,7 @@ defmodule Polyphony.Suggest do
   The one hard rule: **generate from the character's filtered view, not the
   user's omniscient view.** The user knows everything; their character doesn't.
   Because the suggestion is built with `Polyphony.Context.to_messages/2` — which
-  filters live events through `Polyphony.Visibility` — a suggestion structurally
+  filters live events through `PolyphonyCore.Visibility` — a suggestion structurally
   cannot react to a poisoning the character never learned about.
 
   Produces 2–3 editable variants and accepts an optional steer ("keep it brief",

@@ -3,8 +3,9 @@ defmodule Polyphony.BroadcastTest do
   use ExUnit.Case, async: true
 
   import Polyphony.Test.Scenario
-  alias Polyphony.{Broadcast, MembershipSet}
-  alias Polyphony.Events.{BeatOpened, BeatClosed}
+  alias Polyphony.Broadcast
+  alias PolyphonyCore.MembershipSet
+  alias PolyphonyCore.Events.{BeatOpened, BeatClosed}
 
   # a,b present in S1; c not.
   defp member_at? do

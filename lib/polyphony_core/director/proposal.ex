@@ -1,4 +1,4 @@
-defmodule Polyphony.Director.Proposal do
+defmodule PolyphonyCore.Director.Proposal do
   @moduledoc """
   A character's proposal to change the world, extracted from a committed packet
   (§6.4 `Move.proposal`, §10 arbitration).

@@ -19,7 +19,7 @@ defmodule Polyphony.SceneTest do
     ForkScene
   }
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     SceneOpened,
     SceneClosed,
     CharacterEntered,

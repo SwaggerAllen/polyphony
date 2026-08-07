@@ -15,7 +15,8 @@ defmodule Polyphony.QuickBuildNamingTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Builds, Library, Owner}
+  alias Polyphony.{Builds, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.QuickBuild
   alias Polyphony.Jobs.QuickBuild, as: BuildJob
 

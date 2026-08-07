@@ -29,19 +29,9 @@ defmodule PolyphonyWeb.PlayLive do
 
   require Logger
 
-  alias Polyphony.{
-    App,
-    Broadcast,
-    Context,
-    DebugFlags,
-    Drafts,
-    Failures,
-    Library,
-    MembershipSet,
-    Owner,
-    SceneControl,
-    TurnOrder
-  }
+  alias Polyphony.{App, Broadcast, Context, DebugFlags, Drafts, Failures, Library, SceneControl}
+  alias Polyphony.Owner
+  alias PolyphonyCore.{MembershipSet, TurnOrder}
 
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Director.{Auto, BeatDriver}
@@ -69,7 +59,7 @@ defmodule PolyphonyWeb.PlayLive do
 
   alias Polyphony.Authoring.{CharacterSheet, Stub, WorldBible}
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     IntroductionProposed,
     IntroductionDismissed,
     CharacterEntered,
@@ -208,7 +198,7 @@ defmodule PolyphonyWeb.PlayLive do
     # The roster is character **ids**; `cast` is how they become readable. Rebuilt on
     # every reload so a rename shows up without a page load.
     roster = BeatOps.members_now(scene_id, max(next_beat - 1, 1))
-    cast = Cast.for_scene(scene_id)
+    cast = Rebuild.cast_for(scene_id)
     # Voice colours come from the hue stored on each sheet, so they're stable across
     # the transcript, the strip and the perspective control — and stable across a
     # cast change, which is what deriving them from order could never be.

@@ -16,7 +16,7 @@ defmodule Polyphony.PersistentEventStoreTest do
 
   alias Polyphony.PersistentApp
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
-  alias Polyphony.Events.{SceneOpened, CharacterEntered, ThoughtOccurred, SpeechUttered}
+  alias PolyphonyCore.Events.{SceneOpened, CharacterEntered, ThoughtOccurred, SpeechUttered}
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
 

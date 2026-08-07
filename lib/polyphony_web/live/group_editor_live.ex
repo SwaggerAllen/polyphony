@@ -32,7 +32,8 @@ defmodule PolyphonyWeb.GroupEditorLive do
 
   require Logger
 
-  alias Polyphony.{Campaigns, Groups, Library, Owner}
+  alias Polyphony.{Campaigns, Groups, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{ArcEntry, Group, GroupArc}
   alias Polyphony.Authoring.CharacterSheet.Fact
   alias Polyphony.Permissions

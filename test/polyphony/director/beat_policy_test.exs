@@ -2,7 +2,7 @@ defmodule Polyphony.Director.BeatPolicyTest do
   @moduledoc "The beat-loop stopping rule (§10) — pure."
   use ExUnit.Case, async: true
 
-  alias Polyphony.Director.BeatPolicy
+  alias PolyphonyCore.Director.BeatPolicy
 
   test "continues while under the depth cap and the Director says continue" do
     assert :continue = BeatPolicy.next(%{depth: 0, control: :continue})

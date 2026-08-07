@@ -2,7 +2,8 @@ defmodule PolyphonyWeb.PlayMentionsLiveTest do
   @moduledoc "Mention-stubbing (§B8): scan a scene's prose for uncreated characters and stub them."
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Library, Owner}
+  alias Polyphony.{App, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}

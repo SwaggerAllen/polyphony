@@ -9,7 +9,7 @@ defmodule Polyphony.Projectors.SceneForks do
     repo: Polyphony.Repo,
     name: "scene_forks"
 
-  alias Polyphony.Events.SceneForked
+  alias PolyphonyCore.Events.SceneForked
   alias Polyphony.ReadModels.SceneFork
 
   project(%SceneForked{} = e, _metadata, fn multi ->

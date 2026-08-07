@@ -29,7 +29,7 @@ defmodule Polyphony.SceneClose.Handler do
   require Logger
 
   alias Polyphony.SceneClose
-  alias Polyphony.Events.SceneClosed
+  alias PolyphonyCore.Events.SceneClosed
 
   @impl Commanded.Event.Handler
   def handle(%SceneClosed{scene_id: scene_id}, _metadata) do

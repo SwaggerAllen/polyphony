@@ -9,8 +9,8 @@ defmodule Polyphony.VisibilityTest do
 
   import Polyphony.Test.Scenario
 
-  alias Polyphony.Visibility
-  alias Polyphony.Events.{ArcEntryProposed, SceneOpened, BeatClosed}
+  alias PolyphonyCore.Visibility
+  alias PolyphonyCore.Events.{ArcEntryProposed, SceneOpened, BeatClosed}
 
   # A shared scene the size of a real beat sequence.
   #
@@ -52,27 +52,28 @@ defmodule Polyphony.VisibilityTest do
 
       # B is present in the same scene at the same beat and still never sees
       # A's interior monologue — the whole point of the system.
-      refute seen?(b_view, &match?(%Polyphony.Events.ThoughtOccurred{character_id: "A"}, &1))
+      refute seen?(b_view, &match?(%PolyphonyCore.Events.ThoughtOccurred{character_id: "A"}, &1))
     end
 
     test "a character sees their own thoughts" do
       a_view = project({:character, "A"})
 
       assert Enum.any?(a_view, fn e ->
-               e.__struct__ == Polyphony.Events.ThoughtOccurred and e.content == "I don't trust B"
+               e.__struct__ == PolyphonyCore.Events.ThoughtOccurred and
+                 e.content == "I don't trust B"
              end)
     end
 
     test "private self-state is self-only" do
       b_view = project({:character, "B"})
 
-      refute Enum.any?(b_view, &match?(%Polyphony.Events.PrivateStateReported{}, &1))
+      refute Enum.any?(b_view, &match?(%PolyphonyCore.Events.PrivateStateReported{}, &1))
 
       a_view = project({:character, "A"})
 
       assert Enum.any?(
                a_view,
-               &match?(%Polyphony.Events.PrivateStateReported{mood_felt: "afraid"}, &1)
+               &match?(%PolyphonyCore.Events.PrivateStateReported{mood_felt: "afraid"}, &1)
              )
     end
   end
@@ -92,11 +93,14 @@ defmodule Polyphony.VisibilityTest do
     test "C sees only their own S2 events" do
       c_view = project({:character, "C"})
 
-      assert Enum.any?(c_view, &match?(%Polyphony.Events.CharacterEntered{character_id: "C"}, &1))
+      assert Enum.any?(
+               c_view,
+               &match?(%PolyphonyCore.Events.CharacterEntered{character_id: "C"}, &1)
+             )
 
       assert Enum.any?(
                c_view,
-               &match?(%Polyphony.Events.ThoughtOccurred{content: "where am I?"}, &1)
+               &match?(%PolyphonyCore.Events.ThoughtOccurred{content: "where am I?"}, &1)
              )
     end
   end
@@ -107,12 +111,12 @@ defmodule Polyphony.VisibilityTest do
       d_view = project({:character, "D"})
 
       refute Enum.any?(d_view, fn e ->
-               match?(%Polyphony.Events.SpeechUttered{audibility: :private}, e)
+               match?(%PolyphonyCore.Events.SpeechUttered{audibility: :private}, e)
              end)
     end
 
     test "the addressee and speaker do hear it" do
-      whisper? = fn e -> match?(%Polyphony.Events.SpeechUttered{audibility: :private}, e) end
+      whisper? = fn e -> match?(%PolyphonyCore.Events.SpeechUttered{audibility: :private}, e) end
 
       assert Enum.any?(project({:character, "A"}), whisper?), "speaker hears own whisper"
       assert Enum.any?(project({:character, "B"}), whisper?), "addressee hears whisper"
@@ -125,19 +129,22 @@ defmodule Polyphony.VisibilityTest do
 
       # D left at beat 4 (half-open interval): the beat-5 line is invisible.
       refute Enum.any?(d_view, fn e ->
-               match?(%Polyphony.Events.SpeechUttered{beat: 5}, e)
+               match?(%PolyphonyCore.Events.SpeechUttered{beat: 5}, e)
              end)
 
       # But D did witness the beat-2 and beat-3 scene events.
-      assert Enum.any?(d_view, &match?(%Polyphony.Events.SpeechUttered{beat: 2}, &1))
-      assert Enum.any?(d_view, &match?(%Polyphony.Events.WorldEventOccurred{beat: 3}, &1))
+      assert Enum.any?(d_view, &match?(%PolyphonyCore.Events.SpeechUttered{beat: 2}, &1))
+      assert Enum.any?(d_view, &match?(%PolyphonyCore.Events.WorldEventOccurred{beat: 3}, &1))
     end
 
     test "characters still present witness a departure" do
       # A remains in S1, so A sees D exit at beat 4.
       a_view = project({:character, "A"})
 
-      assert Enum.any?(a_view, &match?(%Polyphony.Events.CharacterExited{character_id: "D"}, &1))
+      assert Enum.any?(
+               a_view,
+               &match?(%PolyphonyCore.Events.CharacterExited{character_id: "D"}, &1)
+             )
     end
   end
 
@@ -146,13 +153,13 @@ defmodule Polyphony.VisibilityTest do
       for viewer <- [{:character, "A"}, {:character, "B"}, {:character, "C"}, {:character, "D"}] do
         view = project(viewer)
 
-        refute Enum.any?(view, &match?(%Polyphony.Events.SceneOpened{}, &1)),
+        refute Enum.any?(view, &match?(%PolyphonyCore.Events.SceneOpened{}, &1)),
                "#{inspect(viewer)} must not see SceneOpened"
 
-        refute Enum.any?(view, &match?(%Polyphony.Events.BeatOpened{}, &1)),
+        refute Enum.any?(view, &match?(%PolyphonyCore.Events.BeatOpened{}, &1)),
                "#{inspect(viewer)} must not see BeatOpened"
 
-        refute Enum.any?(view, &match?(%Polyphony.Events.GenerationFailed{}, &1)),
+        refute Enum.any?(view, &match?(%PolyphonyCore.Events.GenerationFailed{}, &1)),
                "#{inspect(viewer)} must not see GenerationFailed"
       end
     end
@@ -182,8 +189,8 @@ defmodule Polyphony.VisibilityTest do
     test "including interior events and generation failures the characters cannot see" do
       omni = Visibility.project(log(), :omniscient)
 
-      assert Enum.any?(omni, &match?(%Polyphony.Events.GenerationFailed{}, &1))
-      assert Enum.any?(omni, &match?(%Polyphony.Events.ThoughtOccurred{}, &1))
+      assert Enum.any?(omni, &match?(%PolyphonyCore.Events.GenerationFailed{}, &1))
+      assert Enum.any?(omni, &match?(%PolyphonyCore.Events.ThoughtOccurred{}, &1))
     end
   end
 

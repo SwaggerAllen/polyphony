@@ -1,4 +1,4 @@
-defmodule Polyphony.Visibility do
+defmodule PolyphonyCore.Visibility do
   @moduledoc """
   The core guarantee (§8): dramatic irony as a **projection**, not a prompt.
 
@@ -20,10 +20,10 @@ defmodule Polyphony.Visibility do
   Membership is evaluated **at the event's beat**, not "now" — a character sees
   only what they could witness *when it happened*. The membership oracle is a
   `(scene_id, character_id, beat) -> boolean` closure so the pure
-  `Polyphony.MembershipSet` and the Postgres read model are interchangeable.
+  `PolyphonyCore.MembershipSet` and the Postgres read model are interchangeable.
   """
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     ThoughtOccurred,
     PrivateStateReported,
     SpeechUttered,
@@ -159,7 +159,7 @@ defmodule Polyphony.Visibility do
 
   @doc """
   Convenience: project a stream for `viewer`, deriving the membership oracle
-  from the same stream via `Polyphony.MembershipSet`.
+  from the same stream via `PolyphonyCore.MembershipSet`.
 
   Purely a projection over the log — no external state — which is what makes it
   safe to hand-write events in tests and assert the guarantee directly (§15
@@ -170,7 +170,9 @@ defmodule Polyphony.Visibility do
     events = Enum.to_list(events)
 
     member_at? =
-      events |> Polyphony.MembershipSet.from_events() |> Polyphony.MembershipSet.member_at_fun()
+      events
+      |> PolyphonyCore.MembershipSet.from_events()
+      |> PolyphonyCore.MembershipSet.member_at_fun()
 
     project(events, viewer, member_at?)
   end

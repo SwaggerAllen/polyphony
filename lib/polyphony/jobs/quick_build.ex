@@ -50,7 +50,8 @@ defmodule Polyphony.Jobs.QuickBuild do
 
   require Logger
 
-  alias Polyphony.{Builds, Campaigns, Library, Owner}
+  alias Polyphony.{Builds, Campaigns, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{QuickBuild, Stub}
 
   @doc """

@@ -8,13 +8,14 @@ defmodule Polyphony.Jobs.ObanControlTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, Repo, Context, Drafts, Packets}
+  alias Polyphony.{App, Repo, Context, Drafts}
+  alias PolyphonyCore.Packets
   alias Polyphony.Context.Store
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter, SetControlMode, DeclareTurnOrder}
   alias Polyphony.Director.BeatDriver
   alias Polyphony.Jobs.RunBeat
-  alias Polyphony.Events.{ThoughtOccurred, BeatClosed}
+  alias PolyphonyCore.Events.{ThoughtOccurred, BeatClosed}
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
 

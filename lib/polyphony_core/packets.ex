@@ -1,4 +1,4 @@
-defmodule Polyphony.Packets do
+defmodule PolyphonyCore.Packets do
   @moduledoc """
   Packet-level helpers over a raw event stream — the one place that knows how a
   re-roll's `PacketSuperseded` markers reshape what a projection sees (§7, §12).
@@ -10,7 +10,7 @@ defmodule Polyphony.Packets do
   no read site has to reason about re-rolls on its own.
   """
 
-  alias Polyphony.Events.PacketSuperseded
+  alias PolyphonyCore.Events.PacketSuperseded
 
   @doc "The set of `packet_id`s that have been superseded by a re-roll."
   @spec superseded_ids([struct()]) :: MapSet.t()

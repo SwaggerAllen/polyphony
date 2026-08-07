@@ -5,7 +5,7 @@ defmodule Polyphony.Authoring.CoverTest do
 
   Everywhere else the engine keeps a secret by never putting it in the prompt: a
   character isn't *told* what they can't know, so they can't leak it, and that is
-  structural rather than instructed (`Polyphony.Visibility`, default-deny). The
+  structural rather than instructed (`PolyphonyCore.Visibility`, default-deny). The
   cover inverts it. The secrets are the input — they're what makes the blurb feel
   like it's about something — and the constraint lives in the prompt.
 

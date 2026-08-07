@@ -11,7 +11,8 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Library, Owner}
+  alias Polyphony.Library
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
 
   setup :register_and_log_in_user
@@ -243,7 +244,7 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
       {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=world")
 
       # The author is omniscient over their own world — what a *character* may know is
-      # `Polyphony.Visibility`'s business and not this screen's. `secret` is the kit
+      # `PolyphonyCore.Visibility`'s business and not this screen's. `secret` is the kit
       # mark the bible editor uses, so the two don't describe one entry differently.
       assert html =~ "The bell is a signal."
       assert html =~ ~s(class="secret)
@@ -350,7 +351,7 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     # `OpenScene` has carried `location_id` since §2.3 and nothing ever passed one, so
     # every scene opened nowhere.
     opened =
-      for %Polyphony.Events.SceneOpened{} = e <-
+      for %PolyphonyCore.Events.SceneOpened{} = e <-
             Polyphony.App
             |> Commanded.EventStore.stream_forward(scene)
             |> Enum.map(& &1.data),

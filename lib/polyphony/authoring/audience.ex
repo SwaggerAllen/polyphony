@@ -62,8 +62,6 @@ defmodule Polyphony.Authoring.Audience do
   transit. It goes in the day locations do.
   """
 
-  alias Polyphony.Groups
-
   @derive Jason.Encoder
   defstruct group_ids: [], character_ids: [], scene: false
 
@@ -141,43 +139,6 @@ defmodule Polyphony.Authoring.Audience do
   end
 
   @doc """
-  Who this audience means **right now** — named characters plus every current member
-  of every named group, de-duplicated, named-first.
-
-  Resolved rather than stored, because a group's membership will change and the whole
-  point of naming one is that the audience moves with it.
-
-  `opts[:owner]` is the character the secret is *about*: a character always knows
-  their own secrets, so they are included whether or not anyone ticked them.
-  `opts[:repo]` is passed through to `Polyphony.Groups`.
-  """
-  @spec resolve(t() | nil, keyword()) :: [String.t()]
-  def resolve(audience, opts \\ [])
-  def resolve(nil, opts), do: owner_list(opts)
-
-  def resolve(%__MODULE__{} = a, opts) do
-    from_groups = Enum.flat_map(a.group_ids, &Groups.member_ids(&1, repo_opts(opts)))
-    from_scene = if a.scene, do: scene_members(opts), else: []
-
-    (owner_list(opts) ++ a.character_ids ++ from_groups ++ from_scene) |> Enum.uniq()
-  end
-
-  defp scene_members(opts),
-    do: opts |> Keyword.get(:scene_members, []) |> Enum.map(&to_string/1)
-
-  @doc """
-  Does `character_id` start out knowing this?
-
-  The read every context assembly makes, and the reason resolution is live: it is
-  asked when a character is being written into a scene, which is exactly when a
-  newly-written group member should turn out to already know.
-  """
-  @spec knows?(t() | nil, term(), keyword()) :: boolean()
-  def knows?(audience, character_id, opts \\ []) do
-    to_string(character_id) in resolve(audience, opts)
-  end
-
-  @doc """
   The character ids named **directly**, as opposed to inherited from a group.
 
   What the picker draws as a solid tick rather than an outlined one: an inherited
@@ -216,57 +177,6 @@ defmodule Polyphony.Authoring.Audience do
       [a1, b1 | rest] -> "#{a1}, #{b1}, +#{length(rest)}"
     end
   end
-
-  @doc """
-  The other direction: everything `character_id` starts out knowing, from every source
-  they're an audience of.
-
-  A **read-only projection**, and deliberately derived rather than stored — one fact,
-  one home, so the two directions cannot drift out of sync. You can see it from a
-  character's sheet; you edit it from the secret.
-
-  `sources` is `[{owner_label, owner_id, items}]`, where `items` are anything carrying
-  `statement`, `concealed` and `audience` — a character's facts, a world bible's
-  entries. Returns `[%{statement:, from:, why:}]`, where `why` says how they came by
-  it, because an inherited one should be obvious.
-  """
-  @spec known_by(term(), [{String.t(), term() | nil, [map()]}], keyword()) :: [map()]
-  def known_by(character_id, sources, opts \\ []) do
-    me = to_string(character_id)
-
-    for {label, owner_id, items} <- sources,
-        item <- items || [],
-        Map.get(item, :concealed),
-        owner_opts = if(owner_id, do: Keyword.put(opts, :owner, owner_id), else: opts),
-        knows?(item.audience, me, owner_opts),
-        do: %{
-          statement: item.statement,
-          from: label,
-          why: why(item.audience, me, owner_id, owner_opts)
-        }
-  end
-
-  defp why(_audience, me, owner_id, _opts) when not is_nil(owner_id) and me == owner_id,
-    do: :own
-
-  defp why(audience, me, _owner_id, opts) do
-    audience = from(audience)
-
-    cond do
-      me in audience.character_ids -> :named
-      Enum.any?(audience.group_ids, &(me in Groups.member_ids(&1, repo_opts(opts)))) -> :group
-      true -> :named
-    end
-  end
-
-  defp owner_list(opts) do
-    case Keyword.get(opts, :owner) do
-      nil -> []
-      owner -> [to_string(owner)]
-    end
-  end
-
-  defp repo_opts(opts), do: Keyword.take(opts, [:repo])
 
   defp append_unique(ids, id) do
     id = to_string(id)

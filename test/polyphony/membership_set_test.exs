@@ -3,7 +3,7 @@ defmodule Polyphony.MembershipSetTest do
   use ExUnit.Case, async: true
 
   import Polyphony.Test.Scenario
-  alias Polyphony.MembershipSet
+  alias PolyphonyCore.MembershipSet
 
   defp set(events), do: MembershipSet.from_events(events)
 

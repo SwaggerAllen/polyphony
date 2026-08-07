@@ -22,7 +22,8 @@ defmodule PolyphonyWeb.PermissionsLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Groups, Library, Owner, Permissions}
+  alias Polyphony.{Groups, Library, Permissions}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, Group, WorldBible}
 
   setup :register_and_log_in_user
@@ -204,7 +205,7 @@ defmodule PolyphonyWeb.PermissionsLiveTest do
       [scene | _] = Library.payload(Library.get(camp.id))[:scenes]
 
       opened =
-        for %Polyphony.Events.SceneOpened{} = e <-
+        for %PolyphonyCore.Events.SceneOpened{} = e <-
               Polyphony.App |> Commanded.EventStore.stream_forward(scene) |> Enum.map(& &1.data),
             do: e
 

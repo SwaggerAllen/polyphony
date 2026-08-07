@@ -37,10 +37,12 @@ defmodule Polyphony.Jobs.GeneratePacket do
   require Logger
 
   alias Polyphony.Scene.Cast
+  alias Polyphony.Context.Rebuild
   alias Polyphony.{App, Drafts, Generation, Failures}
   alias Polyphony.Commands.CommitPacket
-  alias Polyphony.Director.{BeatOps, BeatDriver, BeatPolicy}
-  alias Polyphony.Director.Commands.{RecordPacket, RecordFailure}
+  alias Polyphony.Director.{BeatOps, BeatDriver}
+  alias PolyphonyCore.Director.BeatPolicy
+  alias PolyphonyCore.Director.Commands.{RecordPacket, RecordFailure}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
@@ -115,7 +117,7 @@ defmodule Polyphony.Jobs.GeneratePacket do
            character_id: character_id,
            beat: beat,
            packet_id: packet_id,
-           packet: Cast.resolve_addressees(scene_id, packet)
+           packet: Cast.resolve_addressees(Rebuild.cast_for(scene_id), packet)
          }) do
       :ok ->
         :committed

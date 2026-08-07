@@ -9,10 +9,11 @@ defmodule Polyphony.Director.BeatOps do
   before the cast generates.
   """
 
-  alias Polyphony.{App, Context, MembershipSet, Packets}
+  alias Polyphony.{App, Context}
+  alias PolyphonyCore.{MembershipSet, Packets}
   alias Polyphony.Context.{Rebuild, Store}
   alias Polyphony.Commands.{RecordWorldEvent, ExitCharacter, CloseScene, ProposeIntroduction}
-  alias Polyphony.Director.Proposal
+  alias PolyphonyCore.Director.Proposal
 
   @typedoc "An event-store stream id — a scene, standing in for a branch."
   @type scene_id :: String.t()
@@ -114,7 +115,7 @@ defmodule Polyphony.Director.BeatOps do
   def declare_turn_order(scene_id, beat, default_cast_ids) do
     events = canonical_events(scene_id)
 
-    case Polyphony.TurnOrder.for_beat(events, beat) do
+    case PolyphonyCore.TurnOrder.for_beat(events, beat) do
       nil ->
         :ok =
           App.dispatch(%Polyphony.Commands.DeclareTurnOrder{

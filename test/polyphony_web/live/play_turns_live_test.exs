@@ -2,12 +2,13 @@ defmodule PolyphonyWeb.PlayTurnsLiveTest do
   @moduledoc "Editing / deleting / rerolling committed turns within a beat (§7 supersede-and-recommit)."
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Packets}
+  alias Polyphony.App
+  alias PolyphonyCore.Packets
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
   alias Polyphony.Director.BeatOps
-  alias Polyphony.Events.{SpeechUttered, ThoughtOccurred, ActionTaken}
+  alias PolyphonyCore.Events.{SpeechUttered, ThoughtOccurred, ActionTaken}
 
   setup :register_and_log_in_user
 

@@ -1,4 +1,4 @@
-defmodule Polyphony.Director.Options do
+defmodule PolyphonyCore.Director.Options do
   @moduledoc """
   The valid option set for a scene (§10): the exits and interactable entities a
   character may propose against.

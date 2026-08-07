@@ -19,7 +19,8 @@ defmodule PolyphonyWeb.CampaignPublishLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Campaigns, Library, Owner, Reading}
+  alias Polyphony.{Campaigns, Library, Reading}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
   alias Polyphony.Library.Snapshot
 

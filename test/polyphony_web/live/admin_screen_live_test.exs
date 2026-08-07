@@ -13,7 +13,8 @@ defmodule PolyphonyWeb.AdminScreenLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Accounts, Library, Moderation, Owner}
+  alias Polyphony.{Accounts, Library, Moderation}
+  alias Polyphony.Owner
 
   setup do
     _ = Polyphony.Accounts.Roles.roles()

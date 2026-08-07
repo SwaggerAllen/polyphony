@@ -9,7 +9,7 @@ defmodule PolyphonyWeb.Transcript do
   A second implementation of prose rendering is how the two drift, and the one a
   reader sees is the one nobody is looking at.
 
-  **Nothing here decides who sees what.** `Polyphony.Visibility` already did that
+  **Nothing here decides who sees what.** `PolyphonyCore.Visibility` already did that
   before a message reached this module; every function below is display only.
 
   ## Two registers, same structure
@@ -302,7 +302,7 @@ defmodule PolyphonyWeb.Transcript do
   @doc """
   Render one message as a transcript line, in the viewer's register.
 
-  Display only — `Polyphony.Visibility` already decided who sees what before the
+  Display only — `PolyphonyCore.Visibility` already decided who sees what before the
   message reached here.
   """
   #

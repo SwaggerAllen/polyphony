@@ -24,7 +24,9 @@ defmodule Polyphony.Edit do
   """
 
   alias Polyphony.Scene.Cast
-  alias Polyphony.{App, Packets, Fork}
+  alias Polyphony.Context.Rebuild
+  alias Polyphony.{App, Fork}
+  alias PolyphonyCore.Packets
   alias Polyphony.Commands.{SupersedePacket, CommitPacket}
   alias Polyphony.Director.BeatOps
 
@@ -101,7 +103,7 @@ defmodule Polyphony.Edit do
         beat: beat,
         packet_id: new_id,
         # The correction came back from the model in display names; the log takes ids.
-        packet: Cast.resolve_addressees(scene_id, corrected),
+        packet: Cast.resolve_addressees(Rebuild.cast_for(scene_id), corrected),
         edited: true
       })
 

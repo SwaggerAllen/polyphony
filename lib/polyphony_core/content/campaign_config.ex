@@ -1,4 +1,4 @@
-defmodule Polyphony.Content.CampaignConfig do
+defmodule PolyphonyCore.Content.CampaignConfig do
   @moduledoc """
   Layer 2 of content governance (§A5): the **per-campaign** content config.
 
@@ -25,13 +25,13 @@ defmodule Polyphony.Content.CampaignConfig do
   @doc """
   The categories this campaign turns on — empty unless `adult_content` is set, so
   the master toggle gates every sub-toggle. The field names match the category
-  atoms exactly (`Polyphony.Content.categories/0`).
+  atoms exactly (`PolyphonyCore.Content.categories/0`).
   """
-  @spec enabled(t()) :: [Polyphony.Content.category()]
+  @spec enabled(t()) :: [PolyphonyCore.Content.category()]
   def enabled(%__MODULE__{adult_content: false}), do: []
 
   def enabled(%__MODULE__{} = config),
-    do: Enum.filter(Polyphony.Content.categories(), &Map.get(config, &1))
+    do: Enum.filter(PolyphonyCore.Content.categories(), &Map.get(config, &1))
 
   @doc """
   Pull a config out of a campaign `Library` payload's `:content_config` field,

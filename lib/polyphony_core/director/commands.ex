@@ -1,4 +1,4 @@
-defmodule Polyphony.Director.Commands do
+defmodule PolyphonyCore.Director.Commands do
   @moduledoc "Commands for the beat aggregate (§12)."
 
   defmodule OpenBeat do

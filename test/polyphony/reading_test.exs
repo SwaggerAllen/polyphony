@@ -14,7 +14,8 @@ defmodule Polyphony.ReadingTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{Library, Owner, Reading, Repo}
+  alias Polyphony.{Library, Reading, Repo}
+  alias Polyphony.Owner
   alias Polyphony.Reading.Bookmark
 
   setup do

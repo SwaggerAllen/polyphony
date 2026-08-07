@@ -2,7 +2,8 @@ defmodule PolyphonyWeb.CampaignWorldLiveTest do
   @moduledoc "Associating a world bible with a campaign from the campaign view."
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Library, Owner}
+  alias Polyphony.Library
+  alias Polyphony.Owner
   alias Polyphony.Authoring.WorldBible
 
   setup :register_and_log_in_user

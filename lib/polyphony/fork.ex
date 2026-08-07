@@ -16,10 +16,11 @@ defmodule Polyphony.Fork do
   dropped from the copy — a fork inherits the canonical story, not its dead takes.
   """
 
-  alias Polyphony.{App, Packets}
+  alias Polyphony.App
+  alias PolyphonyCore.Packets
   alias Polyphony.Commands.ForkScene
   alias Polyphony.Director.BeatOps
-  alias Polyphony.Events.{SceneOpened, SceneClosed}
+  alias PolyphonyCore.Events.{SceneOpened, SceneClosed}
 
   @doc """
   Fork `parent_scene_id` at `through_beat`, keeping events **through** that beat

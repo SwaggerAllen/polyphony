@@ -44,7 +44,9 @@ defmodule PolyphonyWeb.BibleEditorLive do
 
   import PolyphonyWeb.BlockField
 
-  alias Polyphony.{Campaigns, Characters, Groups, Library, Owner}
+  alias Polyphony.{Campaigns, Characters, Groups, Library}
+  alias Polyphony.Authoring.Knowledge
+  alias Polyphony.Owner
   alias Polyphony.Permissions
   alias Polyphony.Authoring.{Audience, WorldBible}
   alias Polyphony.Authoring.WorldBible.Entry
@@ -144,7 +146,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
     # Both halves: the draft carries the cover and the count of what's held back, and
     # `seen` is that same draft filtered to what a character would be told.
     draft = Screens.BibleEditor.draft_bible(socket.assigns)
-    assign(socket, draft: draft, seen: WorldBible.for_character(draft))
+    assign(socket, draft: draft, seen: Knowledge.for_character(draft))
   end
 
   # `{field, index}`, over the wire as `rules:2`. Default-deny on the field name: an
@@ -794,7 +796,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
   end
 
   defp knows_count(audience) do
-    case length(Audience.resolve(audience)) do
+    case length(Knowledge.resolve(audience)) do
       0 -> "nobody else"
       n -> to_string(n)
     end
@@ -860,7 +862,7 @@ defmodule PolyphonyWeb.BibleEditorLive do
   defp resolved_audience(socket, {field, index}) do
     case Enum.at(socket.assigns.items[field] || [], index) do
       nil -> []
-      item -> Audience.resolve(item.audience)
+      item -> Knowledge.resolve(item.audience)
     end
   end
 

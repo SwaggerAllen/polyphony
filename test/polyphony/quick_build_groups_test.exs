@@ -20,7 +20,8 @@ defmodule Polyphony.QuickBuildGroupsTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Groups, Library, Owner}
+  alias Polyphony.{Groups, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{Group, QuickBuild}
 
   setup do

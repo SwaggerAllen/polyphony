@@ -21,7 +21,7 @@ defmodule Polyphony.AggregatePurityTest do
 
   alias Polyphony.Test.Purity
 
-  @aggregates [Polyphony.Scene, Polyphony.Director.Beat]
+  @aggregates [Polyphony.Scene, PolyphonyCore.Director.Beat]
 
   defp callbacks(module) do
     module.module_info(:exports)
@@ -55,7 +55,10 @@ defmodule Polyphony.AggregatePurityTest do
     found =
       :code.all_available()
       |> Enum.map(fn {mod, _, _} -> to_string(mod) end)
-      |> Enum.filter(&String.starts_with?(&1, "Elixir.Polyphony."))
+      |> Enum.filter(
+        &(String.starts_with?(&1, "Elixir.Polyphony.") or
+            String.starts_with?(&1, "Elixir.PolyphonyCore."))
+      )
       |> Enum.map(&String.to_existing_atom/1)
       |> Enum.filter(fn mod ->
         Code.ensure_loaded?(mod) and function_exported?(mod, :execute, 2) and

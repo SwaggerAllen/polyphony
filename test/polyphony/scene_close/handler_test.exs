@@ -10,7 +10,7 @@ defmodule Polyphony.SceneClose.HandlerTest do
 
   alias Polyphony.{App, Repo}
   alias Polyphony.SceneClose.Handler
-  alias Polyphony.Events.SceneClosed
+  alias PolyphonyCore.Events.SceneClosed
   alias Polyphony.Jobs.{SummarizeScene, ExtractArc}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket, CloseScene}
   alias Polyphony.TurnPacket

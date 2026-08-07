@@ -2,7 +2,8 @@ defmodule PolyphonyWeb.PlayControlsLiveTest do
   @moduledoc "Per-character control mode (autonomous / assisted / user-controlled) from the play view."
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, TurnOrder}
+  alias Polyphony.App
+  alias PolyphonyCore.TurnOrder
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
 
   setup :register_and_log_in_user

@@ -1,4 +1,4 @@
-defmodule Polyphony.TurnOrder do
+defmodule PolyphonyCore.TurnOrder do
   @moduledoc """
   Reading the declarative §A1 turn-order and control-mode facts off a scene's log.
 
@@ -15,7 +15,7 @@ defmodule Polyphony.TurnOrder do
   mode so it never regenerates a user's turn.
   """
 
-  alias Polyphony.Events.{TurnOrderDeclared, ControlModeSet}
+  alias PolyphonyCore.Events.{TurnOrderDeclared, ControlModeSet}
 
   @default_control "autonomous"
 

@@ -20,7 +20,9 @@ defmodule Polyphony.ArcReviewTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{Groups, Library, Owner, Repo}
+  alias Polyphony.{Groups, Library, Repo}
+  alias Polyphony.Authoring.Knowledge
+  alias Polyphony.Owner
 
   alias Polyphony.Authoring.{
     Audience,
@@ -185,7 +187,7 @@ defmodule Polyphony.ArcReviewTest do
 
       # Nobody, with no way to look the scene up — default-deny.
       blind = EffectiveWorldBible.apply(%WorldBible{}, [canon], :all)
-      assert WorldBible.known_to(blind.starting_canon, "wren") == []
+      assert Knowledge.known_to(blind.starting_canon, "wren") == []
 
       # **Expanded at fold time**, unlike a group. A scene's cast is finished history
       # and can't change, so resolving it once is safe; a group's membership moves,
@@ -195,8 +197,8 @@ defmodule Polyphony.ArcReviewTest do
           scene_members: fn "S1" -> ["wren", "ilias"] end
         )
 
-      assert WorldBible.known_to(folded.starting_canon, "wren") == [entry.statement]
-      assert WorldBible.known_to(folded.starting_canon, "corrigan") == []
+      assert Knowledge.known_to(folded.starting_canon, "wren") == [entry.statement]
+      assert Knowledge.known_to(folded.starting_canon, "corrigan") == []
     end
 
     test "scope and audience stay different axes" do

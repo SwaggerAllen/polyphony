@@ -20,10 +20,11 @@ defmodule PolyphonyWeb.PlayScreenLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Polyphony.{App, Library, Owner}
+  alias Polyphony.{App, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
-  alias Polyphony.Events.WorldEventOccurred
+  alias PolyphonyCore.Events.WorldEventOccurred
   alias Polyphony.Director.BeatOps
 
   setup :register_and_log_in_user

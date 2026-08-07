@@ -39,5 +39,5 @@ defmodule Polyphony do
   one — which is the right answer here, since the application module is the composition
   root and is the one place allowed to know about both halves.
   """
-  use Boundary, exports: :all
+  use Boundary, deps: [PolyphonyCore], exports: :all
 end

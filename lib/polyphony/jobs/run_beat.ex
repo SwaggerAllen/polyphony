@@ -25,12 +25,15 @@ defmodule Polyphony.Jobs.RunBeat do
   require Logger
 
   alias Polyphony.Scene.Cast
-  alias Polyphony.{App, Broadcast, Content, Library}
-  alias Polyphony.Content.CampaignConfig
+  alias Polyphony.Context.Rebuild
+  alias Polyphony.{App, Broadcast, Library}
+  alias PolyphonyCore.Content
+  alias PolyphonyCore.Content.CampaignConfig
   alias Polyphony.Costs.Attribution
   alias Polyphony.Director
-  alias Polyphony.Director.{Auto, BeatDriver, BeatOps, BeatPolicy, Proposal, SceneBrief}
-  alias Polyphony.Director.Commands.OpenBeat
+  alias Polyphony.Director.{Auto, BeatDriver, BeatOps, SceneBrief}
+  alias PolyphonyCore.Director.{BeatPolicy, Proposal}
+  alias PolyphonyCore.Director.Commands.OpenBeat
   alias Polyphony.LLM.Settings
 
   @doc "Kick off (or resume) the beat loop for a scene."
@@ -210,7 +213,7 @@ defmodule Polyphony.Jobs.RunBeat do
     # (§5.2 phase 2b-render) — so its picks come back as names. Resolve them to
     # character ids before they become the beat's declared turn order, because the
     # walk, packet ids and membership guards all key on ids.
-    cast = Cast.for_scene(scene_id)
+    cast = Rebuild.cast_for(scene_id)
     members = BeatOps.members_now(scene_id, beat)
 
     {cast_ids, uncast} =
@@ -330,7 +333,9 @@ defmodule Polyphony.Jobs.RunBeat do
   def director_system_message(args) do
     base = "You are the Director. Cast and pace the scene."
 
-    case Polyphony.Content.render_register(Polyphony.Content.cast_categories(register_arg(args))) do
+    case PolyphonyCore.Content.render_register(
+           PolyphonyCore.Content.cast_categories(register_arg(args))
+         ) do
       nil -> base
       line -> base <> "\n\n" <> line
     end

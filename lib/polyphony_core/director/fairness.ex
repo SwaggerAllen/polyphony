@@ -1,4 +1,4 @@
-defmodule Polyphony.Director.Fairness do
+defmodule PolyphonyCore.Director.Fairness do
   @moduledoc """
   The casting fairness heuristic (§10): track how much each character has spoken
   recently in a scene and show it to the Director, so one character doesn't
@@ -9,7 +9,7 @@ defmodule Polyphony.Director.Fairness do
   a hard constraint.
   """
 
-  alias Polyphony.Events.SpeechUttered
+  alias PolyphonyCore.Events.SpeechUttered
 
   @doc """
   Speak counts `%{character_id => count}` for `scene_id`, optionally limited to

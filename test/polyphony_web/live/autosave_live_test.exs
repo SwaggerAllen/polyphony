@@ -16,7 +16,8 @@ defmodule PolyphonyWeb.AutosaveLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Groups, Library, Owner}
+  alias Polyphony.{Groups, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, Group, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.Relationship
 

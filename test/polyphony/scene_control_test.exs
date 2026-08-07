@@ -6,9 +6,10 @@ defmodule Polyphony.SceneControlTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, SceneControl, MembershipSet}
+  alias Polyphony.{App, SceneControl}
+  alias PolyphonyCore.MembershipSet
   alias Polyphony.Commands.OpenScene
-  alias Polyphony.Events.{CharacterEntered, CharacterExited}
+  alias PolyphonyCore.Events.{CharacterEntered, CharacterExited}
 
   defp stored(scene), do: App |> Commanded.EventStore.stream_forward(scene) |> Enum.map(& &1.data)
 

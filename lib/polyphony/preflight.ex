@@ -1,4 +1,4 @@
-defmodule Polyphony.Publication.Preflight do
+defmodule Polyphony.Preflight do
   @moduledoc """
   What a campaign looks like from the outside, gathered before publishing.
 
@@ -13,13 +13,14 @@ defmodule Polyphony.Publication.Preflight do
       legitimate authorial choice — *sometimes a gap is the point* — but it must not
       happen by accident, so publish says so first and offers the two obvious fixes.
 
-  Cast is derived from the **stream**, through `Polyphony.MembershipSet`, rather than
+  Cast is derived from the **stream**, through `PolyphonyCore.MembershipSet`, rather than
   from the campaign's roster: who was actually in a scene is a fact about what happened,
   and a character added to the campaign afterwards was not in it.
   """
 
-  alias Polyphony.{App, MembershipSet, Packets, Publication}
-  alias Polyphony.Events.SceneOpened
+  alias Polyphony.App
+  alias PolyphonyCore.{MembershipSet, Packets, Publication}
+  alias PolyphonyCore.Events.SceneOpened
 
   @doc """
   Describe each of `scene_ids`, oldest first.

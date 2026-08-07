@@ -199,7 +199,7 @@ generation inside `execute/2` would rebuild the same log into a different story.
   confirms an id belongs to something.
 - **The Play view is the guarantee, visible.** It renders a scene as a
   viewer-parameterized projection (omniscient or as any character); a whisper the viewer
-  wasn't part of is silently absent. That is `Polyphony.Visibility.project/2` — the same
+  wasn't part of is silently absent. That is `PolyphonyCore.Visibility.project/2` — the same
   filter play runs on — and a LiveView test pins it end-to-end.
 
 ## Toolchain note

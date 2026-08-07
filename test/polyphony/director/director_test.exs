@@ -6,9 +6,9 @@ defmodule Polyphony.DirectorTest do
   use ExUnit.Case, async: true
 
   alias Polyphony.Director
-  alias Polyphony.Director.{Proposal, Options}
+  alias PolyphonyCore.Director.{Proposal, Options}
   alias Polyphony.LLM.Stub
-  alias Polyphony.Events.WorldEventOccurred
+  alias PolyphonyCore.Events.WorldEventOccurred
 
   defp decision_json(overrides \\ %{}) do
     Map.merge(

@@ -9,7 +9,7 @@ defmodule Polyphony.ContentContextTest do
   alias Polyphony.Context
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Authoring.CharacterSheet.Boundary
-  alias Polyphony.Content.CampaignConfig
+  alias PolyphonyCore.Content.CampaignConfig
 
   defp materialize(opts) do
     sheet = %CharacterSheet{

@@ -6,8 +6,8 @@ defmodule Polyphony.Director.BeatIntegrationTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.App
-  alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, CloseBeat}
-  alias Polyphony.Events.BeatClosed
+  alias PolyphonyCore.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, CloseBeat}
+  alias PolyphonyCore.Events.BeatClosed
 
   defp stored(beat_ref) do
     App |> Commanded.EventStore.stream_forward(to_string(beat_ref)) |> Enum.map(& &1.data)

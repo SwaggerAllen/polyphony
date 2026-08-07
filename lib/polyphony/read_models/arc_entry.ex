@@ -15,7 +15,7 @@ defmodule Polyphony.ReadModels.ArcEntry do
   import Ecto.Query
 
   alias Polyphony.Authoring.ArcEntry, as: Domain
-  alias Polyphony.Blob
+  alias PolyphonyCore.Blob
   alias Polyphony.Authoring.WorldArcEntry
   @typedoc "A row of this table. `Ecto.Schema` generates no `t/0`, so it is declared here."
   @type t :: %__MODULE__{}

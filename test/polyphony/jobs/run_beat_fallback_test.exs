@@ -8,7 +8,7 @@ defmodule Polyphony.Jobs.RunBeatFallbackTest do
   alias Polyphony.{App, Repo}
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Director.BeatOps
-  alias Polyphony.Events.TurnOrderDeclared
+  alias PolyphonyCore.Events.TurnOrderDeclared
   alias Polyphony.Jobs.RunBeat
 
   # Succeeds only on the heavy model; the workhorse call returns an empty body.

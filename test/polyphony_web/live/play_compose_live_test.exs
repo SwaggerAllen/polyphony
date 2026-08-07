@@ -2,7 +2,8 @@ defmodule PolyphonyWeb.PlayComposeLiveTest do
   @moduledoc "The composer's ✨ Expand button drafts a turn from the character's view (§11)."
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Context, Library, Owner}
+  alias Polyphony.{App, Context, Library}
+  alias Polyphony.Owner
   alias Polyphony.Context.Store
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter}

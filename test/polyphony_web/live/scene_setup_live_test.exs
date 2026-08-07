@@ -13,9 +13,10 @@ defmodule PolyphonyWeb.SceneSetupLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Library, Owner}
+  alias Polyphony.{App, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
-  alias Polyphony.Events.SceneOpened
+  alias PolyphonyCore.Events.SceneOpened
 
   setup :register_and_log_in_user
 
@@ -52,7 +53,7 @@ defmodule PolyphonyWeb.SceneSetupLiveTest do
     App
     |> Commanded.EventStore.stream_forward(scene_id)
     |> Enum.map(& &1.data)
-    |> Enum.filter(&match?(%Polyphony.Events.CharacterEntered{}, &1))
+    |> Enum.filter(&match?(%PolyphonyCore.Events.CharacterEntered{}, &1))
     |> Enum.map(& &1.character_id)
     |> Enum.sort()
   end

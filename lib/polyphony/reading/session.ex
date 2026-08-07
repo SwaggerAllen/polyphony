@@ -8,16 +8,17 @@ defmodule Polyphony.Reading.Session do
   each just reads as a scene, and the reader who switches finds out what they were
   missing.
 
-  ## There is no second implementation of visibility here
+  ## Everything here is a projection over a snapshot the caller already holds
 
-  `Publication.viewer/2` turns the reader's mode into a `Polyphony.Visibility` viewer
-  and `Visibility.project/3` does the rest — the same predicate that filters a
-  character's context in play. That is the entire seam, deliberately: a reading view
-  with its own idea of what a character knows is exactly how a preview ends up telling
-  you something reassuring that isn't true.
+  No reads. `Reading.scene/3` is the one that fetches a scene's events and filters them,
+  and it lives on `Reading` because it goes to the event store — it used to be here, and
+  it made a module of pure answers read as a query.
 
-  Reads go through `Polyphony.Packets.canonical/1` (rule 6) like every other read that
-  feeds fiction to anyone, so a re-rolled take can't reappear in a published story.
+  There is no second implementation of visibility behind it either: `Publication.viewer/2`
+  turns the reader's mode into a `PolyphonyCore.Visibility` viewer and `Visibility.project/3`
+  does the rest, the same predicate that filters a character's context in play. That is
+  the entire seam, deliberately — a reading view with its own idea of what a character
+  knows is exactly how a preview ends up telling you something reassuring that isn't true.
 
   ## Two different kinds of empty, and they aren't interchangeable
 
@@ -29,32 +30,8 @@ defmodule Polyphony.Reading.Session do
       make the numbering lie and the story jump.
   """
 
-  alias Polyphony.{App, MembershipSet, Packets, Publication, Visibility}
+  alias PolyphonyCore.Publication
   alias Polyphony.Library.Snapshot
-
-  @doc """
-  The events of `scene_id` as `mode` may read them.
-
-  Returns `{:ok, events}`, or `{:error, :not_offered}` when the publication never
-  granted that mode — default-deny, and the reason a URL naming a character whose head
-  the author kept back is not a way in.
-  """
-  @spec scene(Snapshot.t() | map(), term(), Publication.mode()) ::
-          {:ok, [struct()]} | {:error, :not_offered}
-  def scene(snapshot, scene_id, mode) do
-    pub = publication(snapshot)
-
-    if Publication.offers?(pub, mode) do
-      events = stored_events(scene_id)
-
-      member_at? =
-        events |> MembershipSet.from_events() |> MembershipSet.member_at_fun()
-
-      {:ok, Visibility.project(events, Publication.viewer(pub, mode), member_at?)}
-    else
-      {:error, :not_offered}
-    end
-  end
 
   @doc """
   Why a scene came back empty — `nil` when it didn't.
@@ -185,16 +162,4 @@ defmodule Polyphony.Reading.Session do
   @doc "The publication settings on a snapshot, defaulting to the least-granting ones."
   @spec publication(Snapshot.t() | map()) :: Publication.t()
   def publication(snapshot), do: Publication.from(Map.get(snapshot, :publication))
-
-  # The same canonical read every other fiction-facing read uses (rule 6): a re-rolled
-  # or superseded take must never reappear, and a published story is the last place you
-  # want one to.
-  defp stored_events(scene_id) do
-    App
-    |> Commanded.EventStore.stream_forward(scene_id)
-    |> Enum.map(& &1.data)
-    |> Packets.canonical()
-  rescue
-    _ -> []
-  end
 end

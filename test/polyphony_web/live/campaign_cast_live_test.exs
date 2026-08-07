@@ -2,7 +2,8 @@ defmodule PolyphonyWeb.CampaignCastLiveTest do
   @moduledoc "Managing a campaign's cast from the campaign overview (add/remove, world-scoped)."
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Library, Owner}
+  alias Polyphony.Library
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
   alias Polyphony.Authoring.CharacterSheet.Relationship
 

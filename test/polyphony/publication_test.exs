@@ -11,9 +11,9 @@ defmodule Polyphony.PublicationTest do
   """
   use ExUnit.Case, async: true
 
-  alias Polyphony.{Publication, Visibility}
+  alias PolyphonyCore.{Publication, Visibility}
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     ThoughtOccurred,
     PrivateStateReported,
     SpeechUttered,

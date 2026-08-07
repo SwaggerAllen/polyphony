@@ -28,9 +28,13 @@ defmodule Polyphony.Reading do
   reading lives here.
   """
 
+  alias PolyphonyCore.{MembershipSet, Packets, Publication, Visibility}
+  alias Polyphony.App
   alias Polyphony.Library
+  alias Polyphony.Library.Snapshot
   alias Polyphony.Owner
   alias Polyphony.Reading.Bookmark
+  alias Polyphony.Reading.Session
 
   @kind "bookmark"
 
@@ -186,7 +190,7 @@ defmodule Polyphony.Reading do
   # The reading modes share one vocabulary with the URL and with `Publication`, so the
   # label comes from there rather than from a second table that could disagree with it.
   def perspective_label(%Bookmark{perspective: p}, names) do
-    Polyphony.Publication.label(Polyphony.Publication.from_param(p), nil, names)
+    PolyphonyCore.Publication.label(PolyphonyCore.Publication.from_param(p), nil, names)
   end
 
   # ── Internals ───────────────────────────────────────────────────────────────
@@ -230,4 +234,41 @@ defmodule Polyphony.Reading do
   # `Owner.coerce/1` is applied by `Library`; kept here so a caller can pass a user.
   @doc false
   def owner(reader), do: Owner.coerce(reader)
+
+  @doc """
+  The events of a published scene as `mode` may read them.
+
+  Lived on `Reading.Session`, which is otherwise a pure projection over a snapshot the
+  caller already holds — this was the one function in it that went to the event store,
+  and it made the whole module read as a query. Here it sits with the rest of the
+  reading side, which is where a read belongs.
+  """
+  @spec scene(Snapshot.t() | map(), term(), Publication.mode()) ::
+          {:ok, [struct()]} | {:error, :not_offered}
+  def scene(snapshot, scene_id, mode) do
+    pub = Session.publication(snapshot)
+
+    if Publication.offers?(pub, mode) do
+      events = stored_events(scene_id)
+
+      member_at? =
+        events |> MembershipSet.from_events() |> MembershipSet.member_at_fun()
+
+      {:ok, Visibility.project(events, Publication.viewer(pub, mode), member_at?)}
+    else
+      {:error, :not_offered}
+    end
+  end
+
+  # The same canonical read every other fiction-facing read uses (rule 6): a re-rolled
+  # or superseded take must never reappear, and a published story is the last place you
+  # want one to.
+  defp stored_events(scene_id) do
+    App
+    |> Commanded.EventStore.stream_forward(scene_id)
+    |> Enum.map(& &1.data)
+    |> Packets.canonical()
+  rescue
+    _ -> []
+  end
 end

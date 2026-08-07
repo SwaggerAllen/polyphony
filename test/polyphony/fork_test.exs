@@ -7,11 +7,12 @@ defmodule Polyphony.ForkTest do
   """
   use ExUnit.Case, async: false
 
-  alias Polyphony.{App, Fork, Reroll, Packets, MembershipSet, Visibility}
+  alias Polyphony.{App, Fork, Reroll}
+  alias PolyphonyCore.{Packets, MembershipSet, Visibility}
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
-  alias Polyphony.Events.{SceneForked, ThoughtOccurred, SpeechUttered}
+  alias PolyphonyCore.Events.{SceneForked, ThoughtOccurred, SpeechUttered}
   alias Polyphony.LLM.Mock
 
   defp new_scene, do: "fork-" <> Integer.to_string(System.unique_integer([:positive]))
@@ -132,7 +133,7 @@ defmodule Polyphony.ForkTest do
     # The child inherits the canonical r1 take, never the superseded base attempt.
     assert "#{child}-3-alice-r1" in ids
     refute "#{child}-3-alice" in ids
-    refute Enum.any?(raw(child), &match?(%Polyphony.Events.PacketSuperseded{}, &1))
+    refute Enum.any?(raw(child), &match?(%PolyphonyCore.Events.PacketSuperseded{}, &1))
   end
 
   test "forking an unknown scene is rejected" do

@@ -19,7 +19,7 @@ defmodule Polyphony.Authoring.WorldBible do
   a prompt instruction**: `public/1` is what the character-facing renderer reads, so
   a concealed world fact never reaches a character's context at all. The Director,
   being omniscient, reads `statements/1` and sees everything. Getting this backwards
-  would be the world-level version of the leak `Polyphony.Visibility` exists to
+  would be the world-level version of the leak `PolyphonyCore.Visibility` exists to
   prevent, and it would leak into *prompts*, where nobody can see it happen.
 
   **Who else knows a secret is not modelled yet** (`completed-roadmap.md` §3.3, the
@@ -31,8 +31,6 @@ defmodule Polyphony.Authoring.WorldBible do
   written before this field existed, and generation that returns plain lines, both
   read as public entries without a migration.
   """
-
-  alias Polyphony.Authoring.Audience
 
   defmodule Entry do
     @moduledoc """
@@ -145,26 +143,6 @@ defmodule Polyphony.Authoring.WorldBible do
 
   defp keep_public(list), do: for(e <- entries(list), not e.concealed, do: e)
 
-  @doc """
-  What one character may read: the public statements, plus the concealed ones whose
-  audience includes them.
-
-  Resolution is live (`Audience.resolve/2` expands groups when asked), so a character
-  written into the Tidewatch in scene 9 gets the Tidewatch's secrets from the moment
-  they turn up — which is the whole reason a group is stored as a group.
-
-  A nil `character_id` is a stranger: `public/1`, and nothing else.
-  """
-  @spec known_to([Entry.t() | String.t() | map()], term() | nil, keyword()) :: [String.t()]
-  def known_to(list, character_id, opts \\ [])
-  def known_to(list, nil, _opts), do: public(list)
-
-  def known_to(list, character_id, opts) do
-    for e <- entries(list),
-        not e.concealed or Audience.knows?(e.audience, character_id, opts),
-        do: e.statement
-  end
-
   @doc "The concealed statements — what a cover must be checked against (§2.12)."
   @spec secrets(t()) :: [String.t()]
   def secrets(%__MODULE__{} = bible),
@@ -174,33 +152,4 @@ defmodule Polyphony.Authoring.WorldBible do
         e.concealed,
         do: e.statement
       )
-
-  @doc """
-  The bible as one character may see it: concealed rules and canon removed unless
-  their audience includes that character.
-
-  Used for the character-facing context and for the read-only *preview as* on the
-  editor (§3.2) — the same filter, so what an author previews is what a character
-  actually gets. With no character (a stranger, or the un-assigned viewer §3.2 calls
-  a real state) it is default-deny: every secret is gone.
-  """
-  @spec for_character(t(), term() | nil, keyword()) :: t()
-  def for_character(bible, character_id \\ nil, opts \\ [])
-
-  def for_character(%__MODULE__{} = bible, character_id, opts) do
-    %__MODULE__{
-      bible
-      | rules: visible(bible.rules, character_id, opts),
-        starting_canon: visible(bible.starting_canon, character_id, opts)
-    }
-  end
-
-  defp visible(list, nil, _opts), do: Enum.reject(entries(list), & &1.concealed)
-
-  defp visible(list, character_id, opts) do
-    Enum.filter(
-      entries(list),
-      &(not &1.concealed or Audience.knows?(&1.audience, character_id, opts))
-    )
-  end
 end

@@ -12,10 +12,11 @@ defmodule PolyphonyWeb.PlayAddCastLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Library, Owner}
+  alias Polyphony.{App, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{EnterCharacter, OpenScene}
-  alias Polyphony.Events.CharacterEntered
+  alias PolyphonyCore.Events.CharacterEntered
 
   setup :register_and_log_in_user
 

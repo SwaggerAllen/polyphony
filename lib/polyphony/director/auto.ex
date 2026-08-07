@@ -49,7 +49,7 @@ defmodule Polyphony.Director.Auto do
   require Logger
 
   alias Polyphony.Director.BeatOps
-  alias Polyphony.Events.SceneClosed
+  alias PolyphonyCore.Events.SceneClosed
   alias Polyphony.Jobs.RunBeat
   alias Polyphony.ReadModels.AutoRun
   alias Polyphony.Repo

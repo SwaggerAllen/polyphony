@@ -1,4 +1,4 @@
-defmodule Polyphony.Publication do
+defmodule PolyphonyCore.Publication do
   @moduledoc """
   What publishing decides (§3.1, §3.1c) — **two separate questions, not one ladder**.
 
@@ -14,7 +14,7 @@ defmodule Polyphony.Publication do
 
   ## Perspectives rather than per-surface toggles
 
-  Publication **names the perspectives a reader may adopt**, and `Polyphony.Visibility`
+  Publication **names the perspectives a reader may adopt**, and `PolyphonyCore.Visibility`
   does the filtering it already does in play. Enumerating authoring surfaces instead
   would mean every new feature ships a new toggle and the defaults rot; filtering by
   perspective covers surfaces that don't exist yet, for free — provided the rule holds
@@ -41,7 +41,7 @@ defmodule Polyphony.Publication do
   merged — reading a published campaign never reaches the author's live world.
   """
 
-  alias Polyphony.Visibility
+  alias PolyphonyCore.Visibility
 
   @derive Jason.Encoder
   defstruct perspectives: [],
@@ -126,7 +126,7 @@ defmodule Polyphony.Publication do
   def offers?(%__MODULE__{} = pub, mode), do: mode in modes(pub)
 
   @doc """
-  Turn a reader's mode into a `Polyphony.Visibility` viewer.
+  Turn a reader's mode into a `PolyphonyCore.Visibility` viewer.
 
   The whole point of §3.1: publication decides *who you may be*, and the existing
   predicate decides what that person sees. No second implementation of visibility

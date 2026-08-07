@@ -6,10 +6,11 @@ defmodule Polyphony.IntroductionsTest do
   """
   use ExUnit.Case, async: true
 
-  alias Polyphony.{Scene, Visibility}
+  alias Polyphony.Scene
+  alias PolyphonyCore.Visibility
   alias Polyphony.Commands.{ProposeIntroduction, DismissIntroduction}
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     SceneOpened,
     CharacterEntered,
     IntroductionProposed,

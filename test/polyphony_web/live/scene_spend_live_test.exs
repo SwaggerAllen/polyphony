@@ -18,7 +18,8 @@ defmodule PolyphonyWeb.SceneSpendLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Costs, Library, Owner}
+  alias Polyphony.{App, Costs, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{EnterCharacter, OpenScene}
 

@@ -27,10 +27,12 @@ defmodule PolyphonyWeb.PlayIdentityLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Library, Owner, Packets}
+  alias Polyphony.{App, Library}
+  alias Polyphony.Owner
+  alias PolyphonyCore.Packets
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
-  alias Polyphony.Events.SpeechUttered
+  alias PolyphonyCore.Events.SpeechUttered
   alias Polyphony.Director.BeatOps
 
   setup :register_and_log_in_user

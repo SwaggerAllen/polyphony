@@ -20,7 +20,8 @@ defmodule Polyphony.Reroll do
   separate mechanism (`{:error, :not_latest_beat}`).
   """
 
-  alias Polyphony.{App, Packets, TurnOrder}
+  alias Polyphony.App
+  alias PolyphonyCore.{Packets, TurnOrder}
   alias Polyphony.Commands.SupersedePacket
   alias Polyphony.Director.BeatOps
   alias Polyphony.Jobs.GeneratePacket

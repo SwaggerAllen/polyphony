@@ -17,12 +17,13 @@ defmodule PolyphonyWeb.PlayNarrateLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{App, Library, Owner}
+  alias Polyphony.{App, Library}
+  alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
   alias Polyphony.Authoring.WorldBible.Entry
   alias Polyphony.Commands.{CommitPacket, EnterCharacter, OpenScene, RecordWorldEvent}
   alias Polyphony.TurnPacket
-  alias Polyphony.Events.WorldEventOccurred
+  alias PolyphonyCore.Events.WorldEventOccurred
 
   setup :register_and_log_in_user
 

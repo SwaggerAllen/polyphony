@@ -19,7 +19,8 @@ defmodule PolyphonyWeb.SheetLayoutLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Library, Owner}
+  alias Polyphony.Library
+  alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
 
   setup :register_and_log_in_user

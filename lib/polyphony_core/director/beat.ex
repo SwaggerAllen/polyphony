@@ -1,4 +1,4 @@
-defmodule Polyphony.Director.Beat do
+defmodule PolyphonyCore.Director.Beat do
   @moduledoc """
   The beat aggregate — the §12 synchronization unit.
 
@@ -14,8 +14,15 @@ defmodule Polyphony.Director.Beat do
   scene framing to the client. Late arrivals after close are rejected (§12).
   """
 
-  alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, RecordPass, CloseBeat}
-  alias Polyphony.Events.{BeatOpened, BeatClosed, PacketRecorded, PacketFailed, PacketPassed}
+  alias PolyphonyCore.Director.Commands.{
+    OpenBeat,
+    RecordPacket,
+    RecordFailure,
+    RecordPass,
+    CloseBeat
+  }
+
+  alias PolyphonyCore.Events.{BeatOpened, BeatClosed, PacketRecorded, PacketFailed, PacketPassed}
 
   defstruct beat_ref: nil,
             scene_id: nil,
