@@ -1,4 +1,4 @@
-defmodule Polyphony.Director.BeatPolicy do
+defmodule PolyphonyCore.Director.BeatPolicy do
   @moduledoc """
   The beat-loop stopping rule (§10), as a pure decision.
 

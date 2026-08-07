@@ -20,7 +20,7 @@ defmodule PolyphonyWeb.PlayUserTurnLiveTest do
   alias PolyphonyCore.TurnOrder
   alias Polyphony.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
   alias Polyphony.Director.BeatOps
-  alias Polyphony.Director.Commands.OpenBeat
+  alias PolyphonyCore.Director.Commands.OpenBeat
 
   setup :register_and_log_in_user
 

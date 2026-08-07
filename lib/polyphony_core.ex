@@ -35,6 +35,19 @@ defmodule PolyphonyCore do
   now. Had it stayed in the namespace it would have been the first thing to fail the
   check, and the temptation would have been to loosen the check.
 
+  ## It mirrors the shell's subsystems
+
+  Not a flat bag. `PolyphonyCore.Director.*` holds the Beat aggregate, its commands and
+  its policy — the rules — while `Polyphony.Director.*` holds the driver, the ops and the
+  auto loop, which read. The same name appears in both layers with the same sub-path, so
+  you navigate by subject and find each half where you would expect it. That is the answer
+  to the obvious objection: organising by purity would scatter one concept across two
+  namespaces, and organising by subject *within* each layer does not.
+
+  It also settles invariant 2. `Director.Beat` is replayed, so a provider call inside it
+  would rebuild the same log into a different story — and now that is a compile error
+  rather than something a test notices.
+
   ## Why it is `PolyphonyCore` and not `Polyphony.Core`
 
   The name is the price of the declaration. `deps: []` is only true because the event

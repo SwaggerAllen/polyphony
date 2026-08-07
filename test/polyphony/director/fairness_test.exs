@@ -3,7 +3,7 @@ defmodule Polyphony.Director.FairnessTest do
   use ExUnit.Case, async: true
 
   import Polyphony.Test.Scenario
-  alias Polyphony.Director.Fairness
+  alias PolyphonyCore.Director.Fairness
 
   defp log do
     [

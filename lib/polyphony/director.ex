@@ -26,7 +26,8 @@ defmodule Polyphony.Director do
   require Logger
 
   alias Polyphony.LLM.Provider
-  alias Polyphony.Director.{Arbitration, Decision, Proposal}
+  alias Polyphony.Director.Decision
+  alias PolyphonyCore.Director.{Arbitration, Proposal}
   alias PolyphonyCore.Events.WorldEventOccurred
 
   @type resolved :: %{

@@ -23,6 +23,12 @@ cannot be a leaf without the shapes of the facts it reasons about. `PolyphonyCor
 holds the namespace to a wider floor than the compiler can see — no repo, event store,
 provider, PubSub, mail, files, processes or ETS — walking the call graph per function.
 
+`PolyphonyCore` **mirrors the shell's subsystems** rather than being a flat bag:
+`PolyphonyCore.Director.*` is the Beat aggregate, its commands and its policy, while
+`Polyphony.Director.*` is the driver and the ops, which read. That is what settles
+invariant 2 — an aggregate is replayed, so a provider call inside one would rebuild the
+same log into a different story, and `deps: []` makes it a compile error.
+
 The rest: `visible_to?/3` decides whether
 one event reaches one viewer, and `project/3` filters a stream. The **same
 predicate** drives character conditioning contexts *and* the client broadcaster, so

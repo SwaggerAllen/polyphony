@@ -28,8 +28,9 @@ defmodule Polyphony.Director.BeatDriver do
   alias Polyphony.Context.Rebuild
   alias Polyphony.{App, Drafts, Broadcast}
   alias Polyphony.Commands.CommitPacket
-  alias Polyphony.Director.{Auto, BeatWalk, BeatOps, BeatPolicy}
-  alias Polyphony.Director.Commands.{CloseBeat, RecordPacket, RecordPass}
+  alias Polyphony.Director.{Auto, BeatWalk, BeatOps}
+  alias PolyphonyCore.Director.BeatPolicy
+  alias PolyphonyCore.Director.Commands.{CloseBeat, RecordPacket, RecordPass}
   alias Polyphony.Jobs.{GeneratePacket, RunBeat}
 
   @pubsub Polyphony.PubSub

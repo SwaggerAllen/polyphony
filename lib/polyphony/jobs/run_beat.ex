@@ -31,8 +31,9 @@ defmodule Polyphony.Jobs.RunBeat do
   alias PolyphonyCore.Content.CampaignConfig
   alias Polyphony.Costs.Attribution
   alias Polyphony.Director
-  alias Polyphony.Director.{Auto, BeatDriver, BeatOps, BeatPolicy, Proposal, SceneBrief}
-  alias Polyphony.Director.Commands.OpenBeat
+  alias Polyphony.Director.{Auto, BeatDriver, BeatOps, SceneBrief}
+  alias PolyphonyCore.Director.{BeatPolicy, Proposal}
+  alias PolyphonyCore.Director.Commands.OpenBeat
   alias Polyphony.LLM.Settings
 
   @doc "Kick off (or resume) the beat loop for a scene."

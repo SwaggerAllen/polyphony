@@ -2,7 +2,9 @@ defmodule Polyphony.Router do
   @moduledoc "Routes commands to aggregates by their identity field."
   use Commanded.Commands.Router
 
-  alias Polyphony.{Scene, Director}
+  alias Polyphony.Scene
+  # The Beat aggregate is in the core (`deps: []`); the rest of `Director` is not.
+  alias PolyphonyCore.Director
 
   alias Polyphony.Commands.{
     OpenScene,
@@ -19,7 +21,13 @@ defmodule Polyphony.Router do
     DismissIntroduction
   }
 
-  alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, RecordPass, CloseBeat}
+  alias PolyphonyCore.Director.Commands.{
+    OpenBeat,
+    RecordPacket,
+    RecordFailure,
+    RecordPass,
+    CloseBeat
+  }
 
   identify(Scene, by: :scene_id)
   identify(Director.Beat, by: :beat_ref)

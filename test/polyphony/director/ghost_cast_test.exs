@@ -21,7 +21,7 @@ defmodule Polyphony.Director.GhostCastTest do
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter, DeclareTurnOrder}
   alias Polyphony.Director.{BeatOps, BeatWalk}
-  alias Polyphony.Director.Commands.OpenBeat
+  alias PolyphonyCore.Director.Commands.OpenBeat
   alias Polyphony.Jobs.{GeneratePacket, RunBeat}
   alias Polyphony.ReadModels.Failure
 

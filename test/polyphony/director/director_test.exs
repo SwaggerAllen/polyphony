@@ -6,7 +6,7 @@ defmodule Polyphony.DirectorTest do
   use ExUnit.Case, async: true
 
   alias Polyphony.Director
-  alias Polyphony.Director.{Proposal, Options}
+  alias PolyphonyCore.Director.{Proposal, Options}
   alias Polyphony.LLM.Stub
   alias PolyphonyCore.Events.WorldEventOccurred
 

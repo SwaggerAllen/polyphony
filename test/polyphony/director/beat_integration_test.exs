@@ -6,7 +6,7 @@ defmodule Polyphony.Director.BeatIntegrationTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.App
-  alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, CloseBeat}
+  alias PolyphonyCore.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, CloseBeat}
   alias PolyphonyCore.Events.BeatClosed
 
   defp stored(beat_ref) do

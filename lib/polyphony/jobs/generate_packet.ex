@@ -40,8 +40,9 @@ defmodule Polyphony.Jobs.GeneratePacket do
   alias Polyphony.Context.Rebuild
   alias Polyphony.{App, Drafts, Generation, Failures}
   alias Polyphony.Commands.CommitPacket
-  alias Polyphony.Director.{BeatOps, BeatDriver, BeatPolicy}
-  alias Polyphony.Director.Commands.{RecordPacket, RecordFailure}
+  alias Polyphony.Director.{BeatOps, BeatDriver}
+  alias PolyphonyCore.Director.BeatPolicy
+  alias PolyphonyCore.Director.Commands.{RecordPacket, RecordFailure}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do

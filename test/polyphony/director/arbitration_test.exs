@@ -2,7 +2,7 @@ defmodule Polyphony.Director.ArbitrationTest do
   @moduledoc "Stage-1 mechanical arbitration (§10) — pure and deterministic."
   use ExUnit.Case, async: true
 
-  alias Polyphony.Director.{Arbitration, Proposal, Options}
+  alias PolyphonyCore.Director.{Arbitration, Proposal, Options}
 
   defp options,
     do: Options.for_scene([%{label: "north gate"}, %{label: "cellar"}], ["lantern", "ledger"])

@@ -13,7 +13,7 @@ defmodule Polyphony.Director.BeatOps do
   alias PolyphonyCore.{MembershipSet, Packets}
   alias Polyphony.Context.{Rebuild, Store}
   alias Polyphony.Commands.{RecordWorldEvent, ExitCharacter, CloseScene, ProposeIntroduction}
-  alias Polyphony.Director.Proposal
+  alias PolyphonyCore.Director.Proposal
 
   @typedoc "An event-store stream id — a scene, standing in for a branch."
   @type scene_id :: String.t()

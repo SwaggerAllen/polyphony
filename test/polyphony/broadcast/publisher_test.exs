@@ -8,7 +8,7 @@ defmodule Polyphony.Broadcast.PublisherTest do
 
   alias Polyphony.{App, Broadcast}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
-  alias Polyphony.Director.Commands.{OpenBeat, CloseBeat}
+  alias PolyphonyCore.Director.Commands.{OpenBeat, CloseBeat}
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
 

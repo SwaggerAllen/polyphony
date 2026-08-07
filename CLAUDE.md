@@ -98,10 +98,11 @@ Breaking any of these silently breaks the core guarantee. Guard them in review.
 2. **No LLM in an aggregate (rule 1).** Aggregates (`Scene`, `Director.Beat`) are
    pure — Commanded replays them, so a provider call would re-fire and rebuild the same
    log into a *different story*. Generation happens only in Oban jobs (or the inline
-   runner), which *produce commands*. **Checked**, by `AggregatePurityTest`: the call
-   graph is walked from `execute/2` and `apply/2` at two floors, the repo/event-store and
-   the provider, and a further test fails when a module grows both callbacks and nobody
-   adds it to the list.
+   runner), which *produce commands*. **`Director.Beat` is in `PolyphonyCore`** (`deps: []`),
+   so a read or a provider call inside it is a compile error. `Scene` is not yet, so
+   `AggregatePurityTest` still walks the call graph from `execute/2` and `apply/2` at two
+   floors — the repo/event-store and the provider — and a further test fails when a module
+   grows both callbacks and nobody adds it to the list.
 3. **Canonical reads (rule 6 / §7).** Every read that feeds fiction to anyone —
    character conditioning, the broadcaster, scene-close — must go through
    `PolyphonyCore.Packets.canonical/1` so re-rolled/superseded packets never reappear.

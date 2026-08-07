@@ -17,7 +17,7 @@ defmodule PolyphonyWeb.PlayDraftsLiveTest do
   alias Polyphony.{App, Drafts}
   alias Polyphony.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
   alias Polyphony.Director.BeatOps
-  alias Polyphony.Director.Commands.OpenBeat
+  alias PolyphonyCore.Director.Commands.OpenBeat
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.Move
 

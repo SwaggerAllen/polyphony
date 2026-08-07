@@ -1,4 +1,4 @@
-defmodule Polyphony.Director.Arbitration do
+defmodule PolyphonyCore.Director.Arbitration do
   @moduledoc """
   Stage-1 arbitration (§10): mechanical, deterministic, free — pure Elixir, no
   LLM.
@@ -12,11 +12,11 @@ defmodule Polyphony.Director.Arbitration do
     * **forward the rest** — every `:novel` proposal goes to the judgment call.
 
   This is small precisely because the valid option set was injected into the
-  character's context (`Polyphony.Director.Options`), so most proposals are
+  character's context (`PolyphonyCore.Director.Options`), so most proposals are
   already well-formed. What survives to Stage 2 is the genuinely ambiguous.
   """
 
-  alias Polyphony.Director.Proposal
+  alias PolyphonyCore.Director.Proposal
 
   @type ruling ::
           {:accept, Proposal.t()} | {:reject, Proposal.t(), atom()} | {:forward, Proposal.t()}
@@ -27,7 +27,7 @@ defmodule Polyphony.Director.Arbitration do
         }
 
   @doc "Classify proposals against `%{exits: [...], entities: [...]}` (see `Options`)."
-  @spec classify([Proposal.t()], Polyphony.Director.Options.t()) :: result()
+  @spec classify([Proposal.t()], PolyphonyCore.Director.Options.t()) :: result()
   def classify(proposals, options) do
     exits = MapSet.new(options[:exits] || [])
     entities = MapSet.new(options[:entities] || [])
