@@ -1,4 +1,4 @@
-defmodule Polyphony.Core do
+defmodule PolyphonyCore do
   @moduledoc """
   The functional core: the rules of the fiction, as data in and data out.
 
@@ -35,21 +35,24 @@ defmodule Polyphony.Core do
   now. Had it stayed in the namespace it would have been the first thing to fail the
   check, and the temptation would have been to loosen the check.
 
-  ## Why there is no boundary declaration here yet
+  ## Why it is `PolyphonyCore` and not `Polyphony.Core`
 
-  `deps: []` was the goal and it is not reachable: the core is the rules *over* the event
-  log, so it pattern-matches thirteen `Polyphony.Events` structs and the sheet's
-  `Boundary` struct. Those are data definitions, which is the right kind of dependency —
-  but naming them means making each its own boundary, and then `Polyphony.Core` is a
-  **sub-boundary** of `Polyphony`.
+  The name is the price of the declaration. `deps: []` is only true because the event
+  vocabulary came with it — the core is the rules *over* the log, so it pattern-matches
+  thirteen event structs and cannot be a leaf without them.
 
-  That is where the tool stops. A parent may use its children's exports; code outside the
-  parent may not, and `exports: :all` cannot be combined with the mass-export entries that
-  would re-export a sub-boundary. So either `Polyphony` enumerates **83 modules** in its
-  export list — churning on every new context function — or the web layer loses the fifty
-  or so `Core` references it legitimately makes.
+  As `Polyphony.Core` that made it a **sub-boundary**, and boundary will not let a parent
+  combine `exports: :all` with the mass-export entries that re-export a child. The choice
+  was `Polyphony` enumerating 83 exports that churn on every new context function, or the
+  web layer losing the fifty-odd core references it legitimately makes. A **sibling** has
+  neither problem: `Polyphony` and `PolyphonyWeb` both simply depend on it.
 
-  Neither is obviously right, so the namespace and the computed check landed first. The
-  declaration is a decision, not a mechanical follow-up.
+  One thing had to move the other way. `Content.gate_boundary/2` and `constrain_boundary/2`
+  were the only functions here that knew the shape of a `CharacterSheet.Boundary`, and a
+  struct dependency is still a dependency. They are on `Authoring.BoundaryGate` now, beside
+  the `resolve/3` that runs right after them — one production caller, so the ceiling capping
+  and the gate releasing now sit together, which reads better than where they were.
   """
+
+  use Boundary, deps: [], exports: :all
 end

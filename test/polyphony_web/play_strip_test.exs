@@ -16,7 +16,7 @@ defmodule PolyphonyWeb.Play.StripTest do
   """
   use ExUnit.Case, async: true
 
-  alias Polyphony.Events.{BeatOpened, PacketFailed, PacketPassed, PacketRecorded}
+  alias PolyphonyCore.Events.{BeatOpened, PacketFailed, PacketPassed, PacketRecorded}
   alias PolyphonyWeb.Play.Strip
 
   @names %{"1" => "Wren Ashgrove", "2" => "Ilias", "3" => "Corrigan", "4" => "Sable"}

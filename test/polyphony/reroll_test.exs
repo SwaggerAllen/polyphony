@@ -8,11 +8,11 @@ defmodule Polyphony.RerollTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.{App, Reroll}
-  alias Polyphony.Core.{Packets, MembershipSet, Visibility}
+  alias PolyphonyCore.{Packets, MembershipSet, Visibility}
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
-  alias Polyphony.Events.{ThoughtOccurred, SpeechUttered, PacketSuperseded}
+  alias PolyphonyCore.Events.{ThoughtOccurred, SpeechUttered, PacketSuperseded}
   alias Polyphony.LLM.Mock
 
   defp new_scene, do: "reroll-" <> Integer.to_string(System.unique_integer([:positive]))

@@ -10,7 +10,7 @@ defmodule PolyphonyWeb.CampaignContentLiveTest do
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Authoring.CharacterSheet.Boundary
-  alias Polyphony.Core.Content.CampaignConfig
+  alias PolyphonyCore.Content.CampaignConfig
   alias Polyphony.Context.Store
 
   setup :register_and_log_in_user

@@ -17,7 +17,7 @@ defmodule PolyphonyWeb.PlayUserTurnLiveTest do
   use PolyphonyWeb.ConnCase, async: false
 
   alias Polyphony.{App, Broadcast}
-  alias Polyphony.Core.TurnOrder
+  alias PolyphonyCore.TurnOrder
   alias Polyphony.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
   alias Polyphony.Director.BeatOps
   alias Polyphony.Director.Commands.OpenBeat
@@ -57,9 +57,9 @@ defmodule PolyphonyWeb.PlayUserTurnLiveTest do
   # which is the shape the whole log is in (§6). So "did they take a turn" is "are
   # there moves of theirs", and the beat comes off the move.
   @moves [
-    Polyphony.Events.SpeechUttered,
-    Polyphony.Events.ThoughtOccurred,
-    Polyphony.Events.ActionTaken
+    PolyphonyCore.Events.SpeechUttered,
+    PolyphonyCore.Events.ThoughtOccurred,
+    PolyphonyCore.Events.ActionTaken
   ]
 
   # Speech names its `speaker_id`; thought and action name a `character_id`. Both are
@@ -127,7 +127,7 @@ defmodule PolyphonyWeb.PlayUserTurnLiveTest do
       # A free `CommitPacket` never touches the beat aggregate, so the Director had no
       # way to know the slot was done.
       recorded =
-        for %{__struct__: Polyphony.Events.PacketRecorded} = e <-
+        for %{__struct__: PolyphonyCore.Events.PacketRecorded} = e <-
               App
               |> Commanded.EventStore.stream_forward(BeatOps.beat_ref(scene, 1))
               |> Enum.map(& &1.data),
@@ -173,7 +173,7 @@ defmodule PolyphonyWeb.PlayUserTurnLiveTest do
       refute html =~ "The scene is waiting on your turn."
 
       passed =
-        for %{__struct__: Polyphony.Events.PacketPassed} = e <-
+        for %{__struct__: PolyphonyCore.Events.PacketPassed} = e <-
               App
               |> Commanded.EventStore.stream_forward(BeatOps.beat_ref(scene, 1))
               |> Enum.map(& &1.data),

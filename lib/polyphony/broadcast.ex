@@ -4,7 +4,7 @@ defmodule Polyphony.Broadcast do
 
   A committed event is published to **per-viewer topics**, and — critically — a
   viewer only receives an event that is visible to them. The fan-out routes every
-  event through the *same* `Polyphony.Core.Visibility.visible_to?/3` used to build
+  event through the *same* `PolyphonyCore.Visibility.visible_to?/3` used to build
   character contexts, so the transport can never leak more than the projection
   (§13 "never hardcode omniscience into the transport"). The omniscient user and
   a second human playing a character are just different viewer values.
@@ -22,10 +22,10 @@ defmodule Polyphony.Broadcast do
   their scene id.
   """
 
-  alias Polyphony.Core.{Visibility, Packets}
+  alias PolyphonyCore.{Visibility, Packets}
   alias Polyphony.Broadcast.Activity
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     ThoughtOccurred,
     PrivateStateReported,
     SpeechUttered,

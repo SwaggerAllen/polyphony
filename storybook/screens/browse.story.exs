@@ -1,7 +1,7 @@
 defmodule Storybook.Screens.Browse do
   use PhoenixStorybook.Story, :component
 
-  alias Polyphony.Core.Publication
+  alias PolyphonyCore.Publication
 
   def container, do: {:div, style: "width:100%"}
 

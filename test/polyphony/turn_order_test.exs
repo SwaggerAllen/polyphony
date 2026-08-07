@@ -8,7 +8,7 @@ defmodule Polyphony.TurnOrderTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.{App, Reroll}
-  alias Polyphony.Core.{TurnOrder, Packets}
+  alias PolyphonyCore.{TurnOrder, Packets}
   alias Polyphony.LLM.Mock
   alias Polyphony.Director.{Beat, BeatWalk}
 
@@ -21,7 +21,7 @@ defmodule Polyphony.TurnOrderTest do
   }
 
   alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordPass}
-  alias Polyphony.Events.{ThoughtOccurred, ControlModeSet, TurnOrderDeclared}
+  alias PolyphonyCore.Events.{ThoughtOccurred, ControlModeSet, TurnOrderDeclared}
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
 

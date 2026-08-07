@@ -8,7 +8,7 @@ defmodule Polyphony.Library.SnapshotTest do
 
   alias Polyphony.Library.Snapshot
   alias Polyphony.Authoring.{WorldBible, CharacterSheet}
-  alias Polyphony.Events.{ThoughtOccurred, SpeechUttered}
+  alias PolyphonyCore.Events.{ThoughtOccurred, SpeechUttered}
 
   defp arc(status, statement, beat),
     do: %{status: status, statement: statement, beat: beat, subject_id: "mira"}

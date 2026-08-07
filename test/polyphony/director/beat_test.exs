@@ -8,7 +8,7 @@ defmodule Polyphony.Director.BeatTest do
 
   alias Polyphony.Director.Beat
   alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, CloseBeat}
-  alias Polyphony.Events.{BeatOpened, BeatClosed, PacketRecorded, PacketFailed}
+  alias PolyphonyCore.Events.{BeatOpened, BeatClosed, PacketRecorded, PacketFailed}
 
   defp evolve(state \\ %Beat{}, events), do: Enum.reduce(events, state, &Beat.apply(&2, &1))
 

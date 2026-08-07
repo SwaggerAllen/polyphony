@@ -9,7 +9,7 @@ defmodule Polyphony.ExportTest do
   alias Polyphony.Export
   alias Polyphony.Authoring.CharacterSheet
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     SpeechUttered,
     ThoughtOccurred,
     CharacterEntered,

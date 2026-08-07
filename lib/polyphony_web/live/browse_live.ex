@@ -43,7 +43,7 @@ defmodule PolyphonyWeb.BrowseLive do
 
   alias Polyphony.{Accounts, Library, Moderation, Reading}
   alias Polyphony.Owner
-  alias Polyphony.Core.Publication
+  alias PolyphonyCore.Publication
   alias Polyphony.Authoring.WorldBible
   alias Polyphony.Reading.Session
   alias PolyphonyWeb.Screens

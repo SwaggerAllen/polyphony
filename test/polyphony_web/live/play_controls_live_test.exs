@@ -3,7 +3,7 @@ defmodule PolyphonyWeb.PlayControlsLiveTest do
   use PolyphonyWeb.ConnCase, async: false
 
   alias Polyphony.App
-  alias Polyphony.Core.TurnOrder
+  alias PolyphonyCore.TurnOrder
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
 
   setup :register_and_log_in_user

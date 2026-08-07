@@ -11,9 +11,9 @@ defmodule Polyphony.ReadModels.MembershipTest do
   import Polyphony.Test.Scenario
 
   alias Polyphony.Repo
-  alias Polyphony.Core.MembershipSet
+  alias PolyphonyCore.MembershipSet
   alias Polyphony.ReadModels.Membership
-  alias Polyphony.Events.{CharacterEntered, CharacterExited}
+  alias PolyphonyCore.Events.{CharacterEntered, CharacterExited}
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)

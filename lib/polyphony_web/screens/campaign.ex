@@ -8,7 +8,7 @@ defmodule PolyphonyWeb.Screens.Campaign do
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
   alias Polyphony.Builds
   alias Polyphony.Characters
-  alias Polyphony.Core.Content.CampaignConfig
+  alias PolyphonyCore.Content.CampaignConfig
   alias Polyphony.Library
   alias Polyphony.ReadModels.BuildRun
   alias PolyphonyWeb.{Kit, Layouts, Voice}

@@ -21,7 +21,7 @@ defmodule Polyphony.Reroll do
   """
 
   alias Polyphony.App
-  alias Polyphony.Core.{Packets, TurnOrder}
+  alias PolyphonyCore.{Packets, TurnOrder}
   alias Polyphony.Commands.SupersedePacket
   alias Polyphony.Director.BeatOps
   alias Polyphony.Jobs.GeneratePacket

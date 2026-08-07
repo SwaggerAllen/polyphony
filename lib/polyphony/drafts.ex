@@ -18,7 +18,7 @@ defmodule Polyphony.Drafts do
 
   require Logger
 
-  alias Polyphony.Core.Blob
+  alias PolyphonyCore.Blob
   alias Polyphony.Scene.Cast
   alias Polyphony.{App, Repo, Broadcast}
   alias Polyphony.ReadModels.PacketDraft
@@ -134,7 +134,7 @@ defmodule Polyphony.Drafts do
   # ── Codec ─────────────────────────────────────────────────────────────────
 
   # A packet is a term nobody queries (`:thought`, `:speech`, `TurnPacket`, …), so it is
-  # stored whole — see `Polyphony.Core.Blob`, which owns the `:safe` read.
+  # stored whole — see `PolyphonyCore.Blob`, which owns the `:safe` read.
   defp encode(packet), do: Blob.encode(packet)
   defp decode(bin), do: Blob.decode(bin)
 

@@ -17,7 +17,7 @@ defmodule Polyphony.SceneClose.ArcExtractor do
   """
 
   alias Polyphony.LLM.Provider
-  alias Polyphony.Core.{Visibility, EventText}
+  alias PolyphonyCore.{Visibility, EventText}
   alias Polyphony.SceneClose.ArcSchema
 
   @doc "Extract proposed arc entries for `character_id`. Returns `{:ok, [ArcEntry]}`."

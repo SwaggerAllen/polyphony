@@ -30,7 +30,7 @@ defmodule PolyphonyWeb.Play.Strip do
   viewer's position, so the same beat reads differently to a player and the GM.
   """
 
-  alias Polyphony.Events.{BeatOpened, PacketFailed, PacketPassed, PacketRecorded}
+  alias PolyphonyCore.Events.{BeatOpened, PacketFailed, PacketPassed, PacketRecorded}
   alias PolyphonyWeb.Voice
 
   @typedoc "One slot: who, what state, whether it's the viewer."

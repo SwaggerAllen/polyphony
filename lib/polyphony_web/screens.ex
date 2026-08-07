@@ -29,5 +29,5 @@ defmodule PolyphonyWeb.Screens do
   reach the repo from the call graph rather than declaring it, and boundary takes the
   coarser half it is actually good at.
   """
-  use Boundary, deps: [Polyphony, PolyphonyWeb], exports: :all
+  use Boundary, deps: [Polyphony, PolyphonyCore, PolyphonyWeb], exports: :all
 end

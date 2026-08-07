@@ -25,7 +25,7 @@ defmodule Polyphony.Edit do
 
   alias Polyphony.Scene.Cast
   alias Polyphony.{App, Fork}
-  alias Polyphony.Core.Packets
+  alias PolyphonyCore.Packets
   alias Polyphony.Commands.{SupersedePacket, CommitPacket}
   alias Polyphony.Director.BeatOps
 

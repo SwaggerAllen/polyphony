@@ -74,7 +74,7 @@ Everything runs offline on `LLM.Mock`; the suite is green with no network.
   and `Context.materialize` renders the resolved state **in character** — a refusal is
   generated as a scene beat, never a post-generation filter.
 - **A4 — Editing.** ✅ **Done.**
-- **A5 — Three nested content layers.** ✅ **Done.** `Polyphony.Content` governs three
+- **A5 — Three nested content layers.** ✅ **Done.** `PolyphonyCore.Content` governs three
   layers: `Content.Floor` (app-wide 18+ ceiling, non-configurable — attested ⇒ all
   categories, else none), `Content.CampaignConfig` (per-campaign `adult_content` master
   toggle gating sexual / graphic-violence / other sub-toggles), and per-character
@@ -626,7 +626,7 @@ backlog.
 
 The fix is `direction` on `Boundary` plus `after_release` (the mock's *and then* / *and now*,
 written at authoring time but withheld from the character until the gate releases). What made it
-worth doing before the port rather than after is what it exposed in `Polyphony.Content`: capping
+worth doing before the port rather than after is what it exposed in `PolyphonyCore.Content`: capping
 meant forcing `stance: :closed`, which for a compulsion means *she always does it*, so the content
 ceiling would have compelled the content it exists to forbid. The cap now flips direction too — the
 design's own rule is that the ceiling always pushes toward refusal, *because that's the correct
@@ -835,7 +835,7 @@ view (§3.1b) exists, so it falls back to the share link or browse; library-wide
 Publishing worked and produced nothing anyone could read. This is the missing half — and the
 biggest backend ask in the rebuild, because a reading surface is not a list with prose in it.
 
-**Publication names perspectives, not surfaces** (§3.1, §3.1c). `Polyphony.Publication` asks two
+**Publication names perspectives, not surfaces** (§3.1, §3.1c). `PolyphonyCore.Publication` asks two
 separate questions rather than one ladder: *how it's meant to be read* — which perspectives a
 reader may adopt, a content decision and the **spoiler control** — and *whether the authoring
 surface is exposed*, which is one checkbox, `forkable`, and brings sheets with it because a fork
@@ -1133,7 +1133,7 @@ before earning it. `Autofill` proposes both directions; `Context` writes a compu
 compulsion rather than as a negated refusal, because a model handed "you will not not do this"
 writes a worse beat than one handed "you can't help it". `CompulsionTest` pins the axis.
 
-The bug this closed is in `Polyphony.Content`. Capping meant forcing `stance: :closed`, which for a
+The bug this closed is in `PolyphonyCore.Content`. Capping meant forcing `stance: :closed`, which for a
 compulsion means *she always does it* — so the content ceiling would have **compelled** the content
 it exists to forbid. The cap now flips direction as well as stance, per the design's own rule:
 *the ceiling always pushes toward refusal. That's the correct direction to fail in.* Original ask
@@ -1389,7 +1389,7 @@ Two follow-ups it surfaced:
 
 #### 3.1 Publication is a set of viewer perspectives · **new** — ✅ **Shipped**
 
-`Polyphony.Publication` — `perspectives` + `spectator` + `forkable`, stored **on the snapshot**
+`PolyphonyCore.Publication` — `perspectives` + `spectator` + `forkable`, stored **on the snapshot**
 rather than the live campaign, because the snapshot is the thing readers hold and the grant must
 not change under someone partway through. `Publication.viewer/2` is the entire seam: publication
 decides *who you may be*, `Visibility` decides what that person sees. Settings a snapshot never

@@ -1,4 +1,4 @@
-defmodule Polyphony.Core.Content.Floor do
+defmodule PolyphonyCore.Content.Floor do
   @moduledoc """
   Layer 1 of content governance (§A5): the **app-wide 18+ floor** — the widest
   ceiling every narrower layer (campaign, boundary) intersects down from.
@@ -15,7 +15,7 @@ defmodule Polyphony.Core.Content.Floor do
   long way out); until then nothing passes `attested: false`, so the branch is a
   latent seam, not a code path exercised per user.
   """
-  alias Polyphony.Core.Content
+  alias PolyphonyCore.Content
 
   @doc """
   The categories the app permits at its widest. `:attested` (default `true`) — the

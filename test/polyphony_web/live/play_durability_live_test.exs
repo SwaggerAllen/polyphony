@@ -30,7 +30,7 @@ defmodule PolyphonyWeb.PlayDurabilityLiveTest do
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
   alias Polyphony.Director.BeatOps
-  alias Polyphony.Events.{SpeechUttered, ThoughtOccurred}
+  alias PolyphonyCore.Events.{SpeechUttered, ThoughtOccurred}
 
   setup :register_and_log_in_user
 

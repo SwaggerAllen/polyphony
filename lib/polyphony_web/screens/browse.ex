@@ -13,7 +13,7 @@ defmodule PolyphonyWeb.Screens.Browse do
   use PolyphonyWeb, :html
 
   alias Polyphony.Library
-  alias Polyphony.Core.Publication
+  alias PolyphonyCore.Publication
   alias Polyphony.Authoring.WorldBible
   alias Polyphony.Moderation.Report
   alias Polyphony.Reading.Session

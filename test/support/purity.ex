@@ -47,7 +47,7 @@ defmodule Polyphony.Test.Purity do
   def impure, do: reaching(@db)
 
   # Everything an effect can be, not just a database read. The distinction decides
-  # `Polyphony.Core`'s membership and it is not academic: under a repo-only floor
+  # `PolyphonyCore`'s membership and it is not academic: under a repo-only floor
   # `Broadcast`, `Mailer` and `DebugLog` all score clean, and they publish, send mail and
   # write ETS respectively.
   @effects @db ++
@@ -58,7 +58,7 @@ defmodule Polyphony.Test.Purity do
                 Elixir.Polyphony.Notifications)
 
   @doc """
-  Everything that can reach an effect of any kind — the floor `Polyphony.Core` is held to.
+  Everything that can reach an effect of any kind — the floor `PolyphonyCore` is held to.
   """
   @spec reaches_effects() :: MapSet.t({module(), atom(), arity()})
   def reaches_effects, do: reaching({@effects, ~w(Elixir.Polyphony.LLM.Settings)})

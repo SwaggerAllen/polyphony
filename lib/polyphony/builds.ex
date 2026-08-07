@@ -31,7 +31,7 @@ defmodule Polyphony.Builds do
   reconnecting work at all.
   """
 
-  alias Polyphony.Core.Blob
+  alias PolyphonyCore.Blob
   alias Polyphony.ReadModels.BuildRun
   alias Polyphony.Repo
 

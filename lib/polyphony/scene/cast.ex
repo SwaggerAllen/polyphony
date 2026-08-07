@@ -19,7 +19,7 @@ defmodule Polyphony.Scene.Cast do
   alias Polyphony.App
   alias Polyphony.Context.Rebuild
   alias Polyphony.Authoring.CharacterSheet
-  alias Polyphony.Events.CharacterEntered
+  alias PolyphonyCore.Events.CharacterEntered
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.Move
 

@@ -10,13 +10,13 @@ defmodule Polyphony.Reading.Session do
 
   ## There is no second implementation of visibility here
 
-  `Publication.viewer/2` turns the reader's mode into a `Polyphony.Core.Visibility` viewer
+  `Publication.viewer/2` turns the reader's mode into a `PolyphonyCore.Visibility` viewer
   and `Visibility.project/3` does the rest — the same predicate that filters a
   character's context in play. That is the entire seam, deliberately: a reading view
   with its own idea of what a character knows is exactly how a preview ends up telling
   you something reassuring that isn't true.
 
-  Reads go through `Polyphony.Core.Packets.canonical/1` (rule 6) like every other read that
+  Reads go through `PolyphonyCore.Packets.canonical/1` (rule 6) like every other read that
   feeds fiction to anyone, so a re-rolled take can't reappear in a published story.
 
   ## Two different kinds of empty, and they aren't interchangeable
@@ -30,7 +30,7 @@ defmodule Polyphony.Reading.Session do
   """
 
   alias Polyphony.App
-  alias Polyphony.Core.{MembershipSet, Packets, Publication, Visibility}
+  alias PolyphonyCore.{MembershipSet, Packets, Publication, Visibility}
   alias Polyphony.Library.Snapshot
 
   @doc """

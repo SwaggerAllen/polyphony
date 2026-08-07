@@ -8,13 +8,13 @@ defmodule Polyphony.Jobs.ObanBeatTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.{App, Context}
-  alias Polyphony.Core.{MembershipSet, Visibility}
+  alias PolyphonyCore.{MembershipSet, Visibility}
   alias Polyphony.Context.Store
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
   alias Polyphony.Jobs.RunBeat
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     ThoughtOccurred,
     SpeechUttered,
     BeatClosed,

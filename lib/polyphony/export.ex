@@ -5,7 +5,7 @@ defmodule Polyphony.Export do
     * **Transcript** — a readable markdown rendering of a scene's events. Omniscient by
       default (the same disclosure as publishing, §B1) or, given a viewer, **as a
       character** — the per-perspective export, near-free because it is just
-      `Polyphony.Core.Visibility.project/2` through the same filter play uses.
+      `PolyphonyCore.Visibility.project/2` through the same filter play uses.
     * **Structured JSON** — the full omniscient event log plus pinned dependencies
       (essentially the frozen `Library.Snapshot`), for archival/portability.
     * **Sheet / bible JSON** — a single authored entity as JSON.
@@ -14,10 +14,10 @@ defmodule Polyphony.Export do
   offline against hand-written logs and never needs a store.
   """
 
-  alias Polyphony.Core.Visibility
+  alias PolyphonyCore.Visibility
   alias Polyphony.Library.Snapshot
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     SpeechUttered,
     ThoughtOccurred,
     ActionTaken,

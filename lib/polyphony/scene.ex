@@ -28,7 +28,7 @@ defmodule Polyphony.Scene do
     DismissIntroduction
   }
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     SceneOpened,
     SceneClosed,
     CharacterEntered,

@@ -16,7 +16,7 @@ defmodule PolyphonyWeb.PlayAddCastLiveTest do
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{EnterCharacter, OpenScene}
-  alias Polyphony.Events.CharacterEntered
+  alias PolyphonyCore.Events.CharacterEntered
 
   setup :register_and_log_in_user
 

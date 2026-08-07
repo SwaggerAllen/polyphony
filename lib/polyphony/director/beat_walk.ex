@@ -19,8 +19,8 @@ defmodule Polyphony.Director.BeatWalk do
   walk would re-enqueue the same generation forever.
   """
 
-  alias Polyphony.Core.{MembershipSet, Packets, TurnOrder}
-  alias Polyphony.Events.{PacketPassed, PacketFailed}
+  alias PolyphonyCore.{MembershipSet, Packets, TurnOrder}
+  alias PolyphonyCore.Events.{PacketPassed, PacketFailed}
   alias Polyphony.Director.BeatOps
 
   @type slot :: {:autonomous | :user_controlled | :assisted, term()} | :settled

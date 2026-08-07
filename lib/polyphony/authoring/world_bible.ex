@@ -19,7 +19,7 @@ defmodule Polyphony.Authoring.WorldBible do
   a prompt instruction**: `public/1` is what the character-facing renderer reads, so
   a concealed world fact never reaches a character's context at all. The Director,
   being omniscient, reads `statements/1` and sees everything. Getting this backwards
-  would be the world-level version of the leak `Polyphony.Core.Visibility` exists to
+  would be the world-level version of the leak `PolyphonyCore.Visibility` exists to
   prevent, and it would leak into *prompts*, where nobody can see it happen.
 
   **Who else knows a secret is not modelled yet** (`completed-roadmap.md` §3.3, the

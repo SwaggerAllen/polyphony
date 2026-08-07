@@ -1,4 +1,4 @@
-defmodule Polyphony.Core.MembershipSet do
+defmodule PolyphonyCore.MembershipSet do
   @moduledoc """
   A pure, in-memory materialization of scene membership as intervals (§8).
 
@@ -13,7 +13,7 @@ defmodule Polyphony.Core.MembershipSet do
   still open). Re-entry is simply a second interval — no special casing.
   """
 
-  alias Polyphony.Events.{CharacterEntered, CharacterExited}
+  alias PolyphonyCore.Events.{CharacterEntered, CharacterExited}
 
   @type interval :: %{
           scene_id: term(),
@@ -96,7 +96,7 @@ defmodule Polyphony.Core.MembershipSet do
   end
 
   @doc """
-  Return a `member_at?/3` closure suitable for `Polyphony.Core.Visibility`.
+  Return a `member_at?/3` closure suitable for `PolyphonyCore.Visibility`.
 
   This is the seam that lets the *pure* set and the *Postgres* read model be
   used interchangeably — both expose the same `(scene_id, char_id, beat) ->

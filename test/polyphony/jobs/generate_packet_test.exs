@@ -8,10 +8,10 @@ defmodule Polyphony.Jobs.GeneratePacketTest do
   use Oban.Testing, repo: Polyphony.Repo
 
   alias Polyphony.App
-  alias Polyphony.Core.{MembershipSet, Visibility}
+  alias PolyphonyCore.{MembershipSet, Visibility}
   alias Polyphony.Jobs.GeneratePacket
   alias Polyphony.Commands.{OpenScene, EnterCharacter}
-  alias Polyphony.Events.{ThoughtOccurred, SpeechUttered}
+  alias PolyphonyCore.Events.{ThoughtOccurred, SpeechUttered}
   alias Polyphony.LLM.Stub
 
   defp stored_events(scene_id) do

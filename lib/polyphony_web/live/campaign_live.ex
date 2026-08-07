@@ -22,15 +22,15 @@ defmodule PolyphonyWeb.CampaignLive do
     WorldBible
   }
 
-  alias Polyphony.Events.SceneOpened
+  alias PolyphonyCore.Events.SceneOpened
   alias Polyphony.Groups
   alias Polyphony.Builds
   alias Polyphony.Generations
   alias Polyphony.Jobs.QuickBuild, as: BuildJob
   alias Polyphony.ReadModels.BuildRun
   alias Polyphony.Campaigns
-  alias Polyphony.Core.Content.CampaignConfig
-  alias Polyphony.Core.Publication
+  alias PolyphonyCore.Content.CampaignConfig
+  alias PolyphonyCore.Publication
   alias Polyphony.Preflight
   alias PolyphonyWeb.Guard
   alias PolyphonyWeb.Screens

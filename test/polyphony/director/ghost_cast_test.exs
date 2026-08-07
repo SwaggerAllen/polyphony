@@ -25,7 +25,7 @@ defmodule Polyphony.Director.GhostCastTest do
   alias Polyphony.Jobs.{GeneratePacket, RunBeat}
   alias Polyphony.ReadModels.Failure
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     ThoughtOccurred,
     TurnOrderDeclared,
     IntroductionProposed,

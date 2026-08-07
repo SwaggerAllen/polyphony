@@ -11,7 +11,7 @@ defmodule Polyphony.SceneClose.WorldArcExtractor do
   """
 
   alias Polyphony.LLM.Provider
-  alias Polyphony.Core.EventText
+  alias PolyphonyCore.EventText
   alias Polyphony.SceneClose.WorldArcSchema
 
   @doc """

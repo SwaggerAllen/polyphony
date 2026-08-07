@@ -17,10 +17,10 @@ defmodule Polyphony.Fork do
   """
 
   alias Polyphony.App
-  alias Polyphony.Core.Packets
+  alias PolyphonyCore.Packets
   alias Polyphony.Commands.ForkScene
   alias Polyphony.Director.BeatOps
-  alias Polyphony.Events.{SceneOpened, SceneClosed}
+  alias PolyphonyCore.Events.{SceneOpened, SceneClosed}
 
   @doc """
   Fork `parent_scene_id` at `through_beat`, keeping events **through** that beat

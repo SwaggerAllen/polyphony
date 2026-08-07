@@ -31,7 +31,7 @@ defmodule PolyphonyWeb.PlayLive do
 
   alias Polyphony.{App, Broadcast, Context, DebugFlags, Drafts, Failures, Library, SceneControl}
   alias Polyphony.Owner
-  alias Polyphony.Core.{MembershipSet, TurnOrder}
+  alias PolyphonyCore.{MembershipSet, TurnOrder}
 
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Director.{Auto, BeatDriver}
@@ -59,7 +59,7 @@ defmodule PolyphonyWeb.PlayLive do
 
   alias Polyphony.Authoring.{CharacterSheet, Stub, WorldBible}
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     IntroductionProposed,
     IntroductionDismissed,
     CharacterEntered,

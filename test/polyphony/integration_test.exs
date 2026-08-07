@@ -13,11 +13,11 @@ defmodule Polyphony.IntegrationTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.App
-  alias Polyphony.Core.{MembershipSet, Visibility}
+  alias PolyphonyCore.{MembershipSet, Visibility}
   alias Polyphony.TurnPacket
   alias Polyphony.TurnPacket.{Move, SelfState}
   alias Polyphony.Commands.{OpenScene, EnterCharacter, CommitPacket}
-  alias Polyphony.Events.{ThoughtOccurred, SpeechUttered}
+  alias PolyphonyCore.Events.{ThoughtOccurred, SpeechUttered}
 
   defp stored_events(scene_id) do
     App

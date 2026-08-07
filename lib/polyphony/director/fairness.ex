@@ -9,7 +9,7 @@ defmodule Polyphony.Director.Fairness do
   a hard constraint.
   """
 
-  alias Polyphony.Events.SpeechUttered
+  alias PolyphonyCore.Events.SpeechUttered
 
   @doc """
   Speak counts `%{character_id => count}` for `scene_id`, optionally limited to

@@ -16,7 +16,7 @@ defmodule Polyphony.Broadcast.Publisher do
     start_from: :current
 
   alias Polyphony.{App, Broadcast}
-  alias Polyphony.Core.{MembershipSet, Packets}
+  alias PolyphonyCore.{MembershipSet, Packets}
 
   @pubsub Polyphony.PubSub
 

@@ -14,7 +14,7 @@ defmodule Polyphony.Costs.Attribution do
   require Logger
 
   alias Polyphony.{App, Library}
-  alias Polyphony.Events.SceneOpened
+  alias PolyphonyCore.Events.SceneOpened
 
   @type t :: %{user_id: term() | nil, campaign_id: term() | nil}
 

@@ -1,6 +1,6 @@
-defmodule Polyphony.CoreTest do
+defmodule PolyphonyCoreTest do
   @moduledoc """
-  `Polyphony.Core` is pure, computed rather than declared.
+  `PolyphonyCore` is pure, computed rather than declared.
 
   The boundary declaration says what Core may *name*: the event vocabulary and the
   sheet's `Boundary` struct, and nothing else. That is enforced at compile time and it is
@@ -14,7 +14,7 @@ defmodule Polyphony.CoreTest do
   it is — under a repo-only floor `Broadcast`, `Mailer` and `DebugLog` all come out clean,
   and they publish, send mail and write ETS.
 
-  The namespace is discovered, not listed. A module added to `Polyphony.Core.*` is held to
+  The namespace is discovered, not listed. A module added to `PolyphonyCore.*` is held to
   this without anybody remembering to add it.
   """
   use ExUnit.Case, async: true
@@ -24,14 +24,14 @@ defmodule Polyphony.CoreTest do
   defp core_modules do
     :code.all_available()
     |> Enum.map(fn {mod, _, _} -> to_string(mod) end)
-    |> Enum.filter(&String.starts_with?(&1, "Elixir.Polyphony.Core"))
+    |> Enum.filter(&String.starts_with?(&1, "Elixir.PolyphonyCore"))
     |> Enum.map(&String.to_existing_atom/1)
     |> Enum.sort()
   end
 
   test "the namespace is not empty, so this test cannot pass by covering nothing" do
-    assert length(core_modules()) >= 9,
-           "found #{length(core_modules())} modules under Polyphony.Core — has it moved?"
+    assert length(core_modules()) >= 30,
+           "found #{length(core_modules())} modules under PolyphonyCore — has it moved?"
   end
 
   test "nothing in the core can reach an effect" do
@@ -45,7 +45,7 @@ defmodule Polyphony.CoreTest do
           do: "#{inspect(mod)}.#{fun}/#{arity}"
 
     assert offenders == [], """
-    These are in Polyphony.Core and can reach an effect:
+    These are in PolyphonyCore and can reach an effect:
 
     #{Enum.join(offenders, "\n")}
 
@@ -59,8 +59,8 @@ defmodule Polyphony.CoreTest do
     # Named rather than merely covered by the sweep above. Rule 3 is the invariant the
     # whole product rests on, and "it happens to live somewhere pure" is a weaker
     # statement than "it lives in the layer that cannot stop being pure".
-    assert Polyphony.Core.Visibility in core_modules()
-    assert Polyphony.Core.Packets in core_modules()
-    assert Polyphony.Core.MembershipSet in core_modules()
+    assert PolyphonyCore.Visibility in core_modules()
+    assert PolyphonyCore.Packets in core_modules()
+    assert PolyphonyCore.MembershipSet in core_modules()
   end
 end

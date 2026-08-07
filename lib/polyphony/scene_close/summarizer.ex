@@ -12,7 +12,7 @@ defmodule Polyphony.SceneClose.Summarizer do
   """
 
   alias Polyphony.LLM.Provider
-  alias Polyphony.Core.{Visibility, EventText}
+  alias PolyphonyCore.{Visibility, EventText}
 
   @doc "Summarize `events` from `viewer`'s filtered perspective. Returns `{:ok, text}`."
   @spec summarize(Enumerable.t(), Visibility.viewer(), keyword()) ::

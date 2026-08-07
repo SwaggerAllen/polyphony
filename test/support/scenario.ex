@@ -7,7 +7,7 @@ defmodule Polyphony.Test.Scenario do
   reading almost like the scene it describes.
   """
 
-  alias Polyphony.Events.{
+  alias PolyphonyCore.Events.{
     SceneOpened,
     SceneClosed,
     CharacterEntered,

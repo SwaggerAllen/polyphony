@@ -24,7 +24,7 @@ defmodule PolyphonyWeb.PlayScreenLiveTest do
   alias Polyphony.Owner
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{DeclareTurnOrder, EnterCharacter, OpenScene}
-  alias Polyphony.Events.WorldEventOccurred
+  alias PolyphonyCore.Events.WorldEventOccurred
   alias Polyphony.Director.BeatOps
 
   setup :register_and_log_in_user

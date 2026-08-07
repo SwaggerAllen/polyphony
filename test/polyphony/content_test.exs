@@ -6,8 +6,9 @@ defmodule Polyphony.ContentTest do
   """
   use ExUnit.Case, async: true
 
-  alias Polyphony.Core.Content
-  alias Polyphony.Core.Content.{CampaignConfig, Floor}
+  alias PolyphonyCore.Content
+  alias PolyphonyCore.Content.{CampaignConfig, Floor}
+  alias Polyphony.Authoring.BoundaryGate
   alias Polyphony.Authoring.CharacterSheet.Boundary
 
   describe "CampaignConfig.enabled/1 — the master toggle gates the sub-toggles" do
@@ -72,29 +73,29 @@ defmodule Polyphony.ContentTest do
   describe "gate_boundary/2 — layer 2 caps layer 3, without conflating them" do
     test "a category the register disables forces the boundary closed, overriding :open" do
       b = %Boundary{topic: "intimacy", stance: :open, category: :sexual}
-      assert %Boundary{stance: :closed} = Content.gate_boundary(b, [])
+      assert %Boundary{stance: :closed} = BoundaryGate.gate_boundary(b, [])
     end
 
     test "a permitted category passes the boundary through untouched" do
       b = %Boundary{topic: "intimacy", stance: :open, category: :sexual}
-      assert Content.gate_boundary(b, [:sexual]) == b
+      assert BoundaryGate.gate_boundary(b, [:sexual]) == b
     end
 
     test "a pure-characterization boundary (no category) is never touched by the register" do
       b = %Boundary{topic: "betrayal", stance: :open, category: nil}
-      assert Content.gate_boundary(b, []) == b
+      assert BoundaryGate.gate_boundary(b, []) == b
     end
   end
 
   describe "constrain_boundary/2 — the authoring-time editor rule (FS §V8a)" do
     test "permitted → {:ok, boundary}; forbidden → {:constrained, forced_closed}" do
       permitted = %Boundary{topic: "intimacy", stance: :conditional, category: :sexual}
-      assert {:ok, ^permitted} = Content.constrain_boundary(permitted, [:sexual])
+      assert {:ok, ^permitted} = BoundaryGate.constrain_boundary(permitted, [:sexual])
 
       forbidden = %Boundary{topic: "intimacy", stance: :open, category: :sexual}
 
       assert {:constrained, %Boundary{stance: :closed}} =
-               Content.constrain_boundary(forbidden, [])
+               BoundaryGate.constrain_boundary(forbidden, [])
     end
   end
 

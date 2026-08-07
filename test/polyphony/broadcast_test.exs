@@ -4,8 +4,8 @@ defmodule Polyphony.BroadcastTest do
 
   import Polyphony.Test.Scenario
   alias Polyphony.Broadcast
-  alias Polyphony.Core.MembershipSet
-  alias Polyphony.Events.{BeatOpened, BeatClosed}
+  alias PolyphonyCore.MembershipSet
+  alias PolyphonyCore.Events.{BeatOpened, BeatClosed}
 
   # a,b present in S1; c not.
   defp member_at? do

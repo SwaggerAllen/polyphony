@@ -10,7 +10,7 @@ open work is the Linear project `Polyphony` (team `StrutCo`); see "The worklist"
 Polyphony — an event-sourced, multi-agent roleplay engine in Elixir/OTP. One
 agent per character plus a world agent ("Director"); the event log is the single
 source of truth, and each character sees a **filtered projection** of it.
-**Dramatic irony is structural** — a property of the data (`Polyphony.Visibility`),
+**Dramatic irony is structural** — a property of the data (`PolyphonyCore.Visibility`),
 never a prompt instruction. That guarantee is the thing to protect above all else.
 
 Backend-first, but the LiveView frontend (`PolyphonyWeb`, Phoenix 1.8 / LiveView
@@ -88,8 +88,13 @@ provisioning to the test path.
 Breaking any of these silently breaks the core guarantee. Guard them in review.
 
 1. **Default-deny visibility (rule 3).** Any event type without an explicit clause
-   in `Polyphony.Visibility.visible_to?/3` is invisible to characters. A forgotten
+   in `PolyphonyCore.Visibility.visible_to?/3` is invisible to characters. A forgotten
    clause makes a character know too *little*, never too much. Omniscient sees all.
+   It lives in **`PolyphonyCore`**, a sibling boundary declared `deps: []` — nothing in
+   there may call the rest of the app at all, so a read inside the visibility rules is a
+   compile error rather than a review catch. `PolyphonyCoreTest` holds the same namespace
+   to a wider floor per-function: no repo, event store, provider, PubSub, mail, files,
+   processes or ETS.
 2. **No LLM in an aggregate (rule 1).** Aggregates (`Scene`, `Director.Beat`) are
    pure — Commanded replays them, so a provider call would re-fire and rebuild the same
    log into a *different story*. Generation happens only in Oban jobs (or the inline
@@ -99,7 +104,7 @@ Breaking any of these silently breaks the core guarantee. Guard them in review.
    adds it to the list.
 3. **Canonical reads (rule 6 / §7).** Every read that feeds fiction to anyone —
    character conditioning, the broadcaster, scene-close — must go through
-   `Polyphony.Packets.canonical/1` so re-rolled/superseded packets never reappear.
+   `PolyphonyCore.Packets.canonical/1` so re-rolled/superseded packets never reappear.
    The stream-read sites (`BeatOps.messages_for`, `Broadcast.Publisher`,
    `SceneClose`) already do; any new one must too.
 4. **Membership at the event's beat, not "now".** `member_at?(scene, char, beat)`

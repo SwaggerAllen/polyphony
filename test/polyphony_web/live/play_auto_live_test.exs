@@ -15,7 +15,7 @@ defmodule PolyphonyWeb.PlayAutoLiveTest do
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Commands.{EnterCharacter, ExitCharacter, OpenScene}
   alias Polyphony.Director.{Auto, BeatOps}
-  alias Polyphony.Events.SpeechUttered
+  alias PolyphonyCore.Events.SpeechUttered
 
   setup :register_and_log_in_user
 

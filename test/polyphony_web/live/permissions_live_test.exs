@@ -205,7 +205,7 @@ defmodule PolyphonyWeb.PermissionsLiveTest do
       [scene | _] = Library.payload(Library.get(camp.id))[:scenes]
 
       opened =
-        for %Polyphony.Events.SceneOpened{} = e <-
+        for %PolyphonyCore.Events.SceneOpened{} = e <-
               Polyphony.App |> Commanded.EventStore.stream_forward(scene) |> Enum.map(& &1.data),
             do: e
 

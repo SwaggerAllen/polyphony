@@ -20,7 +20,7 @@ defmodule Polyphony.Authoring.CompulsionTest do
   """
   use ExUnit.Case, async: true
 
-  alias Polyphony.Core.Content
+  alias PolyphonyCore.Content
   alias Polyphony.Authoring.BoundaryGate
   alias Polyphony.Authoring.CharacterSheet.Boundary
 
@@ -81,7 +81,7 @@ defmodule Polyphony.Authoring.CompulsionTest do
     test "capping a compulsion flips it, so the ceiling can't compel what it forbids" do
       c = compulsion(topic: "Cut someone", stance: :closed, category: :graphic_violence)
 
-      capped = Content.gate_boundary(c, [])
+      capped = BoundaryGate.gate_boundary(c, [])
 
       assert capped.direction == :refusal,
              "a capped compulsion left as a compulsion means the character always does it"
@@ -93,33 +93,33 @@ defmodule Polyphony.Authoring.CompulsionTest do
     test "capping an open compulsion holds it too — stance can't reopen disabled content" do
       c = compulsion(topic: "Cut someone", stance: :open, category: :graphic_violence)
 
-      assert %Boundary{direction: :refusal, stance: :closed} = Content.gate_boundary(c, [])
+      assert %Boundary{direction: :refusal, stance: :closed} = BoundaryGate.gate_boundary(c, [])
     end
 
     test "capping a refusal is unchanged — for that direction closed already meant won't" do
       r = refusal(topic: "Kill", stance: :conditional, category: :graphic_violence)
 
-      assert %Boundary{direction: :refusal, stance: :closed} = Content.gate_boundary(r, [])
+      assert %Boundary{direction: :refusal, stance: :closed} = BoundaryGate.gate_boundary(r, [])
     end
 
     test "a permitted category passes through with its direction intact" do
       c = compulsion(topic: "Cut someone", stance: :conditional, category: :graphic_violence)
 
-      assert Content.gate_boundary(c, [:graphic_violence]) == c
+      assert BoundaryGate.gate_boundary(c, [:graphic_violence]) == c
     end
 
     test "pure characterization is never touched, in either direction" do
       c = compulsion(stance: :conditional, condition: "x")
-      assert Content.gate_boundary(c, []) == c
+      assert BoundaryGate.gate_boundary(c, []) == c
     end
 
     test "the authoring-time constraint caps identically" do
       c = compulsion(topic: "Cut someone", stance: :open, category: :graphic_violence)
 
       assert {:constrained, %Boundary{direction: :refusal, stance: :closed}} =
-               Content.constrain_boundary(c, [])
+               BoundaryGate.constrain_boundary(c, [])
 
-      assert {:ok, ^c} = Content.constrain_boundary(c, [:graphic_violence])
+      assert {:ok, ^c} = BoundaryGate.constrain_boundary(c, [:graphic_violence])
     end
   end
 

@@ -15,7 +15,7 @@ defmodule Polyphony.Director.Beat do
   """
 
   alias Polyphony.Director.Commands.{OpenBeat, RecordPacket, RecordFailure, RecordPass, CloseBeat}
-  alias Polyphony.Events.{BeatOpened, BeatClosed, PacketRecorded, PacketFailed, PacketPassed}
+  alias PolyphonyCore.Events.{BeatOpened, BeatClosed, PacketRecorded, PacketFailed, PacketPassed}
 
   defstruct beat_ref: nil,
             scene_id: nil,

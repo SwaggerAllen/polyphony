@@ -21,7 +21,7 @@ defmodule Polyphony.Authoring.Cover do
 
   Everywhere else, the engine solves *what must not be said* structurally: a
   character is never **told** what they cannot know, so they cannot leak it
-  (`Polyphony.Core.Visibility`, default-deny). Here that is impossible by construction —
+  (`PolyphonyCore.Visibility`, default-deny). Here that is impossible by construction —
   the secrets are the input, and the constraint lives in the prompt.
 
   So a prompt-level obligation gets a mechanical backstop. `generate/3` checks the

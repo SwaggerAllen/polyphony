@@ -100,7 +100,7 @@ defmodule Polyphony.Authoring.CharacterSheet do
     `category` (§A5) is an **optional** link to a content-governance bucket
     (`:sexual | :graphic_violence | :other`). It doesn't conflate the layers — this is
     still pure characterization — it only lets the campaign ceiling *cap* the item
-    (`Polyphony.Core.Content.gate_boundary/2`). A pure-characterization item leaves it
+    (`PolyphonyCore.Content.gate_boundary/2`). A pure-characterization item leaves it
     `nil` and the register never touches it.
 
     The direction matters here, and it is the one place getting it wrong is a real
@@ -128,7 +128,7 @@ defmodule Polyphony.Authoring.CharacterSheet do
             condition: String.t() | nil,
             on_pressure: String.t() | nil,
             after_release: String.t() | nil,
-            category: Polyphony.Core.Content.category() | nil
+            category: PolyphonyCore.Content.category() | nil
           }
 
     @doc "The two directions, refusals first — the order the sheet lists them in."

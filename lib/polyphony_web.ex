@@ -12,7 +12,7 @@ defmodule PolyphonyWeb do
   # LiveViews and controllers are *inside* this boundary, so none of this constrains them;
   # they call whatever they need. The list exists for the one sub-boundary.
   use Boundary,
-    deps: [Polyphony],
+    deps: [Polyphony, PolyphonyCore],
     exports: [AudiencePicker, BlockField, Kit, Layouts, Transcript, TurnEdit, Voice]
 
   @moduledoc """

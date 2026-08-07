@@ -3,7 +3,7 @@ defmodule Polyphony.PacketsTest do
   use ExUnit.Case, async: true
 
   import Polyphony.Test.Scenario
-  alias Polyphony.Core.Packets
+  alias PolyphonyCore.Packets
 
   describe "canonical/1" do
     test "drops superseded packets and the markers themselves" do
@@ -23,7 +23,7 @@ defmodule Polyphony.PacketsTest do
       refute "first take" in contents
       refute "first line" in contents
 
-      refute Enum.any?(canonical, &match?(%Polyphony.Events.PacketSuperseded{}, &1))
+      refute Enum.any?(canonical, &match?(%PolyphonyCore.Events.PacketSuperseded{}, &1))
     end
 
     test "leaves packets that were never superseded untouched, in order" do

@@ -27,7 +27,7 @@ defmodule Polyphony.Director do
 
   alias Polyphony.LLM.Provider
   alias Polyphony.Director.{Arbitration, Decision, Proposal}
-  alias Polyphony.Events.WorldEventOccurred
+  alias PolyphonyCore.Events.WorldEventOccurred
 
   @type resolved :: %{
           cast: [%{character_id: term(), pacing_note: String.t() | nil}],
