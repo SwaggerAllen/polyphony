@@ -93,8 +93,26 @@ defmodule Storybook.Screens.Play do
     %Variation{id: id, description: description, attributes: attrs}
   end
 
+  # The connection banners are driven by the classes **LiveView puts on the container**,
+  # not by an assign — which is what makes them free of server state, and also what made
+  # them impossible to look at. A per-variation template puts the class on an ancestor, so
+  # they are reviewable the same way every other state is.
+  defp connection(id, class, description) do
+    %{v(id, description, %{}) | template: ~s|<div class="#{class}"><.psb-variation/></div>|}
+  end
+
   def variations do
     [
+      connection(
+        :reconnecting,
+        "phx-loading",
+        "The socket dropped and is coming back. A scene is a long-lived socket and this is the state a real reader hits on a train, so it promises recovery rather than describing a fault — reconnecting replays the canonical log, so nothing written is at risk. Driven by the class LiveView sets on the container, which is why it needs no server state."
+      ),
+      connection(
+        :disconnected,
+        "phx-error",
+        "The socket is gone and not currently coming back. Distinct from a **generation** failure, which is a gap in the fiction with a retry on it — this is the transport, and the scene on screen is still true, just no longer live."
+      ),
       v(
         :stage,
         "Omniscient play — the working register. Everything is visible, including interiority, and the composer writes as whoever the perspective control names.",

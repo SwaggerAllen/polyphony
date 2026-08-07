@@ -9,7 +9,7 @@ do, what they see when there is nothing to see, and which of those choices are d
 somebody argued for rather than accidents nobody revisited.
 
 These files exist so that a **design change has somewhere to land before it has any code**.
-The design thread (`../design-thread.md`) reads them, proposes against them, and cites the
+The design thread reads them, proposes against them, and cites the
 `rev` it read; a code session lands the changed doc first and implements against it.
 
 ## What is and isn't the source of truth
@@ -76,6 +76,33 @@ Today exactly one qualifies: the **perspective control**, which appears on play,
 campaign's world tab and the published reader, and has to behave identically on all three.
 It is described in `play.md` and cross-referenced from the others, and it becomes its own
 file the moment a fourth screen wants it.
+
+**The published reader is `browse.md`.** It is not a fourth screen and it is not `PlayLive`
+in a read-only register: `BrowseLive` is both the shelf and the reading surface — same
+header, same perspective control, same transcript, same beat rules, with the composer
+replaced by scene navigation. A design pass looking for "the reader" and finding no file
+should look there rather than conclude it is unbuilt. What `browse.md` does **not** yet
+describe is most of the reading surface's own states, which is a genuine gap and not a
+missing screen.
+
+## What is not a behaviors doc's job
+
+The `###` state sections are pinned to the storybook by `BehaviorsDocTest`, so **a doc can
+only describe what a variation can show**. Two consequences worth knowing before proposing
+one:
+
+- A state driven by something other than assigns — LiveView's own container classes, say —
+  needs a per-variation `template` in the story before it can have a section. `play.md`'s
+  connection states are the worked example.
+- The behaviors docs describe **built** behaviour. The mocks in `ux/` are a larger design
+  pass than what has been ported, and nothing tests that edge, so *doc says nothing* means
+  *not built*, never *not designed*. Read the mock for the design; read here for the app.
+
+## Where the design thread's instructions live
+
+They used to be `docs/design-thread.md`, in this repository. They are a **Linear project
+document** now — a design thread iterates on its own instructions, and a file only this
+thread can edit made that a round trip through a pull request.
 
 ## Files
 

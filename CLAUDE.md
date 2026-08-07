@@ -212,7 +212,9 @@ and it is still only on the author's ask.
 
 Some issues arrive from elsewhere. Design happens in a **normal Claude thread** — faster
 to iterate with, and it doesn't block this one. Its instructions are
-`docs/design-thread.md`, it never writes to the repo, and it hands work over in two
+a **Linear project document** rather than a file here — a design thread iterates on its own
+instructions, and keeping them in the repo made every wording change a round trip through a
+pull request nobody else needed. It never writes to the repo, and it hands work over in two
 pieces:
 
 - **Linear** carries the intent — an issue saying what changes and why, tagged
