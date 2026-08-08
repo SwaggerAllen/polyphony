@@ -807,10 +807,14 @@ defmodule PolyphonyWeb.PlayLive do
   end
 
   def handle_event("edit_turn", %{"packet" => pid}, socket),
-    do: {:noreply, socket |> assign(editing: pid) |> stream_beats(reset: true)}
+    do: {:noreply, socket |> assign(editing: pid) |> restream_packet(pid)}
 
-  def handle_event("cancel_edit", _params, socket),
-    do: {:noreply, socket |> assign(editing: nil) |> stream_beats(reset: true)}
+  def handle_event("cancel_edit", _params, socket) do
+    # The packet that *was* being edited — read before it is cleared, since that is the
+    # beat whose markup has to lose the form.
+    was = socket.assigns.editing
+    {:noreply, socket |> assign(editing: nil) |> restream_packet(was)}
+  end
 
   # Save an edit: supersede the old take and commit the author's rewrite as a new
   # attempt (same aloud/whisper inference as the composer).
@@ -1682,22 +1686,44 @@ defmodule PolyphonyWeb.PlayLive do
   # is no longer enough — the beat holding that turn keeps the markup it was last sent, and
   # the edit form never appears. Found by four tests looking for a form that was not there.
   #
-  # `editing` is the live one. `register`, `cast` and `voices` also reach a turn block, and
-  # all three only change through `reload/1`, which resets the stream anyway.
+  # `editing` is the live one and takes the narrow door — `restream_packet/2`, one beat.
+  # `register`, `cast` and `voices` also reach a turn block and only change through
+  # `reload/1`, which resets the whole stream anyway.
   defp stream_beats(socket, opts \\ []) do
-    beats =
-      socket.assigns.messages
-      |> Transcript.beats()
-      |> Transcript.with_failures(
-        socket.assigns.failures,
-        max(socket.assigns.next_beat - 1, 0)
-      )
+    beats = beat_tree(socket)
 
     socket
     # A stream has no emptiness to ask about — the socket knows, and the screen is handed
     # the answer rather than a collection it cannot count.
     |> assign(transcript_empty: beats == [])
     |> stream(:beats, beats, reset: Keyword.get(opts, :reset, false))
+  end
+
+  defp beat_tree(socket) do
+    socket.assigns.messages
+    |> Transcript.beats()
+    |> Transcript.with_failures(socket.assigns.failures, max(socket.assigns.next_beat - 1, 0))
+  end
+
+  # One beat, because one turn changed how it renders — the beat holding `packet_id`.
+  #
+  # The alternative is `stream_beats(reset: true)`, which is what clicking Edit used to do:
+  # send the whole scene to put a textarea on one turn. It also makes trimming the retained
+  # messages impossible, because a reset replaces the stream with exactly what it is given —
+  # so a socket holding only the recent beats would *delete* the older ones from the DOM the
+  # moment somebody pressed Edit.
+  #
+  # The beat is rendered with the current assigns, so `editing` has to be set before this
+  # runs rather than after.
+  defp restream_packet(socket, nil), do: socket
+
+  defp restream_packet(socket, packet_id) do
+    case Enum.find(beat_tree(socket), fn b ->
+           Enum.any?(b.blocks, &(&1.packet_id == packet_id))
+         end) do
+      nil -> socket
+      beat -> stream_insert(socket, :beats, beat)
+    end
   end
 
   # ── Helpers ──────────────────────────────────────────────────────────────────

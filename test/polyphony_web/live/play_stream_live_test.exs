@@ -69,8 +69,8 @@ defmodule PolyphonyWeb.PlayStreamLiveTest do
     refute html =~ ~s(phx-submit="save_edit")
 
     # `edit_turn` only assigns `editing`. Under a stream that is invisible until the beat
-    # holding this turn is sent again — so if this fails, look for a `stream_beats/2` call
-    # that went missing rather than at the markup, which will be perfectly correct.
+    # holding this turn is sent again — so if this fails, look for a `restream_packet/2`
+    # call that went missing rather than at the markup, which will be perfectly correct.
     html =
       view
       |> element("button[phx-click=edit_turn][phx-value-packet='#{packet(scene, wren)}']")
