@@ -20,7 +20,7 @@ defmodule Polyphony.Moderation do
 
   require Logger
 
-  alias Polyphony.{Repo, Library, Accounts}
+  alias Polyphony.{Repo, Library, Accounts, Owner, Permissions}
   alias Polyphony.Accounts.{User, Roles}
   alias Polyphony.Moderation.{Report, AuditLog, Notifier}
 
@@ -233,7 +233,7 @@ defmodule Polyphony.Moderation do
 
       for entry <- Library.hidden(opts),
           entry.review_reason == "suspended",
-          to_string(entry.owner_id) == to_string(target.id) do
+          Permissions.owner?(entry, target) do
         Library.unhide(entry.id, opts)
       end
 
@@ -310,8 +310,15 @@ defmodule Polyphony.Moderation do
   defp takedown_reason(reason) when is_binary(reason) and reason != "", do: reason
   defp takedown_reason(_reason), do: "takedown"
 
+  # Through `Permissions` rather than comparing ids, because `owner_type` is half of an
+  # owner and an id on its own will happily match an org that shares a number with a
+  # user. A report records only an id, and the rest of this module already reads it as a
+  # user's (`flag_account/2`, `suspend_user/4`), so that is what it is compared as — and
+  # an org-owned family therefore falls to the fork-review lane rather than being hidden
+  # wholesale. That is the side to be wrong on: the lane is a person looking, and the
+  # alternative is destroying work nobody reported.
   defp same_owner?(entry, %Report{owner_id: owner_id}) when not is_nil(owner_id),
-    do: to_string(entry.owner_id) == to_string(owner_id)
+    do: Permissions.owner?(entry, Owner.user(owner_id))
 
   defp same_owner?(_entry, _report), do: false
 

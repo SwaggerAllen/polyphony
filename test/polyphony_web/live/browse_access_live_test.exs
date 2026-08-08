@@ -20,7 +20,7 @@ defmodule PolyphonyWeb.BrowseAccessLiveTest do
   """
   use PolyphonyWeb.ConnCase, async: false
 
-  alias Polyphony.{Library, Owner}
+  alias Polyphony.{Library, Owner, Reading}
   alias Polyphony.Authoring.WorldBible
   alias Polyphony.Library.Snapshot
 
@@ -90,6 +90,31 @@ defmodule PolyphonyWeb.BrowseAccessLiveTest do
       {:ok, _view, html} = live(conn, ~p"/browse?#{[story: entry.id]}")
 
       assert html =~ "A city with no sky."
+    end
+
+    test "opens to a reader who was already reading it", %{conn: conn, user: me} do
+      # `Reading` treats a bookmark as a grant that outlives the author narrowing who can
+      # find the story, and its shelf keeps offering *carry on*. Browse has to agree: a
+      # shelf row that dead-ends on arrival is worse than no row.
+      entry = story(user_fixture(), :public)
+      Reading.mark(Owner.of(me), entry.id, %{scene_id: "s1"})
+      Library.set_visibility(entry.id, "unlisted")
+
+      {:ok, _view, html} = live(conn, ~p"/browse?#{[story: entry.id]}")
+
+      assert html =~ "A city with no sky."
+      assert [%{state: :reading}] = Reading.shelf(Owner.of(me))
+    end
+
+    test "and stays shut once the author pulls it back to private", %{conn: conn, user: me} do
+      entry = story(user_fixture(), :public)
+      Reading.mark(Owner.of(me), entry.id, %{scene_id: "s1"})
+      Library.set_visibility(entry.id, "private")
+
+      {:ok, _view, html} = live(conn, ~p"/browse?#{[story: entry.id]}")
+
+      refute html =~ "A city with no sky."
+      assert [%{state: :gone}] = Reading.shelf(Owner.of(me))
     end
 
     test "a wrong token is no token", %{conn: conn} do

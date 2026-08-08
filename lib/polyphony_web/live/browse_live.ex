@@ -114,7 +114,32 @@ defmodule PolyphonyWeb.BrowseLive do
 
   defp readable?(socket, entry) do
     Library.snapshot?(entry) and
-      Permissions.can_view?(entry, socket.assigns.current_user, token: socket.assigns.token)
+      Permissions.can_view?(entry, socket.assigns.current_user, token: grant(socket, entry))
+  end
+
+  # The token the reader arrived with — or, if they didn't but they have a bookmark for
+  # this story, the entry's own. **A bookmark stands in for the link they were given.**
+  # `Reading` had already decided that and its shelf says so: a story you were reading
+  # stays on it when the author moves it from public to unlisted, because narrowing who
+  # can *find* something is not evicting the people already inside. Browse has to agree
+  # or the shelf offers a *carry on* that dead-ends on arrival.
+  #
+  # Handing the token to `can_view?/3` rather than short-circuiting the check is what
+  # keeps the limit: a token means nothing for a `private` entry, so an author who pulls
+  # a story back properly still shuts the door on everyone — which is exactly what the
+  # shelf reports for the same story.
+  #
+  # It cannot be forged. `Reading.mark/4` is called from one place, after this function
+  # has already admitted the reader, so holding a bookmark is evidence of having been let
+  # in rather than a way of claiming to have been.
+  defp grant(%{assigns: %{token: token}}, _entry) when not is_nil(token), do: token
+  defp grant(%{assigns: %{current_user: nil}}, _entry), do: nil
+
+  defp grant(socket, entry) do
+    case Reading.bookmark(Owner.of(socket.assigns.current_user), entry.id) do
+      nil -> nil
+      _bookmark -> entry.share_token
+    end
   end
 
   defp gone_reason(nil, _entry, _story), do: nil

@@ -153,7 +153,7 @@ defmodule Polyphony.Reading do
         id: entry.id,
         bookmark: bookmark,
         source: source,
-        state: state(bookmark, source)
+        state: state(bookmark, source, reader)
       }
     end)
     |> Enum.sort_by(& &1.bookmark.last_read_at, {:desc, NaiveDateTime})
@@ -199,20 +199,28 @@ defmodule Polyphony.Reading do
   # deleted, archived out of sight, or pulled back to private. Default-deny: anything
   # we can't positively confirm as readable reads as gone, which keeps a stale row
   # from offering a link into someone's unpublished draft.
-  defp state(%Bookmark{finished_at: at}, source) when not is_nil(at) do
-    if readable?(source), do: :finished, else: :gone
+  defp state(%Bookmark{finished_at: at}, source, reader) when not is_nil(at) do
+    if readable?(source, reader), do: :finished, else: :gone
   end
 
-  defp state(_bookmark, source), do: if(readable?(source), do: :reading, else: :gone)
+  defp state(_bookmark, source, reader),
+    do: if(readable?(source, reader), do: :reading, else: :gone)
 
-  defp readable?(nil), do: false
+  # **This is not `Permissions.can_view?/3` and must not become it.** That answers *may
+  # this reader open this*, which needs the share link for an unlisted story. This one
+  # answers *may this reader carry on*, and the bookmark is itself the grant: they were
+  # reading it, and an author moving a story from public to unlisted is not throwing
+  # anybody out. Same rule as the share link, which is also a grant that outlives the
+  # moment it was given.
+  #
+  # So what it looks for is the author **pulling** it: back to private, archived, deleted,
+  # or taken down (§B3). Anything short of that keeps the row, and the place in it.
+  defp readable?(nil, _reader), do: false
 
-  # Taken down counts as gone here, not as a shelf row that links to a dead end — the
-  # row's own `:gone` copy is the honest answer (§B3).
-  defp readable?(source),
-    do:
-      Library.live?(source) and source.visibility in ~w(public unlisted) and
-        not Library.hidden?(source)
+  defp readable?(source, _reader),
+    do: Library.live?(source) and not pulled?(source) and not Library.hidden?(source)
+
+  defp pulled?(%{visibility: visibility}), do: to_string(visibility) == "private"
 
   defp source_of(%Bookmark{published_id: nil}, _opts), do: nil
   defp source_of(%Bookmark{published_id: id}, opts), do: Library.get(id, opts)

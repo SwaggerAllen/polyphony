@@ -30,6 +30,11 @@ have published, and a story's front page once you pick one.
   which is the fact being kept. The link opens the front page and every scene inside it; a
   reader who came in that way keeps their footing for the whole visit without the token
   reappearing in the address bar at every step.
+- **A bookmark stands in for the link.** Somebody already reading a story keeps reading it
+  when the author narrows it from public to unlisted — narrowing who can *find* something
+  is not evicting the people inside, and the reading shelf makes the same promise. Pulling
+  it back to private is the real withdrawal, and that shuts the door on everyone: the story
+  goes as unreachable here as it reads on the shelf.
 - **You may take a copy of anything you may read.** Not only what is listed: a world shared
   by link is a world somebody meant you to have. What you may *not* read you may not copy —
   taking a copy is reading it and keeping it, so it cannot be the looser of the two.
