@@ -43,7 +43,7 @@ defmodule PolyphonyWeb.GroupEditorLiveTest do
   end
 
   defp group(user, attrs \\ %{}) do
-    fields = struct(Group, Map.merge(%{name: "The Tidewatch"}, attrs))
+    fields = struct(Group, Map.merge(%{name: "The Tidewatch", campaign_id: "camp"}, attrs))
     Groups.create(Owner.of(user), fields)
   end
 
@@ -116,11 +116,19 @@ defmodule PolyphonyWeb.GroupEditorLiveTest do
       refute html =~ "The Harbour Office"
     end
 
-    test "and a group belonging to no campaign is on no hub", %{conn: conn, user: user} do
-      # An orphan — written from the library, or predating the scope key. It stays on
-      # the library shelf so it can be deleted; putting it on every hub is the bug.
+    test "and a campaign-less group is on no hub, if one ever exists", %{conn: conn, user: user} do
+      # `Groups.create/3` refuses to make one of these and the backfill trashed the rows
+      # that predated the rule, so this is written straight to the library to build a
+      # state the app can no longer reach. Defence in depth: the hub filters on an id
+      # rather than falling back to "show everything", so a row that got in some way
+      # nobody accounted for still can't land in somebody's story.
       camp = campaign(user, "Camp")
-      group(user, %{name: "The Unplaced"})
+
+      Library.put(%{
+        owner: Owner.of(user),
+        kind: "group",
+        payload: %Group{name: "The Unplaced"}
+      })
 
       {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
 

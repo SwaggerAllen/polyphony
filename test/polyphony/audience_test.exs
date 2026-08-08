@@ -41,7 +41,8 @@ defmodule Polyphony.AudienceTest do
   defp character(owner, name),
     do: Library.put(%{owner: owner, kind: "character", payload: %CharacterSheet{name: name}})
 
-  defp tidewatch(owner), do: Groups.create(owner, %Group{name: "The Tidewatch"})
+  defp tidewatch(owner),
+    do: Groups.create(owner, %Group{name: "The Tidewatch", campaign_id: "camp"})
 
   defp prefix(sheet, character_id, opts \\ []) do
     Context.materialize(

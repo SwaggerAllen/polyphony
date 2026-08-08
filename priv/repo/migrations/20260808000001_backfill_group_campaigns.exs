@@ -15,27 +15,39 @@ defmodule Polyphony.Repo.Migrations.BackfillGroupCampaigns do
   `Polyphony.Groups.backfill_campaigns/1` is pinned by `Polyphony.GroupsBackfillTest`,
   including the cases where it must decline to answer.
 
-  **Groups it can't place stay unplaced, and that is correct output.** A group written
-  from the library belongs to no campaign; it stays visible on the library shelf so it
-  can be deleted or re-filed. Guessing would file somebody's writing inside a story it
-  was never part of, where it would look like it belonged — the one error here that
-  isn't self-announcing.
+  **Groups it can't place are trashed.** A group belonging to no campaign is not a state
+  this app supports — it appears on no hub, so it is unreachable from the story it was
+  written for, and keeping the read paths that tolerate one means carrying compatibility
+  logic for a class `Groups.create/3` now refuses to produce. Guessing a campaign would
+  be worse: that files somebody's writing inside a story it was never part of, where it
+  looks like it belongs, which is the one error here that doesn't announce itself.
 
-  Safe to run twice: it only touches groups whose `campaign_id` is nil.
+  **Trashed, not purged** — `soft_delete/2`, so anything this catches that somebody
+  actually wanted is one Restore away on the trash shelf and `Jobs.PurgeTrash` finishes
+  on the ordinary 30-day clock. This runs unattended over every row, and irreversibility
+  is not a property to hand that. The expected result on the deployment this was written
+  for is zero rows either way.
+
+  Safe to run twice: it only looks at live groups whose `campaign_id` is nil.
   """
   use Ecto.Migration
 
   require Logger
 
   def up do
-    case Polyphony.Groups.backfill_campaigns(repo: repo()) do
-      [] ->
-        Logger.info("[migrate] group campaigns: nothing to backfill")
+    %{placed: placed, trashed: trashed} = Polyphony.Groups.backfill_campaigns(repo: repo())
 
-      placed ->
+    case {placed, trashed} do
+      {[], []} ->
+        Logger.info("[migrate] group campaigns: nothing to do")
+
+      _ ->
         Logger.info(
           "[migrate] group campaigns: placed #{length(placed)} " <>
-            "(#{Enum.map_join(placed, ", ", &"##{&1.id}→##{&1.campaign_id}")})"
+            "(#{Enum.map_join(placed, ", ", &"##{&1.id}→##{&1.campaign_id}")}), " <>
+            "trashed #{length(trashed)} belonging to no campaign " <>
+            "(#{Enum.map_join(trashed, ", ", &"##{&1}")}) — restorable for " <>
+            "#{Polyphony.Library.retention_days()} days"
         )
     end
   end

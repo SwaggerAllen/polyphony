@@ -268,8 +268,14 @@ defmodule Polyphony.Authoring.QuickBuild do
             # `meter` already carries the campaign for cost attribution, and it is the
             # campaign's library entry id — the same value a group is scoped by. Read
             # once here rather than threaded as an eighth positional argument.
-            for p <- proposed,
-                do: persist_group(owner, bible_id, meter[:campaign_id], p, announce)
+            #
+            # `fetch!` rather than `[]`: a build with no campaign would write groups that
+            # belong to no story, which `Groups.create/3` now refuses outright. Failing
+            # here names the missing option instead of failing three frames down on a
+            # struct field.
+            campaign_id = Keyword.fetch!(meter, :campaign_id)
+
+            for p <- proposed, do: persist_group(owner, bible_id, campaign_id, p, announce)
 
           {:error, _} ->
             []

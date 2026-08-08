@@ -78,7 +78,11 @@ defmodule Polyphony.QuickBuildGroupsTest do
       [
         owner: owner,
         world_seed: "a rain-drowned harbour",
-        character_seeds: ["a harbour-master", "the collector"]
+        character_seeds: ["a harbour-master", "the collector"],
+        # Groups are scoped to a campaign (STR-68), and a build writes them, so a build
+        # has to say which campaign it is building. `write_groups/7` fetches it rather
+        # than defaulting, so a caller that forgets is told here and not three frames on.
+        campaign_id: "camp"
       ] ++ opts
     )
   end

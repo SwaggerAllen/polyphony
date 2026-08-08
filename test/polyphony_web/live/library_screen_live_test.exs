@@ -42,7 +42,7 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
   defp group(user, name, attrs \\ []) do
     Polyphony.Groups.create(
       Owner.of(user),
-      struct(Polyphony.Authoring.Group, [{:name, name} | attrs])
+      struct(Polyphony.Authoring.Group, [{:name, name}, {:campaign_id, "camp"} | attrs])
     )
   end
 
@@ -258,16 +258,13 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
       assert html =~ "The Salt Line"
     end
 
-    test "one belonging to no campaign is still on the shelf", %{conn: conn, user: user} do
-      # The orphan, and the reason it isn't filtered out everywhere: it appears on no
-      # campaign hub, so if the shelf hid it too there would be no way to reach it and
-      # no way to delete it.
-      campaign(user, %{name: "The Salt Line"})
-      group(user, "The Unplaced")
-
-      {:ok, _view, html} = live(conn, ~p"/library?tab=groups")
-
-      assert html =~ "The Unplaced"
+    test "there is no such thing as one belonging to no campaign", %{user: user} do
+      # Not a band on this shelf, because it is not a state the app has. Writing a group
+      # outside a campaign is a bug in the caller and says so where the mistake is,
+      # rather than becoming a row that shows up on every hub or none.
+      assert_raise ArgumentError, ~r/must be written in a campaign/, fn ->
+        Polyphony.Groups.create(Owner.of(user), %Polyphony.Authoring.Group{name: "The Unplaced"})
+      end
     end
   end
 

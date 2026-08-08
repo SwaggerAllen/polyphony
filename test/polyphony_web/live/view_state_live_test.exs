@@ -147,7 +147,7 @@ defmodule PolyphonyWeb.ViewStateLiveTest do
 
   describe "a group" do
     test "an open panel survives being mounted again", %{conn: conn, user: user} do
-      entry = Groups.create(Owner.of(user), %Group{name: "The Tidewatch"})
+      entry = Groups.create(Owner.of(user), %Group{name: "The Tidewatch", campaign_id: "camp"})
       {:ok, view, _html} = live(conn, ~p"/authoring/group/#{entry.id}")
 
       view |> element("button[phx-click=panel][phx-value-panel=facts]") |> render_click()

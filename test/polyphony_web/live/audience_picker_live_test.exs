@@ -45,7 +45,7 @@ defmodule PolyphonyWeb.AudiencePickerLiveTest do
   describe "on a world bible entry" do
     setup %{user: user} do
       sable = character(user, %CharacterSheet{name: "Sable Quist"})
-      group = Groups.create(Owner.of(user), %Group{name: "The Tidewatch"})
+      group = Groups.create(Owner.of(user), %Group{name: "The Tidewatch", campaign_id: "camp"})
       {:ok, _} = Groups.add_member(group.id, sable.id)
 
       entry =
@@ -291,7 +291,7 @@ defmodule PolyphonyWeb.AudiencePickerLiveTest do
     test "shows what they start out knowing, and says how they came by it",
          %{conn: conn, user: user} do
       sable = character(user, %CharacterSheet{name: "Sable Quist"})
-      group = Groups.create(Owner.of(user), %Group{name: "The Tidewatch"})
+      group = Groups.create(Owner.of(user), %Group{name: "The Tidewatch", campaign_id: "camp"})
       {:ok, _} = Groups.add_member(group.id, sable.id)
 
       character(user, %CharacterSheet{

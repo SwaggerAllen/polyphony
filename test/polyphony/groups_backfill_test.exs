@@ -3,11 +3,15 @@ defmodule Polyphony.GroupsBackfillTest do
   STR-68: giving every existing group the campaign it belongs to.
 
   This runs once, unattended, over a live table, and the two ways it could be wrong are
-  not symmetrical. Filing a group under **no** campaign is recoverable — it sits on the
-  library shelf, visibly unplaced, one delete or one re-file away. Filing it under the
-  **wrong** campaign puts somebody's writing inside a story it was never part of, where
-  it looks like it belongs. So every case here is either "assigns the right one" or
-  "assigns none", and none of them is "assigns its best guess".
+  not symmetrical. Filing a group under the **wrong** campaign puts somebody's writing
+  inside a story it was never part of, where it looks like it belongs — the one error
+  here that doesn't announce itself. Trashing one is recoverable: it lands on the trash
+  shelf with the ordinary window, one Restore away.
+
+  So every case is either "assigns the right campaign" or "trashes it", and none of them
+  is "assigns its best guess". A group belonging to no campaign is not a state that
+  survives this pass, because it is not a state the app supports: it appears on no hub,
+  which makes it unreachable from the story it was written for.
   """
   use ExUnit.Case, async: false
 
@@ -35,14 +39,25 @@ defmodule Polyphony.GroupsBackfillTest do
     Library.put(%{owner: owner, kind: "character", payload: %CharacterSheet{name: name}})
   end
 
-  # A group as it exists *before* the field — no `campaign_id` at all, which is what
-  # every stored row looks like until this runs.
+  # A group as it exists *before* the field — no `campaign_id`, which is what every
+  # stored row looks like until this runs.
+  #
+  # Written straight to the library rather than through `Groups.create/3`, which now
+  # refuses one: the state this migration exists to clear up is one the app can no
+  # longer produce, so the only way to test the migration is to forge it.
   defp legacy_group(owner, attrs) do
-    Groups.create(owner, struct(Group, Map.merge(%{name: "The Tidewatch"}, attrs)))
+    Library.put(%{
+      owner: owner,
+      kind: Group.kind(),
+      payload: struct(Group, Map.merge(%{name: "The Tidewatch"}, attrs))
+    })
   end
 
   defp campaign_id_of(entry),
     do: Library.get(entry.id) |> Library.payload() |> Map.get(:campaign_id)
+
+  # Trashed, not purged — recoverable from the trash shelf on the ordinary clock.
+  defp trashed?(entry), do: Library.get(entry.id).deleted_at != nil
 
   describe "by world" do
     test "a group written in a campaign lands on that campaign" do
@@ -51,7 +66,7 @@ defmodule Polyphony.GroupsBackfillTest do
       camp = campaign(owner, %{bible_id: bible.id})
       group = legacy_group(owner, %{world_bible_id: bible.id})
 
-      assert [%{id: id, campaign_id: cid}] = Groups.backfill_campaigns([])
+      assert %{placed: [%{id: id, campaign_id: cid}], trashed: []} = Groups.backfill_campaigns([])
       assert id == group.id
       assert cid == camp.id
       assert campaign_id_of(group) == camp.id
@@ -59,13 +74,15 @@ defmodule Polyphony.GroupsBackfillTest do
 
     test "a world no campaign holds resolves nothing on its own" do
       # The library template — the case the world key could never answer, and the
-      # reported bug. With no members either, this stays an orphan.
+      # reported bug. With no members either there is nothing left to go on, so the row
+      # goes rather than becoming a group that belongs nowhere.
       owner = Owner.user("u2")
       template = world(owner, "A shared setting")
       group = legacy_group(owner, %{world_bible_id: template.id})
 
-      assert Groups.backfill_campaigns([]) == []
-      assert campaign_id_of(group) == nil
+      assert %{placed: [], trashed: [id]} = Groups.backfill_campaigns([])
+      assert id == group.id
+      assert trashed?(group)
     end
   end
 
@@ -83,7 +100,7 @@ defmodule Polyphony.GroupsBackfillTest do
       group =
         legacy_group(owner, %{world_bible_id: template.id, member_ids: [to_string(wren.id)]})
 
-      assert [%{campaign_id: cid}] = Groups.backfill_campaigns([])
+      assert %{placed: [%{campaign_id: cid}], trashed: []} = Groups.backfill_campaigns([])
       assert cid == camp.id
       assert campaign_id_of(group) == camp.id
     end
@@ -93,22 +110,24 @@ defmodule Polyphony.GroupsBackfillTest do
       stray = character(owner, "Nobody's")
       group = legacy_group(owner, %{member_ids: [to_string(stray.id)]})
 
-      assert Groups.backfill_campaigns([]) == []
-      assert campaign_id_of(group) == nil
+      assert %{placed: [], trashed: [_]} = Groups.backfill_campaigns([])
+      assert trashed?(group)
     end
   end
 
   describe "what it refuses to do" do
-    test "a group with nothing to go on stays unplaced" do
+    test "a group with nothing to go on is trashed, not kept as an orphan" do
       owner = Owner.user("u5")
       _camp = campaign(owner, %{})
       group = legacy_group(owner, %{})
 
-      assert Groups.backfill_campaigns([]) == []
-      assert campaign_id_of(group) == nil
-      # And it is reachable, which is the whole reason not to guess.
-      assert [%{id: id}] = Groups.orphans(owner)
-      assert id == group.id
+      assert %{placed: [], trashed: [_]} = Groups.backfill_campaigns([])
+      assert trashed?(group)
+
+      # And the shelf no longer carries it, which is the point: the class stops
+      # existing rather than becoming a heading to file things under.
+      assert Groups.orphans(owner) == []
+      assert Groups.list(owner) == []
     end
 
     test "it never files a group under somebody else's campaign" do
@@ -121,8 +140,8 @@ defmodule Polyphony.GroupsBackfillTest do
       _their_camp = campaign(theirs, %{bible_id: bible.id})
       group = legacy_group(mine, %{world_bible_id: bible.id})
 
-      assert Groups.backfill_campaigns([]) == []
-      assert campaign_id_of(group) == nil
+      assert %{placed: [], trashed: [_]} = Groups.backfill_campaigns([])
+      assert trashed?(group)
     end
 
     test "it leaves a group that already has a campaign alone" do
@@ -132,7 +151,7 @@ defmodule Polyphony.GroupsBackfillTest do
       other = campaign(owner, %{name: "Elsewhere"})
       group = legacy_group(owner, %{world_bible_id: bible.id, campaign_id: other.id})
 
-      assert Groups.backfill_campaigns([]) == []
+      assert %{placed: [], trashed: []} = Groups.backfill_campaigns([])
       assert campaign_id_of(group) == other.id
     end
 
@@ -152,8 +171,8 @@ defmodule Polyphony.GroupsBackfillTest do
 
       group = legacy_group(owner, %{member_ids: [to_string(wren.id)]})
 
-      assert Groups.backfill_campaigns([]) == []
-      assert campaign_id_of(group) == nil
+      assert %{placed: [], trashed: [_]} = Groups.backfill_campaigns([])
+      assert trashed?(group)
     end
   end
 
@@ -165,8 +184,8 @@ defmodule Polyphony.GroupsBackfillTest do
     camp = campaign(owner, %{bible_id: bible.id})
     group = legacy_group(owner, %{world_bible_id: bible.id})
 
-    assert [_] = Groups.backfill_campaigns([])
-    assert Groups.backfill_campaigns([]) == []
+    assert %{placed: [_], trashed: []} = Groups.backfill_campaigns([])
+    assert %{placed: [], trashed: []} = Groups.backfill_campaigns([])
     assert campaign_id_of(group) == camp.id
   end
 

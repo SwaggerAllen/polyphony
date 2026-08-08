@@ -380,6 +380,7 @@ defmodule PolyphonyWeb.CharacterSheetScreenLiveTest do
       group =
         Groups.create(owner, %Group{
           name: "The Tidewatch",
+          campaign_id: "camp",
           premise: "They keep the bell.",
           facts: [%Fact{statement: "They ring for the tide.", concealed: true}]
         })

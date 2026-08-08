@@ -46,8 +46,6 @@ defmodule PolyphonyWeb.PermissionsLiveTest do
         payload: %CharacterSheet{name: "Wren", status: :full}
       })
 
-    group = Groups.create(Owner.of(stranger), %Group{name: "The Tidewatch"})
-
     campaign =
       Library.put(%{
         owner: Owner.of(stranger),
@@ -60,6 +58,11 @@ defmodule PolyphonyWeb.PermissionsLiveTest do
           scenes: []
         }
       })
+
+    # After the campaign, because a group is written *in* one — `Groups.create/3`
+    # refuses a group with no campaign to belong to (STR-68).
+    group =
+      Groups.create(Owner.of(stranger), %Group{name: "The Tidewatch", campaign_id: campaign.id})
 
     %{
       user: user,
@@ -125,7 +128,8 @@ defmodule PolyphonyWeb.PermissionsLiveTest do
     test "open normally", %{conn: conn, user: user} do
       world = mine(user, "world_bible", %WorldBible{name: "Mine"})
       character = mine(user, "character", %CharacterSheet{name: "Mine", status: :full})
-      group = Groups.create(Owner.of(user), %Group{name: "Mine"})
+      mine_camp = mine(user, "campaign", %{kind: :campaign, name: "Mine", character_ids: []})
+      group = Groups.create(Owner.of(user), %Group{name: "Mine", campaign_id: mine_camp.id})
 
       assert {:ok, _view, _html} = live(conn, ~p"/authoring/bible/#{world.id}")
       assert {:ok, _view, _html} = live(conn, ~p"/authoring/character/#{character.id}")
