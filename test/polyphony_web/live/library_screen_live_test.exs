@@ -39,6 +39,13 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
     Library.put(%{owner: Owner.of(user), kind: "character", payload: sheet})
   end
 
+  defp group(user, name, attrs \\ []) do
+    Polyphony.Groups.create(
+      Owner.of(user),
+      struct(Polyphony.Authoring.Group, [{:name, name} | attrs])
+    )
+  end
+
   defp world(user, name, attrs \\ %{}) do
     Library.put(%{
       owner: Owner.of(user),
@@ -219,6 +226,48 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
 
       assert html =~ "1 archived"
       assert html =~ "1 in trash"
+    end
+  end
+
+  describe "groups" do
+    test "band by the campaign they were written in", %{conn: conn, user: user} do
+      # By the group's **own** campaign (STR-68), not by where its members happen to be.
+      # The shelf used to infer it from members, which was the only answer available
+      # before the field and couldn't speak for a group with nobody in it yet — every
+      # group, for the minute between creating one and adding anybody. It also has to be
+      # the same answer the campaign hub gives: two screens deriving one fact two ways
+      # is how they come to disagree about whose story somebody's work is in.
+      salt = campaign(user, %{name: "The Salt Line"})
+      group(user, "The Tidewatch", campaign_id: salt.id)
+
+      {:ok, _view, html} = live(conn, ~p"/library?tab=groups")
+
+      assert html =~ "The Salt Line"
+      assert html =~ "The Tidewatch"
+    end
+
+    test "an empty one still bands, because it knows where it was written", %{
+      conn: conn,
+      user: user
+    } do
+      salt = campaign(user, %{name: "The Salt Line"})
+      group(user, "The Tidewatch", campaign_id: salt.id, member_ids: [])
+
+      {:ok, _view, html} = live(conn, ~p"/library?tab=groups")
+
+      assert html =~ "The Salt Line"
+    end
+
+    test "one belonging to no campaign is still on the shelf", %{conn: conn, user: user} do
+      # The orphan, and the reason it isn't filtered out everywhere: it appears on no
+      # campaign hub, so if the shelf hid it too there would be no way to reach it and
+      # no way to delete it.
+      campaign(user, %{name: "The Salt Line"})
+      group(user, "The Unplaced")
+
+      {:ok, _view, html} = live(conn, ~p"/library?tab=groups")
+
+      assert html =~ "The Unplaced"
     end
   end
 

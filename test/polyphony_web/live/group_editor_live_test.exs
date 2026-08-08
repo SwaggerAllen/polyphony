@@ -47,6 +47,14 @@ defmodule PolyphonyWeb.GroupEditorLiveTest do
     Groups.create(Owner.of(user), fields)
   end
 
+  defp campaign(user, name) do
+    Library.put(%{
+      owner: Owner.of(user),
+      kind: "campaign",
+      payload: %{kind: :campaign, name: name, character_ids: [], scenes: []}
+    })
+  end
+
   defp group_of(entry), do: Library.payload(Library.get(entry.id))
 
   defp pending_for(subject, type),
@@ -77,23 +85,46 @@ defmodule PolyphonyWeb.GroupEditorLiveTest do
     end
 
     test "and lists them the way the design counts them", %{conn: conn, user: user} do
+      camp = campaign(user, "Camp")
+
       group(user, %{
         name: "The Tidewatch",
+        campaign_id: camp.id,
         member_ids: ["1", "2"],
         facts: [%Fact{statement: "They keep the bell.", concealed: true}]
       })
-
-      camp =
-        Library.put(%{
-          owner: Owner.of(user),
-          kind: "campaign",
-          payload: %{kind: :campaign, name: "Camp", character_ids: [], scenes: []}
-        })
 
       {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
 
       assert html =~ "The Tidewatch"
       assert html =~ "2 members · seeds new people · 1 secret"
+    end
+
+    test "and lists only this campaign's", %{conn: conn, user: user} do
+      # The reported bug (STR-68): the hub read every group the *author* owned, so a
+      # second campaign's collectives showed up on the first campaign's hub and the
+      # count in the card header was the library's count.
+      here = campaign(user, "The quay")
+      elsewhere = campaign(user, "The other one")
+
+      group(user, %{name: "The Tidewatch", campaign_id: here.id})
+      group(user, %{name: "The Harbour Office", campaign_id: elsewhere.id})
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{here.id}?tab=cast")
+
+      assert html =~ "The Tidewatch"
+      refute html =~ "The Harbour Office"
+    end
+
+    test "and a group belonging to no campaign is on no hub", %{conn: conn, user: user} do
+      # An orphan — written from the library, or predating the scope key. It stays on
+      # the library shelf so it can be deleted; putting it on every hub is the bug.
+      camp = campaign(user, "Camp")
+      group(user, %{name: "The Unplaced"})
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+
+      refute html =~ "The Unplaced"
     end
   end
 

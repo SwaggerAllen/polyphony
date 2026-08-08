@@ -194,7 +194,7 @@ defmodule PolyphonyWeb.CampaignLive do
       llm: Settings.from_payload(payload),
       global_models: global_models(),
       content: CampaignConfig.from_payload(payload),
-      groups: group_rows(owner),
+      groups: group_rows(owner, socket.assigns.entry.id),
       published?: Library.published?(socket.assigns.entry)
     )
     |> assign_scene_rows()
@@ -207,7 +207,16 @@ defmodule PolyphonyWeb.CampaignLive do
   # is how they drift.
   def handle_event("new_group", _params, socket) do
     safe(socket, fn ->
-      entry = Groups.create(socket.assigns.owner, %Group{name: "New group"})
+      # Scoped on the way out, for the same reason `new_character` casts on the way
+      # out: the button is *on* a campaign, so anything else makes a group written from
+      # a campaign that isn't in it — which is how the unscoped rows this replaces got
+      # there. `world_bible_id` is left to the editor; the campaign is what files it.
+      entry =
+        Groups.create(
+          socket.assigns.owner,
+          %Group{name: "New group", campaign_id: socket.assigns.entry.id}
+        )
+
       {:noreply, push_navigate(socket, to: ~p"/authoring/group/#{entry.id}")}
     end)
   end
@@ -1222,8 +1231,11 @@ defmodule PolyphonyWeb.CampaignLive do
 
   # Groups sit beside Cast because that is where they are used (§06b): a group is
   # written like a character and used as a starting point for others.
-  defp group_rows(owner) do
-    for entry <- Groups.list(owner) do
+  # Scoped to **this** campaign. It was `Groups.list(owner)` — every group the author
+  # owns — so a second campaign's collectives appeared here and the count in the card
+  # header was the library's count (STR-68).
+  defp group_rows(owner, campaign_id) do
+    for entry <- Groups.list_for_campaign(owner, campaign_id) do
       group = Library.payload(entry)
 
       %{

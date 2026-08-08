@@ -412,6 +412,17 @@ defmodule Polyphony.Library do
   def hidden(opts \\ []), do: LibraryEntry.list_hidden(repo(opts))
 
   @doc """
+  Every entry of a kind, across all owners — for one-time backfills.
+
+  **Not a read any screen should use.** It is unscoped by owner and includes archived,
+  trashed and hidden rows, which is right for a migration that has to see everything it
+  is about to rewrite and wrong for anything a person looks at. Screens want
+  `list_for_owner/2`, and permission questions want `Polyphony.Permissions`.
+  """
+  @spec of_kind(term(), keyword()) :: [LibraryEntry.t()]
+  def of_kind(kind, opts \\ []), do: LibraryEntry.list_kind(repo(opts), kind)
+
+  @doc """
   Everything `owner` has shared — public **and** unlisted.
 
   What a suspension has to reach. Hiding only the public half would leave a suspended

@@ -205,8 +205,7 @@ defmodule PolyphonyWeb.LibraryLive do
   end
 
   defp group_rows(owner, entries) do
-    by_character = Campaigns.by_character(owner)
-    campaigns = Map.new(entries, &{&1.id, &1})
+    campaigns = Map.new(entries, &{to_string(&1.id), &1})
 
     owner
     |> Groups.list()
@@ -220,7 +219,7 @@ defmodule PolyphonyWeb.LibraryLive do
         members: length(members),
         secrets: length(secrets_of(group)),
         colour: Voice.of_sheet(group),
-        campaign: campaign_of_members(members, by_character, campaigns)
+        campaign: campaign_named(group, campaigns)
       }
     end)
     |> Enum.group_by(& &1.campaign)
@@ -271,16 +270,23 @@ defmodule PolyphonyWeb.LibraryLive do
     end
   end
 
-  # A group has no campaign field — it belongs wherever its members do, which is
-  # unambiguous because they can't cross campaigns.
-  defp campaign_of_members(members, by_character, campaigns) do
-    Enum.find_value(members, fn id ->
-      case Map.get(by_character, to_string(id)) do
-        nil -> nil
-        c -> Campaigns.name(Map.get(campaigns, c.id, c))
-      end
-    end)
+  # A group **has** a campaign field now (STR-68), so this asks it rather than inferring
+  # from its members. The inference was sound — members can't cross campaigns — and it
+  # was the only answer available; it just couldn't speak for a group with no members
+  # yet, which is every group for the minute between creating one and adding anybody.
+  #
+  # It also has to be the same answer the campaign hub gives, and that matters more than
+  # either method: two screens deriving one fact two ways is how they come to disagree
+  # about which campaign somebody's work is in.
+  defp campaign_named(group, campaigns) do
+    case Map.get(group, :campaign_id) do
+      nil -> nil
+      id -> campaigns |> Map.get(to_string(id)) |> maybe_name()
+    end
   end
+
+  defp maybe_name(nil), do: nil
+  defp maybe_name(entry), do: Campaigns.name(entry)
 
   defp world_name(by_id, payload) do
     case Map.get(payload, :bible_id) || Map.get(payload, :world_bible_id) do

@@ -32,7 +32,7 @@ defmodule PolyphonyWeb.GroupEditorLive do
 
   require Logger
 
-  alias Polyphony.{Campaigns, Groups, Library}
+  alias Polyphony.{Groups, Library}
   alias Polyphony.Owner
   alias Polyphony.Authoring.{ArcEntry, Group, GroupArc}
   alias Polyphony.Authoring.CharacterSheet.Fact
@@ -55,7 +55,7 @@ defmodule PolyphonyWeb.GroupEditorLive do
 
     if entry && entry.kind == Group.kind() &&
          Permissions.can_edit?(entry, socket.assigns.current_user) do
-      group = struct(Group, Map.from_struct(Library.payload(entry)))
+      group = Group.load(Library.payload(entry))
 
       {:ok,
        socket
@@ -63,8 +63,11 @@ defmodule PolyphonyWeb.GroupEditorLive do
          page_title: group.name || "Group",
          entry: entry,
          group: group,
-         campaign:
-           Campaigns.of_world(Owner.of(socket.assigns.current_user), group.world_bible_id),
+         # The group says which campaign it belongs to, rather than being inferred from
+         # its world — the inference that couldn't answer for a group written from the
+         # library, whose world is a template no campaign holds (STR-68). Nil is a real
+         # answer here: an orphan has no campaign to name.
+         campaign: group.campaign_id && Library.get(group.campaign_id),
          name: group.name || "",
          blocks: blocks_from_group(group),
          facts: group.facts || [],
