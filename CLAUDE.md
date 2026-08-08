@@ -296,6 +296,30 @@ up any queued work, design-thread or not:
    a **fragment**, never a whole file: paste it into `ux/polyphony-kit.css`, run
    `mix kit.port`, and if the class already exists, that collision is the conflict signal —
    stop and ask rather than overwriting.
+
+   **A mock now arrives with a review scaffold, and it has to come off.** The design
+   thread's review channel is a sandbox that blocks external stylesheets and won't run
+   scripts, so a mock that links the kit or leans on the Tailwind CDN renders unstyled and
+   can't be reviewed at all. What arrives is a `<style>` block near the top of `<head>`,
+   fenced by `REVIEW SCAFFOLD — DELETE ON LANDING` markers, holding `polyphony-kit.css`
+   verbatim plus a hand-written shim for whatever Tailwind utilities that mock uses.
+
+   Delete the whole block and restore `<link rel="stylesheet" href="polyphony-kit.css">`;
+   the host page loads Tailwind itself. **The embedded kit has no authority** — it is a
+   snapshot taken for rendering, and where it disagrees with `ux/polyphony-kit.css` the
+   repo wins. Landing it would make a review artifact the source of truth for every screen.
+
+   A second `<style>` block marked `PROPOSED KIT ADDITION` is the **opposite** and must not
+   be deleted: compose those rules into `ux/polyphony-kit.css` beside the component they
+   extend, run `mix kit.port`, then drop the block from the mock. Every such class is also
+   named in the issue under *What it touches* — **a proposed addition the issue doesn't
+   name is a mistake, not a shortcut.** Raise it rather than landing it, for the same
+   reason a new class is a decision: the issue is where the decision is recorded, and a
+   class that arrives only inside a mock is one nobody agreed to.
+
+   Everything else in the file is real and stays: the wrapper's responsive classes,
+   `<body class="antialiased">`, and element-level `style=` attributes are the mocks' own
+   idiom rather than proposals.
 5. **Docs first, then code.** Land the behaviors doc (`docs/behaviors/<screen>.md`, bumping
    its `rev`) before implementing, so what you build against is in the repo rather than in a
    Drive file. That ordering is also what makes the next design session's base meaningful.
