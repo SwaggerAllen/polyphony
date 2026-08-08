@@ -265,6 +265,7 @@ That prints the URL (15-minute TTL) and sends it via whatever transport is confi
    | `PHX_HOST` | injected app domain (`${APP_DOMAIN}`) |
    | `POOL_SIZE` / `EVENT_STORE_POOL_SIZE` | DB connection pools (spec: 5 / 2 — see budget below) |
    | `SHOW_ERROR_DETAILS` | `true` shows the full exception + stacktrace on 5xx pages (bring-up); set `false` before going public |
+   | `SENTRY_DSN` | crash reporting. Unset means off, and off is silent — see below |
 
 3. **pgvector.** DO's managed Postgres 16 ships `pgvector`, and the read-model
    migration runs `CREATE EXTENSION IF NOT EXISTS vector;`, so the release-time
@@ -445,6 +446,24 @@ generation — end to end:
      compile-time path read it. If you see that message for some *other* key, this is
      the shape: an `Application.compile_env` read whose `runtime.exs` counterpart
      disagrees.
+   - **Turn on crash reporting.** Set `SENTRY_DSN` (RUN_TIME) to a Sentry project's
+     DSN. Everything above this line is a failure you can *see*; without a reporter,
+     one you can't see stays invisible — `SafeEvent` turns a raise into a flash for
+     the author and tells nobody else, a dying LiveView writes one line to a log
+     nobody is tailing, and a failing Oban job ends in a table. The boot log says
+     which state you're in (`crash reporting ON` / `OFF`), because "off" and "working
+     but nothing has broken yet" look identical from the dashboard.
+
+     Reports carry the request, the stacktrace and the LiveView assigns, minus
+     credentials: magic-link, invite and share tokens are reduced to a digest and
+     addresses to `a***@example.com`, by `Polyphony.Redact`. **The transcript is not
+     stripped** — a crash on the play screen carries the omniscient story, deliberately,
+     because a dev debugging one is not a character and needs to see it. Read that
+     module's moduledoc before changing what it keeps.
+
+     Free tier is the intended plan; DO already integrates Sentry for logs, which is
+     why it is Sentry. `SOURCE_COMMIT` (App Platform sets it) ties a report to the
+     build that produced it.
    - **Watch the server live from the browser.** Set `DEBUG_DRAWER=true` to get a
      floating **debug drawer** (bottom-right, on every page) that streams recent
      server logs with **Copy** and **Clear** — invaluable when a click seems to do

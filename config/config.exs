@@ -134,6 +134,26 @@ config :phoenix, :json_library, Jason
 # bring-up. Dev shows the richer Plug.Debugger page instead (debug_errors: true).
 config :polyphony, :show_error_details, false
 
+# Crash reporting (STR-55). **No DSN means no reporting**, which is the state in dev and
+# test and in any deploy that hasn't set one — `Polyphony.Crash.enabled?/0` reads the DSN
+# rather than a flag of its own, so there is no way to be switched on with nowhere to
+# send. `runtime.exs` supplies the DSN from SENTRY_DSN.
+#
+# `before_send` is not optional decoration: it is the last thing that runs before a
+# payload leaves the box, and the only place with the whole event in hand. See
+# `Polyphony.Redact` for what it strips and — just as deliberately — what it keeps.
+config :sentry,
+  dsn: nil,
+  client: Polyphony.Crash.HTTP,
+  before_send: {Polyphony.Crash, :before_send},
+  environment_name: to_string(config_env()),
+  enable_source_code_context: true,
+  root_source_code_paths: [File.cwd!()],
+  # A job that exhausts its retries currently ends in a table nobody watches. This is
+  # the other half of the same gap `SafeEvent` was: the failure is recorded where the
+  # code can see it and nowhere a person can.
+  integrations: [oban: [capture_errors: true]]
+
 # Run migrations + event-store setup at boot (Polyphony.Application). Off by
 # default; prod turns it on from MIGRATE_ON_BOOT (runtime.exs) so the schema is
 # self-healing regardless of the pre-deploy migrate job. dev/test manage their own.

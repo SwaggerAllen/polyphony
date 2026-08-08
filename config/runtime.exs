@@ -141,6 +141,22 @@ if config_env() == :prod do
          :show_error_details,
          System.get_env("SHOW_ERROR_DETAILS", "true") in ~w(true 1)
 
+  # Crash reporting. Unset means off, and off is a real deploy state rather than a
+  # misconfiguration — the app runs, it just can't tell you it broke, which is exactly
+  # the situation STR-55 describes and worth being able to see in one variable.
+  #
+  # `release:` ties a report to the commit that produced it. App Platform exposes the
+  # deployed SHA; without one the reports still arrive, they just can't say which build.
+  if dsn = System.get_env("SENTRY_DSN") do
+    config :sentry,
+      dsn: dsn,
+      release: System.get_env("SOURCE_COMMIT") || System.get_env("RELEASE_SHA")
+
+    IO.puts("[boot] crash reporting ON (Sentry) — payloads go through Polyphony.Redact")
+  else
+    IO.puts("[boot] crash reporting OFF — set SENTRY_DSN to turn it on")
+  end
+
   # Migrate + set up the event store on boot so the schema is guaranteed present,
   # independent of the pre-deploy migrate job. Idempotent. Set MIGRATE_ON_BOOT=false
   # to rely solely on the pre-deploy job (e.g. to keep boots fast at scale).

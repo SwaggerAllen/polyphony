@@ -109,3 +109,13 @@ config :logger, level: :warning
 # stays the logging one — prod switches it in `runtime.exs` once SMTP is configured —
 # so no other test's delivery path changes.
 config :polyphony, Polyphony.Mailer, adapter: Swoosh.Adapters.Test
+
+# Crash reporting: **collected, not sent**. `test_mode: true` starts Sentry's ownership
+# server so `Sentry.Test.start_collecting/0` can capture the assembled event per-test —
+# which is how `Polyphony.CrashTest` reads what would actually go over the wire rather
+# than trusting that `Polyphony.Redact` was wired in somewhere. A redactor that is
+# written, tested and not called looks exactly like one that works.
+#
+# The DSN stays unset, so `Polyphony.Crash.enabled?/0` is false and nothing reports
+# unless a test opts in by collecting.
+config :sentry, test_mode: true

@@ -111,21 +111,45 @@ defmodule PolyphonyWeb.DebugDrawerTest do
 
     test "the sign-in token is fingerprinted, never logged whole" do
       user = user_fixture()
-      token = PolyphonyWeb.Auth.sign_token(user.id)
 
-      log = with_info_logs(fn -> PolyphonyWeb.Auth.deliver_magic_link(user) end)
+      # The token has to come back from the call that minted it. This test used to sign
+      # its own and compare, which cannot work — `Phoenix.Token` stamps a timestamp, so
+      # two tokens for the same user differ unless both land in the same millisecond.
+      # It passed anyway, because the fingerprint was the token's first eight characters
+      # and those are the same on every token this app has ever signed. Fixing the
+      # fingerprint to actually distinguish turned this into the flake it always was.
+      parent = self()
+
+      log =
+        with_info_logs(fn ->
+          send(parent, {:url, PolyphonyWeb.Auth.deliver_magic_link(user)})
+        end)
+
+      assert_received {:url, url}
+      token = url |> String.split("/auth/verify/") |> List.last()
 
       assert log =~ "magic_link requested for user ##{user.id}"
 
-      # The request line carries only a prefix. A live 15-minute token in a stream any
-      # visitor can read while DEBUG_DRAWER is on would be the same account-takeover
-      # hole the login screen's on-page link was — and the drawer can't be admin-gated,
-      # because its most valuable use is diagnosing sign-in while signed out.
+      # The request line carries a digest, never the token. A live 15-minute token in a
+      # stream any visitor can read while DEBUG_DRAWER is on would be the same
+      # account-takeover hole the login screen's on-page link was — and the drawer can't
+      # be admin-gated, because its most valuable use is diagnosing sign-in while
+      # signed out.
       [request_line] =
         log |> String.split("\n") |> Enum.filter(&String.contains?(&1, "magic_link requested"))
 
       refute request_line =~ token
-      assert request_line =~ String.slice(token, 0, 8)
+      assert request_line =~ Polyphony.Redact.fingerprint(token)
+
+      # And the fingerprint has to *distinguish*, which is the half this test used to
+      # miss. It asserted the first eight characters, and the first eight characters of
+      # a `Phoenix.Token` are base64 of the algorithm name — identical on every token
+      # the app has ever minted. The assertion passed, the log line looked right, and
+      # every magic link in the drawer read `SFMyNTY.…`, which is no use for the one
+      # thing the fingerprint is for: matching the link you got against the one sent.
+      refute request_line =~ "SFMyNTY"
+      other = PolyphonyWeb.Auth.sign_token(user.id + 1)
+      refute request_line =~ Polyphony.Redact.fingerprint(other)
     end
   end
 

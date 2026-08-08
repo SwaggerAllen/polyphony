@@ -36,10 +36,26 @@ defmodule PolyphonyWeb.SafeEvent do
     kind, reason -> flash_error(socket, kind, reason, __STACKTRACE__)
   end
 
+  # Report first, then flash. The order is the point: the flash is what the author needs
+  # and the report is what makes it a symptom somebody chases rather than the whole
+  # story. Catching the error here is what made these failures invisible to everyone but
+  # the person who hit them, and this is the line that undoes that.
   defp flash_error(socket, kind, reason, stack) do
     Logger.error("LiveView event failed:\n" <> Exception.format(kind, reason, stack))
+
+    Polyphony.Crash.report(exception(kind, reason),
+      stacktrace: stack,
+      extra: %{view: inspect(socket.view), source: "SafeEvent"}
+    )
+
     {:noreply, put_flash(socket, :error, message(kind, reason, stack))}
   end
+
+  # `capture_exception` wants an exception. A `throw` or an `exit` is neither, and
+  # wrapping it keeps those reportable instead of quietly dropping the two kinds of
+  # failure nobody thinks to test.
+  defp exception(:error, %{__exception__: true} = e), do: e
+  defp exception(kind, reason), do: %RuntimeError{message: Exception.format_banner(kind, reason)}
 
   defp message(kind, reason, _stack) do
     if Application.get_env(:polyphony, :show_error_details, false) do

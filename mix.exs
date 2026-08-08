@@ -130,6 +130,17 @@ defmodule Polyphony.MixProject do
 
       {:jason, "~> 1.4"},
 
+      # Crash reporting (STR-55). Sentry because DigitalOcean already integrates it for
+      # logs, so it is one integration rather than two. Every payload goes through
+      # `Polyphony.Redact` before it leaves the box — see that module for what is
+      # stripped and, just as deliberately, what isn't.
+      #
+      # Its default HTTP client is hackney. `Polyphony.Crash.HTTP` speaks `:httpc`
+      # instead, for the same reason the DeepInfra adapter does: the standard library
+      # already ships an HTTP client, and a crash reporter is the last place that should
+      # be pulling a dependency tree in behind it.
+      {:sentry, "~> 13.4"},
+
       # Email (§B4). Swoosh's SMTP adapter speaks to every provider worth using
       # (Resend, Postmark, SendGrid, Mailgun, SES all offer SMTP), so this commits to
       # a protocol rather than a vendor — and needs no HTTP client, keeping the
