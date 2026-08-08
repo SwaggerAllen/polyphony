@@ -187,6 +187,53 @@ defmodule Polyphony.Campaigns do
     end
   end
 
+  @doc """
+  Drop one scene from a campaign, and everything derived from it.
+
+  `restart/2` scoped to a single scene, and deliberately the same operation: the campaign
+  stops naming the stream, and the read models built from it go — the memberships, the
+  per-character summaries, the drafts, the recorded failures, the fork rows, and the **arc
+  proposals it raised**. An arc entry that outlives the scene which proposed it is a review
+  item about something that never happened, which is the reason this isn't a one-line
+  `List.delete/2` on the payload.
+
+  It does **not** delete the event stream, and cannot: events are immutable (rule 6). The
+  stream is abandoned, not erased, and nothing reads a stream no campaign names. That also
+  makes this safe next to forking — a fork is its own stream and copied what it needed at
+  the fork point, so deleting the scene it came from does not reach into it.
+
+  Deleting a scene says nothing about whether the campaign is finished, so `finished_at`
+  is left alone — unlike `restart/2`, where starting over is exactly a statement about it.
+
+  Returns `{:ok, %{rows: %{table => n}}}`, or `{:error, :not_found}` when the campaign is
+  gone or `{:error, :no_such_scene}` when it never held that scene. The second is worth
+  distinguishing: it is what a double-submitted delete looks like, and it should not report
+  success for work it didn't do.
+  """
+  @spec delete_scene(term(), term(), keyword()) :: {:ok, map()} | {:error, term()}
+  def delete_scene(id, scene_id, opts \\ []) do
+    repo = Keyword.get(opts, :repo, Repo)
+    scene_id = to_string(scene_id)
+
+    with entry when not is_nil(entry) <- Library.get(id, opts),
+         payload = Library.payload(entry),
+         scenes = Enum.map(List.wrap(Map.get(payload, :scenes)), &to_string/1),
+         true <- scene_id in scenes do
+      rows =
+        for {table, column} <- @scene_derived, into: %{} do
+          {table, delete_by_scene(repo, table, column, [scene_id])}
+        end
+
+      {:ok, _} =
+        Library.update_payload(id, Map.put(payload, :scenes, scenes -- [scene_id]), opts)
+
+      {:ok, %{rows: rows}}
+    else
+      nil -> {:error, :not_found}
+      false -> {:error, :no_such_scene}
+    end
+  end
+
   defp delete_by_scene(_repo, _table, _column, []), do: 0
 
   defp delete_by_scene(repo, table, column, scenes) do

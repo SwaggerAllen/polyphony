@@ -7,8 +7,8 @@ defmodule Polyphony.Library do
 
   Two independent axes (see `Polyphony.ReadModels.LibraryEntry`): **visibility**
   (`private` / `unlisted` / `public`) and **live/frozen**. Access is never decided in
-  this module — it is the pure `Polyphony.Library.Access` predicate. This context owns
-  persistence and the three lifecycle transitions:
+  this module — `Polyphony.Permissions` answers it. This context owns persistence and
+  the three lifecycle transitions:
 
     * **publish** — freeze a campaign into a self-contained `Snapshot` (pinned bible +
       sheet versions + canon-only arc at the published beat) and store it as a frozen

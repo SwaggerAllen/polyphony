@@ -66,6 +66,8 @@ defmodule PolyphonyWeb.CampaignLive do
          pub_spectator: true,
          pub_forkable: false,
          qb_world: "",
+         qb_premise: "",
+         qb_bible_id: nil,
          qb_seeds: [""],
          qb_suggest: true,
          qb_groups: false,
@@ -195,6 +197,7 @@ defmodule PolyphonyWeb.CampaignLive do
       groups: group_rows(owner),
       published?: Library.published?(socket.assigns.entry)
     )
+    |> assign_scene_rows()
     |> assign_seen()
     |> preflight()
   end
@@ -487,6 +490,8 @@ defmodule PolyphonyWeb.CampaignLive do
     {:noreply,
      assign(socket,
        qb_world: params["world_seed"] || socket.assigns.qb_world,
+       qb_premise: params["campaign_premise"] || socket.assigns.qb_premise,
+       qb_bible_id: blank_to_nil(params["bible_id"]),
        qb_seeds: seeds_param(params["char_seed"], socket.assigns.qb_seeds),
        qb_suggest: params["suggest_offscreen"] == "true",
        qb_groups: params["groups"] == "true"
@@ -517,10 +522,20 @@ defmodule PolyphonyWeb.CampaignLive do
       # from the world) — the row count is the cast size the author asked for.
       seeds = params["char_seed"] |> List.wrap() |> Enum.map(&String.trim/1)
 
+      # A chosen world is attached to the campaign **before** the build starts, not after
+      # it finishes. That is the same rule the build follows for a world it writes itself
+      # (`:on_entry`, see `Polyphony.Jobs.QuickBuild`): associate the moment the thing
+      # exists, so an interrupted build leaves a half-built campaign you can open rather
+      # than loose parts. It is also what the job reads — `resume_state/2` resolves the
+      # campaign's `bible_id`, and `QuickBuild.world/6` already has the clause for a world
+      # that is already written, because a resume is the same situation.
+      bible_id = attach_chosen_world(socket, params["bible_id"])
+
       opts =
         [
           owner: socket.assigns.owner,
-          world_seed: params["world_seed"] || "",
+          world_seed: if(bible_id, do: "", else: params["world_seed"] || ""),
+          campaign_premise: params["campaign_premise"] || "",
           character_seeds: seeds,
           suggest_offscreen: params["suggest_offscreen"] == "true",
           groups: params["groups"] == "true",
@@ -648,6 +663,28 @@ defmodule PolyphonyWeb.CampaignLive do
        |> assign(entry: Library.get(socket.assigns.entry.id))
        |> put_flash(:info, restart_note(n, arcs))
        |> load()}
+    end)
+  end
+
+  # One scene, the same operation `restart_campaign` performs on all of them — the arc
+  # proposals go too, for the same reason. `owned/2` rather than `safe/2`: this destroys
+  # somebody's work, so it answers to ownership rather than to being signed in.
+  def handle_event("delete_scene", %{"id" => scene_id}, socket) do
+    owned(socket, fn ->
+      case Campaigns.delete_scene(socket.assigns.entry.id, scene_id) do
+        {:ok, %{rows: rows}} ->
+          {:noreply,
+           socket
+           |> assign(entry: Library.get(socket.assigns.entry.id))
+           |> put_flash(:info, deleted_scene_note(rows))
+           |> load()}
+
+        # A second submit of the same delete, or a scene that moved. Reloading is the
+        # honest response: the list is already what they wanted and saying "deleted" a
+        # second time would claim work nobody did.
+        {:error, :no_such_scene} ->
+          {:noreply, load(socket)}
+      end
     end)
   end
 
@@ -843,6 +880,8 @@ defmodule PolyphonyWeb.CampaignLive do
        |> assign(
          quick_build_open: false,
          qb_world: "",
+         qb_premise: "",
+         qb_bible_id: nil,
          qb_seeds: [""],
          qb_suggest: true,
          qb_groups: false
@@ -956,6 +995,26 @@ defmodule PolyphonyWeb.CampaignLive do
     case Integer.parse(to_string(value || "")) do
       {n, _} when n > 0 -> n
       _ -> default
+    end
+  end
+
+  # Returns the id it attached, or nil for "write a new one". Refuses an id that isn't on
+  # this author's selectable roster: the value arrives from a form, and attaching a
+  # stranger's world would ground every character in this campaign on a bible they don't
+  # own — the same check `select_world` makes, for the same reason.
+  defp attach_chosen_world(socket, raw) do
+    with id when not is_nil(id) <- blank_to_nil(raw),
+         id = normalize_id(id),
+         true <- Enum.any?(socket.assigns.bibles, &(&1.id == id)) do
+      {:ok, _} =
+        Library.update_payload(
+          socket.assigns.entry.id,
+          Map.put(socket.assigns.payload, :bible_id, id)
+        )
+
+      id
+    else
+      _ -> nil
     end
   end
 
@@ -1213,9 +1272,38 @@ defmodule PolyphonyWeb.CampaignLive do
   # Recomputed whenever the grant changes, so the warning tracks what's actually ticked
   # rather than appearing once at the end. Only the reading half matters — forkable
   # can't make a scene unreachable.
+  @doc """
+  The campaign's scenes as things an author can name: **number and place**, oldest first.
+
+  A scene's identity was its stream id, rendered as the first twelve characters of a
+  uuid — which is not an identifier a person can hold, and made the scenes list a column
+  of near-identical strings. It is a chapter in a story, so it is numbered by its position
+  in the campaign and titled by where it happens; `SceneOpened` has carried `location_id`
+  since §2.3 and this is the first thing to read it back.
+
+  `Preflight.describe/1` already produced exactly this shape — id, title, premise, cast,
+  beats — for the publish warning, and already fell back to *A scene* for a stream with no
+  opening event. So this adds the number and nothing else, and the two surfaces cannot
+  disagree about what a scene is called.
+
+  Resolved once here rather than in `preflight/1`, which is also reached from the two
+  grant toggles: those re-read every scene's stream to answer a question about
+  perspectives, which the scenes cannot have changed.
+  """
+  def assign_scene_rows(socket) do
+    rows =
+      socket.assigns.scenes
+      |> Preflight.scenes()
+      |> Enum.with_index(1)
+      |> Enum.map(fn {scene, n} -> Map.put(scene, :number, n) end)
+
+    assign(socket, scene_rows: rows)
+  end
+
   defp preflight(socket) do
-    scenes = Preflight.scenes(socket.assigns.scenes)
-    assign(socket, publish_warning: Preflight.warning(publication(socket), scenes))
+    assign(socket,
+      publish_warning: Preflight.warning(publication(socket), socket.assigns.scene_rows)
+    )
   end
 
   defp publication(socket) do
@@ -1239,6 +1327,16 @@ defmodule PolyphonyWeb.CampaignLive do
   defp request_generation(socket, key, op, request) do
     Generations.request(socket.assigns.entry.id, key, op, request)
     socket
+  end
+
+  defp deleted_scene_note(rows) do
+    case Map.get(rows, "arc_entries", 0) do
+      0 ->
+        "Scene deleted."
+
+      n ->
+        "Scene deleted, along with #{Screens.Campaign.count_label(n, "arc proposal", "arc proposals")} it raised."
+    end
   end
 
   defp restart_note(0, _arcs), do: "Nothing had been played yet."
@@ -1282,9 +1380,10 @@ defmodule PolyphonyWeb.CampaignLive do
   # that reached it would be a leak with no symptom but a character who mysteriously
   # knows something.
 
-  # The scenes already played, for "don't open on the same quay again".
-  defp scene_lines(assigns),
-    do: Enum.map(Enum.reverse(assigns.scenes), &Screens.Campaign.scene_label/1)
+  # The scenes already played, for "don't open on the same quay again". This used to map
+  # over the raw ids, so what reached the model was `Scene 0f3a-91bb…` — which names no
+  # quay and cannot be avoided. It is the *places* that make the hint mean anything.
+  defp scene_lines(assigns), do: Enum.map(assigns.scene_rows, &Screens.Campaign.scene_label/1)
 
   defp scene_world(socket) do
     case socket.assigns.bible_id && Library.get(socket.assigns.bible_id) do
@@ -1389,6 +1488,8 @@ defmodule PolyphonyWeb.CampaignLive do
       published?={@published?}
       qb_groups={@qb_groups}
       qb_seeds={@qb_seeds}
+      qb_premise={@qb_premise}
+      qb_bible_id={@qb_bible_id}
       qb_suggest={@qb_suggest}
       qb_world={@qb_world}
       quick_build_open={@quick_build_open}
@@ -1397,6 +1498,7 @@ defmodule PolyphonyWeb.CampaignLive do
       scene_premise={@scene_premise}
       scene_suggesting={@scene_suggesting}
       scenes={@scenes}
+      scene_rows={@scene_rows}
       seen={@seen}
       tab={@tab}
       viewer={@viewer}

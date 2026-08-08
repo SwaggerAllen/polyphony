@@ -196,6 +196,176 @@ defmodule PolyphonyWeb.CampaignQuickBuildLiveTest do
     assert length(Regex.scan(~r/name="char_seed\[\]"/, render(view))) == 2
   end
 
+  describe "building on a world you already wrote" do
+    defp world(user, name) do
+      Library.put(%{
+        owner: Owner.of(user),
+        kind: "world_bible",
+        payload: %WorldBible{
+          name: name,
+          setting: "A rain-drowned harbour city where debts are paid in memories.",
+          tone: "Wet, close, and quietly transactional."
+        }
+      })
+    end
+
+    test "no second world is written, and the cast is grounded in the chosen one",
+         %{conn: conn, user: user} do
+      # The case Quick Build could not serve: the second campaign in a setting, which is
+      # where an author has the most to reuse and the least reason to pay for it again.
+      salt = world(user, "The Salt Line")
+      camp = campaign(user)
+
+      before = Enum.count(Library.list_for_owner(Owner.of(user)), &(&1.kind == "world_bible"))
+
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+      open_quick_build(view)
+
+      view
+      |> form("#quick-build", %{"bible_id" => to_string(salt.id), "char_seed" => ["a smuggler"]})
+      |> render_submit()
+
+      drain()
+
+      payload = Library.payload(Library.get(camp.id))
+      assert payload[:bible_id] == salt.id
+
+      after_count =
+        Enum.count(Library.list_for_owner(Owner.of(user)), &(&1.kind == "world_bible"))
+
+      assert after_count == before, "a world was written even though one was chosen"
+
+      # Untouched, not regenerated over: the bible is authored work that predates this
+      # campaign and belongs to whatever else is already built on it.
+      assert Library.payload(Library.get(salt.id)).setting =~ "rain-drowned"
+
+      # And the cast is linked to it, which is the thing the choice was for.
+      sheets = Enum.map(payload[:character_ids], &Library.payload(Library.get(&1)))
+      assert sheets != []
+      assert Enum.all?(sheets, &(&1.world_bible_id == salt.id))
+    end
+
+    test "the world is attached before the build runs, so an interrupted one is half-built",
+         %{conn: conn, user: user} do
+      # The same rule the build follows for a world it writes itself: associate the moment
+      # the thing exists. Attached only on success, a build that never finished would
+      # leave the author's choice nowhere.
+      salt = world(user, "The Salt Line")
+      camp = campaign(user)
+
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+      open_quick_build(view)
+
+      view
+      |> form("#quick-build", %{"bible_id" => to_string(salt.id), "char_seed" => ["a smuggler"]})
+      |> render_submit()
+
+      # Deliberately before `drain/0` — nothing has been built yet.
+      assert Library.payload(Library.get(camp.id))[:bible_id] == salt.id
+    end
+
+    test "a world this author cannot select is refused", %{conn: conn, user: user} do
+      other = user_fixture()
+      theirs = world(other, "Somebody else's world")
+      camp = campaign(user)
+
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+      open_quick_build(view)
+
+      # Submitted as a raw event rather than through `form/3`, which refuses a value the
+      # select never offered — and that refusal is exactly the point. The select cannot
+      # produce this id, so the server-side check exists for a submission that did not
+      # come from the select, and only a raw event can reach it.
+      render_submit(view, "quick_build", %{
+        "bible_id" => to_string(theirs.id),
+        "char_seed" => ["a smuggler"]
+      })
+
+      drain()
+
+      payload = Library.payload(Library.get(camp.id))
+      refute payload[:bible_id] == theirs.id
+
+      # Attaching a stranger's world would ground every character in this campaign on a
+      # bible the author doesn't own, so it falls back to writing one rather than failing.
+      assert Library.payload(Library.get(theirs.id)).name == "Somebody else's world"
+    end
+  end
+
+  describe "the campaign premise, separate from the world seed" do
+    test "an author's premise is kept verbatim", %{conn: conn, user: user} do
+      # The reason the two fields are separate: written into the world seed, "a shipment
+      # came in that isn't on any manifest" became *setting* — canon in the bible, and
+      # inherited by every later campaign in that world. A premise happens to this cast,
+      # once.
+      camp = campaign(user)
+      mine = "A shipment came in that isn't on any manifest, and one of them signed for it."
+
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+      open_quick_build(view)
+
+      view
+      |> form("#quick-build", %{
+        "world_seed" => "a rain-drowned harbour city",
+        "campaign_premise" => mine,
+        "char_seed" => ["a smuggler"]
+      })
+      |> render_submit()
+
+      drain()
+
+      payload = Library.payload(Library.get(camp.id))
+      assert payload[:premise] == mine
+
+      # Still titled, though — a generated title is worth having, and it is the half of
+      # that one call the author didn't do themselves.
+      assert payload[:name] not in [nil, ""]
+    end
+
+    test "a blank premise still gets one written", %{conn: conn, user: user} do
+      camp = campaign(user)
+
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+      open_quick_build(view)
+
+      view
+      |> form("#quick-build", %{
+        "world_seed" => "a rain-drowned harbour city",
+        "campaign_premise" => "",
+        "char_seed" => ["a smuggler"]
+      })
+      |> render_submit()
+
+      drain()
+
+      assert Library.payload(Library.get(camp.id))[:premise] not in [nil, ""]
+    end
+
+    test "it does not reach the world bible", %{conn: conn, user: user} do
+      camp = campaign(user)
+
+      {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}")
+      open_quick_build(view)
+
+      view
+      |> form("#quick-build", %{
+        "world_seed" => "a rain-drowned harbour city",
+        "campaign_premise" => "Zzyzx signed for the crate.",
+        "char_seed" => ["a smuggler"]
+      })
+      |> render_submit()
+
+      drain()
+
+      payload = Library.payload(Library.get(camp.id))
+      bible = Library.payload(Library.get(payload[:bible_id]))
+
+      # A distinctive token, so this can only match if the premise itself leaked into the
+      # setting the world writes down as permanent.
+      refute inspect(bible) =~ "Zzyzx"
+    end
+  end
+
   describe "the attached world" do
     test "is shown, not just named", %{conn: conn, user: user} do
       bible =

@@ -2,6 +2,7 @@ defmodule Storybook.Screens.Play do
   use PhoenixStorybook.Story, :component
 
   alias PolyphonyCore.Scene.Cast
+  alias PolyphonyWeb.Transcript
 
   def container, do: {:div, style: "width:100%"}
 
@@ -90,11 +91,51 @@ defmodule Storybook.Screens.Play do
     # without it every `#say-input` in the file is the same element as far as the DOM is
     # concerned.
     attrs = base() |> Map.merge(overrides) |> Map.put(:id, to_string(id))
-    %Variation{id: id, description: description, attributes: attrs}
+    %Variation{id: id, description: description, attributes: transcript(attrs)}
+  end
+
+  # A variation writes `messages:` — the honest fixture, the shape the broadcaster emits —
+  # and the screen takes `{dom_id, beat}` pairs, because that is what a `LiveStream`
+  # enumerates to. Derived here, once, rather than in fourteen variations: a story that had
+  # to hand-build beat trees would be a story about a rendering mechanism.
+  defp transcript(attrs) do
+    beats =
+      attrs
+      |> Map.get(:messages, [])
+      |> Transcript.beats()
+      |> Transcript.with_failures(
+        Map.get(attrs, :failures, []),
+        Map.get(attrs, :next_beat, 1) - 1
+      )
+
+    attrs
+    |> Map.delete(:messages)
+    # Prefixed by variation: storybook renders all fourteen on one page, so a bare
+    # `beat-2` is the same DOM id in every one of them.
+    |> Map.put(:beats, Enum.map(beats, &{"#{attrs.id}-beat-#{&1.beat}", &1}))
+    |> Map.put(:transcript_empty, beats == [])
+  end
+
+  # The connection banners are driven by the classes **LiveView puts on the container**,
+  # not by an assign — which is what makes them free of server state, and also what made
+  # them impossible to look at. A per-variation template puts the class on an ancestor, so
+  # they are reviewable the same way every other state is.
+  defp connection(id, class, description) do
+    %{v(id, description, %{}) | template: ~s|<div class="#{class}"><.psb-variation/></div>|}
   end
 
   def variations do
     [
+      connection(
+        :reconnecting,
+        "phx-loading",
+        "The socket dropped and is coming back. A scene is a long-lived socket and this is the state a real reader hits on a train, so it promises recovery rather than describing a fault — reconnecting replays the canonical log, so nothing written is at risk. Driven by the class LiveView sets on the container, which is why it needs no server state."
+      ),
+      connection(
+        :disconnected,
+        "phx-error",
+        "The socket is gone and not currently coming back. Distinct from a **generation** failure, which is a gap in the fiction with a retry on it — this is the transport, and the scene on screen is still true, just no longer live."
+      ),
       v(
         :stage,
         "Omniscient play — the working register. Everything is visible, including interiority, and the composer writes as whoever the perspective control names.",

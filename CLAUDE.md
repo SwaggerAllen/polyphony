@@ -186,17 +186,41 @@ things a markdown list can't do. Their shipped half is in `docs/completed-roadma
 things deliberately ruled out are the **Confirmed non-asks** project document, which is
 worth reading before building anything that looks obviously missing.
 
-**Labels describe the work; states describe who has it.** The only labels are
-**`frontend`** / **`backend`** — which never change, because a thing doesn't stop being
-frontend work — plus `design-inbox` for provenance. Anything you'd have to *remove* when
-the work changes hands is a state wearing a label, which is why there is no `deferred`
-(that is Backlog) and no `needs-design` (that is Designing). Milestones carry the
-sequencing the roadmap used to argue for — **Frontend rebuild** (the critical path; the
-app has no users until it lands), then **Authoring quality**, then **World simulation**.
+**Labels describe the work; states describe who has it.** The labels are
+**`frontend`** / **`backend`** / **`tech-debt`** — none of which ever change, because a
+thing doesn't stop being frontend work and debt doesn't stop being debt, it gets paid —
+plus `design-inbox` for provenance. Anything you'd have to *remove* when the work changes
+hands is a state wearing a label, which is why there is no `deferred` (that is Backlog)
+and no `needs-design` (that is Designing).
+
+Milestones carry the sequencing the roadmap used to argue for, and **alternate**: a
+tech-debt milestone before each product one, so the debt that gates a milestone is
+scheduled rather than remembered.
+
+| | |
+|---|---|
+| **Tech debt · before Frontend rebuild** | Debt users would pay for, before the milestone that gives the app users. |
+| **Frontend rebuild** | The critical path; the app has no users until it lands. |
+| **Tech debt · before Authoring quality** | Deliberately thin — an honest empty beats a padded one. |
+| **Authoring quality** | A6: the review panel and its gate. |
+| **Tech debt · before World simulation** | Guards, while the invariants are still small enough to state. |
+| **World simulation** | B11 → B10 → B12. |
+
+That table is the **argument**, not the roster. What each milestone is for is worth writing
+down; which ones exist is not, because a list here goes stale silently and nothing would say
+so. Read the current set off the project when it matters. (Linear sorts the tech-debt ones to
+the bottom today, so the displayed order is not the intended one until somebody drags them —
+the names carry the sequence in the meantime.)
+
+A tech-debt issue is **undesigned by definition** — nothing about the product changes, so
+there is nothing to draw. That is the one place issues get filed without a design pass,
+and it is still only on the author's ask.
 
 Some issues arrive from elsewhere. Design happens in a **normal Claude thread** — faster
 to iterate with, and it doesn't block this one. Its instructions are
-`docs/design-thread.md`, it never writes to the repo, and it hands work over in two
+a **Linear project document** rather than a file here — a design thread iterates on its own
+instructions, and keeping them in the repo made every wording change a round trip through a
+pull request nobody else needed. It never writes to the repo, and it hands work over in two
 pieces:
 
 - **Linear** carries the intent — an issue saying what changes and why, tagged
@@ -215,7 +239,13 @@ answers it differently — which is the test for whether a state earns its place
 | **Ready for dev** | **The queue. This is what you drain.** |
 | In Progress | You, now. |
 | Ready to merge | The author. A PR is open. (Linear's default `In Review`, renamed.) |
+| **Reconciling** | The design thread. Merged and deployed, being checked against what was asked for. **Never yours** — an issue here is one you have finished with. |
 | Done / Canceled | Nobody. A rejected proposal is **Canceled**, never Done. |
+
+**You never write Done.** A merged issue goes to Reconciling, and the design thread closes
+it from there or sends it back. That is deliberate: the person who wrote the argument is the
+only one positioned to tell that the paragraph which landed isn't the one they meant, and
+they cannot tell that from a PR — only from the served site after a merge.
 
 The `design-inbox` label is provenance — *this came from the design thread* — and is
 worth reading for context, but it is never the queue: a label doesn't move, and two
@@ -232,11 +262,25 @@ up any queued work, design-thread or not:
    column is the only place an unmerged PR is visible. If the Linear connector isn't
    attached to this session, say so and ask for the issue to be pasted rather than
    guessing at what's queued.
+
+   **Check the issue's relations before starting.** `blocked-by` means what it says. Two
+   open issues rewriting the same behaviors file is the one collision nothing here can
+   reconcile — a `rev` catches a base that moved, but not a second design landing in the
+   same section an hour later. If you find one and neither is marked, say so rather than
+   picking.
 2. **Drive** — for each issue with a `Drive:` line, `download_file_content` on that
    `fileId`, base64-decode it, and **check the byte count against Drive's `fileSize`**
    before doing anything with it. The transport is byte-exact when the design thread sets
    `disableConversionToGoogleType: true`; a size mismatch means it didn't, and the file
    is a Google Doc's idea of the file rather than the file.
+
+   Files are **named for their issue** and that is what tells you where they go:
+   `play-STR-123.md` → `docs/behaviors/play.md`, `polyphony-play-STR-123.html` →
+   `ux/polyphony-play.html`, `kit-additions-STR-123.css` → a fragment pasted into
+   `ux/polyphony-kit.css`. The ticket in the name is load-bearing: two issues can touch play,
+   and it also makes the link bidirectional, so a mistyped `fileId` is recoverable by name.
+   A revision keeps the same name and uploads a *new* file, so **most recent wins** — see
+   *A ticket that comes back*.
 3. **Check the base before applying anything.** For every `Base: <screen>.md rev <n>` line
    on the issue, compare it against the file in the repo. **Equal — apply cleanly. Higher
    in the repo — something moved while the design was being drawn**, and it will usually
@@ -252,22 +296,84 @@ up any queued work, design-thread or not:
    a **fragment**, never a whole file: paste it into `ux/polyphony-kit.css`, run
    `mix kit.port`, and if the class already exists, that collision is the conflict signal —
    stop and ask rather than overwriting.
+
+   **A mock now arrives with a review scaffold, and it has to come off.** The design
+   thread's review channel is a sandbox that blocks external stylesheets and won't run
+   scripts, so a mock that links the kit or leans on the Tailwind CDN renders unstyled and
+   can't be reviewed at all. What arrives is a `<style>` block near the top of `<head>`,
+   fenced by `REVIEW SCAFFOLD — DELETE ON LANDING` markers, holding `polyphony-kit.css`
+   verbatim plus a hand-written shim for whatever Tailwind utilities that mock uses.
+
+   Delete the whole block and restore `<link rel="stylesheet" href="polyphony-kit.css">`;
+   the host page loads Tailwind itself. **The embedded kit has no authority** — it is a
+   snapshot taken for rendering, and where it disagrees with `ux/polyphony-kit.css` the
+   repo wins. Landing it would make a review artifact the source of truth for every screen.
+
+   A second `<style>` block marked `PROPOSED KIT ADDITION` is the **opposite** and must not
+   be deleted: compose those rules into `ux/polyphony-kit.css` beside the component they
+   extend, run `mix kit.port`, then drop the block from the mock. Every such class is also
+   named in the issue under *What it touches* — **a proposed addition the issue doesn't
+   name is a mistake, not a shortcut.** Raise it rather than landing it, for the same
+   reason a new class is a decision: the issue is where the decision is recorded, and a
+   class that arrives only inside a mock is one nobody agreed to.
+
+   Everything else in the file is real and stays: the wrapper's responsive classes,
+   `<body class="antialiased">`, and element-level `style=` attributes are the mocks' own
+   idiom rather than proposals.
 5. **Docs first, then code.** Land the behaviors doc (`docs/behaviors/<screen>.md`, bumping
    its `rev`) before implementing, so what you build against is in the repo rather than in a
    Drive file. That ordering is also what makes the next design session's base meaningful.
    A new `### \`state\`` section obliges a storybook variation of the same name — `BehaviorsDocTest`
    fails while the two sets disagree, which is what stops the docs describing an app nobody
    can look at.
-6. **Close the loop in Linear**: open the PR, move the issue to **Ready to merge**, and
+6. **Hand it back in Linear**: open the PR, move the issue to **Ready to merge**, and
    comment with what landed and the commit. Say plainly if you didn't do part of it and
-   why. An issue that goes quiet is indistinguishable from one nobody read — and an issue
-   moved without a comment is a state change nobody can audit. The author merges; feedback
-   in scope comes back as **Ready for dev**, anything new is a **new issue**, and a merged
-   issue with nothing outstanding is **Done**.
+   why — and if you resolved an open question the issue left open, say what you decided,
+   because that resolution is now the design and a PR is not where the design lives. An
+   issue that goes quiet is indistinguishable from one nobody read, and an issue moved
+   without a comment is a state change nobody can audit.
 
-**Issues are for designed work.** A small fix — a wrong label, a broken state, a rename —
-happens right here and never gets an issue. That is the intended behaviour and it is
-precisely why behaviors docs carry a `rev`: the undesigned changes are the ones no ticket
+   Then you are done with it. The author merges, the issue goes to **Reconciling**, and
+   what happens next is the design thread's. It comes back to you or it doesn't.
+
+## A ticket that comes back
+
+An issue can return to **Ready for dev** from Reconciling, and it does not look different
+from a fresh one in the queue. Read it differently anyway — this is the one case where
+taking the issue at face value rebuilds the wrong thing.
+
+**The description still describes the original change.** Reconciling writes *comments*, not
+edits, because the argument in the description is what the merged work is being measured
+against and rewriting it would destroy the measurement. So on a returned ticket:
+
+- **The newest comment is the scope**, not the description. The description is context for
+  why the change exists; the comment is what is still missing. Building the description
+  again is the specific failure this section exists to prevent — it is work that was already
+  merged, and re-landing it will conflict with itself.
+- **Read every comment, oldest to newest.** Your own hand-back comment is in there, and so
+  is the reason the design thread disagreed with it. A ticket can round-trip more than once.
+- **`Base:` is stale by definition.** The rev it names is what the design was drawn against
+  *before* your first pass; the merged file is higher because you bumped it. Compare against
+  the file in the repo now and treat the difference as yours, not as somebody else's edit.
+- **Re-check Drive before reusing a `fileId`.** A revised artifact keeps the **same
+  ticket-scoped filename** and is a *new file* — Drive has no in-place edit — so the
+  `fileId` on the description may point at the version that was already landed. Most recent
+  upload of that name wins. If a comment says *reapply the fragment already named on this
+  issue*, that is exactly this: the file didn't change, the paste dropped something.
+
+The commonest return is not a missing feature but a missing **paragraph** — a standing
+decision that didn't land, a state named differently from the way the issue named it, copy
+that was argued for and then paraphrased. Those are cheap, and they are cheap only if you go
+looking for the comment rather than diffing the description.
+
+If the comment asks for something you have a reason not to do — the design can't work as
+drawn, or it contradicts something in `architecture.md` — say so on the issue and move it to
+**Designing**. Don't silently do a third thing.
+
+## Issues are for designed work
+
+A small fix — a wrong label, a broken state, a rename — happens right here and never gets an
+issue. That is the intended behaviour and it is precisely why behaviors docs carry a `rev`: the undesigned changes are the ones no ticket
 warns the design thread about, so the counter is the only thing that says the ground moved.
 
 **Never file an issue unless the author asks for one.** Not bugs, not findings, not work

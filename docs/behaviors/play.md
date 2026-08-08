@@ -1,6 +1,6 @@
 # Play
 
-<!-- rev: 1 -->
+<!-- rev: 2 -->
 
 | | |
 |---|---|
@@ -25,6 +25,10 @@ difference is a property of the data rather than an instruction anybody gave a m
 - **A failure is a visible gap, not a stall.** When a turn can't be generated, the beat says
   so in place and carries on closing around it. It is scoped per viewer, so one character's
   read never shows somebody else's error.
+- **A dropped socket is not a failed turn**, and the two must never be said the same way. A
+  generation failure is a hole in the fiction and carries a retry; a lost connection is the
+  transport, and everything on screen is still true — it has simply stopped being live. They
+  look identical from the seat, which is exactly why the copy has to distinguish them.
 - **The composer answers a specific slot at a specific beat.** Not "the next free moment" —
   a turn committed at whatever beat happens to be current is how one beat ends up with two
   turns from the same person.
@@ -112,3 +116,19 @@ offering one as a one-click entry would be offering a choice that can't be honou
 ### `intros_exhausted` — Nobody left to bring in
 
 Worth its own state: an empty panel that says nothing reads as broken.
+
+### `reconnecting` — The socket dropped and is coming back
+
+The state a real reader hits on a train, and it promises recovery rather than describing a
+fault: reconnecting replays the canonical log, so nothing written is at risk and the sentence
+can say so.
+
+Driven by the class LiveView puts on the container, not by an assign — which is what makes it
+free of server state, and what kept it out of this document until now. The storybook variation
+sets the class through a per-variation template so it can be looked at like anything else.
+
+### `disconnected` — The socket is gone
+
+Not coming back on its own. See the standing decision: this is the transport rather than the
+fiction, so it says the scene will catch up rather than offering a retry, because there is
+nothing here to retry.

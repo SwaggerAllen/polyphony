@@ -134,12 +134,33 @@ if config_env() == :prod do
     System.get_env("DEEPINFRA_EMBED_MODEL") || deepinfra[:embed_model] ||
       "BAAI/bge-large-en-v1.5"
 
-  # Surface full exception + stacktrace on 5xx pages during bring-up. Defaults on;
-  # set SHOW_ERROR_DETAILS=false before the app is public (stacktraces leak
-  # internals). See PolyphonyWeb.ErrorHTML.
+  # Surface the full exception + stacktrace on 5xx pages. **Defaults on, deliberately
+  # and indefinitely** — this is a confirmed non-ask, not a to-do left in a comment.
+  # The app's first users are alpha testers, and full debuggability in front of one of
+  # them beats hearing "it broke" second-hand. Set SHOW_ERROR_DETAILS=false to turn it
+  # off; don't change the default. See PolyphonyWeb.ErrorHTML for the whole argument.
   config :polyphony,
          :show_error_details,
          System.get_env("SHOW_ERROR_DETAILS", "true") in ~w(true 1)
+
+  # Crash reporting. Unset means off, and off is a real deploy state rather than a
+  # misconfiguration — the app runs, it just can't tell you it broke, which is exactly
+  # the situation STR-55 describes and worth being able to see in one variable.
+  #
+  # `release:` ties a report to the commit that produced it. App Platform has no
+  # variable of its own for this — `SOURCE_COMMIT` does not exist there, whatever it
+  # looks like it should be called — so `.do/app.yaml` binds `SENTRY_RELEASE` to the
+  # platform's `${_self.COMMIT_HASH}`. Unset is fine: reports still arrive, they just
+  # can't say which build produced them.
+  if dsn = System.get_env("SENTRY_DSN") do
+    config :sentry,
+      dsn: dsn,
+      release: System.get_env("SENTRY_RELEASE")
+
+    IO.puts("[boot] crash reporting ON (Sentry) — payloads go through Polyphony.Redact")
+  else
+    IO.puts("[boot] crash reporting OFF — set SENTRY_DSN to turn it on")
+  end
 
   # Migrate + set up the event store on boot so the schema is guaranteed present,
   # independent of the pre-deploy migrate job. Idempotent. Set MIGRATE_ON_BOOT=false

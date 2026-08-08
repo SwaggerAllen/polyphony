@@ -55,6 +55,11 @@ defmodule PolyphonyWeb.Screens.Campaign do
   attr(:groups, :list, default: [])
   attr(:scenes, :list, default: [])
 
+  attr(:scene_rows, :list,
+    default: [],
+    doc: "the scenes as `%{id:, number:, title:, premise:, beats:, cast:}`, oldest first"
+  )
+
   attr(:bibles, :list, default: [], doc: "worlds this campaign could attach")
   attr(:bible_id, :any, default: nil)
   attr(:bible_name, :string, default: nil)
@@ -67,6 +72,13 @@ defmodule PolyphonyWeb.Screens.Campaign do
   attr(:quick_build_open, :boolean, default: false)
   attr(:qb_seeds, :list, default: [])
   attr(:qb_world, :string, default: "")
+  attr(:qb_premise, :string, default: "")
+
+  attr(:qb_bible_id, :any,
+    default: nil,
+    doc: "an existing world to build on, or nil to write one"
+  )
+
   attr(:qb_groups, :boolean, default: false)
   attr(:qb_suggest, :boolean, default: true)
   attr(:build, :any, default: nil, doc: "the running or finished quick build")
@@ -336,6 +348,15 @@ defmodule PolyphonyWeb.Screens.Campaign do
       "This can't be undone."
   end
 
+  # Names what goes with it. The arc proposals are the part an author doesn't expect to
+  # lose — they were raised *by* this scene and outliving it would make them unanswerable
+  # — so the confirmation says so rather than saying "this can't be undone" twice.
+  defp delete_scene_confirm(scene) do
+    "Delete #{scene_label(scene)}? " <>
+      "#{count_label(scene.beats, "beat", "beats") || "Nothing"} played in it, and any arc " <>
+      "proposals it raised, are let go of. This can't be undone."
+  end
+
   defp campaign_label(assigns) do
     case String.trim(to_string(assigns.payload[:name] || "")) do
       "" -> "this campaign"
@@ -347,15 +368,52 @@ defmodule PolyphonyWeb.Screens.Campaign do
     ~H"""
     <Kit.sheet class="px-3.5 py-3">
       <form id={eid(@id, "quick-build")} phx-submit="quick_build" phx-change="sync_quick_build">
-        <label for={eid(@id, "qb-world")} class="lbl dim">World seed</label>
+        <%!-- A world you already wrote, or a new one. Quick Build only ever invented one,
+              which made it useless for the second campaign in a setting — the case where
+              an author has the most to reuse and the least reason to pay for it again. --%>
+        <label for={eid(@id, "qb-bible")} class="lbl dim">World</label>
+        <select
+          id={eid(@id, "qb-bible")}
+          name="bible_id"
+          class="field px-3 py-2.5 text-[13px] w-full mt-1.5"
+        >
+          <option value="" selected={@qb_bible_id in [nil, ""]}>✦ Write a new one</option>
+          <option :for={b <- @bibles} value={b.id} selected={to_string(b.id) == to_string(@qb_bible_id)}>
+            <%= bible_label_of(b) %>
+          </option>
+        </select>
+
+        <%!-- Hidden rather than disabled when a world is chosen: a seed for a world that
+              isn't going to be written is a field whose text is silently discarded. --%>
+        <div :if={@qb_bible_id in [nil, ""]}>
+          <label for={eid(@id, "qb-world")} class="lbl dim mt-3 block">World seed</label>
+          <textarea
+            id={eid(@id, "qb-world")}
+            name="world_seed"
+            rows="2"
+            phx-debounce="blur"
+            class="field px-3 py-2.5 text-[13px] w-full mt-1.5"
+            placeholder="A rain-drowned harbour city where debts are paid in memories."
+          ><%= @qb_world %></textarea>
+        </div>
+
+        <%!-- Separate from the world seed, and this is the whole point of it: written into
+              one box, "a smuggler owes the harbour-master a favour" became *setting* — it
+              went into the bible's canon and every later campaign in that world inherited
+              it. A premise is what happens to this cast, once. Blank still generates one. --%>
+        <label for={eid(@id, "qb-premise")} class="lbl dim mt-3 block">What this story is about</label>
         <textarea
-          id={eid(@id, "qb-world")}
-          name="world_seed"
+          id={eid(@id, "qb-premise")}
+          name="campaign_premise"
           rows="2"
           phx-debounce="blur"
           class="field px-3 py-2.5 text-[13px] w-full mt-1.5"
-          placeholder="A rain-drowned harbour city where debts are paid in memories."
-        ><%= @qb_world %></textarea>
+          placeholder="A shipment came in that isn't on any manifest, and one of them signed for it."
+        ><%= @qb_premise %></textarea>
+        <p class="text-[11px] leading-relaxed dim mt-1.5">
+          The campaign's premise, not the world's. Leave it blank and one gets written from
+          the world and the cast.
+        </p>
 
         <div class="lbl dim mt-3 mb-1.5">Characters — one concept each</div>
         <div :for={{seed, i} <- Enum.with_index(@qb_seeds)} class="flex gap-1.5 mb-1.5">
@@ -1086,14 +1144,29 @@ defmodule PolyphonyWeb.Screens.Campaign do
         </form>
       </Kit.row>
 
-      <Kit.row :for={s <- @scenes} class="px-4 py-3">
-        <.link navigate={~p"/play/#{s}"} class="flex items-center justify-between gap-2">
-          <span class="ttl text-[14.5px] font-semibold min-w-0 truncate"><%= scene_label(s) %></span>
-          <span class="dim text-[14px] shrink-0">›</span>
+      <%!-- Newest first: the scene an author wants is nearly always the one they were
+            just in. The numbers therefore count down, which is what a reverse-chronological
+            list of chapters looks like and is not a mistake. --%>
+      <Kit.row :for={s <- Enum.reverse(@scene_rows)} class="px-4 py-3 flex items-center gap-2">
+        <.link navigate={~p"/play/#{s.id}"} class="min-w-0 flex-1">
+          <div class="ttl text-[14.5px] font-semibold truncate"><%= scene_label(s) %></div>
+          <div :if={scene_blurb(s) != ""} class="text-[11px] dim truncate"><%= scene_blurb(s) %></div>
         </.link>
+        <Kit.btn
+          kind={:pen}
+          size={:sm}
+          type="button"
+          phx-click="delete_scene"
+          phx-value-id={s.id}
+          data-confirm={delete_scene_confirm(s)}
+          class="shrink-0"
+        >
+          Delete
+        </Kit.btn>
+        <span class="dim text-[14px] shrink-0">›</span>
       </Kit.row>
 
-      <Kit.empty :if={@scenes == []} headline="Nothing has happened yet.">
+      <Kit.empty :if={@scene_rows == []} headline="Nothing has happened yet.">
         Set a scene and the Director will open it.
         <:action>
           <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={scene_cast_entries(assigns) == []}>
@@ -1216,7 +1289,29 @@ defmodule PolyphonyWeb.Screens.Campaign do
     end
   end
 
-  def scene_label(scene_id), do: "Scene " <> String.slice(to_string(scene_id), 0, 12)
+  @doc """
+  What a scene is called: its number in the campaign, and where it happens.
+
+  It used to be `"Scene " <> first twelve characters of the stream id`, which is not a
+  name — the scenes list read as a column of near-identical hex, and the same string was
+  being handed to the model as *the scenes already played* to steer it away from repeating
+  a setting it could not identify.
+
+  A scene with no location falls back to *A scene*, which `Preflight.describe/1` supplies,
+  so the number still distinguishes it.
+  """
+  def scene_label(%{number: n, title: title}), do: "Scene #{n} · #{title}"
+
+  # How many beats, and what the author said was true when it opened. The premise is the
+  # one line that says what this scene *is* rather than where it sits.
+  def scene_blurb(%{beats: beats, premise: premise}) do
+    [count_label(beats, "beat", "beats"), blank_to_nil(premise)]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" · ")
+  end
+
+  defp blank_to_nil(s) when is_binary(s), do: if(String.trim(s) == "", do: nil, else: s)
+  defp blank_to_nil(_), do: nil
 
   def char_name(entry) do
     case Library.payload(entry) do

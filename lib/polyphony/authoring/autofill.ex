@@ -608,11 +608,14 @@ defmodule Polyphony.Authoring.Autofill do
             "The premise is one vivid paragraph naming the central tension and what is at " <>
             "stake for this cast. It says what the story is *about*; it does not decide how " <>
             "it ends.\n\n" <>
+            given_premise_rule(opts[:premise]) <>
             "Return ONLY a JSON object with exactly these keys: name, premise."
       },
       %{
         role: "user",
-        content: world_block(opts[:world]) <> campaign_cast_block(opts[:cast] || [])
+        content:
+          world_block(opts[:world]) <>
+            campaign_cast_block(opts[:cast] || []) <> given_premise_block(opts[:premise])
       }
     ]
 
@@ -794,6 +797,12 @@ defmodule Polyphony.Authoring.Autofill do
             "what a character does or feels about it — their turn is theirs. Do not " <>
             "resolve the scene: a world event puts pressure on people, it does not " <>
             "settle anything for them.\n\n" <>
+            "The scene you are given is **omniscient** — it includes what characters " <>
+            "thought and what they said privately to each other. The world knows all of " <>
+            "it, and needs to, or it writes a door open that somebody locked quietly. " <>
+            "But a world event is read by **everyone in the room**: let what you know " <>
+            "shape what happens, and never state it. A secret should be something the " <>
+            "world moves around, not something the narration says out loud.\n\n" <>
             "Return only the prose: no label, no quotes, no JSON."
       },
       %{
@@ -811,13 +820,14 @@ defmodule Polyphony.Authoring.Autofill do
     end
   end
 
-  # Deliberately named "so far, as everyone present saw it" rather than "the transcript":
-  # what the caller passes is a filtered read, and the prompt should say what it is
-  # rather than imply a completeness it doesn't have.
+  # The label says what the read is, and the read changed: this was "as everyone present
+  # saw it" while the caller passed a filtered transcript, and the caller now passes the
+  # omniscient one. A prompt that describes its own context wrongly is worse than one that
+  # doesn't describe it — the model believes the label over the lines.
   defp recent_block([]), do: ""
 
   defp recent_block(lines) do
-    "The scene so far, as everyone present saw it:\n" <>
+    "The scene so far, all of it — including what was thought and whispered:\n" <>
       Enum.map_join(lines, "\n", &"- #{&1}") <> "\n\n"
   end
 
@@ -900,6 +910,21 @@ defmodule Polyphony.Authoring.Autofill do
       "\n\nOpen somewhere this story has not " <>
       "already been, unless returning is the point.\n\n"
   end
+
+  # The author already wrote the premise. The caller keeps theirs verbatim regardless of
+  # what comes back — this is here so the **title** is a read on their story rather than on
+  # the world in general, which is the whole reason a title and a premise are one call.
+  defp given_premise_rule(premise) when is_binary(premise) and premise != "",
+    do:
+      "The author has already written the premise, below. Do not rewrite it — return it " <>
+        "unchanged in the `premise` key, and make the name a title for *that* story.\n\n"
+
+  defp given_premise_rule(_), do: ""
+
+  defp given_premise_block(premise) when is_binary(premise) and premise != "",
+    do: "The premise, as the author wrote it:\n" <> premise <> "\n\n"
+
+  defp given_premise_block(_), do: ""
 
   defp campaign_cast_block([]), do: ""
 

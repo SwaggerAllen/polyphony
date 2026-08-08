@@ -1,6 +1,6 @@
 # Library
 
-<!-- rev: 1 -->
+<!-- rev: 2 -->
 
 | | |
 |---|---|
@@ -30,8 +30,18 @@ groups, what you're reading, and what you have filed or binned.
 ### `campaigns` — The shelf
 
 A campaign row carries what you need to pick it back up: where it is in its life, its world
-and size, and how many arc proposals are waiting. That last number is the **same** one the
-scene gate will stop you with, so the row never surprises anybody.
+and size, and how many arc proposals are waiting.
+
+That last number is an **upper bound** on what the scene gate will stop you with, not the same
+number — this document used to claim they were identical and they are not.
+`Campaigns.pending_review/2` counts every proposal about the campaign's whole cast plus its
+world; `SceneGate.check/3` counts only the characters *in the scene you are opening*, plus the
+same world total. Opening a two-hander whose two have nothing pending gates clean while the
+row still reads nineteen.
+
+The bound is the useful half and is worth keeping: **nothing waiting means nothing will stop
+you**, and the row is never lower than the gate. What it cannot promise is the reverse, so it
+should not be read as a countdown to a scene you can open.
 
 ### `first_run` — Nothing written yet
 

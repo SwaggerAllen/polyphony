@@ -52,7 +52,13 @@ defmodule Polyphony.Authoring.QuickBuild do
   Build a world, a cast, and a premise from seeds. `opts`:
 
     * `:owner` — the `%Owner{}` (required); every entry is stored under it.
-    * `:world_seed` — free-text brief for the world (may be blank).
+    * `:world_seed` — free-text brief for the world (may be blank). Ignored when the
+      campaign already has a bible (see `:resume`), because there is nothing to write.
+    * `:campaign_premise` — the author's premise for **this story**, kept verbatim. Blank
+      generates one. It is deliberately not the same field as `:world_seed`: written into
+      that one, "a smuggler owes the harbour-master a favour" lands in the bible's canon
+      and every later campaign in the world inherits it as setting. A premise is what
+      happens to this cast, once.
     * `:character_seeds` — a list of free-text briefs, one per character.
     * `:suggest_offscreen` — also stub AI-suggested off-screen people per character
       (default `false`).
@@ -87,6 +93,7 @@ defmodule Polyphony.Authoring.QuickBuild do
     seed_done = announcer(opts[:on_seed_done])
     resume = opts[:resume] || %{}
     world_seed = to_string(opts[:world_seed] || "")
+    given_premise = blank_to_nil(to_string(opts[:campaign_premise] || ""))
     # One character per provided seed — a blank seed is kept, generating a character
     # freely from the world rather than dropping the row.
     seeds = opts[:character_seeds] |> List.wrap() |> Enum.map(&to_string/1)
@@ -142,7 +149,9 @@ defmodule Polyphony.Authoring.QuickBuild do
         char_entries = interlink_cast(char_entries, meter)
 
         report.(length(seeds) + 2, "Framing the premise")
-        %{name: name, premise: premise} = build_opening(world_ctx, char_entries, meter)
+
+        %{name: name, premise: premise} =
+          build_opening(world_ctx, char_entries, given_premise, meter)
 
         # Last, because a cover is written *from* everything else — a world's rules and
         # canon, a character's facts — and is the only part a stranger reads before
@@ -322,12 +331,24 @@ defmodule Polyphony.Authoring.QuickBuild do
   # sinking the whole build (the author can ✨ Expand it on the campaign screen
   # afterward, and rename it there). Blank is also what a caller reads as "don't
   # attach", so a failure here leaves whatever the campaign already had.
-  defp build_opening(world_ctx, char_entries, meter) do
-    case Autofill.generate_campaign_opening(
-           [world: world_ctx, cast: cast_summaries(char_entries)] ++ meter
-         ) do
-      {:ok, %{"name" => name, "premise" => premise}} -> %{name: name, premise: premise}
-      {:error, _} -> %{name: "", premise: ""}
+  # The title and the pitch. When the author wrote the premise themselves it is kept
+  # **verbatim** and only the title is taken from the response — a generated title is worth
+  # having, and a generated rewrite of what they just typed is not. The premise still goes
+  # to the model as context, so the title is a read on *their* story rather than on the
+  # world in general.
+  defp build_opening(world_ctx, char_entries, given_premise, meter) do
+    opts =
+      [world: world_ctx, cast: cast_summaries(char_entries), premise: given_premise] ++ meter
+
+    case {Autofill.generate_campaign_opening(opts), given_premise} do
+      {{:ok, %{"name" => name}}, premise} when is_binary(premise) ->
+        %{name: name, premise: premise}
+
+      {{:ok, %{"name" => name, "premise" => premise}}, nil} ->
+        %{name: name, premise: premise}
+
+      {{:error, _}, premise} ->
+        %{name: "", premise: premise || ""}
     end
   end
 

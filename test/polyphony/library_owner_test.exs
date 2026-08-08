@@ -8,7 +8,7 @@ defmodule Polyphony.LibraryOwnerTest do
 
   alias Polyphony.{Library, Repo}
   alias Polyphony.Owner
-  alias Polyphony.Library.Access
+  alias Polyphony.Permissions
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -40,11 +40,12 @@ defmodule Polyphony.LibraryOwnerTest do
     org_entry =
       Library.put(%{owner: %Owner{type: :org, id: "9"}, kind: "character", payload: %{}})
 
-    assert Access.can_write?(user_entry, %{actor_id: "42", token: nil})
-    refute Access.can_write?(user_entry, %{actor_id: "99", token: nil})
+    assert Permissions.can_edit?(user_entry, "42")
+    refute Permissions.can_edit?(user_entry, "99")
 
     # The org's id matches the actor id, but org ownership isn't grantable to a bare
-    # actor — it resolves through a permission layer that is a later addition (§P8).
-    refute Access.can_write?(org_entry, %{actor_id: "9", token: nil})
+    # actor — a bare id coerces to a *user* owner, and org membership resolves through a
+    # permission layer that is a later addition (§P8).
+    refute Permissions.can_edit?(org_entry, "9")
   end
 end

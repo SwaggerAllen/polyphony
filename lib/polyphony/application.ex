@@ -8,6 +8,7 @@ defmodule Polyphony.Application do
   def start(_type, _args) do
     maybe_migrate_on_boot()
     maybe_reset_bootstrap()
+    attach_crash_reporter()
 
     children =
       [
@@ -37,6 +38,26 @@ defmodule Polyphony.Application do
       other ->
         other
     end
+  end
+
+  # A process that dies outright never reaches `SafeEvent` — a LiveView that raises in
+  # `mount/3`, a projector, a task. The `:logger` handler is what catches those, because
+  # every one of them ends as a crash report on the error logger whatever else it does.
+  # Oban is attached separately: a job that returns `{:error, reason}` never raises, so
+  # it produces no crash report and the telemetry event is the only sign it failed.
+  #
+  # Both are no-ops without a DSN, but they are skipped rather than attached-and-idle so
+  # a dev run has no extra logger handler in the chain at all.
+  defp attach_crash_reporter do
+    if Polyphony.Crash.enabled?() do
+      :logger.add_handler(:polyphony_sentry, Sentry.LoggerHandler, %{
+        config: %{metadata: [:file, :line], capture_log_messages: false}
+      })
+
+      Sentry.Integrations.Oban.ErrorReporter.attach()
+    end
+
+    :ok
   end
 
   # Last child ⇒ terminates first on shutdown, releasing DB connections early so a

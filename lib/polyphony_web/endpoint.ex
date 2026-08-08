@@ -1,4 +1,13 @@
 defmodule PolyphonyWeb.Endpoint do
+  # Before `Phoenix.Endpoint`, and it has to be: it wraps the whole `call/2` so an error
+  # raised anywhere below — including inside the router, before any of our own code runs
+  # — is reported before Cowboy turns it into a 500 and forgets it. This is the Cowboy
+  # recommendation specifically; on Bandit it would double-report, and this app runs
+  # Cowboy (see `plug_cowboy` in mix.exs).
+  #
+  # No-op without a DSN. `Sentry.PlugContext` — the request's path, params and headers —
+  # is in the router, where the pipelines are.
+  use Sentry.PlugCapture
   use Phoenix.Endpoint, otp_app: :polyphony
 
   # The session — signed cookie. Auth stores the current user id here (§B2 transport).

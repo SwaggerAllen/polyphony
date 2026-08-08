@@ -21,7 +21,15 @@ defmodule PolyphonyWeb.PlayNarrateLiveTest do
   alias Polyphony.Owner
   alias Polyphony.Authoring.{CharacterSheet, WorldBible}
   alias Polyphony.Authoring.WorldBible.Entry
-  alias PolyphonyCore.Commands.{CommitPacket, EnterCharacter, OpenScene, RecordWorldEvent}
+
+  alias PolyphonyCore.Commands.{
+    CommitPacket,
+    EnterCharacter,
+    OpenScene,
+    RecordWorldEvent,
+    SupersedePacket
+  }
+
   alias PolyphonyCore.TurnPacket
   alias PolyphonyCore.Events.WorldEventOccurred
 
@@ -179,7 +187,10 @@ defmodule PolyphonyWeb.PlayNarrateLiveTest do
     refute prompt =~ "The core is a sleeping thing."
   end
 
-  test "a whisper is not part of the scene so far", %{conn: conn, user: user} do
+  test "the scene it is given is omniscient, and it is told not to say so", %{
+    conn: conn,
+    user: user
+  } do
     %{scene: scene, wren: wren} = scene_with_world(user)
 
     :ok =
@@ -202,9 +213,63 @@ defmodule PolyphonyWeb.PlayNarrateLiveTest do
 
     assert prompt =~ "Rain starts on the tin roof."
     assert prompt =~ "Bring the ledger over."
-    # A whisper reached two people. Feeding it to a drafting aid whose output goes into
-    # the shared transcript is how a secret gets narrated out loud.
-    refute prompt =~ "I burned the second page."
+
+    # The whisper **is** in there, and that is the decision. This filtered it out on the
+    # grounds that a drafting aid fed a secret narrates it out loud — true of the output,
+    # not of the input. A world that cannot see the quiet part writes a door open that
+    # somebody locked quietly, and the scene stops being consistent with itself.
+    assert prompt =~ "I burned the second page."
+
+    # What keeps it unsaid is the instruction, so the instruction is the thing to pin.
+    # Without it this test would be asserting a leak.
+    assert prompt =~ "read by **everyone in the room**"
+    assert prompt =~ "never state it"
+
+    # And the label has to match the read. The model believes the label over the lines,
+    # so a prompt still claiming this is what everyone present saw would be telling it
+    # the whisper was public.
+    assert prompt =~ "including what was thought and whispered"
+    refute prompt =~ "as everyone present saw it"
+  end
+
+  test "a re-rolled turn is not in the scene it is given", %{conn: conn, user: user} do
+    # The read goes through `Packets.canonical/1` like every other one that feeds fiction
+    # (rule 6, §7). It used to inherit that from the socket's own replay; now it is the
+    # domain read's own job, which is worth pinning at the point it moved.
+    %{scene: scene, wren: wren} = scene_with_world(user)
+    # Committed by hand rather than through `say/4`, which mints a unique packet id and
+    # keeps it — superseding needs the id back.
+    packet_id = "#{scene}-1-#{wren.id}-reroll"
+
+    :ok =
+      App.dispatch(%CommitPacket{
+        scene_id: scene,
+        packet_id: packet_id,
+        character_id: to_string(wren.id),
+        beat: 1,
+        packet: %TurnPacket{
+          moves: [%TurnPacket.Move{seq: 1, type: :speech, content: "The first take."}]
+        }
+      })
+
+    :ok =
+      App.dispatch(%SupersedePacket{
+        scene_id: scene,
+        beat: 1,
+        character_id: to_string(wren.id),
+        packet_id: packet_id,
+        attempt: 2,
+        reason: "reroll"
+      })
+
+    capture_prompt()
+
+    view = narrating(conn, scene)
+    view |> element("button[phx-click=expand_narrate]") |> render_click()
+    generate(view)
+
+    assert_received {:prompt, prompt}
+    refute prompt =~ "The first take."
   end
 
   test "a failed draft says so and leaves the box alone", %{conn: conn, user: user} do

@@ -71,6 +71,10 @@ defmodule Polyphony.Jobs.QuickBuild do
       "campaign_id" => to_string(campaign_id),
       "owner" => Owner.key(Owner.coerce(Keyword.fetch!(opts, :owner))),
       "world_seed" => to_string(Keyword.get(opts, :world_seed, "")),
+      # The author's own premise, if they wrote one. Kept distinct from `world_seed` all
+      # the way down: they used to be one box, and a premise written into it became
+      # *setting* — canon in the bible, inherited by every later campaign in that world.
+      "campaign_premise" => to_string(Keyword.get(opts, :campaign_premise, "")),
       "character_seeds" => Enum.map(seeds, &to_string/1),
       "suggest_offscreen" => !!Keyword.get(opts, :suggest_offscreen, false),
       "groups" => !!Keyword.get(opts, :groups, false),
@@ -142,6 +146,7 @@ defmodule Polyphony.Jobs.QuickBuild do
       [
         owner: owner,
         world_seed: args["world_seed"],
+        campaign_premise: args["campaign_premise"],
         character_seeds: args["character_seeds"] || [],
         suggest_offscreen: args["suggest_offscreen"] == true,
         groups: args["groups"] == true,

@@ -1,6 +1,6 @@
 # Browse
 
-<!-- rev: 1 -->
+<!-- rev: 2 -->
 
 | | |
 |---|---|
@@ -23,6 +23,21 @@ have published, and a story's front page once you pick one.
   publication, not an error, and the author was warned about it when they published.
 - **Forks group under the story they came from.** Three forks share a title until somebody
   renames one, and a flat list of those reads as duplicates of the same thing.
+- **An unlisted story needs its link, here as much as anywhere.** *Unlisted* means reachable
+  by the URL somebody was sent and not otherwise, so arriving without the token reads
+  exactly like arriving at a story that was never published — see `taken_down`. Saying
+  *you need the link* instead would confirm that the id names something somebody shared,
+  which is the fact being kept. The link opens the front page and every scene inside it; a
+  reader who came in that way keeps their footing for the whole visit without the token
+  reappearing in the address bar at every step.
+- **A bookmark stands in for the link.** Somebody already reading a story keeps reading it
+  when the author narrows it from public to unlisted — narrowing who can *find* something
+  is not evicting the people inside, and the reading shelf makes the same promise. Pulling
+  it back to private is the real withdrawal, and that shuts the door on everyone: the story
+  goes as unreachable here as it reads on the shelf.
+- **You may take a copy of anything you may read.** Not only what is listed: a world shared
+  by link is a world somebody meant you to have. What you may *not* read you may not copy —
+  taking a copy is reading it and keeping it, so it cannot be the looser of the two.
 
 ## States
 
@@ -68,6 +83,12 @@ possible.
 
 Unpublished by the author or taken down by a moderator. Somebody arriving on a link they were
 sent gets an answer rather than a 404.
+
+Three situations reach this one screen and only one of them is announced. A moderated story
+says so, because its author follows the same link and a silent disappearance is worse than
+the news. An unpublished story and an **unlisted story opened without its link** both give
+the same neutral answer — *this link doesn't lead anywhere any more* — because telling them
+apart would tell a stranger which ids are stories.
 
 ### `reporting` — Reporting something
 

@@ -69,52 +69,6 @@ defmodule PolyphonyWeb.Screens.Play do
   # Group the flat message stream into blocks: a character's turn (one committed
   # packet, all its moves) carries edit/reroll/delete affordances; everything else
   # (world events, entrances) is a plain block.
-  # The transcript as an ordered list of `{:block, block}` and `{:fail, failure}` items,
-  # each failure placed at the beat it occurred (after that beat's turns) rather than in a
-  # standalone pane — so a transient error and its Retry sit where they happened and vanish
-  # when retried. Event blocks (no beat of their own) inherit the last turn's beat so they
-  # keep their place.
-  #
-  # A failure without a beat is a scene-close operation (arc extraction, summarization);
-  # those are emitted at the scene's current beat, so they default to `current_beat` and
-  # land with the latest action rather than at the top. A character viewer only ever gets
-  # their own turn failures (§1.7), which always carry a beat, so they sort in place.
-  defp transcript_items(messages, failures, current_beat) do
-    # Blocking and beat rules live in `PolyphonyWeb.Transcript`, shared with the
-    # published reading view — the reading view *is* this screen with a different
-    # bottom bar, and a second implementation of prose rendering is how the two drift.
-    blocks = Transcript.blocks(messages)
-    items = Enum.map(blocks, &{:block, &1}) ++ Enum.map(failures, &{:fail, &1})
-
-    items
-    |> Enum.sort_by(fn
-      {:block, b} -> {b.eff_beat, 0}
-      {:fail, f} -> {f.beat || current_beat, 1}
-    end)
-    |> mark_beat_rules()
-  end
-
-  # A beat rule opens a beat exactly once, so it's decided by walking the *sorted*
-  # items — which is why this stays here rather than in the shared module: play
-  # interleaves failures with turns, and a rule must open above whichever came first.
-  defp mark_beat_rules(items) do
-    {marked, _} =
-      Enum.map_reduce(items, nil, fn
-        {:block, b} = item, previous ->
-          beat = b.eff_beat
-
-          if is_integer(beat) and beat > 0 and beat != previous do
-            {{:block, Map.put(b, :beat_rule, beat)}, beat}
-          else
-            {item, previous}
-          end
-
-        item, previous ->
-          {item, previous}
-      end)
-
-    marked
-  end
 
   # The editable text of a turn: the whole turn — thoughts, speech, actions, and
   # demeanor — serialized one move per line (see `TurnEdit`), not just its spoken lines.
@@ -302,7 +256,16 @@ defmodule PolyphonyWeb.Screens.Play do
   attr(:scene_id, :string, required: true)
   attr(:current_user, :map, default: nil)
 
-  attr(:messages, :list, default: [], doc: "canonical moves, %{kind:, payload:}")
+  attr(:beats, :any,
+    default: [],
+    doc: "`{dom_id, beat}` pairs — a `LiveStream` live, a plain list in a story"
+  )
+
+  attr(:transcript_empty, :boolean,
+    default: true,
+    doc: "a stream cannot be counted, so the caller answers this"
+  )
+
   attr(:failures, :list, default: [], doc: "per-viewer failed turns, rendered in place")
 
   attr(:strip, :map,
@@ -423,35 +386,47 @@ defmodule PolyphonyWeb.Screens.Play do
             </div>
           </div>
         <% else %>
-          <%= for {item, i} <- Enum.with_index(transcript_items(@messages, @failures, max(@next_beat - 1, 0))) do %>
-            <%= case item do %>
-              <% {:block, block} -> %>
-                <.turn_block
-                  id={eid(@id, "blk-#{i}")}
-                  block={block}
-                  register={@register}
-                  cast={@cast}
-                  voices={@voices}
-                  beat_rule={block[:beat_rule]}
-                  editable={@viewer == :omniscient and block.type == :turn}
-                  editing={@editing}
-                  control={control_of(@control_modes, block.character)}
-                />
-              <% {:fail, f} -> %>
-                <Kit.fail_move
-                  id={eid(@id, "fail-#{i}")}
-                  class="my-3"
-                  title={"#{if f.subject, do: name_of(@cast, f.subject), else: "A turn"} didn't generate"}
-                  detail={failure_reason(f)}
-                >
-                  <div :if={f.retryable} class="flex flex-wrap gap-0.5 mt-1.5 -ml-1">
-                    <Kit.btn kind={:pen} phx-click="retry_failure" phx-value-id={f.id}>Retry</Kit.btn>
-                  </div>
-                </Kit.fail_move>
-            <% end %>
-          <% end %>
+          <%!-- One element per beat, holding its divider and everything that happened in
+                it. The divider is `position: sticky`, which holds only while its
+                containing block is on screen — inside the beat it stays up for as long
+                as the beat does, where nested in the first turn it unstuck as soon as
+                that one turn scrolled past.
+
+                `@beats` arrives as `{dom_id, beat}` pairs because that is what a
+                `LiveStream` enumerates to. A story passes a plain list of the same pairs,
+                so the markup is identical live and in the catalogue — which is the whole
+                reason this screen is a function of its assigns. --%>
+          <div id={eid(@id, "beats")} phx-update="stream">
+          <div :for={{dom_id, beat} <- @beats} id={dom_id} class="beat">
+            <Kit.beat_rule :if={beat.beat > 0} beat={beat.beat} />
+
+            <.turn_block
+              :for={{block, i} <- Enum.with_index(beat.blocks)}
+              id={eid(@id, "blk-#{beat.beat}-#{i}")}
+              block={block}
+              register={@register}
+              cast={@cast}
+              voices={@voices}
+              editable={@viewer == :omniscient and block.type == :turn}
+              editing={@editing}
+              control={control_of(@control_modes, block.character)}
+            />
+
+            <Kit.fail_move
+              :for={f <- beat.failures}
+              id={eid(@id, "fail-#{f.id}")}
+              class="my-3"
+              title={"#{if f.subject, do: name_of(@cast, f.subject), else: "A turn"} didn't generate"}
+              detail={failure_reason(f)}
+            >
+              <div :if={f.retryable} class="flex flex-wrap gap-0.5 mt-1.5 -ml-1">
+                <Kit.btn kind={:pen} phx-click="retry_failure" phx-value-id={f.id}>Retry</Kit.btn>
+              </div>
+            </Kit.fail_move>
+          </div>
+          </div>
           <Kit.empty
-            :if={@messages == [] and @failures == [] and not beat_busy?(@progress)}
+            :if={@transcript_empty and not beat_busy?(@progress)}
             headline={empty_headline(@viewer)}
           >
             Nothing has happened here yet.
@@ -793,7 +768,6 @@ defmodule PolyphonyWeb.Screens.Play do
   attr(:register, :atom, required: true)
   attr(:cast, :any, required: true)
   attr(:voices, :map, required: true)
-  attr(:beat_rule, :any, default: nil)
   attr(:editable, :boolean, default: false)
   attr(:editing, :string, default: nil)
   attr(:control, :string, default: nil)
@@ -806,8 +780,6 @@ defmodule PolyphonyWeb.Screens.Play do
 
     ~H"""
     <div id={@id} class="turn-block">
-      <Kit.beat_rule :if={@beat_rule} beat={@beat_rule} />
-
       <%!-- An event with no packet — a world beat, an entrance — is nobody's turn,
             so it carries no attribution and no editorial controls. --%>
       <div :if={@block.type == :event} class="py-1">

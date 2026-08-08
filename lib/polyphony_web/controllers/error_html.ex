@@ -6,9 +6,16 @@ defmodule PolyphonyWeb.ErrorHTML do
   server logs.
 
   Detail is gated by `config :polyphony, :show_error_details` (env
-  `SHOW_ERROR_DETAILS`, default on in prod during bring-up — **turn it off before
-  the app is public**, since stacktraces can leak internals). When detail is off,
-  the page still shows the status and the request id so a log search is easy.
+  `SHOW_ERROR_DETAILS`), and it **defaults on in production by decision**. That reads
+  like an unfinished to-do and isn't one: the first users are alpha testers, a stack
+  trace in front of one of them is worth more than the internals it reveals, and the
+  cost of learning what broke from a bug report instead is higher than the cost of
+  showing it. It is a **confirmed non-ask** on the project — please don't file it as a
+  security finding, and don't flip the default; anyone who wants it off sets the env
+  var. Revisit when the audience stops being people who were invited.
+
+  When detail is off, the page still shows the status and the request id so a log
+  search is easy.
 
   `render_errors` is configured with `layout: false`, so this renders a complete,
   self-contained HTML document with inline styles (it can't assume the app's

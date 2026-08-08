@@ -108,9 +108,10 @@ services:
       - key: EVENT_STORE_POOL_SIZE
         scope: RUN_TIME
         value: "2"
-      # Shows the full exception + stacktrace on 5xx error pages. Handy during
-      # bring-up; set to "false" before the app is public (stacktraces leak
-      # internals).
+      # Shows the full exception + stacktrace on 5xx error pages. On by decision, not
+      # pending a change: the first users are alpha testers, and a stack trace in front
+      # of one is worth more than the internals it reveals. Set "false" if you want it
+      # off — but it is not a to-do. See PolyphonyWeb.ErrorHTML.
       - key: SHOW_ERROR_DETAILS
         scope: RUN_TIME
         value: "true"
@@ -129,6 +130,21 @@ services:
       - key: DEBUG_DRAWER
         scope: RUN_TIME
         value: "false"
+      # Crash reporting (Sentry). Empty means off, and off is silent — a raise inside
+      # a LiveView event becomes a flash for whoever hit it and reaches nobody else.
+      # Paste a project DSN here (free tier is fine) and the boot log will say
+      # "crash reporting ON". Payloads go through Polyphony.Redact, which strips
+      # tokens and addresses and deliberately keeps the transcript.
+      - key: SENTRY_DSN
+        scope: RUN_TIME
+        value: ""
+      # Which build a crash report came from. App Platform has no SOURCE_COMMIT — the
+      # bindable is COMMIT_HASH, and it resolves at build, so this is scoped to both
+      # to guarantee it is present at run time. Unset is survivable: reports still
+      # arrive, they just can't say which deploy produced them.
+      - key: SENTRY_RELEASE
+        scope: RUN_AND_BUILD_TIME
+        value: "${_self.COMMIT_HASH}"
 
 databases:
   - name: db

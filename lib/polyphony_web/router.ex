@@ -55,6 +55,18 @@ defmodule PolyphonyWeb.Router do
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers, %{"content-security-policy" => @csp})
     plug(:fetch_current_user)
+
+    # What a crash report says about the request that caused it: path, method, params,
+    # headers. Last in the pipeline so `:current_user` is already assigned — a report
+    # that can't say who hit it is a report you can't follow up.
+    #
+    # The `:scrubber` and `:cookie_scrubber` options are left at their defaults on
+    # purpose. Sentry's defaults key off *field names*, which catches `password` and
+    # misses a magic link sitting in a path segment, so relying on them would be
+    # relying on the wrong shape of check. `Polyphony.Crash.before_send/1` runs over the
+    # assembled event instead, where the whole payload is in hand — one place rather
+    # than one per collection point.
+    plug(Sentry.PlugContext)
   end
 
   # Public + authed-optional.

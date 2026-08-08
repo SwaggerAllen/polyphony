@@ -41,7 +41,7 @@ defmodule PolyphonyWeb.BrowseLive do
   """
   use PolyphonyWeb, :live_view
 
-  alias Polyphony.{Accounts, Library, Moderation, Reading}
+  alias Polyphony.{Accounts, Library, Moderation, Permissions, Reading}
   alias Polyphony.Owner
   alias PolyphonyCore.Publication
   alias Polyphony.Authoring.WorldBible
@@ -62,6 +62,7 @@ defmodule PolyphonyWeb.BrowseLive do
       socket
       |> assign(tab: if(params["tab"] in @tabs, do: params["tab"], else: "stories"))
       |> assign(story_id: params["story"], scene_id: params["scene"])
+      |> remember_token(params["t"])
       |> load()
       |> assign_mode(params["as"])
       |> load_scene()
@@ -71,9 +72,17 @@ defmodule PolyphonyWeb.BrowseLive do
 
   # ── Loading ──────────────────────────────────────────────────────────────────
 
+  # A share token is a grant, and it arrives once — on the hand-off from `/s/:token`.
+  # Every move inside a story after that is a `patch`, which keeps this process, so the
+  # grant is held here rather than re-appended to each link. Reading a `nil` param must
+  # not clear one: `handle_params` runs on every patch, and the perspective picker would
+  # otherwise revoke the reader's own access on their first click.
+  defp remember_token(socket, nil), do: assign_new(socket, :token, fn -> nil end)
+  defp remember_token(socket, token), do: assign(socket, token: token)
+
   defp load(socket) do
     entry = socket.assigns.story_id && Library.get(socket.assigns.story_id)
-    story = if entry && Screens.Browse.published?(entry), do: entry, else: nil
+    story = if readable?(socket, entry), do: entry, else: nil
 
     socket
     |> assign(
@@ -95,6 +104,44 @@ defmodule PolyphonyWeb.BrowseLive do
   # Taken-down is its own answer rather than folded into "gone", because the author
   # follows the same link, finds their own copy missing as well, and needs to know why
   # (§B3 — a take-down takes everything).
+  # Two questions, and only one of them is a permission. `snapshot?` is what this screen
+  # is *for* — a live campaign is somebody's working copy, not a story, and opening one
+  # here would read its scene list as a published contents. `can_view?/3` is the other
+  # half: may this reader have it. They used to be one function in `Screens.Browse`,
+  # which is how a presentation module came to hold the rule about who may read an
+  # unlisted story, and to get it wrong.
+  defp readable?(_socket, nil), do: false
+
+  defp readable?(socket, entry) do
+    Library.snapshot?(entry) and
+      Permissions.can_view?(entry, socket.assigns.current_user, token: grant(socket, entry))
+  end
+
+  # The token the reader arrived with — or, if they didn't but they have a bookmark for
+  # this story, the entry's own. **A bookmark stands in for the link they were given.**
+  # `Reading` had already decided that and its shelf says so: a story you were reading
+  # stays on it when the author moves it from public to unlisted, because narrowing who
+  # can *find* something is not evicting the people already inside. Browse has to agree
+  # or the shelf offers a *carry on* that dead-ends on arrival.
+  #
+  # Handing the token to `can_view?/3` rather than short-circuiting the check is what
+  # keeps the limit: a token means nothing for a `private` entry, so an author who pulls
+  # a story back properly still shuts the door on everyone — which is exactly what the
+  # shelf reports for the same story.
+  #
+  # It cannot be forged. `Reading.mark/4` is called from one place, after this function
+  # has already admitted the reader, so holding a bookmark is evidence of having been let
+  # in rather than a way of claiming to have been.
+  defp grant(%{assigns: %{token: token}}, _entry) when not is_nil(token), do: token
+  defp grant(%{assigns: %{current_user: nil}}, _entry), do: nil
+
+  defp grant(socket, entry) do
+    case Reading.bookmark(Owner.of(socket.assigns.current_user), entry.id) do
+      nil -> nil
+      _bookmark -> entry.share_token
+    end
+  end
+
   defp gone_reason(nil, _entry, _story), do: nil
   defp gone_reason(_id, _entry, story) when not is_nil(story), do: nil
 
@@ -352,12 +399,27 @@ defmodule PolyphonyWeb.BrowseLive do
     end)
   end
 
+  # The id comes off a `phx-value-id` on a row the catalogue rendered, which is to say it
+  # comes from the client and the rows are not the limit of what can be sent. Taking
+  # *copies*, payload and all, so an unchecked id here was a way to lift a private world
+  # — secrets included — straight out of somebody else's library, and the same hole for
+  # a private campaign. `CampaignLive.attach_world/2` had already worked this out and
+  # checks; this path is the one that didn't, which is the whole argument for one gate
+  # rather than a check at each site that remembers.
+  #
+  # `can_view?/3` is the right bar rather than ownership: taking a copy of what you may
+  # read is the product (§2.5b). It is what you may read that was never being asked.
   defp copy_into(socket, id, user, message) do
-    case Library.get(id) do
-      nil ->
+    source = Library.get(id)
+
+    cond do
+      is_nil(source) ->
         put_flash(socket, :error, "That's gone.")
 
-      source ->
+      not Permissions.can_view?(source, user, token: socket.assigns.token) ->
+        put_flash(socket, :error, "That isn't yours to take.")
+
+      true ->
         Library.copy(source, Owner.of(user))
         put_flash(socket, :info, message)
     end
@@ -394,6 +456,7 @@ defmodule PolyphonyWeb.BrowseLive do
       stories={@stories}
       story={@story}
       tab={@tab}
+      token={@token}
       who={@who}
       worlds={@worlds}
     />

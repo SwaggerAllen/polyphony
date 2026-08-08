@@ -72,7 +72,11 @@ defmodule PolyphonyWeb.Auth do
     defp log_url(_url), do: :ok
   end
 
-  defp fingerprint(token), do: String.slice(token, 0, 8) <> "…"
+  # Shared with the crash reporter, which needs the identical rule for the identical
+  # reason — and which is where the note lives about why this cannot measure from the
+  # front of a `Phoenix.Token`. It used to, and printed the same eight characters for
+  # every magic link the app had ever sent.
+  defp fingerprint(token), do: Polyphony.Redact.fingerprint(token)
 
   # ── Plug (dead views) ───────────────────────────────────────────────────────────
 

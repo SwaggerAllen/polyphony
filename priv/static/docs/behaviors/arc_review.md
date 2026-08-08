@@ -1,6 +1,6 @@
 # Arc review
 
-<!-- rev: 1 -->
+<!-- rev: 2 -->
 
 | | |
 |---|---|
@@ -21,7 +21,15 @@ whether that is now true of her.
   Without it a proposal is an assertion about somebody you wrote, from nowhere.
 - **The gate is per-cast, not per-backlog.** Nineteen proposals pending on a different
   campaign do not block opening a scene with two — otherwise the review queue becomes a
-  reason not to play.
+  reason not to play. It is per-cast **within** a campaign too: `SceneGate.check/3` looks
+  only at the characters in the scene being opened, so nineteen pending across ten people
+  do not block a two-hander whose two are clear. The library row counts the whole backlog
+  and is therefore an upper bound rather than the same number — `library.md` says so now,
+  having claimed the opposite.
+- **The world's arc gates every scene, whoever is in it.** The one thing that is *not*
+  per-cast: pending world-arc proposals block any scene in the campaign, because a world
+  fact is true for everybody and there is no cast small enough to duck it. Worth knowing
+  before designing the blocked state — the reason a scene is gated may name nobody in it.
 - **A group change is one card, not one per member.** It is really one proposal against the
   template plus one per current member; a group of twelve would otherwise flood the queue
   from a change nobody made twelve times.

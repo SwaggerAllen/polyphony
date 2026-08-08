@@ -12,7 +12,6 @@ defmodule PolyphonyWeb.Screens.Browse do
   """
   use PolyphonyWeb, :html
 
-  alias Polyphony.Library
   alias PolyphonyCore.Publication
   alias Polyphony.Authoring.WorldBible
   alias Polyphony.Moderation.Report
@@ -311,12 +310,17 @@ defmodule PolyphonyWeb.Screens.Browse do
   # control, same transcript, same beat rules. Only the composer is replaced, by
   # scene navigation.
   defp reader(assigns) do
+    # A share token is a credential, not a state of this screen, so it defaults away
+    # rather than becoming a fifteenth thing every storybook variation has to declare.
+    # The public and unlisted readers are the same markup; only how you got here differs.
+    assigns = assign_new(assigns, :token, fn -> nil end)
+
     ~H"""
     <Kit.frame register={:page} class="flex flex-col min-h-[100dvh]">
       <Kit.header
         title={Map.get(@scene, :title)}
         eyebrow={story_name(@snapshot)}
-        back={~p"/browse?#{[story: @story.id]}"}
+        back={front_path(@story.id, @token)}
         back_label="The front page"
       >
         <:actions>
@@ -417,19 +421,6 @@ defmodule PolyphonyWeb.Screens.Browse do
 
   # ── Copy ─────────────────────────────────────────────────────────────────────
 
-  # A **frozen** snapshot, readable, and not taken down. The catalogue already only
-  # lists these, and a direct URL has to agree with it: a live campaign is somebody's
-  # working copy, not a story, and opening one here would read its scene list as a
-  # published contents.
-  #
-  # Hidden is checked here and not left to the list query, because the list query isn't
-  # what a direct link goes through — a taken-down story keeps its `visibility`, so
-  # without this its old URL still serves it (§B3).
-  def published?(entry),
-    do:
-      Library.snapshot?(entry) and entry.visibility in ~w(public unlisted) and
-        not Library.hidden?(entry)
-
   def story_name(snapshot), do: Session.title(snapshot)
   def blurb(snapshot), do: Session.blurb(snapshot)
 
@@ -503,6 +494,15 @@ defmodule PolyphonyWeb.Screens.Browse do
         into: %{},
         do: {to_string(Map.get(c, :source_id)), Voice.of_sheet(Map.get(c, :sheet) || %{})}
   end
+
+  # The one link out of a story that isn't a `patch`. `Kit.header`'s chevron navigates,
+  # which tears the LiveView down and mounts a fresh one, so a reader who arrived on an
+  # unlisted story's share link would come back without the grant they came in with and
+  # find their own story gone. Every other route through the reader stays in-process and
+  # needs nothing appended — a token in a URL is a credential, and the fewer places it
+  # is written the better.
+  defp front_path(story_id, nil), do: ~p"/browse?#{[story: story_id]}"
+  defp front_path(story_id, token), do: ~p"/browse?#{[story: story_id, t: token]}"
 
   defp scene_path(story_id, scene, mode) do
     params =

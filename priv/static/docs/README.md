@@ -13,7 +13,6 @@ The map of what lives where, and the rule for where new writing goes. Start with
 | **`backend-capabilities.md`** | The **catalog** of every backend capability, with a gap register (surfaced / partial / backend-only). A survey of what exists. | "What can the backend already do?" |
 | _(the worklist)_ | **Not a document.** Open work lives in **Linear** — team `StrutCo`, project `Polyphony` — one issue per item, carrying the argument that decides it. | "What ships next, in what order?" |
 | **`behaviors/`** | One file per screen: **what it does from the user's seat**, state by state. The thing a design change lands in before it has any code. Each state section is pinned to a storybook variation by a test. | "What is this screen supposed to do?" |
-| **`design-thread.md`** | Instructions for the **normal Claude thread** that does design work: what to read, how a mock reaches Drive, how intent reaches Linear. The code thread's half is in `CLAUDE.md`. | "How does design work get handed over?" |
 | **`completed-roadmap.md`** | **Shipped work**, moved out of the planning docs so they stay lean. Detail for done backlog/roadmap items lands here. | "What's already been built (and where)?" |
 | **`decisions.md`** | Post-v1 **strategy and forward rationale**: monetization, TTRPG resolution, kids/org products, style material, and the ordering logic (P1–P11). | "Why the post-v1 plan is what it is?" |
 | **`../CLAUDE.md`** | Operational guide + the non-negotiable invariants. | "How do I work in this repo safely?" |
