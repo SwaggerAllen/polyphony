@@ -81,7 +81,14 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
     html = view |> element("button[phx-click=toggle_intros]") |> render_click()
-    assert html =~ "Write &amp; admit"
+
+    # **One button, and it says Admit** whether the name resolves to somebody already
+    # written or not. It used to say *✦ Write & admit* for an unwritten name, which made
+    # the GM answer a question about the database in the middle of a question about the
+    # scene. Every path into a scene ends with a full character (§07); what differs is
+    # only how long the sheet takes to arrive, and that is the panel's problem to hide.
+    assert html =~ "Admit"
+    refute html =~ "Write &amp; admit"
 
     view |> element("button[phx-click=intro_generate][phx-value-name=Ghost]") |> render_click()
     generate(view)

@@ -45,6 +45,33 @@ defmodule PolyphonyWeb.Screens.Play do
   # A character's control mode, defaulting to autonomous (matches the beat walk).
   defp control_of(modes, character), do: Map.get(modes, character) || "autonomous"
 
+  # The *they'll be* control, in the mock's words. **Automated / Draft / Mine** are copy
+  # for `autonomous` / `assisted` / `user_controlled` — the domain's names, unchanged.
+  # Different words for the same three things is fine and deliberate; what would not be
+  # fine is somebody "correcting" one set to match the other, so both are written here
+  # together. The composer's own picker says *Draft & approve* and *I write their turns*
+  # for the same values, because it is answering a different question — how this
+  # character behaves from now on, rather than how they will behave when they arrive.
+  defp control_choices,
+    do: [{"autonomous", "Automated"}, {"assisted", "Draft"}, {"user_controlled", "Mine"}]
+
+  # Tier leads the picker's filters because once walk-ons autogenerate, the roster gets
+  # long fast and tier is the axis somebody actually scans by.
+  defp tier_choices,
+    do: [
+      {"all", "Everyone"},
+      {"main", "Main cast"},
+      {"recurring", "Recurring"},
+      {"incidental", "Walk-ons"}
+    ]
+
+  defp presence(value, fallback) do
+    case String.trim(to_string(value || "")) do
+      "" -> fallback
+      text -> text
+    end
+  end
+
   # ── Names (§5.2) ──────────────────────────────────────────────────────────────
   #
   # The single edge between the id-keyed log and the name-keyed fiction. Every
@@ -296,6 +323,45 @@ defmodule PolyphonyWeb.Screens.Play do
 
   attr(:panel, :any, default: nil, doc: "which side panel is open, or nil")
   attr(:introductions, :list, default: [])
+
+  # The intros panel is four screens deep, and which one is showing is a property of the
+  # panel rather than of the scene — so it is one assign rather than four booleans that
+  # can disagree with each other.
+  attr(:intros_view, :atom,
+    default: :panel,
+    values: [:panel, :write_new, :picker, :picker_confirm],
+    doc: "which face of the introductions panel is showing"
+  )
+
+  attr(:suggestion, :any,
+    default: nil,
+    doc: "%{name, reason, colour} — one, or nil when the Director isn't asking"
+  )
+
+  attr(:intro_control, :string,
+    default: "autonomous",
+    doc: "the *they'll be* answer, set before admitting rather than after"
+  )
+
+  attr(:admitted, :list,
+    default: [],
+    doc: "%{id, name, colour, status: :writing | :failed} — in the room, no sheet yet"
+  )
+
+  attr(:sending_away, :any, default: nil, doc: "%{id, name, colour} being confirmed, or nil")
+
+  attr(:new_name, :string, default: "")
+  attr(:new_premise, :string, default: "")
+
+  attr(:picker_query, :string, default: "")
+  attr(:picker_tier, :string, default: "all")
+
+  attr(:picker_rows, :list,
+    default: [],
+    doc: "%{id, name, blurb, tier_label, colour, in_scene?} — this campaign's roster"
+  )
+
+  attr(:picker_chosen, :any, default: nil, doc: "the row being confirmed, or nil")
 
   attr(:joinable, :list,
     default: [],
@@ -726,36 +792,279 @@ defmodule PolyphonyWeb.Screens.Play do
         </Kit.btn>
       </div>
 
-      <div :if={@panel == :intros and @introductions != []} class="row px-4 py-3">
-        <div class="lbl dim mb-2">The Director suggests</div>
-        <div :for={i <- @introductions} class="flex items-center gap-2.5 py-1.5">
-          <div class="min-w-0 flex-1">
-            <div class="text-[13px] font-semibold"><%= i.name %></div>
-            <div :if={i.reason not in [nil, ""]} class="text-[11px] dim"><%= i.reason %></div>
+      <%!-- Somebody already in the room whose sheet hasn't landed. Rendered in the
+            panel because the panel is where the introduction was made and where the
+            ways out of it live — the transcript says something different on purpose
+            (`admitted_writing`), and only the roster is allowed to look unfinished. --%>
+      <div :for={a <- @admitted} :if={@panel == :intros} class="row px-4 py-3">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="av shrink-0" style={"background:#{a.colour}"}></span>
+          <div>
+            <span class="ttl text-[14px]" style="font-weight:600"><%= a.name %></span>
+            <div class="lbl" style={"color:#{if a.status == :failed, do: "var(--pencil)", else: "var(--lamp)"}"}>
+              <%= if a.status == :failed, do: "Here · not written", else: "Here · being written" %>
+            </div>
           </div>
-          <Kit.btn
-            :if={i.resolution.status == :ready}
-            kind={:primary}
-            size={:sm}
-            phx-click="intro_admit"
-            phx-value-name={i.name}
-          >
-            Admit
+        </div>
+
+        <div :if={a.status == :writing} class="space-y-2 mb-3">
+          <div class="h-2.5 rounded" style="background:var(--b3);width:92%"></div>
+          <div class="h-2.5 rounded" style="background:var(--b3);width:74%"></div>
+        </div>
+        <p :if={a.status == :writing} class="text-[12px] leading-relaxed dim">
+          They're in the room. They won't act until they're written — the beat carries on
+          without them.
+        </p>
+
+        <div :if={a.status == :failed}>
+          <p class="text-[13px] leading-relaxed dim mb-2.5">
+            Writing them didn't work. They're still in the scene and still won't act until
+            they have a sheet.
+          </p>
+          <div class="flex flex-wrap gap-1.5">
+            <Kit.btn kind={:primary} size={:sm} phx-click="intro_retry" phx-value-id={a.id}>
+              Try again
+            </Kit.btn>
+            <Kit.btn kind={:ghost} size={:sm} phx-click="intro_write_self" phx-value-id={a.id}>
+              Write them yourself
+            </Kit.btn>
+            <Kit.btn kind={:ghost} size={:sm} phx-click="send_away_confirm" phx-value-id={a.id}>
+              Send them away
+            </Kit.btn>
+          </div>
+        </div>
+      </div>
+
+      <%!-- Sending somebody away (§07b). The confirm names **what survives**, because
+            nothing is destroyed — the entrance is a committed event other characters
+            could have reacted to, so the departure is written into the fiction rather
+            than edited out of the log. The name-what-dies pattern used for deletions is
+            deliberately inverted here: the fear is that this is irreversible, and it
+            isn't. --%>
+      <div :if={@panel == :intros and @sending_away} class="row px-4 py-3">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="av shrink-0" style={"background:#{@sending_away.colour}"}></span>
+          <div>
+            <span class="ttl text-[14px]" style="font-weight:600"><%= @sending_away.name %></span>
+            <div class="lbl" style="color:var(--pencil)">Here · not written</div>
+          </div>
+        </div>
+        <p class="text-[13px] leading-relaxed mb-2.5">
+          They'll leave the scene. Their entrance stays in the transcript — it already
+          happened, and the others saw it.
+        </p>
+        <p class="text-[12px] leading-relaxed dim mb-3">You can bring them on again later.</p>
+        <div class="flex flex-wrap gap-1.5">
+          <Kit.btn kind={:primary} size={:sm} phx-click="send_away" phx-value-id={@sending_away.id}>
+            Send them away
           </Kit.btn>
-          <Kit.btn
-            :if={i.resolution.status != :ready}
-            kind={:primary}
-            size={:sm}
-            phx-click="intro_generate"
-            phx-value-name={i.name}
-          >
-            ✦ Write &amp; admit
+          <Kit.btn kind={:ghost} size={:sm} phx-click="send_away_cancel">Keep trying</Kit.btn>
+        </div>
+      </div>
+
+      <%!-- The panel proper. One suggestion rather than a list: the GM is being asked to
+            ratify a judgement about the scene, and a queue of them turns that into
+            picking from a roster. --%>
+      <div :if={@panel == :intros and @intros_view == :panel} class="row px-4 py-3">
+        <div :if={@suggestion}>
+          <div class="lbl dim mb-2">The Director suggests</div>
+          <div class="flex items-center gap-2.5">
+            <span class="av shrink-0" style={"background:#{@suggestion.colour}"}></span>
+            <div class="min-w-0 flex-1">
+              <div class="text-[13px] font-semibold"><%= @suggestion.name %></div>
+              <div :if={@suggestion.reason not in [nil, ""]} class="text-[11px] dim">
+                <%= @suggestion.reason %>
+              </div>
+            </div>
+            <Kit.btn
+              kind={:primary}
+              size={:sm}
+              class="shrink-0"
+              phx-click={if @suggestion.ready?, do: "intro_admit", else: "intro_generate"}
+              phx-value-name={@suggestion.name}
+            >
+              Admit
+            </Kit.btn>
+          </div>
+
+          <%!-- Set before they are in the room, because the answer changes what
+                admitting them means and it is much harder to explain afterwards. --%>
+          <div class="mt-2 flex items-center gap-2">
+            <form id={eid(@id, "intro-control")} phx-change="intro_control">
+              <label for={eid(@id, "intro-control-select")} class="lbl dim">They'll be</label>
+              <select
+                id={eid(@id, "intro-control-select")}
+                name="control"
+                class="field px-2 py-1 text-[12px]"
+              >
+                <option :for={{value, label} <- control_choices()} value={value} selected={@intro_control == value}>
+                  <%= label %>
+                </option>
+              </select>
+            </form>
+            <Kit.btn kind={:pen} size={:sm} phx-click="intro_dismiss" phx-value-name={@suggestion.name}>
+              Not now
+            </Kit.btn>
+          </div>
+        </div>
+
+        <p :if={is_nil(@suggestion)} class="text-[13px] leading-relaxed dim text-center py-3">
+          The Director isn't asking for anyone. It will when the scene needs someone.
+        </p>
+      </div>
+
+      <%!-- The GM's own two doors, under their own heading — a different act from
+            ratifying a suggestion, so they sit apart from it rather than beside it.
+            They stay when the Director has nobody, which is what makes this panel
+            useful on a two-hander that never needs a third voice. --%>
+      <div :if={@panel == :intros and @intros_view == :panel} class="px-4 py-3">
+        <div class="lbl dim mb-2">Bring someone on yourself</div>
+        <div class="flex flex-col gap-1.5">
+          <Kit.btn kind={:ghost} class="justify-start" phx-click="intros_write_new">
+            ✦ Write someone new
           </Kit.btn>
-          <Kit.btn kind={:pen} size={:sm} phx-click="intro_edit" phx-value-name={i.name}>Edit</Kit.btn>
-          <Kit.btn kind={:pen} size={:sm} phx-click="intro_dismiss" phx-value-name={i.name}>
-            Not now
+          <Kit.btn kind={:ghost} class="justify-start" phx-click="intros_picker">
+            Find someone you've written
           </Kit.btn>
         </div>
+      </div>
+
+      <%!-- Write someone new. The note at the bottom is load-bearing and must not be
+            dropped: somebody typing one line into a scene needs to know they are not
+            creating a throwaway. Both actions end in a full character; only the route
+            differs. --%>
+      <div :if={@panel == :intros and @intros_view == :write_new} class="px-4 py-3.5">
+        <form id={eid(@id, "intro-new")} phx-submit="intro_write_new">
+          <div class="lbl dim mb-1.5">Who are they</div>
+          <input
+            id={eid(@id, "intro-new-name")}
+            name="name"
+            value={@new_name}
+            placeholder="A harbour constable"
+            class="field px-3 py-2.5 text-[14px] w-full mb-2"
+          />
+          <textarea
+            id={eid(@id, "intro-new-premise")}
+            name="premise"
+            placeholder="A sentence or two on who they are."
+            class="field px-3 py-2.5 text-[13px] leading-relaxed w-full mb-2.5"
+            style="min-height:60px"
+          ><%= @new_premise %></textarea>
+
+          <div class="lbl dim mb-1.5">They'll be</div>
+          <select name="control" class="field px-2 py-1 text-[12px] w-full mb-3">
+            <option :for={{value, label} <- control_choices()} value={value} selected={@intro_control == value}>
+              <%= label %>
+            </option>
+          </select>
+
+          <div class="flex flex-col gap-1.5">
+            <Kit.btn kind={:primary} class="justify-center" type="submit">
+              ✦ Write them and bring them on
+            </Kit.btn>
+            <Kit.btn kind={:ghost} class="justify-center" type="button" phx-click="intro_open_editor">
+              Open the sheet editor instead
+            </Kit.btn>
+          </div>
+          <p class="text-[11px] dim mt-2.5">
+            Either way they join your cast as a full character.
+          </p>
+        </form>
+      </div>
+
+      <%!-- The picker. Scoped to this campaign — see the standing decision; the reach it
+            adds over the Director's suggestion is *within* the campaign, to the walk-ons
+            it would never propose. Tier leads the filters for the same reason: that is
+            the roster that gets long. --%>
+      <div :if={@panel == :intros and @intros_view == :picker} class="row px-4 py-3">
+        <form id={eid(@id, "picker-search")} phx-change="picker_search">
+          <label for={eid(@id, "picker-q")} class="sr-only">Search this campaign</label>
+          <input
+            id={eid(@id, "picker-q")}
+            name="q"
+            value={@picker_query}
+            placeholder="Search this campaign"
+            class="field px-3 py-2.5 text-[14px] w-full mb-2.5"
+          />
+        </form>
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            :for={{value, label} <- tier_choices()}
+            type="button"
+            phx-click="picker_tier"
+            phx-value-tier={value}
+            class={["pill", @picker_tier != value && "dim"]}
+            style={@picker_tier == value && "background:var(--b3)"}
+          >
+            <%= label %>
+          </button>
+        </div>
+      </div>
+
+      <div :if={@panel == :intros and @intros_view == :picker and @picker_rows != []}>
+        <%!-- Characters already in the scene are shown, dimmed and inert. Costs a row and
+              stops the GM hunting for somebody standing in front of them. --%>
+        <button
+          :for={row <- @picker_rows}
+          type="button"
+          disabled={row.in_scene?}
+          phx-click={!row.in_scene? && "picker_choose"}
+          phx-value-id={row.id}
+          class={["row px-4 py-2.5 flex items-center gap-2.5 w-full text-left", row.in_scene? && "dim"]}
+        >
+          <span class="av shrink-0" style={"background:#{row.colour}"}></span>
+          <div class="min-w-0 flex-1">
+            <div class="text-[13px] font-semibold truncate"><%= row.name %></div>
+            <div class="text-[11px] dim truncate">
+              <%= row.tier_label %><span :if={row.in_scene?}> · already here</span>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      <%!-- Not a dead end: somebody who searched for an alchemist and found none wants
+            an alchemist, and the panel already has a door for that. The query carries
+            into the name. --%>
+      <div
+        :if={@panel == :intros and @intros_view == :picker and @picker_rows == []}
+        class="px-4 py-7 text-center"
+      >
+        <p class="text-[13px] leading-relaxed dim mb-3">
+          Nobody in this campaign by that name.
+        </p>
+        <Kit.btn kind={:primary} size={:sm} phx-click="intros_write_new" phx-value-name={@picker_query}>
+          ✦ Write <%= presence(@picker_query, "someone") %>
+        </Kit.btn>
+      </div>
+
+      <%!-- A second step rather than one-click entry from the row: enough to catch
+            *wrong Sable* before she walks in, and the last moment the *they'll be*
+            answer can be given. --%>
+      <div :if={@panel == :intros and @intros_view == :picker_confirm and @picker_chosen} class="px-4 py-3.5">
+        <div class="flex items-center gap-2.5 mb-2.5">
+          <span class="av shrink-0" style={"background:#{@picker_chosen.colour}"}></span>
+          <div>
+            <div class="text-[13px] font-semibold"><%= @picker_chosen.name %></div>
+            <div class="text-[11px] dim"><%= @picker_chosen.tier_label %></div>
+          </div>
+        </div>
+        <p :if={@picker_chosen.blurb not in [nil, ""]} class="text-[13px] leading-relaxed mb-3">
+          <%= @picker_chosen.blurb %>
+        </p>
+
+        <div class="lbl dim mb-1.5">They'll be</div>
+        <form id={eid(@id, "picker-control")} phx-change="intro_control">
+          <select name="control" class="field px-2 py-1 text-[12px] w-full mb-3">
+            <option :for={{value, label} <- control_choices()} value={value} selected={@intro_control == value}>
+              <%= label %>
+            </option>
+          </select>
+        </form>
+
+        <Kit.btn kind={:primary} class="w-full justify-center" phx-click="picker_admit" phx-value-id={@picker_chosen.id}>
+          Bring them on
+        </Kit.btn>
+        <p class="text-[11px] dim mt-2.5 text-center">They come in at the next beat.</p>
       </div>
     </Kit.frame>
     """

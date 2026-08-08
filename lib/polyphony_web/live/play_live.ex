@@ -128,6 +128,17 @@ defmodule PolyphonyWeb.PlayLive do
        progress: Broadcast.progress(scene_id),
        auto: Auto.get(scene_id),
        introductions: [],
+       suggestion: nil,
+       intros_view: :panel,
+       intro_control: "autonomous",
+       admitted: [],
+       sending_away: nil,
+       new_name: "",
+       new_premise: "",
+       picker_query: "",
+       picker_tier: "all",
+       picker_rows: [],
+       picker_chosen: nil,
        control_modes: %{},
        failures: [],
        drafts: [],
@@ -212,6 +223,7 @@ defmodule PolyphonyWeb.PlayLive do
     traces = if socket.assigns.debug_trace, do: DebugTap.recent(scene_id), else: []
     failures = open_failures(socket)
     feed = debug_feed(socket, traces, failures)
+    intros = intro_queue(socket, plain, cast)
 
     assign(socket,
       messages: messages,
@@ -238,7 +250,12 @@ defmodule PolyphonyWeb.PlayLive do
       control_modes: Map.new(roster, fn c -> {c, TurnOrder.control_mode(plain, c)} end),
       # The Director's pending introductions — author-facing tooling, so only the
       # omniscient view shows the queue (and each carries how it resolves).
-      introductions: intro_queue(socket, plain, cast),
+      introductions: intros,
+      # The panel shows **one**, because the GM is being asked to ratify a judgement about
+      # the scene rather than pick from a queue. The rest stay in `introductions`, which is
+      # still what dismiss and admit key off — the next one surfaces when this one is
+      # answered.
+      suggestion: suggestion_of(intros),
       failures: failures,
       drafts: open_drafts(scene_id),
       debug_feed: feed,
@@ -310,6 +327,31 @@ defmodule PolyphonyWeb.PlayLive do
       []
     end
   end
+
+  # The suggestion the panel draws, or nil when the Director isn't asking. A proposal is
+  # by **name** — it can name somebody who doesn't exist yet — so the swatch is the
+  # resolved character's voice where there is one and the neutral where there isn't.
+  # Nobody has a palette place until they are in the campaign.
+  defp suggestion_of([]), do: nil
+
+  defp suggestion_of([intro | _rest]) do
+    %{
+      name: intro.name,
+      reason: Map.get(intro, :reason),
+      colour: colour_of(Map.get(intro, :resolution)),
+      # One button says **Admit** whichever this is. The panel used to offer *Admit* or
+      # *✦ Write & admit* depending on whether the name resolved to somebody already
+      # written — which made the GM answer a question about the database in the middle
+      # of a question about the scene. Every path ends with a full character, so the
+      # difference is only how long the sheet takes to arrive.
+      ready?: Map.get(intro, :resolution, %{}) |> Map.get(:status) == :ready
+    }
+  end
+
+  defp colour_of(%{entry: entry}) when not is_nil(entry),
+    do: entry |> Library.payload() |> Voice.of_sheet()
+
+  defp colour_of(_resolution), do: Voice.neutral()
 
   # Fold the stream into the still-pending proposals (proposed, minus dismissed, minus
   # those who have since entered).
@@ -1891,6 +1933,17 @@ defmodule PolyphonyWeb.PlayLive do
       editing_draft={@editing_draft}
       failures={@failures}
       introductions={@introductions}
+      suggestion={@suggestion}
+      intros_view={@intros_view}
+      intro_control={@intro_control}
+      admitted={@admitted}
+      sending_away={@sending_away}
+      new_name={@new_name}
+      new_premise={@new_premise}
+      picker_query={@picker_query}
+      picker_tier={@picker_tier}
+      picker_rows={@picker_rows}
+      picker_chosen={@picker_chosen}
       joinable={@joinable}
       beats={@streams.beats}
       transcript_empty={@transcript_empty}
