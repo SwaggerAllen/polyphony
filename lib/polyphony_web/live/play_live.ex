@@ -542,21 +542,6 @@ defmodule PolyphonyWeb.PlayLive do
   # What everybody in the scene has already seen: speech that wasn't a whisper, actions,
   # demeanour, and the Director's own moves. Thoughts are structurally invisible to
   # everyone else and a whisper reached two people — feeding either to a drafting aid
-  # whose output goes into the shared transcript is how a secret gets narrated out loud.
-  @public_kinds ~w(SpeechUttered ActionTaken DemeanorReported WorldEventOccurred)
-  @recent_lines 12
-
-  defp public_lines(messages) do
-    for m <- messages,
-        m[:kind] in @public_kinds,
-        p = m[:payload] || %{},
-        to_string(p[:audibility]) != "private",
-        text = String.trim(to_string(p[:content] || "")),
-        text != "" do
-      text
-    end
-    |> Enum.take(-@recent_lines)
-  end
 
   defp maybe_payload(nil), do: nil
   defp maybe_payload(entry), do: Library.payload(entry)
@@ -906,10 +891,20 @@ defmodule PolyphonyWeb.PlayLive do
   # since it existed; Narrate is the other thing you can write from that bar and had
   # nothing, which made the Director's own move the only one with no help.
   #
-  # Grounded in **what the scene can see**: a world event goes straight into every
-  # member's transcript, so seeding the draft with somebody's interior thought or a
-  # whisper is how a drafting aid narrates a secret out loud. `Visibility` isn't in this
-  # path — `public_lines/1` choosing what to pass is.
+  # Grounded in the **Director's omniscient view**, through `SceneBrief.recent_lines/2` —
+  # the same read the Director's own judgment call conditions on, which is right because
+  # Narrate commits the same `WorldEventOccurred` the Director emits, from a human.
+  #
+  # This used to filter the scene down to "what everybody can see", assembled here out of
+  # `socket.assigns.messages` and a hand-kept list of public event kinds. Two things were
+  # wrong with that. The list is `Visibility`'s job and got a new event type wrong by
+  # omission rather than by default-deny; and the socket's messages are **viewer-filtered**,
+  # so the context depended on which perspective the author was looking through.
+  #
+  # The filtering is gone deliberately: the world does not care what is secret and has to
+  # know in order to stay consistent with it — a door is locked because somebody locked it
+  # quietly. What keeps the secret unsaid is the prompt (a world event is seen by everyone)
+  # and the author, who edits the draft before committing it.
   def handle_event("expand_narrate", _params, socket) do
     safe(socket, fn ->
       # Read from the socket, not from the click. A `phx-click` carries `phx-value-*`,
@@ -927,7 +922,7 @@ defmodule PolyphonyWeb.PlayLive do
               do: %{"name" => Play.name_of(socket.assigns.cast, id)}
             ),
           location: elem(scene_campaign_location(socket.assigns.scene_id), 1),
-          recent: public_lines(socket.assigns.messages),
+          recent: SceneBrief.recent_lines(socket.assigns.scene_id),
           current: text
         ] ++ narration_meter(socket)
 

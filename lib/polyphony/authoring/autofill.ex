@@ -797,6 +797,12 @@ defmodule Polyphony.Authoring.Autofill do
             "what a character does or feels about it — their turn is theirs. Do not " <>
             "resolve the scene: a world event puts pressure on people, it does not " <>
             "settle anything for them.\n\n" <>
+            "The scene you are given is **omniscient** — it includes what characters " <>
+            "thought and what they said privately to each other. The world knows all of " <>
+            "it, and needs to, or it writes a door open that somebody locked quietly. " <>
+            "But a world event is read by **everyone in the room**: let what you know " <>
+            "shape what happens, and never state it. A secret should be something the " <>
+            "world moves around, not something the narration says out loud.\n\n" <>
             "Return only the prose: no label, no quotes, no JSON."
       },
       %{
@@ -814,13 +820,14 @@ defmodule Polyphony.Authoring.Autofill do
     end
   end
 
-  # Deliberately named "so far, as everyone present saw it" rather than "the transcript":
-  # what the caller passes is a filtered read, and the prompt should say what it is
-  # rather than imply a completeness it doesn't have.
+  # The label says what the read is, and the read changed: this was "as everyone present
+  # saw it" while the caller passed a filtered transcript, and the caller now passes the
+  # omniscient one. A prompt that describes its own context wrongly is worse than one that
+  # doesn't describe it — the model believes the label over the lines.
   defp recent_block([]), do: ""
 
   defp recent_block(lines) do
-    "The scene so far, as everyone present saw it:\n" <>
+    "The scene so far, all of it — including what was thought and whispered:\n" <>
       Enum.map_join(lines, "\n", &"- #{&1}") <> "\n\n"
   end
 

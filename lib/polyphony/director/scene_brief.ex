@@ -257,6 +257,41 @@ defmodule Polyphony.Director.SceneBrief do
 
   # The full scene, oldest first, budgeted by tokens keeping the most recent — so a
   # long scene keeps its opening context instead of dropping off a fixed window.
+  @doc """
+  The last `limit` lines of the scene, as the Director sees them.
+
+  Omniscient, and that is the point: the canonical log **is** the omniscient projection
+  (`Visibility` lets `:omniscient` see everything), so reading the stream is the same
+  answer as projecting it, and it is the answer the Director already conditions on
+  through `transcript_section/2`.
+
+  Exists because the play screen's Narrate control needed the same read and had grown
+  its own — over `socket.assigns.messages`, which is a **viewer-filtered** projection, so
+  the context a human Director wrote from depended on which perspective they happened to
+  be looking through. It also filtered by a hand-kept list of "public" event kinds, which
+  is `Visibility`'s job and gets a new event type wrong by omission rather than by
+  default-deny.
+
+  The filtering was deliberate and is now deliberately gone: the world does not care what
+  is secret, and **has to know** in order to stay consistent with it. A door is locked
+  because somebody locked it quietly; a world that cannot see the quiet part writes the
+  door open. What stops the secret being said out loud is the prompt (a world event is
+  seen by everyone) and the author, who edits the draft before committing it.
+
+  Goes through `Packets.canonical/1` like every other read that feeds fiction (rule 6,
+  §7), so a re-rolled turn never reappears in the context.
+  """
+  @spec recent_lines(term(), pos_integer()) :: [String.t()]
+  def recent_lines(scene_id, limit \\ 12) do
+    cast = Rebuild.cast_for(scene_id)
+
+    scene_id
+    |> BeatOps.stored_events()
+    |> Packets.canonical()
+    |> Enum.flat_map(&transcript_line(&1, cast))
+    |> Enum.take(-limit)
+  end
+
   defp transcript_section(scene_id, cast) do
     lines =
       scene_id
