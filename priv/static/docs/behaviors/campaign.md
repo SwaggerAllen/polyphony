@@ -1,6 +1,6 @@
 # Campaign
 
-<!-- rev: 2 -->
+<!-- rev: 3 -->
 
 | | |
 |---|---|
@@ -10,7 +10,7 @@
 
 Everything about one story that isn't playing it: its cast, its world, its pitch, its
 scenes, what it is allowed to contain, how it gets published, and the three ways it ends.
-Five tabs, in the order somebody meets them — Settings, World, Cast, Premise, Scenes.
+Six tabs, in the order somebody meets them — Settings, World, Cast, Groups, Premise, Scenes.
 
 ## Standing decisions
 
@@ -24,6 +24,13 @@ Five tabs, in the order somebody meets them — Settings, World, Cast, Premise, 
 - **Attaching a world copies it.** A campaign accumulates its own world arc, so two
   campaigns cannot share a bible. The copy is labelled as one, so nobody edits it expecting
   the original to change.
+- **A group belongs to a campaign, not to a world**, the same rule characters follow.
+  Attaching a world brings no groups with it — they are written per campaign, and a group
+  written in one story never appears in another. Groups get their own tab and it sits
+  **beside Cast**, because a group is written with the character editor and seeds the
+  people it produces; it is a kind of person, not a kind of setting. It is not part of
+  first run: a campaign is ready to play without one, so the tab carries no *to do* mark
+  where World, Cast and Premise do.
 - **Publishing a head is a spoiler control, not a reading preference.** Nothing is ticked by
   default. The list is in **tier order**, not roster order — the roster is the accident of
   how the campaign was built, the tier is the author's own statement about who the story is
@@ -116,9 +123,7 @@ rules.
 
 ### `cast` — The people
 
-Main cast reads as the short list you authored; walk-ons collapse behind a count. Groups sit
-beside the cast, because a group is written like a character and seeds the people it
-produces.
+Main cast reads as the short list you authored; walk-ons collapse behind a count.
 
 ### `cast_pending` — Stubs waiting to be written
 
@@ -129,6 +134,23 @@ than twenty trips through the editor.
 
 A campaign needs at least one character before a scene can open. The empty state offers the
 write rather than explaining the rule.
+
+### `groups` — The collectives this story has
+
+A crew, a household, an order. Each row says what membership is worth: how many people are
+in it, whether anyone can be written from it, and how many secrets it carries — the three
+things that make a group different from a list of names. The card closes by saying what
+being written from one gets you, because that is the part nobody guesses.
+
+Only **this campaign's**. A group written in another story is not here, and neither is one
+belonging to no campaign at all.
+
+### `groups_empty` — None yet
+
+The empty state makes the case rather than describing the feature: a group saves writing the
+same person five times, and gives secrets somewhere to point. A campaign is perfectly
+playable without one, so this is an offer and not a gap — which is why it has no *to do*
+mark on the tab.
 
 ### `publish` — What a reader gets
 

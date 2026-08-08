@@ -278,6 +278,34 @@ defmodule Storybook.Screens.Campaign do
         Map.merge(first_run(), %{tab: "cast"})
       ),
       v(
+        :groups,
+        "The collectives this story has. Each row says what membership is *worth* — how many people are in it, whether anyone can be written from it, and how many secrets it carries — because those three are what make a group different from a list of names. Only this campaign's: a group written in another story isn't here, and neither is one belonging to no campaign at all.",
+        %{
+          tab: "groups",
+          groups: [
+            %{
+              id: "g1",
+              name: "The Tidewatch",
+              colour: "hsl(210 40% 55%)",
+              members: 6,
+              secrets: 2
+            },
+            %{
+              id: "g2",
+              name: "The harbour office",
+              colour: "hsl(35 45% 55%)",
+              members: 3,
+              secrets: 0
+            }
+          ]
+        }
+      ),
+      v(
+        :groups_empty,
+        "None yet. The empty state makes the case rather than describing the feature — a group saves writing the same person five times, and gives secrets somewhere to point. A campaign plays perfectly well without one, which is why this is an offer rather than a gap and why the tab carries no *to do* mark.",
+        %{tab: "groups", groups: []}
+      ),
+      v(
         :publish,
         "What a reader gets. Publishing a head is a **spoiler control, not a reading preference** — it hands over what that character knew while they knew it — so nothing here is ticked by default, and the list is in tier order rather than the accident of cast order.",
         %{pub_spectator: true, pub_perspectives: ["11"], pub_forkable: true}
