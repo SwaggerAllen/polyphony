@@ -134,9 +134,11 @@ if config_env() == :prod do
     System.get_env("DEEPINFRA_EMBED_MODEL") || deepinfra[:embed_model] ||
       "BAAI/bge-large-en-v1.5"
 
-  # Surface full exception + stacktrace on 5xx pages during bring-up. Defaults on;
-  # set SHOW_ERROR_DETAILS=false before the app is public (stacktraces leak
-  # internals). See PolyphonyWeb.ErrorHTML.
+  # Surface the full exception + stacktrace on 5xx pages. **Defaults on, deliberately
+  # and indefinitely** — this is a confirmed non-ask, not a to-do left in a comment.
+  # The app's first users are alpha testers, and full debuggability in front of one of
+  # them beats hearing "it broke" second-hand. Set SHOW_ERROR_DETAILS=false to turn it
+  # off; don't change the default. See PolyphonyWeb.ErrorHTML for the whole argument.
   config :polyphony,
          :show_error_details,
          System.get_env("SHOW_ERROR_DETAILS", "true") in ~w(true 1)

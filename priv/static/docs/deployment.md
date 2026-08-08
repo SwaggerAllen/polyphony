@@ -349,7 +349,7 @@ That prints the URL (15-minute TTL) and sends it via whatever transport is confi
    | `DATABASE_URL` | injected from the managed db (`${db.DATABASE_URL}`) |
    | `PHX_HOST` | injected app domain (`${APP_DOMAIN}`) |
    | `POOL_SIZE` / `EVENT_STORE_POOL_SIZE` | DB connection pools (spec: 5 / 2 — see budget below) |
-   | `SHOW_ERROR_DETAILS` | `true` shows the full exception + stacktrace on 5xx pages (bring-up); set `false` before going public |
+   | `SHOW_ERROR_DETAILS` | `true` (the default, and it stays) shows the full exception + stacktrace on 5xx pages — see below |
    | `SENTRY_DSN` | crash reporting. Unset means off, and off is silent — see [Sentry integration](#sentry-integration-crash-reporting) |
 
 3. **pgvector.** DO's managed Postgres 16 ships `pgvector`, and the read-model
@@ -516,9 +516,12 @@ generation — end to end:
    (the `Failures` subsystem) rather than a crash. The usual first cause is a wrong
    **model id** (DeepInfra 404) — fix `DEEPINFRA_MODEL` / `DEEPINFRA_MODEL_HEAVY`
    and retry. Check the runtime logs for the DeepInfra response body.
-   - **Unexpected 500s** (with `SHOW_ERROR_DETAILS=true`) now render the full
-     exception + stacktrace in the browser, plus a request id — so you rarely need
-     the logs during bring-up. Turn the flag off before opening the app publicly.
+   - **Unexpected 500s** render the full exception + stacktrace in the browser, plus
+     a request id, so you rarely need the logs at all. `SHOW_ERROR_DETAILS` defaults
+     to `true` and **stays on** — a deliberate choice for an alpha, where the first
+     users are people you invited and a stack trace in front of one of them is worth
+     more than the internals it reveals. It reads like an unfinished to-do and isn't
+     one; it's a confirmed non-ask. Revisit when the audience stops being invitees.
    - **Review the design kit on the deployment.** Set `STORYBOOK=true` (RUN_TIME) and
      restart to serve the component catalogue at `/storybook`. It reads no domain
      data, so it is a presentation choice rather than an exposure, and it is gated per

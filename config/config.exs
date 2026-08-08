@@ -130,8 +130,9 @@ config :polyphony, PolyphonyWeb.Endpoint,
 config :phoenix, :json_library, Jason
 
 # Show the full exception + stacktrace on 5xx error pages (PolyphonyWeb.ErrorHTML).
-# Off by default; prod turns it on from SHOW_ERROR_DETAILS (runtime.exs) during
-# bring-up. Dev shows the richer Plug.Debugger page instead (debug_errors: true).
+# Off here; prod turns it on from SHOW_ERROR_DETAILS (runtime.exs) and keeps it on —
+# a decision, not a bring-up leftover. Dev shows the richer Plug.Debugger page instead
+# (debug_errors: true), so this flag only matters where Plug.Debugger isn't.
 config :polyphony, :show_error_details, false
 
 # Crash reporting (STR-55). **No DSN means no reporting**, which is the state in dev and
