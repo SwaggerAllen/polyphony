@@ -1,6 +1,20 @@
 defmodule Polyphony.Permissions do
   @moduledoc """
-  Who may change what — the one place that answers it.
+  Who may see and change what — the one place that answers it.
+
+  ## Why it says "the one place" twice
+
+  It didn't used to be. `Polyphony.Library.Access` answered the same question in its own
+  words — fully written, fully tested, and called by **nothing in `lib/`** — while the
+  screen that actually decided whether a stranger could open a story
+  (`Screens.Browse.published?/1`) answered it a third way, in a presentation module.
+
+  Two of those three said an `unlisted` entry was readable by anyone; the deleted one
+  was the only one that checked the share token, and it was the one nobody called. So a
+  reader could open an unlisted story by guessing its id, and ids here are small
+  integers. That is what four answers to one question costs, and it is why this module
+  now holds reading as well as writing: a second implementation of an authorization rule
+  is not redundancy, it is a rule that is enforced in some places and not others.
 
   ## What it fixes
 
@@ -67,11 +81,7 @@ defmodule Polyphony.Permissions do
   def can_edit?(%LibraryEntry{frozen: true}, _actor), do: false
 
   def can_edit?(%LibraryEntry{} = entry, actor) do
-    cond do
-      Library.hidden?(entry) -> false
-      owner?(entry, actor) -> true
-      true -> editor?(entry, actor)
-    end
+    not Library.hidden?(entry) and theirs?(entry, actor)
   end
 
   @doc "Does `actor` own this entry outright?"
@@ -97,20 +107,47 @@ defmodule Polyphony.Permissions do
   @doc """
   May `actor` read this entry?
 
-  Broader than editing on purpose: a published or shared entry is readable by anyone,
-  which is what makes "this is somebody else's — take a copy" an honest thing to say
-  rather than a hint that the id exists.
-  """
-  @spec can_view?(LibraryEntry.t() | nil, actor()) :: boolean()
-  def can_view?(nil, _actor), do: false
+  Broader than editing on purpose: a published entry is readable by anyone, which is
+  what makes "this is somebody else's — take a copy" an honest thing to say rather than
+  a hint that the id exists.
 
-  def can_view?(%LibraryEntry{} = entry, actor) do
+  **`unlisted` is not a weaker `public`.** It means *reachable by the link and not
+  otherwise*, so it needs the link: pass `token: t` and it is compared against the
+  entry's `share_token`. Without one, an unlisted entry is readable only by its owner —
+  the same answer a private one gives, which is the point, because an unlisted entry
+  that answers differently from a private one to a stranger has told them it exists.
+
+  Reading does not go through `can_edit?/2`, and the difference is `frozen`: a published
+  snapshot refuses every edit including its author's, and routing reads through the edit
+  check would have made an author unable to open their own unlisted publication. Frozen
+  stops writing, not reading.
+  """
+  @spec can_view?(LibraryEntry.t() | nil, actor(), keyword()) :: boolean()
+  def can_view?(entry, actor, opts \\ [])
+  def can_view?(nil, _actor, _opts), do: false
+
+  def can_view?(%LibraryEntry{} = entry, actor, opts) do
     cond do
       Library.hidden?(entry) -> false
-      entry.visibility in ["public", "unlisted"] -> true
-      true -> can_edit?(entry, actor)
+      entry.visibility == "public" -> true
+      entry.visibility == "unlisted" -> holds_link?(entry, opts[:token]) or theirs?(entry, actor)
+      true -> theirs?(entry, actor)
     end
   end
+
+  # Both halves must be present and equal. A nil `share_token` on the entry is an
+  # unlisted entry that was never given a link, and a nil presented token is a reader
+  # who doesn't hold one — neither is a match, and `nil == nil` would make them one.
+  defp holds_link?(%LibraryEntry{share_token: token}, presented) do
+    not is_nil(token) and not is_nil(presented) and to_string(token) == to_string(presented)
+  end
+
+  # Nil is a signed-out request and belongs to nobody. The clause is here rather than at
+  # each entry point because `can_view?/3` and `can_edit?/2` both reach it, and `editor?`
+  # coerces the actor — a nil that gets that far raises rather than denying, which is the
+  # loudest possible way to fail a check that should quietly say no.
+  defp theirs?(_entry, nil), do: false
+  defp theirs?(entry, actor), do: owner?(entry, actor) or editor?(entry, actor)
 
   @doc """
   May `actor` play this scene?
@@ -138,7 +175,7 @@ defmodule Polyphony.Permissions do
       # A campaign that has been deleted outright leaves its scenes readable to whoever
       # was already in them; there is nothing left to check against.
       nil -> true
-      entry -> owner?(entry, actor) or editor?(entry, actor)
+      entry -> theirs?(entry, actor)
     end
   end
 

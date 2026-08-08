@@ -11,8 +11,14 @@ defmodule Polyphony.ReadModels.LibraryEntry do
 
   `payload` is an opaque Erlang term (`Polyphony.Library` owns the codec) so nested
   authored structs (`CharacterSheet`, `WorldBible`, `Library.Snapshot`) round-trip
-  losslessly. Access decisions are **never** made here — they live in the pure
-  `Polyphony.Library.Access` predicate.
+  losslessly. Access decisions are **never** made here — they live in
+  `Polyphony.Permissions`.
+
+  The list queries below carry `visibility` and `hidden_at` predicates anyway, and that
+  is not a second gate: *what belongs in a catalogue* is a different question from *may
+  this reader open this*. `list_public/2` excludes `unlisted` deliberately — an unlisted
+  entry is reachable by its link and must not be reachable by browsing — where
+  `Permissions.can_view?/3` admits one to a reader holding the token.
   """
   use Ecto.Schema
   import Ecto.Query
