@@ -247,7 +247,7 @@ defmodule Polyphony.ArcReviewTest do
   describe "a group changing" do
     setup do
       owner = owner()
-      group = Groups.create(owner, %Group{name: "The Tidewatch"})
+      group = Groups.create(owner, %Group{name: "The Tidewatch", campaign_id: "camp"})
       sable = character(owner, "Sable Quist")
       bellman = character(owner, "The bellman")
       corrigan = character(owner, "Mother Corrigan")

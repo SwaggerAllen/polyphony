@@ -35,6 +35,7 @@ defmodule Polyphony.GroupsTest do
       struct(
         %Group{
           name: "The Tidewatch",
+          campaign_id: "camp",
           premise: "They keep the bell, and the bell keeps something else.",
           temperament: "Watchful, and slow to say why.",
           facts: [
@@ -102,7 +103,7 @@ defmodule Polyphony.GroupsTest do
     test "a character's groups are derived, so the two directions can't disagree" do
       o = owner()
       tide = tidewatch(o)
-      office = Groups.create(o, %Group{name: "The harbour office"})
+      office = Groups.create(o, %Group{name: "The harbour office", campaign_id: "camp"})
 
       {:ok, _} = Groups.add_member(tide.id, "11")
       {:ok, _} = Groups.add_member(office.id, "22")
@@ -120,6 +121,20 @@ defmodule Polyphony.GroupsTest do
 
       assert Groups.member_ids(group.id) == ["11"]
       assert payload(group).premise == "New."
+    end
+
+    test "and leaves its campaign alone, which a save must never clear" do
+      # `update_fields/3` takes the whole struct, so anything the caller didn't set is
+      # nil. Membership was already carried over from the record for that reason; the
+      # campaign is carried over for a stronger one — it is the scope key, and a save
+      # that cleared it would drop the group off every hub, recreating one row at a
+      # time the class this field exists to remove.
+      o = owner()
+      group = tidewatch(o)
+
+      {:ok, _} = Groups.update_fields(group.id, %Group{name: "The Tidewatch", premise: "New."})
+
+      assert payload(group).campaign_id == "camp"
     end
   end
 

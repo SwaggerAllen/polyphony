@@ -39,6 +39,13 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
     Library.put(%{owner: Owner.of(user), kind: "character", payload: sheet})
   end
 
+  defp group(user, name, attrs \\ []) do
+    Polyphony.Groups.create(
+      Owner.of(user),
+      struct(Polyphony.Authoring.Group, [{:name, name}, {:campaign_id, "camp"} | attrs])
+    )
+  end
+
   defp world(user, name, attrs \\ %{}) do
     Library.put(%{
       owner: Owner.of(user),
@@ -219,6 +226,45 @@ defmodule PolyphonyWeb.LibraryScreenLiveTest do
 
       assert html =~ "1 archived"
       assert html =~ "1 in trash"
+    end
+  end
+
+  describe "groups" do
+    test "band by the campaign they were written in", %{conn: conn, user: user} do
+      # By the group's **own** campaign (STR-68), not by where its members happen to be.
+      # The shelf used to infer it from members, which was the only answer available
+      # before the field and couldn't speak for a group with nobody in it yet — every
+      # group, for the minute between creating one and adding anybody. It also has to be
+      # the same answer the campaign hub gives: two screens deriving one fact two ways
+      # is how they come to disagree about whose story somebody's work is in.
+      salt = campaign(user, %{name: "The Salt Line"})
+      group(user, "The Tidewatch", campaign_id: salt.id)
+
+      {:ok, _view, html} = live(conn, ~p"/library?tab=groups")
+
+      assert html =~ "The Salt Line"
+      assert html =~ "The Tidewatch"
+    end
+
+    test "an empty one still bands, because it knows where it was written", %{
+      conn: conn,
+      user: user
+    } do
+      salt = campaign(user, %{name: "The Salt Line"})
+      group(user, "The Tidewatch", campaign_id: salt.id, member_ids: [])
+
+      {:ok, _view, html} = live(conn, ~p"/library?tab=groups")
+
+      assert html =~ "The Salt Line"
+    end
+
+    test "there is no such thing as one belonging to no campaign", %{user: user} do
+      # Not a band on this shelf, because it is not a state the app has. Writing a group
+      # outside a campaign is a bug in the caller and says so where the mistake is,
+      # rather than becoming a row that shows up on every hub or none.
+      assert_raise ArgumentError, ~r/must be written in a campaign/, fn ->
+        Polyphony.Groups.create(Owner.of(user), %Polyphony.Authoring.Group{name: "The Unplaced"})
+      end
     end
   end
 

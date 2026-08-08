@@ -240,7 +240,12 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
           payload: %CharacterSheet{name: "The bellman"}
         })
 
-      group = Polyphony.Groups.create(owner, %Polyphony.Authoring.Group{name: "The Tidewatch"})
+      group =
+        Polyphony.Groups.create(owner, %Polyphony.Authoring.Group{
+          name: "The Tidewatch",
+          campaign_id: "camp"
+        })
+
       {:ok, _} = Polyphony.Groups.add_member(group.id, sable.id)
       {:ok, _} = Polyphony.Groups.add_member(group.id, bellman.id)
 

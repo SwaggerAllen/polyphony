@@ -49,7 +49,25 @@ defmodule Polyphony.Authoring.Group do
             facts: [],
             # Who is in it, by stable library id. Ordered, so the UI is stable.
             member_ids: [],
-            # The world this group belongs to, same authoring link a character has.
+            # **The scope key** (STR-68): the campaign this group was written in, by
+            # library entry id. Groups do not cross campaigns, the same rule characters
+            # follow — attaching a world copies the bible and brings no groups with it.
+            #
+            # Nil is a real state, not a missing value: a group written before this
+            # field, or one whose campaign was deleted, belongs to no campaign. Those
+            # stay visible on the library shelf so they can be deleted, and appear on no
+            # campaign hub. See `Polyphony.Groups.orphans/2`.
+            campaign_id: nil,
+            # The world this group is written against — an **authoring** link, not the
+            # scope key, and it kept its job when `campaign_id` took that one over. It
+            # is what `seed_sheet/2` passes to a character written from this group, so
+            # they inherit the setting rather than having to be told it again.
+            #
+            # Scoping on it was the bug: `campaign.md` decides that attaching a world
+            # *copies* it, so a campaign's bible is private to that campaign and world
+            # scope nearly coincides with campaign scope. The case that breaks is a
+            # group written from the **library**, which points at the template bible no
+            # campaign holds — matching no hub, or with a nil id, matching every hub.
             world_bible_id: nil,
             # A group takes a hue like a character does, so it reads as one thing
             # across the cast list and the audience picker.
@@ -60,6 +78,23 @@ defmodule Polyphony.Authoring.Group do
   @doc "The kind under which groups are stored in the library."
   @spec kind() :: String.t()
   def kind, do: "group"
+
+  @doc """
+  A stored group, with any field it predates filled in from the defaults.
+
+  A payload is an Erlang term written when it was written, so one saved before
+  `campaign_id` existed decodes to a struct **without that key** — and reading it as
+  `group.campaign_id` raises `KeyError` rather than answering nil. That is a real
+  hazard here because the field was added to a live table: every group in the database
+  predates it until the backfill runs, and a screen that reads it directly would have
+  crashed on all of them.
+
+  The incantation was already in use at one call site (`GroupEditorLive.mount/3`, added
+  when `world_bible_id` was the new field). This is the same thing, named once, so the
+  next field to arrive doesn't need it re-derived at whichever site notices first.
+  """
+  @spec load(t() | map()) :: t()
+  def load(%__MODULE__{} = group), do: struct(__MODULE__, Map.from_struct(group))
 
   @doc """
   The group's secrets — the facts membership is what grants you.

@@ -160,7 +160,7 @@ defmodule PolyphonyWeb.AutosaveLiveTest do
 
   describe "a group" do
     test "writes what was typed", %{conn: conn, user: user} do
-      entry = Groups.create(Owner.of(user), %Group{name: "The Tidewatch"})
+      entry = Groups.create(Owner.of(user), %Group{name: "The Tidewatch", campaign_id: "camp"})
       {:ok, view, _html} = live(conn, ~p"/authoring/group/#{entry.id}")
 
       view

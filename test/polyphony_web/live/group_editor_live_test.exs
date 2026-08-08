@@ -43,8 +43,16 @@ defmodule PolyphonyWeb.GroupEditorLiveTest do
   end
 
   defp group(user, attrs \\ %{}) do
-    fields = struct(Group, Map.merge(%{name: "The Tidewatch"}, attrs))
+    fields = struct(Group, Map.merge(%{name: "The Tidewatch", campaign_id: "camp"}, attrs))
     Groups.create(Owner.of(user), fields)
+  end
+
+  defp campaign(user, name) do
+    Library.put(%{
+      owner: Owner.of(user),
+      kind: "campaign",
+      payload: %{kind: :campaign, name: name, character_ids: [], scenes: []}
+    })
   end
 
   defp group_of(entry), do: Library.payload(Library.get(entry.id))
@@ -77,23 +85,54 @@ defmodule PolyphonyWeb.GroupEditorLiveTest do
     end
 
     test "and lists them the way the design counts them", %{conn: conn, user: user} do
+      camp = campaign(user, "Camp")
+
       group(user, %{
         name: "The Tidewatch",
+        campaign_id: camp.id,
         member_ids: ["1", "2"],
         facts: [%Fact{statement: "They keep the bell.", concealed: true}]
       })
-
-      camp =
-        Library.put(%{
-          owner: Owner.of(user),
-          kind: "campaign",
-          payload: %{kind: :campaign, name: "Camp", character_ids: [], scenes: []}
-        })
 
       {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
 
       assert html =~ "The Tidewatch"
       assert html =~ "2 members · seeds new people · 1 secret"
+    end
+
+    test "and lists only this campaign's", %{conn: conn, user: user} do
+      # The reported bug (STR-68): the hub read every group the *author* owned, so a
+      # second campaign's collectives showed up on the first campaign's hub and the
+      # count in the card header was the library's count.
+      here = campaign(user, "The quay")
+      elsewhere = campaign(user, "The other one")
+
+      group(user, %{name: "The Tidewatch", campaign_id: here.id})
+      group(user, %{name: "The Harbour Office", campaign_id: elsewhere.id})
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{here.id}?tab=cast")
+
+      assert html =~ "The Tidewatch"
+      refute html =~ "The Harbour Office"
+    end
+
+    test "and a campaign-less group is on no hub, if one ever exists", %{conn: conn, user: user} do
+      # `Groups.create/3` refuses to make one of these and the backfill trashed the rows
+      # that predated the rule, so this is written straight to the library to build a
+      # state the app can no longer reach. Defence in depth: the hub filters on an id
+      # rather than falling back to "show everything", so a row that got in some way
+      # nobody accounted for still can't land in somebody's story.
+      camp = campaign(user, "Camp")
+
+      Library.put(%{
+        owner: Owner.of(user),
+        kind: "group",
+        payload: %Group{name: "The Unplaced"}
+      })
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+
+      refute html =~ "The Unplaced"
     end
   end
 

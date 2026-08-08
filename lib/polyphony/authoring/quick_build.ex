@@ -264,13 +264,26 @@ defmodule Polyphony.Authoring.QuickBuild do
 
       _ ->
         case Autofill.suggest_groups([world: world_ctx, cast_seeds: seeds] ++ meter) do
-          {:ok, proposed} -> for p <- proposed, do: persist_group(owner, bible_id, p, announce)
-          {:error, _} -> []
+          {:ok, proposed} ->
+            # `meter` already carries the campaign for cost attribution, and it is the
+            # campaign's library entry id — the same value a group is scoped by. Read
+            # once here rather than threaded as an eighth positional argument.
+            #
+            # `fetch!` rather than `[]`: a build with no campaign would write groups that
+            # belong to no story, which `Groups.create/3` now refuses outright. Failing
+            # here names the missing option instead of failing three frames down on a
+            # struct field.
+            campaign_id = Keyword.fetch!(meter, :campaign_id)
+
+            for p <- proposed, do: persist_group(owner, bible_id, campaign_id, p, announce)
+
+          {:error, _} ->
+            []
         end
     end
   end
 
-  defp persist_group(owner, bible_id, proposed, announce) do
+  defp persist_group(owner, bible_id, campaign_id, proposed, announce) do
     group = %Group{
       name: proposed["name"],
       premise: blank_to_nil(proposed["premise"]),
@@ -281,7 +294,8 @@ defmodule Polyphony.Authoring.QuickBuild do
         for f <- proposed["facts"] || [] do
           %Fact{statement: f["statement"], concealed: f["concealed"] == true}
         end,
-      world_bible_id: bible_id
+      world_bible_id: bible_id,
+      campaign_id: campaign_id
     }
 
     entry = Groups.create(owner, group)
