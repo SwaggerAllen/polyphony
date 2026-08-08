@@ -684,8 +684,23 @@ defmodule PolyphonyWeb.Screens.Play do
               <Kit.btn kind={:ghost} type="button" phx-click="toggle_cast">
                 Cast <span class="dim"><%= length(@roster) %></span>
               </Kit.btn>
-              <Kit.btn :if={@introductions != []} kind={:ghost} type="button" phx-click="toggle_intros">
-                Introductions <span class="dim"><%= length(@introductions) %></span>
+              <%!-- Always there for the author, not only when the Director is asking.
+                    The panel's own two doors are the GM's way of bringing somebody on at
+                    all, so gating the button on there being a suggestion made them
+                    unreachable in the one case they matter most — a two-hander that
+                    never needs a third voice, where `intros_no_suggestion` is the only
+                    version of the panel anybody ever sees. The omniscient test is
+                    explicit rather than inherited from the enclosing bar: this is the
+                    Director's unratified judgement about the scene, and a character
+                    seeing it would be a visibility failure with a UI in front of it. --%>
+              <Kit.btn
+                :if={@viewer == :omniscient}
+                kind={:ghost}
+                type="button"
+                phx-click="toggle_intros"
+              >
+                Introductions
+                <span :if={@introductions != []} class="dim"><%= length(@introductions) %></span>
               </Kit.btn>
             </div>
             <div class="flex gap-1.5">

@@ -36,6 +36,7 @@ defmodule PolyphonyWeb.PlayLive do
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Director.{Auto, BeatDriver}
   alias Polyphony.Campaigns
+  alias Polyphony.Characters
   alias Polyphony.Edit
   alias Polyphony.Generations
   alias Polyphony.Permissions
@@ -52,6 +53,7 @@ defmodule PolyphonyWeb.PlayLive do
     CommitPacket,
     DeclareTurnOrder,
     EnterCharacter,
+    ExitCharacter,
     DismissIntroduction,
     RecordWorldEvent,
     SetControlMode,
@@ -231,6 +233,9 @@ defmodule PolyphonyWeb.PlayLive do
       roster: roster,
       joinable: joinable(socket, roster),
       writable: writable(socket, roster),
+      # In the room without a sheet — derived from the roster, never tracked, so a
+      # reconnect comes back to the same panel.
+      admitted: admitted(socket, roster),
       cast: cast,
       voices: voices,
       strip:
@@ -463,14 +468,22 @@ defmodule PolyphonyWeb.PlayLive do
 
   # Return the existing library character for `name`, or create a pending stub for it
   # (owned by the author, in the campaign's world) so it can be generated/edited.
-  defp ensure_character(socket, name) do
+  defp ensure_character(socket, name), do: stub_for(socket, name, "")
+
+  # The same, carrying the *who are they* line the panel's form collected. It is the
+  # stub's `role`, which is the seed `Autofill` folds into the generation context — so a
+  # sentence typed into play survives into the sheet rather than being decoration on a
+  # form. A name that already belongs to somebody wins over the premise: the author is
+  # naming a person, not describing a new one.
+  defp stub_for(socket, name, premise) do
     case Map.get(owner_characters(socket.assigns.current_user), String.downcase(name)) do
       nil ->
         entry =
           Library.put(%{
             owner: Owner.of(socket.assigns.current_user),
             kind: "character",
-            payload: Stub.new(name, "", world_bible_id: campaign_world_id(socket))
+            payload:
+              Stub.new(name, presence(premise, ""), world_bible_id: campaign_world_id(socket))
           })
 
         # Somebody introduced mid-scene belongs to the story they walked into.
@@ -479,6 +492,13 @@ defmodule PolyphonyWeb.PlayLive do
 
       entry ->
         entry
+    end
+  end
+
+  defp presence(value, fallback) do
+    case String.trim(to_string(value || "")) do
+      "" -> fallback
+      text -> text
     end
   end
 
@@ -509,6 +529,104 @@ defmodule PolyphonyWeb.PlayLive do
 
   defp admit(socket, _entry, _other),
     do: put_flash(socket, :error, "That character has no usable sheet yet.")
+
+  # ── Admit first, write after (§07, `admitted_writing`) ────────────────────────
+  #
+  # The panel's *write someone new* door brings them on **before** the sheet exists,
+  # which is the opposite order from `write_in` and deliberately so: the entrance is
+  # what the room reacts to, and making the GM watch a spinner before anybody arrives
+  # turns a dramatic beat into a progress bar. They enter, they cannot act (the beat
+  # loop only casts `:full` characters), and the write lands underneath them.
+  #
+  # `writing_in` doubles as the in-flight set here, so a reconnect mid-write comes back
+  # in the same state — it is rebuilt from the running generations on mount.
+  defp write_in_new(socket, name, premise) do
+    entry = stub_for(socket, name, premise)
+    sheet = Library.payload(entry)
+
+    if match?(%CharacterSheet{status: :full}, sheet) do
+      # The name resolved to somebody already written. Nothing to wait for.
+      socket |> set_control(to_string(entry.id)) |> close_intros() |> admit(entry, sheet)
+    else
+      socket
+      |> set_control(to_string(entry.id))
+      # Marked as in-flight **before** the entrance, because entering reloads and the
+      # reload is what derives `admitted`. The other order renders them for one frame as
+      # somebody whose write already failed.
+      |> assign(writing_in: MapSet.put(socket.assigns.writing_in, entry.id))
+      |> enter_pending(entry, sheet)
+      # Back to the panel rather than closed: they are in the room and their sheet is
+      # still being written, and the panel is where that is said and where the ways out
+      # of it live. Closing it would be the app losing track of somebody it has just put
+      # on stage.
+      |> back_to_panel()
+      |> request_generation(
+        "write_in:#{entry.id}",
+        "play.intro",
+        Map.merge(%{entry_id: entry.id}, billing(socket))
+      )
+    end
+  end
+
+  # Enter somebody whose sheet hasn't been written yet. Same `EnterCharacter` as any
+  # other arrival — the log doesn't have a provisional kind of member, and inventing one
+  # would put "is this person real" into every projection that reads membership. What is
+  # deliberately *not* done here is `SceneBrief.note_character/2`: there is nothing to
+  # tell the Director about yet, and a brief describing an empty sheet is worse than one
+  # that mentions nobody. Both it and the frozen context are done again by
+  # `settle_admitted/3` once the sheet lands.
+  defp enter_pending(socket, entry, sheet) do
+    :ok =
+      App.dispatch(%EnterCharacter{
+        scene_id: socket.assigns.scene_id,
+        character_id: to_string(entry.id),
+        beat: max(socket.assigns.next_beat - 1, 1)
+      })
+
+    name = (match?(%CharacterSheet{}, sheet) && sheet.name) || "They"
+    socket |> reload() |> put_flash(:info, "#{name} joins the scene.")
+  end
+
+  # The write landed for somebody already in the room: give them the context and the
+  # brief entry they entered without. Not `admit/3` — they are already a member, and a
+  # second `EnterCharacter` is `{:error, :already_present}`.
+  defp settle_admitted(socket, entry, %CharacterSheet{} = sheet) do
+    seed_context(
+      socket.assigns.scene_id,
+      to_string(entry.id),
+      sheet,
+      socket.assigns.premise,
+      campaign_world_bible(socket)
+    )
+
+    SceneBrief.note_character(socket.assigns.scene_id, sheet)
+    socket |> reload() |> put_flash(:info, "#{sheet.name} is written.")
+  end
+
+  # Who is in the room without a sheet — derived from membership rather than tracked,
+  # so it survives a reconnect and can't disagree with the roster. `:writing` while a
+  # generation is in flight for them, `:failed` when there is none: a character sitting
+  # in a scene with a stub and nothing running is exactly the failed case, however the
+  # generation died. Author-facing, so omniscient only.
+  defp admitted(socket, roster) do
+    if socket.assigns.viewer == :omniscient do
+      for id <- roster,
+          entry = Library.get(id),
+          entry != nil,
+          sheet = Library.payload(entry),
+          match?(%CharacterSheet{}, sheet),
+          sheet.status != :full,
+          do: %{
+            id: entry.id,
+            name: sheet.name,
+            colour: Voice.of_sheet(sheet),
+            status:
+              if(MapSet.member?(socket.assigns.writing_in, entry.id), do: :writing, else: :failed)
+          }
+    else
+      []
+    end
+  end
 
   defp seed_context(scene_id, character_id, %CharacterSheet{} = sheet, premise, bible) do
     {campaign_id, location} = scene_campaign_location(scene_id)
@@ -661,6 +779,74 @@ defmodule PolyphonyWeb.PlayLive do
   # refuses anything else) and not already on the roster. Scoped to the campaign rather
   # than the whole library, because §2.7 means a character belongs to one story and the
   # picker for *this* scene should not offer somebody else's people.
+  # ── The picker's rows ──────────────────────────────────────────────────────────
+
+  # **This campaign's roster, and nothing else** — see `play.md`'s standing decision. Not
+  # the author's library, which is the mistake this is the one surface tempted to make.
+  # Characters already in the scene are included rather than filtered: they render dimmed
+  # and inert, which costs a row and stops the GM hunting for somebody standing in front
+  # of them.
+  defp load_picker(socket) do
+    present = MapSet.new(socket.assigns.roster, &to_string/1)
+    query = socket.assigns.picker_query |> to_string() |> String.trim() |> String.downcase()
+
+    rows =
+      for id <- campaign_character_ids(socket),
+          entry = Library.get(id),
+          entry != nil,
+          sheet = Library.payload(entry),
+          match?(%CharacterSheet{}, sheet),
+          matches_tier?(sheet, socket.assigns.picker_tier),
+          matches_query?(sheet, query),
+          do: %{
+            id: entry.id,
+            name: char_name(entry),
+            blurb: Map.get(sheet, :premise),
+            tier_label: CharacterSheet.tier_label(Characters.tier_of(entry)),
+            colour: Voice.of_sheet(sheet),
+            in_scene?: MapSet.member?(present, to_string(entry.id))
+          }
+
+    assign(socket, picker_rows: rows)
+  end
+
+  defp matches_tier?(_sheet, "all"), do: true
+  defp matches_tier?(sheet, tier), do: to_string(Map.get(sheet, :tier) || :main) == tier
+
+  defp matches_query?(_sheet, ""), do: true
+
+  defp matches_query?(sheet, query),
+    do: sheet |> Map.get(:name) |> to_string() |> String.downcase() |> String.contains?(query)
+
+  # The *they'll be* answer, applied at the moment they arrive rather than left for the
+  # composer's picker afterwards — which is the whole reason the control sits on the
+  # admission and not next to it.
+  defp set_control(socket, character_id) do
+    :ok =
+      App.dispatch(%SetControlMode{
+        scene_id: socket.assigns.scene_id,
+        character_id: character_id,
+        control: socket.assigns.intro_control
+      })
+
+    socket
+  end
+
+  defp close_intros(socket), do: socket |> back_to_panel() |> assign(panel: nil)
+
+  # The panel's own face again, with the doors' working state cleared. Distinct from
+  # closing it: `write_in_new` comes back here so the character it just walked on stage
+  # is still being reported somewhere.
+  defp back_to_panel(socket),
+    do:
+      assign(socket,
+        intros_view: :panel,
+        picker_chosen: nil,
+        picker_query: "",
+        new_name: "",
+        new_premise: ""
+      )
+
   defp joinable(socket, roster) do
     present = MapSet.new(roster, &to_string/1)
 
@@ -1070,6 +1256,171 @@ defmodule PolyphonyWeb.PlayLive do
     end)
   end
 
+  # ── The panel's own two doors (§07) ────────────────────────────────────────────
+  #
+  # `intros_view` is one assign rather than four booleans that can disagree, so moving
+  # between the panel's faces is a single write. Nothing here touches the scene — these
+  # are navigation within a panel, and the only ones that commit anything are
+  # `intro_write_new` and `picker_admit`.
+
+  def handle_event("intros_write_new", params, socket) do
+    # Carries the query in from `intros_picker_empty`: somebody who searched for an
+    # alchemist and found none wants an alchemist, and re-typing it is the panel making
+    # them repeat themselves.
+    {:noreply,
+     assign(socket,
+       intros_view: :write_new,
+       new_name: params["name"] || socket.assigns.new_name,
+       new_premise: ""
+     )}
+  end
+
+  def handle_event("intros_picker", _params, socket),
+    do: {:noreply, socket |> assign(intros_view: :picker, picker_query: "") |> load_picker()}
+
+  def handle_event("picker_search", %{"q" => q}, socket),
+    do: {:noreply, socket |> assign(picker_query: q) |> load_picker()}
+
+  def handle_event("picker_tier", %{"tier" => tier}, socket),
+    do: {:noreply, socket |> assign(picker_tier: tier) |> load_picker()}
+
+  def handle_event("picker_choose", %{"id" => id}, socket) do
+    row = Enum.find(socket.assigns.picker_rows, &(to_string(&1.id) == to_string(id)))
+    {:noreply, assign(socket, picker_chosen: row, intros_view: :picker_confirm)}
+  end
+
+  def handle_event("intro_control", %{"control" => control}, socket),
+    do: {:noreply, assign(socket, intro_control: control)}
+
+  def handle_event("picker_admit", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      case Library.get(id) do
+        nil ->
+          {:noreply, put_flash(socket, :error, "That character is gone.")}
+
+        entry ->
+          socket = set_control(socket, to_string(entry.id))
+          {:noreply, admit(close_intros(socket), entry, Library.payload(entry))}
+      end
+    end)
+  end
+
+  # Writes them **and** brings them on. The secondary route (the sheet editor) is the
+  # same character by a longer road, which is what the panel's own note promises: either
+  # way they join the cast as a full character.
+  def handle_event("intro_write_new", %{"name" => name} = params, socket) do
+    safe(socket, fn ->
+      case String.trim(name) do
+        "" ->
+          {:noreply, put_flash(socket, :error, "Give them a name first.")}
+
+        name ->
+          {:noreply,
+           socket
+           |> assign(intro_control: params["control"] || socket.assigns.intro_control)
+           |> write_in_new(name, params["premise"])}
+      end
+    end)
+  end
+
+  # ── Somebody in the room whose sheet didn't land (`admitted_failed`) ──────────
+  #
+  # Three ways out and they are genuinely different, which is why they are three
+  # handlers rather than a retry with decoration: run it again, write them by hand, or
+  # let them leave.
+
+  def handle_event("intro_retry", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      case Library.get(normalize_id(id)) do
+        nil ->
+          {:noreply, put_flash(socket, :error, "They're gone.")}
+
+        entry ->
+          {:noreply,
+           socket
+           |> assign(writing_in: MapSet.put(socket.assigns.writing_in, entry.id))
+           |> reload()
+           |> request_generation(
+             "write_in:#{entry.id}",
+             "play.intro",
+             Map.merge(%{entry_id: entry.id}, billing(socket))
+           )}
+      end
+    end)
+  end
+
+  def handle_event("intro_write_self", %{"id" => id}, socket) do
+    case Library.get(normalize_id(id)) do
+      nil -> {:noreply, put_flash(socket, :error, "They're gone.")}
+      entry -> {:noreply, push_navigate(socket, to: ~p"/authoring/character/#{entry.id}")}
+    end
+  end
+
+  def handle_event("send_away_confirm", %{"id" => id}, socket) do
+    {:noreply,
+     assign(socket,
+       sending_away: Enum.find(socket.assigns.admitted, &(to_string(&1.id) == to_string(id)))
+     )}
+  end
+
+  def handle_event("send_away_cancel", _params, socket),
+    do: {:noreply, assign(socket, sending_away: nil)}
+
+  # **A departure, not an undo.** The entrance is a committed event that other characters
+  # could already have reacted to, so removing them cannot mean erasing it: the fiction
+  # absorbs it the same way the Director's own rulings do — a world event saying they
+  # go — and then they exit. The log stays append-only, a reader who saw the entrance is
+  # never shown a scene that contradicts their memory, and bringing them on again later
+  # reconciles with nothing.
+  def handle_event("send_away", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      case Library.get(normalize_id(id)) do
+        nil ->
+          {:noreply, assign(socket, sending_away: nil)}
+
+        entry ->
+          scene_id = socket.assigns.scene_id
+          beat = max(socket.assigns.next_beat - 1, 1)
+          name = Cast.render_name(socket.assigns.cast, to_string(entry.id))
+
+          :ok =
+            App.dispatch(%RecordWorldEvent{
+              scene_id: scene_id,
+              beat: beat,
+              content: "#{name} leaves the way they came."
+            })
+
+          :ok =
+            App.dispatch(%ExitCharacter{
+              scene_id: scene_id,
+              character_id: to_string(entry.id),
+              beat: beat
+            })
+
+          {:noreply,
+           socket
+           |> assign(
+             sending_away: nil,
+             writing_in: MapSet.delete(socket.assigns.writing_in, entry.id)
+           )
+           |> reload()}
+      end
+    end)
+  end
+
+  def handle_event("intro_open_editor", _params, socket) do
+    safe(socket, fn ->
+      name = String.trim(socket.assigns.new_name)
+
+      if name == "" do
+        {:noreply, put_flash(socket, :error, "Give them a name first.")}
+      else
+        entry = stub_for(socket, name, socket.assigns.new_premise)
+        {:noreply, push_navigate(socket, to: ~p"/authoring/character/#{entry.id}")}
+      end
+    end)
+  end
+
   def handle_event("toggle_intros", _params, socket),
     do: {:noreply, assign(socket, panel: toggle(socket.assigns.panel, :intros), narrating: false)}
 
@@ -1372,10 +1723,21 @@ defmodule PolyphonyWeb.PlayLive do
           # `admit/3` refuses a non-`:full` character the same way `SceneControl` does,
           # so the check is here rather than trusted: a generation that came back
           # `{:ok, _}` having written nothing usable must not be walked on stage.
-          if match?(%CharacterSheet{status: :full}, sheet) do
-            {:noreply, admit(socket, entry, sheet)}
-          else
-            {:noreply, put_flash(socket, :error, "Written, but not ready — open them to finish.")}
+          cond do
+            not match?(%CharacterSheet{status: :full}, sheet) ->
+              {:noreply,
+               socket
+               |> reload()
+               |> put_flash(:error, "Written, but not ready — open them to finish.")}
+
+            # Already in the room: they were admitted first and this is the sheet
+            # arriving underneath them, so they get the context and the brief rather
+            # than a second `EnterCharacter`.
+            to_string(entry.id) in Enum.map(socket.assigns.roster, &to_string/1) ->
+              {:noreply, settle_admitted(socket, entry, sheet)}
+
+            true ->
+              {:noreply, admit(socket, entry, sheet)}
           end
       end
     end)
@@ -1388,6 +1750,9 @@ defmodule PolyphonyWeb.PlayLive do
      socket
      |> forget_generation("write_in:#{id}")
      |> assign(writing_in: MapSet.delete(socket.assigns.writing_in, normalize_id(id)))
+     # Reload rather than only flashing: if they were admitted first, this is the moment
+     # the panel has to stop saying *being written* and offer the three ways out.
+     |> reload()
      |> put_flash(:error, "Couldn't write them — open them to finish by hand.")}
   end
 
