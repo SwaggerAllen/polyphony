@@ -65,6 +65,91 @@ without a code change:
 > two env vars before the first run. Everything else stays offline — nothing but
 > the DeepInfra call leaves the box.
 
+## Sentry integration (crash reporting)
+
+Without this, a failure has three ways to end and none of them reaches you:
+`PolyphonyWeb.SafeEvent` turns a raise inside a LiveView event into a flash for
+whoever hit it, a LiveView that dies outright writes one line to a log nobody is
+tailing, and an Oban job that exhausts its retries ends in a table. **The first you
+hear is when somebody tells you.** That is fine while you're the only user and
+expensive the moment you aren't.
+
+`Polyphony.Crash` is the seam and `Polyphony.Redact` is what stands between a crash
+payload and a third party. Sentry because DigitalOcean already integrates it, so it's
+one vendor rather than two.
+
+### Setting it up
+
+1. **Make a Sentry project.** Platform **Elixir**. The free tier is the intended plan
+   — one developer, 5k events/month, which is far more than a crash reporter on a
+   working app should ever produce. If you're burning that, the events *are* the
+   signal.
+2. **Copy the DSN** from *Settings → Projects → \[project\] → Client Keys (DSN)*. It
+   looks like `https://<key>@o123.ingest.sentry.io/456`.
+3. **Set `SENTRY_DSN`** on the web component (RUN_TIME). `.do/app.yaml` ships it
+   empty, so it's a paste in the App Platform UI rather than a new variable.
+
+   A DSN is a **write-only ingest key, not a credential** — it's designed to be
+   embedded in browser bundles, and it grants nothing but the ability to send events.
+   Encrypting it in App Platform is harmless and unnecessary; the real reason to keep
+   it off a public repo is that anyone holding it can burn your quota.
+4. **Leave `SENTRY_RELEASE` alone.** It's bound to `${_self.COMMIT_HASH}`, App
+   Platform's own build-commit variable, which is what ties a report to the build that
+   produced it. (There is no `SOURCE_COMMIT` on App Platform, whatever it sounds like
+   it should be called.)
+5. **Redeploy** and read the boot log. It says exactly one of:
+
+   ```
+   [boot] crash reporting ON (Sentry) — payloads go through Polyphony.Redact
+   [boot] crash reporting OFF — set SENTRY_DSN to turn it on
+   ```
+
+   That line exists because *off* and *on but nothing has broken yet* are
+   indistinguishable from a dashboard, and the failure you'd discover late is the
+   first one.
+
+### Checking it works
+
+Don't wait for a real crash to find out. With `DEBUG_DRAWER=true`, the drawer's
+**Clear** button is a `handle_event` like any other — but the honest test is from the
+web console on the running app:
+
+```elixir
+Polyphony.Crash.report(%RuntimeError{message: "deploy smoke test"})
+```
+
+An event should appear in Sentry within a few seconds, tagged with the release. If
+nothing arrives, the two causes in order of likelihood are a DSN that didn't get set
+(check the boot line) and outbound HTTPS being blocked (`Polyphony.Crash.HTTP` uses
+`:httpc` with `verify_peer`, so a missing CA store fails the TLS handshake rather
+than sending in the clear).
+
+### What is in a report, and what isn't
+
+Reports carry the request (path, method, params, headers), the stacktrace with source
+context, and LiveView assigns. Everything goes through `Polyphony.Redact` on the way
+out:
+
+| | |
+|---|---|
+| **Stripped** | Magic-link, invite and share tokens — reduced to a digest wherever they appear, including inside a URL. Email addresses, masked to `a***@example.com`. Session cookies. |
+| **Kept, deliberately** | **The transcript.** A crash on the play screen carries the omniscient story, every character's secrets included. |
+
+That second row is a decision, not an oversight, and it will look like a bug to
+anyone who knows what `PolyphonyCore.Visibility` is for: a dev debugging a crash is
+not a character, and a crash report has no audience inside the story. Read
+`Polyphony.Redact`'s moduledoc before changing what it keeps — that's where the
+argument lives.
+
+**What does not report:** `Polyphony.Failures`. A turn that didn't generate is a
+domain event with a screen of its own, not a defect, and routing it here would bury
+real crashes under a provider having a bad afternoon.
+
+### Turning it off
+
+Clear `SENTRY_DSN`. There is no second switch — the DSN *is* the flag, so there's no
+way to be configured on with nowhere to send.
+
 ## Email, and how anyone signs in
 
 Sign-in is **magic-link only — there are no passwords**. That makes the mailer part of
@@ -265,7 +350,7 @@ That prints the URL (15-minute TTL) and sends it via whatever transport is confi
    | `PHX_HOST` | injected app domain (`${APP_DOMAIN}`) |
    | `POOL_SIZE` / `EVENT_STORE_POOL_SIZE` | DB connection pools (spec: 5 / 2 — see budget below) |
    | `SHOW_ERROR_DETAILS` | `true` shows the full exception + stacktrace on 5xx pages (bring-up); set `false` before going public |
-   | `SENTRY_DSN` | crash reporting. Unset means off, and off is silent — see below |
+   | `SENTRY_DSN` | crash reporting. Unset means off, and off is silent — see [Sentry integration](#sentry-integration-crash-reporting) |
 
 3. **pgvector.** DO's managed Postgres 16 ships `pgvector`, and the read-model
    migration runs `CREATE EXTENSION IF NOT EXISTS vector;`, so the release-time
@@ -446,24 +531,11 @@ generation — end to end:
      compile-time path read it. If you see that message for some *other* key, this is
      the shape: an `Application.compile_env` read whose `runtime.exs` counterpart
      disagrees.
-   - **Turn on crash reporting.** Set `SENTRY_DSN` (RUN_TIME) to a Sentry project's
-     DSN. Everything above this line is a failure you can *see*; without a reporter,
-     one you can't see stays invisible — `SafeEvent` turns a raise into a flash for
-     the author and tells nobody else, a dying LiveView writes one line to a log
-     nobody is tailing, and a failing Oban job ends in a table. The boot log says
-     which state you're in (`crash reporting ON` / `OFF`), because "off" and "working
-     but nothing has broken yet" look identical from the dashboard.
-
-     Reports carry the request, the stacktrace and the LiveView assigns, minus
-     credentials: magic-link, invite and share tokens are reduced to a digest and
-     addresses to `a***@example.com`, by `Polyphony.Redact`. **The transcript is not
-     stripped** — a crash on the play screen carries the omniscient story, deliberately,
-     because a dev debugging one is not a character and needs to see it. Read that
-     module's moduledoc before changing what it keeps.
-
-     Free tier is the intended plan; DO already integrates Sentry for logs, which is
-     why it is Sentry. `SOURCE_COMMIT` (App Platform sets it) ties a report to the
-     build that produced it.
+   - **Confirm crashes are being reported.** Everything else in this list is a failure
+     you can *see*. Without a reporter the ones you can't see stay invisible, and the
+     smoke test is the moment to check the boot log says `crash reporting ON` — see
+     [Sentry integration](#sentry-integration-crash-reporting) for the setup and for
+     the one-liner that proves the path end to end.
    - **Watch the server live from the browser.** Set `DEBUG_DRAWER=true` to get a
      floating **debug drawer** (bottom-right, on every page) that streams recent
      server logs with **Copy** and **Clear** — invaluable when a click seems to do

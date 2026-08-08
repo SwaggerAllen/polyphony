@@ -137,6 +137,13 @@ services:
       - key: SENTRY_DSN
         scope: RUN_TIME
         value: ""
+      # Which build a crash report came from. App Platform has no SOURCE_COMMIT — the
+      # bindable is COMMIT_HASH, and it resolves at build, so this is scoped to both
+      # to guarantee it is present at run time. Unset is survivable: reports still
+      # arrive, they just can't say which deploy produced them.
+      - key: SENTRY_RELEASE
+        scope: RUN_AND_BUILD_TIME
+        value: "${_self.COMMIT_HASH}"
 
 databases:
   - name: db

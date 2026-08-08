@@ -145,12 +145,15 @@ if config_env() == :prod do
   # misconfiguration — the app runs, it just can't tell you it broke, which is exactly
   # the situation STR-55 describes and worth being able to see in one variable.
   #
-  # `release:` ties a report to the commit that produced it. App Platform exposes the
-  # deployed SHA; without one the reports still arrive, they just can't say which build.
+  # `release:` ties a report to the commit that produced it. App Platform has no
+  # variable of its own for this — `SOURCE_COMMIT` does not exist there, whatever it
+  # looks like it should be called — so `.do/app.yaml` binds `SENTRY_RELEASE` to the
+  # platform's `${_self.COMMIT_HASH}`. Unset is fine: reports still arrive, they just
+  # can't say which build produced them.
   if dsn = System.get_env("SENTRY_DSN") do
     config :sentry,
       dsn: dsn,
-      release: System.get_env("SOURCE_COMMIT") || System.get_env("RELEASE_SHA")
+      release: System.get_env("SENTRY_RELEASE")
 
     IO.puts("[boot] crash reporting ON (Sentry) — payloads go through Polyphony.Redact")
   else
