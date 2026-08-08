@@ -70,7 +70,7 @@ defmodule PolyphonyWeb.GroupEditorLiveTest do
           payload: %{kind: :campaign, name: "Camp", character_ids: [], scenes: []}
         })
 
-      {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+      {:ok, view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=groups")
 
       # §06b's empty state, in the design's own words.
       assert html =~ "No groups yet."
@@ -94,7 +94,7 @@ defmodule PolyphonyWeb.GroupEditorLiveTest do
         facts: [%Fact{statement: "They keep the bell.", concealed: true}]
       })
 
-      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=groups")
 
       assert html =~ "The Tidewatch"
       assert html =~ "2 members · seeds new people · 1 secret"
@@ -110,7 +110,7 @@ defmodule PolyphonyWeb.GroupEditorLiveTest do
       group(user, %{name: "The Tidewatch", campaign_id: here.id})
       group(user, %{name: "The Harbour Office", campaign_id: elsewhere.id})
 
-      {:ok, _view, html} = live(conn, ~p"/campaigns/#{here.id}?tab=cast")
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{here.id}?tab=groups")
 
       assert html =~ "The Tidewatch"
       refute html =~ "The Harbour Office"
@@ -130,7 +130,7 @@ defmodule PolyphonyWeb.GroupEditorLiveTest do
         payload: %Group{name: "The Unplaced"}
       })
 
-      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=groups")
 
       refute html =~ "The Unplaced"
     end

@@ -22,6 +22,40 @@ defmodule PolyphonyWeb.CampaignCastLiveTest do
     Library.put(%{owner: Owner.of(user), kind: "campaign", payload: payload})
   end
 
+  describe "the Groups tab" do
+    test "is in the strip, beside Cast, and reachable", %{conn: conn, user: user} do
+      # The tab was drawn in `ux/polyphony-campaign.html` §06b and never built; the card
+      # rendered at the bottom of Cast instead, so a campaign with a long roster buried
+      # its groups under the whole cast list. A tab nobody can click is the failure mode
+      # worth pinning — the panel itself is covered in `GroupEditorLiveTest`.
+      camp = campaign(user, %{name: "The Salt Line"})
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
+
+      assert html =~ "?tab=groups"
+      # The mock's order: Settings · World · Cast · Groups · Premise · Scenes.
+      assert :binary.match(html, "?tab=groups") < :binary.match(html, "?tab=premise")
+    end
+
+    test "carries no to-do mark on first run, unlike World, Cast and Premise", %{
+      conn: conn,
+      user: user
+    } do
+      # A campaign is ready to play without a group, so Groups is not part of the
+      # first-run checklist — the mock's first-run frame marks the other three and
+      # leaves this one plain.
+      camp = campaign(user, %{name: ""})
+
+      {:ok, _view, html} = live(conn, ~p"/campaigns/#{camp.id}?tab=settings")
+
+      [groups_tab] =
+        Regex.run(~r|<a[^>]*\?tab=groups[^>]*class="([^"]*)"|, html, capture: :all_but_first)
+
+      refute groups_tab =~ "tab-todo"
+      assert html =~ "tab tab-todo"
+    end
+  end
+
   test "a blank campaign is named where it is pitched", %{conn: conn, user: user} do
     camp = campaign(user, %{name: ""})
 

@@ -20,6 +20,12 @@ defmodule PolyphonyWeb.Screens.Campaign do
     {"settings", "Settings"},
     {"world", "World"},
     {"cast", "Cast"},
+    # Beside Cast, in the mock's own order (§06b): groups are written with the character
+    # editor and seed the people they produce, so they belong next to the people rather
+    # than in a corner of their own. Not part of the first-run checklist — the mock's
+    # first-run frame marks World, Cast and Premise `tab-todo` and leaves this one plain,
+    # because a campaign doesn't need a group to be ready to play.
+    {"groups", "Groups"},
     {"premise", "Premise"},
     {"scenes", "Scenes"}
   ]
@@ -147,6 +153,7 @@ defmodule PolyphonyWeb.Screens.Campaign do
         <.settings_tab :if={@tab == "settings"} {assigns} />
         <.world_tab :if={@tab == "world"} {assigns} />
         <.cast_tab :if={@tab == "cast"} {assigns} />
+        <.groups_tab :if={@tab == "groups"} {assigns} />
         <.premise_tab :if={@tab == "premise"} {assigns} />
         <.scenes_tab :if={@tab == "scenes"} {assigns} />
       </div>
@@ -884,9 +891,16 @@ defmodule PolyphonyWeb.Screens.Campaign do
         in the cast.
       </p>
 
-      <%!-- Beside Cast, per §06b: groups are written with the character editor and
-            seed the people they produce, so this is where they belong rather than in
-            a corner of their own. --%>
+    </div>
+    """
+  end
+
+  # Its own tab, beside Cast, which is where §06b puts it. It rendered at the bottom of
+  # Cast until now — the card was right and its place was a stand-in, so a campaign with
+  # a long roster buried its groups under the whole cast list.
+  defp groups_tab(assigns) do
+    ~H"""
+    <div>
       <.groups_card {assigns} />
     </div>
     """
