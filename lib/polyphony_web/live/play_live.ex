@@ -41,6 +41,7 @@ defmodule PolyphonyWeb.PlayLive do
   alias Polyphony.Permissions
   alias PolyphonyCore.Scene.Cast
   alias PolyphonyWeb.Play.Strip
+  alias PolyphonyWeb.Transcript
   alias PolyphonyWeb.Screens.Play
   alias PolyphonyWeb.Voice
   alias Polyphony.Authoring.Effective
@@ -88,6 +89,10 @@ defmodule PolyphonyWeb.PlayLive do
   end
 
   defp mount_scene(scene_id, socket) do
+    # Keyed by the beat's own number, which is what makes a re-insert land on the node it
+    # replaces rather than appending a second copy of the beat.
+    socket = stream_configure(socket, :beats, dom_id: &"beat-#{&1.beat}")
+
     if connected?(socket) do
       DebugFlags.subscribe()
       DebugTap.subscribe(scene_id)
@@ -143,7 +148,8 @@ defmodule PolyphonyWeb.PlayLive do
        voices: %{},
        campaign_name: "",
        scene_title: "The scene",
-       strip: %{slots: [], sentence: nil, tone: nil}
+       strip: %{slots: [], sentence: nil, tone: nil},
+       transcript_empty: true
      )
      |> then(&if connected?(&1), do: restore_generations(&1), else: &1)}
   end
@@ -238,6 +244,10 @@ defmodule PolyphonyWeb.PlayLive do
       debug_feed: feed,
       debug_feed_text: feed_text(feed)
     )
+    # Last, and reset: everything it reads — the messages, the failures, the beat the
+    # scene has reached — is assigned above, and a reload is a re-projection rather than a
+    # delta, so the client clears and takes the whole tree.
+    |> stream_beats(reset: true)
   end
 
   # Assisted turns awaiting the author (§A2). Not filtered by viewer: a draft is
@@ -797,9 +807,10 @@ defmodule PolyphonyWeb.PlayLive do
   end
 
   def handle_event("edit_turn", %{"packet" => pid}, socket),
-    do: {:noreply, assign(socket, editing: pid)}
+    do: {:noreply, socket |> assign(editing: pid) |> stream_beats(reset: true)}
 
-  def handle_event("cancel_edit", _params, socket), do: {:noreply, assign(socket, editing: nil)}
+  def handle_event("cancel_edit", _params, socket),
+    do: {:noreply, socket |> assign(editing: nil) |> stream_beats(reset: true)}
 
   # Save an edit: supersede the old take and commit the author's rewrite as a new
   # attempt (same aloud/whisper inference as the composer).
@@ -1240,7 +1251,10 @@ defmodule PolyphonyWeb.PlayLive do
   # right at the moment the author is waiting to see the new one.
   def handle_info({:polyphony_event, %{type: "packet.superseded", packet_id: id}}, socket)
       when is_binary(id) do
-    {:noreply, assign(socket, messages: drop_packet(socket.assigns.messages, id))}
+    {:noreply,
+     socket
+     |> assign(messages: drop_packet(socket.assigns.messages, id))
+     |> stream_beats(reset: true)}
   end
 
   # No `packet_id` to drop. Nothing emits this, and if something starts to, re-deriving is
@@ -1643,8 +1657,47 @@ defmodule PolyphonyWeb.PlayLive do
     if is_integer(seq) and Enum.any?(existing, &(&1[:seq] == seq)) do
       socket
     else
-      assign(socket, messages: existing ++ [msg])
+      socket |> assign(messages: existing ++ [msg]) |> stream_beats()
     end
+  end
+
+  # ── The transcript stream ─────────────────────────────────────────────────────
+  #
+  # The DOM unit is a **beat**, not a message and not a block. A message is a fragment of
+  # a turn (a thought, a line and an action are three messages and one block), and a block
+  # mutates in place as its packet's later moves arrive — so neither is a stable key. A
+  # beat is: it is keyed by its own number, and it is *bounded* by the cast size, where the
+  # transcript is not bounded by anything.
+  #
+  # So a move landing re-renders its beat rather than the scene. The cost is that the
+  # newest beat re-renders once per move as it fills, which is the price of a stream unit
+  # coarse enough to be stable.
+  #
+  # Recomputed from `messages` rather than patched in place: the tree is cheap, and a
+  # second incremental implementation of grouping is how the streamed transcript and the
+  # replayed one start disagreeing about what happened.
+  # **Anything that changes how a beat renders has to come back through here.** That is the
+  # cost of a stream and it is easy to miss: `phx-update="stream"` means the client only
+  # touches nodes the server explicitly re-inserts, so assigning `editing` and re-rendering
+  # is no longer enough — the beat holding that turn keeps the markup it was last sent, and
+  # the edit form never appears. Found by four tests looking for a form that was not there.
+  #
+  # `editing` is the live one. `register`, `cast` and `voices` also reach a turn block, and
+  # all three only change through `reload/1`, which resets the stream anyway.
+  defp stream_beats(socket, opts \\ []) do
+    beats =
+      socket.assigns.messages
+      |> Transcript.beats()
+      |> Transcript.with_failures(
+        socket.assigns.failures,
+        max(socket.assigns.next_beat - 1, 0)
+      )
+
+    socket
+    # A stream has no emptiness to ask about — the socket knows, and the screen is handed
+    # the answer rather than a collection it cannot count.
+    |> assign(transcript_empty: beats == [])
+    |> stream(:beats, beats, reset: Keyword.get(opts, :reset, false))
   end
 
   # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -1813,7 +1866,8 @@ defmodule PolyphonyWeb.PlayLive do
       failures={@failures}
       introductions={@introductions}
       joinable={@joinable}
-      messages={@messages}
+      beats={@streams.beats}
+      transcript_empty={@transcript_empty}
       narrating={@narrating}
       narrating_draft={@narrating_draft}
       next_beat={@next_beat}

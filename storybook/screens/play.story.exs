@@ -2,6 +2,7 @@ defmodule Storybook.Screens.Play do
   use PhoenixStorybook.Story, :component
 
   alias PolyphonyCore.Scene.Cast
+  alias PolyphonyWeb.Transcript
 
   def container, do: {:div, style: "width:100%"}
 
@@ -90,7 +91,29 @@ defmodule Storybook.Screens.Play do
     # without it every `#say-input` in the file is the same element as far as the DOM is
     # concerned.
     attrs = base() |> Map.merge(overrides) |> Map.put(:id, to_string(id))
-    %Variation{id: id, description: description, attributes: attrs}
+    %Variation{id: id, description: description, attributes: transcript(attrs)}
+  end
+
+  # A variation writes `messages:` — the honest fixture, the shape the broadcaster emits —
+  # and the screen takes `{dom_id, beat}` pairs, because that is what a `LiveStream`
+  # enumerates to. Derived here, once, rather than in fourteen variations: a story that had
+  # to hand-build beat trees would be a story about a rendering mechanism.
+  defp transcript(attrs) do
+    beats =
+      attrs
+      |> Map.get(:messages, [])
+      |> Transcript.beats()
+      |> Transcript.with_failures(
+        Map.get(attrs, :failures, []),
+        Map.get(attrs, :next_beat, 1) - 1
+      )
+
+    attrs
+    |> Map.delete(:messages)
+    # Prefixed by variation: storybook renders all fourteen on one page, so a bare
+    # `beat-2` is the same DOM id in every one of them.
+    |> Map.put(:beats, Enum.map(beats, &{"#{attrs.id}-beat-#{&1.beat}", &1}))
+    |> Map.put(:transcript_empty, beats == [])
   end
 
   # The connection banners are driven by the classes **LiveView puts on the container**,

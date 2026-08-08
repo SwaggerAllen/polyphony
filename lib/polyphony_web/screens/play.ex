@@ -69,24 +69,6 @@ defmodule PolyphonyWeb.Screens.Play do
   # Group the flat message stream into blocks: a character's turn (one committed
   # packet, all its moves) carries edit/reroll/delete affordances; everything else
   # (world events, entrances) is a plain block.
-  # The transcript as beats, each holding its turns and then its failures — so a transient
-  # error and its Retry sit where they happened and vanish when retried, rather than in a
-  # standalone pane.
-  #
-  # Both halves live in `PolyphonyWeb.Transcript`, shared with the published reading view:
-  # the reading view *is* this screen with a different bottom bar, and a second
-  # implementation of prose rendering is how the two drift. Play used to keep its own beat-
-  # rule walk here on the grounds that it interleaves failures and the reading view doesn't
-  # — which was true of the flat list and is not true of a tree, where a failure files into
-  # a beat that already knows its own number.
-  #
-  # A character viewer only ever gets their own turn failures (§1.7), which always carry a
-  # beat, so they file in place.
-  defp transcript_beats(messages, failures, current_beat) do
-    messages
-    |> Transcript.beats()
-    |> Transcript.with_failures(failures, current_beat)
-  end
 
   # The editable text of a turn: the whole turn — thoughts, speech, actions, and
   # demeanor — serialized one move per line (see `TurnEdit`), not just its spoken lines.
@@ -274,7 +256,16 @@ defmodule PolyphonyWeb.Screens.Play do
   attr(:scene_id, :string, required: true)
   attr(:current_user, :map, default: nil)
 
-  attr(:messages, :list, default: [], doc: "canonical moves, %{kind:, payload:}")
+  attr(:beats, :any,
+    default: [],
+    doc: "`{dom_id, beat}` pairs — a `LiveStream` live, a plain list in a story"
+  )
+
+  attr(:transcript_empty, :boolean,
+    default: true,
+    doc: "a stream cannot be counted, so the caller answers this"
+  )
+
   attr(:failures, :list, default: [], doc: "per-viewer failed turns, rendered in place")
 
   attr(:strip, :map,
@@ -399,12 +390,14 @@ defmodule PolyphonyWeb.Screens.Play do
                 it. The divider is `position: sticky`, which holds only while its
                 containing block is on screen — inside the beat it stays up for as long
                 as the beat does, where nested in the first turn it unstuck as soon as
-                that one turn scrolled past. --%>
-          <div
-            :for={beat <- transcript_beats(@messages, @failures, max(@next_beat - 1, 0))}
-            id={eid(@id, "beat-#{beat.beat}")}
-            class="beat"
-          >
+                that one turn scrolled past.
+
+                `@beats` arrives as `{dom_id, beat}` pairs because that is what a
+                `LiveStream` enumerates to. A story passes a plain list of the same pairs,
+                so the markup is identical live and in the catalogue — which is the whole
+                reason this screen is a function of its assigns. --%>
+          <div id={eid(@id, "beats")} phx-update="stream">
+          <div :for={{dom_id, beat} <- @beats} id={dom_id} class="beat">
             <Kit.beat_rule :if={beat.beat > 0} beat={beat.beat} />
 
             <.turn_block
@@ -431,8 +424,9 @@ defmodule PolyphonyWeb.Screens.Play do
               </div>
             </Kit.fail_move>
           </div>
+          </div>
           <Kit.empty
-            :if={@messages == [] and @failures == [] and not beat_busy?(@progress)}
+            :if={@transcript_empty and not beat_busy?(@progress)}
             headline={empty_headline(@viewer)}
           >
             Nothing has happened here yet.
