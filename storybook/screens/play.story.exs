@@ -286,20 +286,117 @@ defmodule Storybook.Screens.Play do
       ),
       v(
         :intros_panel,
-        "The introductions panel, with both lists it can offer. Characters who can walk in, and the walk-ons this story invented and never wrote — a separate list with a separate control, because the honest offer is *write them, then bring them in*.",
+        "The Director asks; the GM decides. **One** suggestion, named and reasoned — the GM is being asked to ratify a judgement about the scene, and a queue of them turns that into picking from a roster. *They'll be* is set before they are in the room, because the answer changes what admitting them means and it is much harder to explain afterwards.",
         %{
           panel: :intros,
-          joinable: [%{id: "sable", name: "Sable"}],
-          writable: [%{id: "corrigan", name: "Corrigan"}]
+          intros_view: :panel,
+          suggestion: %{
+            name: "Sable Quist",
+            reason: "Somebody rang that bell",
+            colour: "var(--v4)",
+            ready?: true
+          }
         }
       ),
       v(
-        :intros_exhausted,
-        "The same panel with nothing left to offer. Worth looking at because an empty panel that says nothing reads as broken.",
+        :intros_no_suggestion,
+        "The Director has nobody to propose. It says so, and says it will ask when the scene needs someone — the difference between a system with nothing to say and one that has stopped working. Both of the GM's doors stay, which is what makes them load-bearing: on a two-hander that never needs a third voice, this is the only version of the panel anybody sees.",
+        %{panel: :intros, intros_view: :panel, suggestion: nil}
+      ),
+      v(
+        :intros_write_new,
+        "Writing somebody into the scene, without leaving play. The note at the bottom is the important part and shouldn't be dropped — somebody typing one line into a scene needs to know they are not creating a throwaway. Both actions end in a full character; only the route differs.",
         %{
           panel: :intros,
-          joinable: [],
-          writable: []
+          intros_view: :write_new,
+          new_name: "A harbour constable",
+          new_premise:
+            "Came down for the noise, knows Wren's father, not on anyone's payroll yet."
+        }
+      ),
+      v(
+        :intros_picker,
+        "Find someone you've written. **Scoped to this campaign** — characters don't cross campaigns, and what the picker adds over the Director's suggestion is reach *within* one: the walk-ons it would never propose. Tier leads the filters because that is the roster that gets long. Characters already in the scene appear dimmed and inert rather than missing, so nobody hunts for somebody standing in front of them.",
+        %{
+          panel: :intros,
+          intros_view: :picker,
+          picker_query: "",
+          picker_rows: [
+            %{
+              id: "sable",
+              name: "Sable Quist",
+              blurb: "Rings the tide bell for whoever pays her.",
+              tier_label: "Recurring",
+              colour: "var(--v4)",
+              in_scene?: false
+            },
+            %{
+              id: "corrigan",
+              name: "Mother Corrigan",
+              blurb: "Keeps the ledger nobody asks about.",
+              tier_label: "Recurring",
+              colour: "var(--v2)",
+              in_scene?: false
+            },
+            %{
+              id: "wren",
+              name: "Wren Ashgrove",
+              blurb: "Keeps the tide ledger, and keeps it honest.",
+              tier_label: "Main cast",
+              colour: "var(--v1)",
+              in_scene?: true
+            }
+          ]
+        }
+      ),
+      v(
+        :intros_picker_empty,
+        "No matches, and not a dead end. Somebody who typed *alchemist* and found none wants an alchemist, and the panel already has a door for that — so the offer is to write the thing that was searched for, carrying the query into the name.",
+        %{
+          panel: :intros,
+          intros_view: :picker,
+          picker_query: "alchemist",
+          picker_rows: []
+        }
+      ),
+      v(
+        :intros_picker_confirm,
+        "Chosen, not yet admitted. A second step rather than one-click entry from the row: enough to catch *wrong Sable* before she walks in, and the last moment the *they'll be* answer can be given.",
+        %{
+          panel: :intros,
+          intros_view: :picker_confirm,
+          picker_chosen: %{
+            id: "sable",
+            name: "Sable Quist",
+            blurb: "Rings the tide bell for whoever pays her, and has never once said who did.",
+            tier_label: "Recurring · last seen in scene 1",
+            colour: "var(--v4)",
+            in_scene?: false
+          }
+        }
+      ),
+      v(
+        :admitted_writing,
+        "In the room, sheet still being written. The beat carries on without them. The entrance reads as fiction first — *a man comes up the steps from the water* — and nobody sees a sheet being written, which is why the roster's line and the transcript's line say different things.",
+        %{
+          panel: :intros,
+          intros_view: :panel,
+          suggestion: nil,
+          admitted: [
+            %{id: "bellman", name: "The bellman", colour: "var(--v4)", status: :writing}
+          ]
+        }
+      ),
+      v(
+        :admitted_failed,
+        "In the room, and writing them didn't work. Distinct from `failed_turn`: that is a turn that couldn't be generated inside a working scene, this is a character with no sheet already standing in it. Three genuinely different ways out — and *send them away* is a departure written into the transcript, not an edit to the log, because the entrance already happened and the others saw it.",
+        %{
+          panel: :intros,
+          intros_view: :panel,
+          suggestion: nil,
+          admitted: [
+            %{id: "bellman", name: "The bellman", colour: "var(--v4)", status: :failed}
+          ]
         }
       )
     ]

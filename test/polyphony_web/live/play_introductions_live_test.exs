@@ -66,9 +66,11 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
     view |> element("button[phx-click=intro_admit][phx-value-name=Bram]") |> render_click()
 
     html = render(view)
-    # Proposal gone — matched by *name* even though he entered by id (§5.2). With
-    # nothing left to suggest, the drawer's button goes too.
-    refute html =~ "toggle_intros"
+    # Proposal gone — matched by *name* even though he entered by id (§5.2). The panel's
+    # own button stays: its two doors are how the GM brings somebody on without being
+    # asked, so it is not a drawer that exists only while the Director has something to
+    # say (`intros_no_suggestion`).
+    refute html =~ "The Director suggests"
     # Bram is a scene member: offered in the viewing-as roster keyed by his library
     # id, labelled with his name. The value is what routes; the label is what reads.
     assert html =~ ~s(<option value="#{bram.id}")
@@ -81,7 +83,14 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/play/#{scene}")
     html = view |> element("button[phx-click=toggle_intros]") |> render_click()
-    assert html =~ "Write &amp; admit"
+
+    # **One button, and it says Admit** whether the name resolves to somebody already
+    # written or not. It used to say *✦ Write & admit* for an unwritten name, which made
+    # the GM answer a question about the database in the middle of a question about the
+    # scene. Every path into a scene ends with a full character (§07); what differs is
+    # only how long the sheet takes to arrive, and that is the panel's problem to hide.
+    assert html =~ "Admit"
+    refute html =~ "Write &amp; admit"
 
     view |> element("button[phx-click=intro_generate][phx-value-name=Ghost]") |> render_click()
     generate(view)
@@ -104,8 +113,9 @@ defmodule PolyphonyWeb.PlayIntroductionsLiveTest do
     view |> element("button[phx-click=intro_dismiss][phx-value-name=Bram]") |> render_click()
 
     html = render(view)
-    # Nothing left to suggest, so the drawer's own button goes with the proposal.
-    refute html =~ "toggle_intros"
+    # The suggestion goes; the panel stays, saying the Director isn't asking for anyone.
+    refute html =~ "The Director suggests"
+    assert html =~ "The Director isn&#39;t asking for anyone"
     refute html =~ ~s(<option value="Bram")
   end
 end

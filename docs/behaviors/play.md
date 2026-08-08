@@ -1,6 +1,6 @@
 # Play
 
-<!-- rev: 2 -->
+<!-- rev: 3 -->
 
 | | |
 |---|---|
@@ -32,6 +32,23 @@ difference is a property of the data rather than an instruction anybody gave a m
 - **The composer answers a specific slot at a specific beat.** Not "the next free moment" —
   a turn committed at whatever beat happens to be current is how one beat ends up with two
   turns from the same person.
+- **Every path into a scene ends with a full character.** There is no admit-as-a-stub. A scene
+  refuses a character who isn't fully written, so offering an unwritten walk-on as a one-click
+  entry would be offering a choice that can't be honoured — and the panel used to do exactly
+  that, in a second list. The three doors are: admit somebody the Director suggests, write
+  somebody new, or find somebody already written. Each ends in a sheet. What differs is only
+  how long the sheet takes to arrive, which is `admitted_writing`'s problem rather than the
+  panel's.
+- **The picker reaches the campaign, not the library.** A character search opened inside play
+  looks like the library's and is built from the same component, and the temptation is to let
+  it behave like the library's too — everything the author owns. It must not: characters do
+  not cross campaigns. The distinction that *is* real is a different one — the Director can
+  only suggest from the cast and its off-screen stubs, while the GM reaches the **whole
+  campaign roster**, including walk-ons the Director would never think to propose. That is
+  what the picker is for. Written down rather than left to the scope rule to imply, because
+  this is the one surface where the author's entire library feels like it should be a
+  keystroke away, and therefore the one place the rule will be broken by somebody being
+  helpful.
 
 ## The perspective control
 
@@ -106,16 +123,97 @@ A reader meeting a name for the first time gets **what the scene has actually sh
 plus that character's cover. Never the sheet — the sheet is the author's, and half of it is
 things this reader is specifically not supposed to know.
 
-### `intros_panel` — Bringing somebody in
+### `intros_panel` — The Director asks, the GM decides
 
-Two lists, kept apart: characters who can walk in now, and the walk-ons this story invented
-for itself and never wrote. The second list gets its own control because the honest offer is
-*write them, then bring them in* — a scene refuses a character who isn't fully written, so
-offering one as a one-click entry would be offering a choice that can't be honoured.
+One suggestion, named and reasoned: who, and the half-line of why — *somebody rang that bell*.
+The reason matters more than the name, because the GM is being asked to ratify a judgement
+about the scene rather than pick from a roster.
 
-### `intros_exhausted` — Nobody left to bring in
+Three controls, and they are not equal. **Admit** takes the suggestion. **Not now** declines
+this one without closing the panel. And *she'll be* sets how the character will act before
+they are in the room, because the answer changes what admitting them means and it is much
+harder to explain after the fact.
 
-Worth its own state: an empty panel that says nothing reads as broken.
+Below the suggestion, under its own heading, the GM's two doors: **write someone new** and
+**find someone you've written**. They sit apart from the suggestion because they are a
+different act — the Director proposed something and you are declining to be led.
+
+### `intros_no_suggestion` — The Director isn't asking for anyone
+
+The panel opened and the Director has nobody to propose. It says so, and says it will ask when
+the scene needs someone — which is the difference between a system with nothing to say and a
+system that has stopped working.
+
+Both doors stay. This is the state that makes the panel's own controls load-bearing rather
+than a fallback: on a two-hander that never needs a third voice, this is the only version of
+the panel anybody sees.
+
+### `intros_write_new` — Writing somebody into the scene
+
+The inline form, opened from the panel without leaving play. Two fields — a name and *who are
+they*, a sentence or two — plus the same *she'll be* control the suggestion carries.
+
+The primary action writes them **and** brings them on; a secondary offers the full sheet
+editor instead. The note under it is the important part: *either way she joins your cast as a
+full character*. Somebody typing one line into a scene needs to know they are not creating a
+throwaway.
+
+### `intros_picker` — Find someone you've written
+
+The shared character picker, opened inside play. Search, tier filter, and rows carrying a
+face, a name, a half-line and their tier.
+
+**Scoped to this campaign** — see the standing decision. Not the author's library, not another
+campaign's cast. What the picker adds over the Director's suggestion is *reach within the
+campaign*: walk-ons and minor players the Director would never propose, which is precisely the
+roster that gets long. Tier is therefore the primary filter rather than an afterthought.
+
+Two bands. Characters in this campaign but not in the scene are pickable. Characters **already
+in the scene** appear too, dimmed and inert — showing them costs a row and prevents the GM
+hunting for somebody who is standing in front of them.
+
+### `intros_picker_empty` — No matches
+
+The search found nobody. It does not stop at saying so: the offer is to **write** the thing
+that was searched for, carrying the query into the name. Somebody who typed *alchemist* and
+found none wants an alchemist, and the panel already has a door for that.
+
+### `intros_picker_confirm` — Chosen, not yet admitted
+
+A second step rather than one-click entry from the row. It shows the face, the tier, when they
+were last seen, and their cover line — enough to catch *wrong Sable* before she walks in — and
+it carries the *she'll be* control, because this is the last moment before the character is in
+the room.
+
+### `admitted_writing` — In the room, sheet still being written
+
+They are in the scene and cannot act until the sheet lands; the beat carries on without them.
+The entrance reads as fiction first — *a man comes up the steps from the water, still holding
+the bell rope* — and nobody sees a sheet being written. That is the whole point of admitting
+before writing finishes, and it is why the roster's line and the transcript's line say
+different things.
+
+### `admitted_failed` — In the room, and writing them didn't work
+
+Distinct from `failed_turn`: that is a turn that couldn't be generated inside a working scene,
+and this is a character with no sheet who is already standing in it. They stay in the scene and
+still cannot act. Three ways out, genuinely different rather than a retry with decoration:
+
+- **Try again** — re-run the write.
+- **Write him yourself** — the same form as `intros_write_new`, pre-filled with whatever the
+  entrance already committed to.
+- **Send him away** — a departure, not an undo. The entrance has already been narrated and
+  other characters could have reacted to it, so removing the character cannot mean erasing it.
+  The fiction absorbs it — *he goes back down the steps* — the same shape the Director uses
+  when it rules against a proposal. That keeps the log append-only, keeps a reader who saw the
+  entrance from being shown a scene that contradicts their memory, and lets the character be
+  brought on again later with nothing to reconcile.
+
+  The confirm names **what survives** rather than what is destroyed, because nothing is — that
+  deliberately inverts the name-what-dies pattern used for deletions elsewhere, since the fear
+  here is that the action is irreversible when it isn't. Afterwards the roster simply no longer
+  lists him: no tombstone, no struck-through row. The roster is who is here now; the transcript
+  is what happened, and only one of them should remember him.
 
 ### `reconnecting` — The socket dropped and is coming back
 
