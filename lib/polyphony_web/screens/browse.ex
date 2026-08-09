@@ -18,6 +18,15 @@ defmodule PolyphonyWeb.Screens.Browse do
   alias Polyphony.Reading.Session
   alias PolyphonyWeb.{Kit, Layouts, Transcript, Voice}
 
+  # A prefix for every element id in this screen, the same contract `Screens.Play` states
+  # in an `attr`: empty in the app, where the screen renders once, and distinct per
+  # variation in the storybook, which renders all of them on one page. Seven variations
+  # now draw the reader, so without this the perspective control's id repeats seven times
+  # and a label points at another variation's select.
+  defp eid("", name), do: name
+  defp eid(nil, name), do: name
+  defp eid(prefix, name), do: "#{prefix}-#{name}"
+
   def screen(%{story: nil, gone: reason} = assigns) when not is_nil(reason),
     do: dead_end(assigns)
 
@@ -274,20 +283,22 @@ defmodule PolyphonyWeb.Screens.Browse do
   end
 
   defp report_panel(assigns) do
+    assigns = assign_new(assigns, :id, fn -> "" end)
+
     ~H"""
     <Kit.sheet class="m-4">
       <Kit.row class="px-4 py-3" style="background:var(--b2)">
         <div class="ttl text-[15px] font-semibold">Report <%= story_name(@snapshot) %></div>
       </Kit.row>
-      <form id="report-form" phx-submit="send_report">
+      <form id={eid(@id, "report-form")} phx-submit="send_report">
         <label :for={r <- report_reasons()} class="px-4 py-2.5 row flex items-start gap-2.5">
           <input type="radio" name="reason" value={r.value} required class="mt-1" />
           <span class="text-[13px]"><%= r.label %></span>
         </label>
         <div class="px-4 py-3">
-          <label for="report-detail" class="sr-only">Anything that would help</label>
+          <label for={eid(@id, "report-detail")} class="sr-only">Anything that would help</label>
           <textarea
-            id="report-detail"
+            id={eid(@id, "report-detail")}
             name="detail"
             rows="3"
             class="field px-3 py-2.5 text-[13px] w-full mb-2.5"
@@ -313,7 +324,7 @@ defmodule PolyphonyWeb.Screens.Browse do
     # A share token is a credential, not a state of this screen, so it defaults away
     # rather than becoming a fifteenth thing every storybook variation has to declare.
     # The public and unlisted readers are the same markup; only how you got here differs.
-    assigns = assign_new(assigns, :token, fn -> nil end)
+    assigns = assigns |> assign_new(:token, fn -> nil end) |> assign_new(:id, fn -> "" end)
 
     ~H"""
     <Kit.frame register={:page} class="flex flex-col min-h-[100dvh]">
@@ -324,9 +335,9 @@ defmodule PolyphonyWeb.Screens.Browse do
         back_label="The front page"
       >
         <:actions>
-          <form id="mode-form" phx-change="switch_mode">
+          <form id={eid(@id, "mode-form")} phx-change="switch_mode">
             <Kit.viewas_select
-              id="mode-select"
+              id={eid(@id, "mode-select")}
               label="Reading as"
               name="as"
               colour={mode_colour(@mode, voices(@snapshot))}
