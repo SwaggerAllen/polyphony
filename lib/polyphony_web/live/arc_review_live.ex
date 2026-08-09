@@ -36,7 +36,7 @@ defmodule PolyphonyWeb.ArcReviewLive do
   use PolyphonyWeb, :live_view
 
   alias Polyphony.{Groups, Library, Repo}
-  alias Polyphony.Authoring.{ArcEntry, Effective, WorldArcEntry}
+  alias Polyphony.Authoring.{ArcAccept, ArcEntry, Effective, WorldArcEntry}
   alias Polyphony.Authoring.CharacterSheet
   alias Polyphony.Owner
   alias Polyphony.ReadModels.ArcEntry, as: ArcEntryRepo
@@ -156,8 +156,11 @@ defmodule PolyphonyWeb.ArcReviewLive do
 
   # ── Reviewing ─────────────────────────────────────────────────────────────────
 
+  # Through `ArcAccept` rather than the read model directly: a proposal can name
+  # somebody who doesn't exist yet, and accepting it is what makes them real.
   def handle_event("accept", %{"id" => id}, socket),
-    do: act(socket, &ArcEntryRepo.accept(Repo, &1), id, "Made true.")
+    do:
+      act(socket, &ArcAccept.accept(&1, Owner.of(socket.assigns.current_user)), id, "Made true.")
 
   def handle_event("reject", %{"id" => id}, socket),
     do: act(socket, &ArcEntryRepo.reject(Repo, &1), id, "Left as it was.")
@@ -167,7 +170,7 @@ defmodule PolyphonyWeb.ArcReviewLive do
   def handle_event("accept_all", %{"subject" => subject}, socket) do
     safe(socket, fn ->
       type = if subject == socket.assigns.campaign_id, do: "world", else: "character"
-      count = ArcEntryRepo.accept_all(Repo, subject, type)
+      count = ArcAccept.accept_all(subject, type, Owner.of(socket.assigns.current_user))
 
       {:noreply, socket |> put_flash(:info, made_true(count)) |> load()}
     end)
@@ -201,17 +204,11 @@ defmodule PolyphonyWeb.ArcReviewLive do
   def handle_event("drawer", _params, socket),
     do: {:noreply, assign(socket, drawer: not socket.assigns.drawer)}
 
-  # A world fact proposed as common knowledge: the refusal narrows the audience
-  # rather than rejecting the fact — the thing is true either way and the question
-  # is who it reached.
-  def handle_event("accept_narrowed", %{"id" => id}, socket),
-    do:
-      act(
-        socket,
-        &ArcEntryRepo.accept_narrowed(Repo, &1),
-        id,
-        "True — for whoever was there."
-      )
+  # Who knows a world fact is an audience, and common knowledge is one of its values
+  # — so this changes the proposal and leaves the decision about whether it is true
+  # to the ordinary actions.
+  def handle_event("set_audience", %{"id" => id, "who" => who}, socket),
+    do: act(socket, &ArcEntryRepo.set_audience(Repo, &1, who_atom(who)), id, audience_line(who))
 
   # ── Authoring (STR-62) ────────────────────────────────────────────────────────
   #
@@ -287,6 +284,12 @@ defmodule PolyphonyWeb.ArcReviewLive do
       end
     end)
   end
+
+  defp who_atom("there"), do: :there
+  defp who_atom(_), do: :everyone
+
+  defp audience_line("there"), do: "Only whoever was there will know it."
+  defp audience_line(_), do: "Everyone will come to know it."
 
   defp update_authoring(socket, fun) do
     case socket.assigns.authoring do

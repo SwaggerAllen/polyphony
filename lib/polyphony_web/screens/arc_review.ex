@@ -11,23 +11,27 @@ defmodule PolyphonyWeb.Screens.ArcReview do
   member, and the screen **collapses that fan-out into a single card** — a group of
   twelve would otherwise flood the queue from a change nobody made twelve times.
 
-  ## Three action sets (STR-62)
+  ## The action sets (STR-62)
 
-  Which set a card gets is a claim about what has already happened. *True / Edit /
-  No* for anything that hasn't. *True / Not yet* only for a line that gave **in
-  play** — she already acted, so refusing keeps it scene-local rather than
-  un-playing it. *True / Only who was there* only for a world fact proposed as
-  common knowledge, where refusing narrows the audience rather than rejecting the
-  fact. A release the Director proposes past its written condition shows that
-  condition struck through and marked unmet, and takes the ordinary three.
+  Which set a card gets is a claim about what has already happened. *True / Not yet*
+  for a line that gave **in play** — she already acted, so refusing keeps it
+  scene-local rather than un-playing it, and there is nothing to edit. *True / Edit /
+  No* for everything else, including a release the Director proposes past its written
+  condition (shown struck through and marked unmet) and a world fact however wide its
+  audience: **who knows is an audience, not an action**, so narrowing one is the
+  control on the card rather than a way of refusing it.
 
   ## Authoring (STR-62)
 
   The author can propose too — same card, same accept-or-refuse, same place in the
   history. The *add an entry* row sits last in the list of proposals wherever they
-  are shown (here and in a cast row's expansion on the campaign screen), and opens
-  the authoring form, whose shape follows what is being changed: one value, a list,
-  a line, a direction, or the world.
+  are shown, and the form opens in place beneath them.
+
+  ## The card is shared
+
+  `proposal_card/1` is public because reviewing happens **in every place you cast
+  somebody**: this screen, a cast row on scene setup, and the intros panel in play.
+  `:events` prefixes its actions for a host that already owns an `edit` of its own.
   """
   use PolyphonyWeb, :html
 
@@ -92,9 +96,7 @@ defmodule PolyphonyWeb.Screens.ArcReview do
       <div class="flex-1 min-h-0 overflow-y-auto">
         <.drawer :if={@drawer} />
 
-        <.authoring_form :if={@authoring} id={@id} authoring={@authoring} />
-
-        <Kit.sheet :if={is_nil(@authoring)} class="m-4">
+        <Kit.sheet class="m-4">
           <.proposal_card
             :for={e <- visible(assigns)}
             entry={e}
@@ -121,8 +123,10 @@ defmodule PolyphonyWeb.Screens.ArcReview do
 
           <%!-- Last in the list wherever proposals are shown: the extraction proposes
                 what the scene concluded, never what it missed, and the person best
-                placed to notice a miss is the one reading the things it caught. --%>
-          <div class="row px-4 py-2.5">
+                placed to notice a miss is the one reading the things it caught. It
+                opens **in place**, under the proposals — the form is where you tapped
+                rather than somewhere the list used to be. --%>
+          <div :if={is_nil(@authoring)} class="row px-4 py-2.5">
             <button
               type="button"
               class="field px-3 py-2 text-[13px] dim w-full text-left"
@@ -133,6 +137,8 @@ defmodule PolyphonyWeb.Screens.ArcReview do
                 else: "✦ Something else changed about #{subject_name(assigns)}…" %>
             </button>
           </div>
+
+          <.authoring_form :if={@authoring} id={@id} authoring={@authoring} />
         </Kit.sheet>
 
         <Kit.empty
@@ -144,13 +150,7 @@ defmodule PolyphonyWeb.Screens.ArcReview do
           up here first.
         </Kit.empty>
 
-        <.group_card
-          :if={is_nil(@authoring)}
-          :for={g <- @groups}
-          group={g}
-          cast={@cast}
-          editing={@editing}
-        />
+        <.group_card :for={g <- @groups} group={g} cast={@cast} editing={@editing} />
       </div>
     </Kit.frame>
     """
@@ -170,6 +170,13 @@ defmodule PolyphonyWeb.Screens.ArcReview do
   attr(:was, :string, default: nil)
   attr(:editing, :any, default: nil)
   attr(:world, :boolean, default: false)
+
+  attr(:events, :string,
+    default: "",
+    doc:
+      "prefix for the card's events — a host that already owns an `edit`/`cancel_edit` " <>
+        "of its own names them apart rather than the card renaming its own actions"
+  )
 
   def proposal_card(assigns) do
     ~H"""
@@ -193,7 +200,7 @@ defmodule PolyphonyWeb.Screens.ArcReview do
             be a lie about what's happening. --%>
       <p :if={@was} class="text-[12.5px] leading-relaxed dim was mb-2"><%= @was %></p>
 
-      <form :if={@editing == @entry.id} id={"edit-#{@entry.id}"} phx-submit="save_edit">
+      <form :if={@editing == @entry.id} id={"edit-#{@entry.id}"} phx-submit={@events <> "save_edit"}>
         <input type="hidden" name="entry_id" value={@entry.id} />
         <label for={"stmt-#{@entry.id}"} class="sr-only">The change</label>
         <textarea
@@ -215,7 +222,7 @@ defmodule PolyphonyWeb.Screens.ArcReview do
         </div>
         <div class="flex gap-1.5 mt-2">
           <Kit.btn kind={:primary} size={:sm} type="submit">Save it</Kit.btn>
-          <Kit.btn size={:sm} type="button" phx-click="cancel_edit">Cancel</Kit.btn>
+          <Kit.btn size={:sm} type="button" phx-click={@events <> "cancel_edit"}>Cancel</Kit.btn>
         </div>
       </form>
 
@@ -250,54 +257,70 @@ defmodule PolyphonyWeb.Screens.ArcReview do
         <%!-- A world fact also has to say who comes to know it — the audience picker
               doing the same job it does on a secret. Proposed as everyone's, accepting
               means anyone off-screen is told the next time they turn up. --%>
+        <%!-- Who knows is an **audience**, not an action. Common knowledge is one of
+              its values rather than a refusal that means it — so narrowing is the same
+              control on the card that the authoring form uses, and the card keeps the
+              ordinary actions. --%>
         <div
           :if={@world}
           class="mb-2.5 pt-2.5"
           style="border-top:1px solid var(--rule)"
         >
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-[12.5px] dim">Who knows</span>
-            <Kit.pill colour={if(concealed?(@entry), do: "var(--secret)", else: "var(--lamp)")}>
-              <%= if concealed?(@entry), do: "Whoever was there", else: "Everyone" %>
-            </Kit.pill>
-          </div>
+          <div class="lbl dim mb-1.5">Who knows</div>
+          <Kit.seg>
+            <:option
+              on={concealed?(@entry)}
+              rest={%{
+                "phx-click" => @events <> "set_audience",
+                "phx-value-id" => @entry.id,
+                "phx-value-who" => "there"
+              }}
+            >
+              Only who was there
+            </:option>
+            <:option
+              on={not concealed?(@entry)}
+              rest={%{
+                "phx-click" => @events <> "set_audience",
+                "phx-value-id" => @entry.id,
+                "phx-value-who" => "everyone"
+              }}
+            >
+              Everyone
+            </:option>
+          </Kit.seg>
           <p :if={common_knowledge?(@entry, @world)} class="text-[11px] leading-relaxed dim mt-1.5">
-            Anyone off-screen is told this the next time they turn up, and reacts to it on
-            the page rather than arriving already used to it.
+            Common knowledge. Anyone off-screen is told this the next time they turn up, and
+            reacts to it on the page rather than arriving already used to it.
           </p>
         </div>
 
-        <%!-- Three action sets, and which one a card gets is a claim about what has
-              already happened. True / Not yet for a line that gave in play (you cannot
-              un-play it, so there is nothing to edit); True / Only who was there for a
-              world fact proposed as common knowledge (the refusal narrows the audience
-              rather than rejecting the fact); True / Edit / No for everything else. --%>
+        <%!-- Two action sets, and which one a card gets is a claim about what has
+              already happened. True / Not yet for a line that gave in play — you cannot
+              un-play it, so there is nothing to edit. True / Edit / No for everything
+              else, world facts included: narrowing a world fact's audience is the
+              control above, so refusing one still means refusing it. --%>
         <div class="flex flex-wrap gap-1.5">
           <Kit.btn
             kind={:primary}
             size={:sm}
             type="button"
-            phx-click="accept"
+            phx-click={@events <> "accept"}
             phx-value-id={@entry.id}
           >
             True
           </Kit.btn>
-          <%= case action_set(@entry, @world) do %>
-            <% :not_yet -> %>
-              <Kit.btn size={:sm} type="button" phx-click="reject" phx-value-id={@entry.id}>
-                Not yet
-              </Kit.btn>
-            <% :narrow -> %>
-              <Kit.btn size={:sm} type="button" phx-click="accept_narrowed" phx-value-id={@entry.id}>
-                Only who was there
-              </Kit.btn>
-            <% :ordinary -> %>
-              <Kit.btn size={:sm} type="button" phx-click="edit" phx-value-id={@entry.id}>
-                Edit
-              </Kit.btn>
-              <Kit.btn size={:sm} type="button" phx-click="reject" phx-value-id={@entry.id}>
-                No
-              </Kit.btn>
+          <%= if action_set(@entry) == :not_yet do %>
+            <Kit.btn size={:sm} type="button" phx-click={@events <> "reject"} phx-value-id={@entry.id}>
+              Not yet
+            </Kit.btn>
+          <% else %>
+            <Kit.btn size={:sm} type="button" phx-click={@events <> "edit"} phx-value-id={@entry.id}>
+              Edit
+            </Kit.btn>
+            <Kit.btn size={:sm} type="button" phx-click={@events <> "reject"} phx-value-id={@entry.id}>
+              No
+            </Kit.btn>
           <% end %>
         </div>
       </div>
@@ -372,7 +395,7 @@ defmodule PolyphonyWeb.Screens.ArcReview do
 
   defp authoring_form(assigns) do
     ~H"""
-    <Kit.sheet class="m-4">
+    <div class="row">
       <form id={eid(@id, "authoring")} phx-change="authoring_change" phx-submit="authoring_propose">
         <div class="px-4 py-3 flex items-center gap-2" style="background:var(--b2)">
           <span class="av" style={"background:#{@authoring.colour}"}></span>
@@ -468,7 +491,7 @@ defmodule PolyphonyWeb.Screens.ArcReview do
           </p>
         </div>
       </form>
-    </Kit.sheet>
+    </div>
     """
   end
 
@@ -849,20 +872,17 @@ defmodule PolyphonyWeb.Screens.ArcReview do
     })
   end
 
-  # ── The three action sets ─────────────────────────────────────────────────────
+  # ── The action sets ───────────────────────────────────────────────────────────
 
   # Which one a card gets is a claim about what has already happened. A line that
-  # gave in play cannot be un-played, so it takes True / Not yet; a world fact
-  # proposed as common knowledge takes True / Only who was there, because refusing
-  # narrows the audience rather than rejecting the fact; everything else — including
-  # a release the Director proposes past its written condition — takes the ordinary
-  # True / Edit / No.
-  defp action_set(entry, world) do
-    cond do
-      safe_kind(entry.kind) == :release and not past_condition?(entry) -> :not_yet
-      world and not concealed?(entry) -> :narrow
-      true -> :ordinary
-    end
+  # gave in play cannot be un-played, so refusing it means *not yet* — scene-local
+  # rather than never having occurred, and there is nothing to edit. Everything else
+  # — including a release the Director proposes past its written condition, and a
+  # world fact proposed as common knowledge — takes the ordinary True / Edit / No.
+  defp action_set(entry) do
+    if safe_kind(entry.kind) == :release and not past_condition?(entry),
+      do: :not_yet,
+      else: :ordinary
   end
 
   defp past_condition?(entry),
@@ -929,9 +949,9 @@ defmodule PolyphonyWeb.Screens.ArcReview do
 
   defp timings, do: [{"always", "Always true"}, {"scene", "In a scene"}, {"now", "Just now"}]
 
-  # The mocks draw Because on every character shape and neither world frame; the
-  # world card still carries a reason when extraction wrote one.
-  defp show_because?(%{world: true}), do: false
+  # A world entry gets a Because like anything else. The mocks left it off both world
+  # frames, which the author confirmed was an oversight rather than an argument —
+  # *what in the story made this true* is the same question whoever the subject is.
   defp show_because?(%{op: "remove", picked: picked}), do: not is_nil(picked)
   defp show_because?(_), do: true
 

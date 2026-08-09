@@ -208,19 +208,29 @@ defmodule Polyphony.ReadModels.ArcEntry do
   def reject(repo, id), do: set_status(repo, id, "retracted")
 
   @doc """
-  Accept a world fact proposed as common knowledge, narrowed to **only who was
-  there** (STR-62). The refusal narrows the audience rather than rejecting the
-  fact — the thing is true either way and the question is who it reached. The
-  entry goes canon concealed, with a `scene: true` audience that resolves to the
-  cast of its source scene.
+  Set who knows a world proposal, before it is reviewed (STR-62).
+
+  Common knowledge is a **value of the audience**, not a way of refusing — so this
+  is the same question the authoring form asks, asked again on the card. `:everyone`
+  is the world's default and clears the audience; `:there` narrows to a `scene: true`
+  audience, which resolves to the cast of the entry's source scene.
+
+  Deliberately leaves `status` alone: narrowing is not a decision about whether the
+  fact is true, and a card whose audience you changed is still a card you have to
+  accept.
   """
-  def accept_narrowed(repo, id) do
+  @spec set_audience(Ecto.Repo.t(), term(), :everyone | :there) :: t()
+  def set_audience(repo, id, :there) do
+    set_audience_fields(repo, id, true, %Polyphony.Authoring.Audience{scene: true})
+  end
+
+  def set_audience(repo, id, :everyone) do
+    set_audience_fields(repo, id, false, nil)
+  end
+
+  defp set_audience_fields(repo, id, concealed, audience) do
     repo.get!(__MODULE__, id)
-    |> Ecto.Changeset.change(
-      status: "canon",
-      concealed: true,
-      audience: Blob.encode(%Polyphony.Authoring.Audience{scene: true})
-    )
+    |> Ecto.Changeset.change(concealed: concealed, audience: Blob.encode(audience))
     |> repo.update!()
   end
 
@@ -254,6 +264,22 @@ defmodule Polyphony.ReadModels.ArcEntry do
 
     repo.get!(__MODULE__, id)
     |> Ecto.Changeset.change(changes)
+    |> repo.update!()
+  end
+
+  @doc "One row by id, or nil."
+  def get(repo, id), do: repo.get(__MODULE__, id)
+
+  @doc """
+  Point an authored relationship at the character it names (STR-62).
+
+  Set when the proposal is accepted and the target is resolved or minted — see
+  `Polyphony.Authoring.ArcAccept`. A relationship targets an **id**, with the name
+  rendered beside it, because a name is display and two people can share one.
+  """
+  def set_target_id(repo, id, target_id) do
+    repo.get!(__MODULE__, id)
+    |> Ecto.Changeset.change(target_id: to_string(target_id))
     |> repo.update!()
   end
 

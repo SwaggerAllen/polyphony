@@ -376,6 +376,50 @@ defmodule Storybook.Screens.Play do
         }
       ),
       v(
+        :intros_arc_gate,
+        "They're behind, and this is where you catch them up. Casting somebody is casting somebody wherever you do it, so the gate is met here too — with **the same cards** the review screen shows. *Accept all and bring them on* is one tap and carries straight on into the entrance it interrupted; *Not now* leaves them out and their arc where it was.",
+        %{
+          panel: :intros,
+          intros_view: :arc_gate,
+          arc_gate: %{
+            id: "sable",
+            name: "Sable Quist",
+            colour: "var(--v4)",
+            editing: nil,
+            proposals: [
+              %{
+                id: 951,
+                kind: "revision",
+                sheet_field: "temperament",
+                statement: "Careful in the way of somebody who has been caught once.",
+                reason: "She was seen on the quay and said nothing about why.",
+                released_topic: nil,
+                operation: nil,
+                condition_met: nil,
+                author: nil,
+                line_condition: nil,
+                concealed: false,
+                scope: nil
+              },
+              %{
+                id: 952,
+                kind: "discovery",
+                sheet_field: "facts",
+                statement: "She has been paid twice for the same night's ringing.",
+                reason: "Ilias counted the ledger out loud.",
+                released_topic: nil,
+                operation: nil,
+                condition_met: nil,
+                author: nil,
+                line_condition: nil,
+                concealed: false,
+                scope: nil
+              }
+            ]
+          }
+        }
+      ),
+      v(
         :admitted_writing,
         "In the room, sheet still being written. The beat carries on without them. The entrance reads as fiction first — *a man comes up the steps from the water* — and nobody sees a sheet being written, which is why the roster's line and the transcript's line say different things.",
         %{

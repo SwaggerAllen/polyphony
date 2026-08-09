@@ -258,7 +258,7 @@ defmodule Storybook.Screens.ArcReview do
       ),
       v(
         :world_common_knowledge,
-        "A fact proposed as everyone's. Its own state because its actions differ: **True / Only who was there** — the refusal narrows the audience rather than rejecting the fact, which no other card does. Accepting means anyone off-screen is told the next time they turn up.",
+        "A fact proposed as everyone's. Its own state because of the **audience control** it carries, not because its actions differ — *everyone* and *only who was there* are two values of one question, and picking between them isn't the same act as accepting the fact. Accepting means anyone off-screen is told the next time they turn up.",
         %{
           tab: "world",
           world: [

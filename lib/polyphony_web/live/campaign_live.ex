@@ -16,6 +16,7 @@ defmodule PolyphonyWeb.CampaignLive do
   alias PolyphonyCore.Commands.{OpenScene, EnterCharacter}
 
   alias Polyphony.Authoring.{
+    ArcAccept,
     CharacterSheet,
     Effective,
     Group,
@@ -749,7 +750,7 @@ defmodule PolyphonyWeb.CampaignLive do
 
   def handle_event("gate_accept_all", %{"subject" => subject}, socket) do
     safe(socket, fn ->
-      count = ReadArcEntry.accept_all(Repo, subject, "character")
+      count = ArcAccept.accept_all(subject, "character", socket.assigns.owner)
 
       {:noreply,
        socket
@@ -762,19 +763,24 @@ defmodule PolyphonyWeb.CampaignLive do
   # The cards on a row emit the same events the review screen's do — refusing one
   # here is the same act as refusing it there.
   def handle_event("accept", %{"id" => id}, socket),
-    do: gate_act(socket, &ReadArcEntry.accept(Repo, &1), id, "Made true.")
+    do: gate_act(socket, &ArcAccept.accept(&1, socket.assigns.owner), id, "Made true.")
 
   def handle_event("reject", %{"id" => id}, socket),
     do: gate_act(socket, &ReadArcEntry.reject(Repo, &1), id, "Left as it was.")
 
-  def handle_event("accept_narrowed", %{"id" => id}, socket),
-    do:
-      gate_act(
-        socket,
-        &ReadArcEntry.accept_narrowed(Repo, &1),
-        id,
-        "True — for whoever was there."
+  def handle_event("set_audience", %{"id" => id, "who" => who}, socket) do
+    who = if who == "there", do: :there, else: :everyone
+
+    gate_act(
+      socket,
+      &ReadArcEntry.set_audience(Repo, &1, who),
+      id,
+      if(who == :there,
+        do: "Only whoever was there will know it.",
+        else: "Everyone will come to know it."
       )
+    )
+  end
 
   def handle_event("edit", %{"id" => id}, socket),
     do: {:noreply, assign(socket, gate_editing: String.to_integer(id))}

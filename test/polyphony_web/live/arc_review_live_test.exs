@@ -189,7 +189,7 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
     refute render(world_view) =~ "Drop this one."
   end
 
-  test "a fact proposed as everyone's narrows rather than rejects (STR-62)", %{
+  test "who knows is an audience on the card, and narrowing is not a decision (STR-62)", %{
     conn: conn,
     user: user
   } do
@@ -198,20 +198,25 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
 
     {:ok, view, html} = live(conn, ~p"/arc/#{camp.id}?tab=world")
 
-    # No reject and no edit on a common-knowledge card — the thing is true either
-    # way and the question is who it reached.
-    refute has_element?(view, "button[phx-value-id='#{fact.id}'][phx-click='reject']")
-    refute has_element?(view, "button[phx-value-id='#{fact.id}'][phx-click='edit']")
+    # Common knowledge is one value of the audience, not a way of refusing — so the
+    # card keeps the ordinary actions.
+    assert has_element?(view, "button[phx-value-id='#{fact.id}'][phx-click='reject']")
+    assert has_element?(view, "button[phx-value-id='#{fact.id}'][phx-click='edit']")
     assert html =~ "Only who was there"
 
-    view
-    |> element("button[phx-value-id='#{fact.id}'][phx-click='accept_narrowed']")
-    |> render_click()
+    render_click(view, "set_audience", %{"id" => to_string(fact.id), "who" => "there"})
 
     row = Repo.get!(ArcRM, fact.id)
-    assert row.status == "canon"
+    # Narrowed, and still waiting on a decision about whether it happened at all.
+    assert row.status == "proposed"
     assert row.concealed == true
     assert %Polyphony.Authoring.Audience{scene: true} = PolyphonyCore.Blob.decode(row.audience)
+
+    render_click(view, "set_audience", %{"id" => to_string(fact.id), "who" => "everyone"})
+
+    widened = Repo.get!(ArcRM, fact.id)
+    assert widened.concealed == false
+    assert PolyphonyCore.Blob.decode(widened.audience) == nil
   end
 
   test "accept all promotes every proposal at once (the §3.0 fast path)", %{

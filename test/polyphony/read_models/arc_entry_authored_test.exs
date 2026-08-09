@@ -68,7 +68,7 @@ defmodule Polyphony.ReadModels.ArcEntryAuthoredTest do
     assert row.line_condition =~ "hurt by the silence"
   end
 
-  test "accept_narrowed goes canon concealed, with a whoever-was-there audience" do
+  test "set_audience narrows and widens without deciding whether it is true" do
     row =
       ArcRM.put_world(
         Repo,
@@ -82,7 +82,16 @@ defmodule Polyphony.ReadModels.ArcEntryAuthoredTest do
         "camp-1"
       )
 
-    ArcRM.accept_narrowed(Repo, row.id)
+    ArcRM.set_audience(Repo, row.id, :there)
+
+    # Still proposed: who knows is an audience, not a way of accepting or refusing.
+    assert [%{status: "proposed", concealed: true}] = ArcRM.list_proposed_world(Repo, "camp-1")
+
+    ArcRM.set_audience(Repo, row.id, :everyone)
+    assert [%{concealed: false, audience: nil}] = ArcRM.list_proposed_world(Repo, "camp-1")
+
+    ArcRM.set_audience(Repo, row.id, :there)
+    ArcRM.accept(Repo, row.id)
 
     assert [%WorldArcEntry{concealed: true, audience: %Audience{scene: true}}] =
              ArcRM.canon_for_world(Repo, "camp-1")

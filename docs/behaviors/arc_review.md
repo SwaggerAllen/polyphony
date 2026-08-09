@@ -1,6 +1,6 @@
 # Arc review
 
-<!-- rev: 3 -->
+<!-- rev: 4 -->
 
 | | |
 |---|---|
@@ -117,14 +117,19 @@ rereading the scene.
 **Three action sets, and which one a card gets is a claim about what has already happened.**
 
 - **True / Edit / No** — the ordinary set. A new fact, a field being replaced, a
-  relationship, an authored entry of any kind, and a line the Director proposes past its
-  written condition. Nothing has happened yet; you are deciding whether it will.
+  relationship, an authored entry of any kind, a world fact however wide its audience, and a
+  line the Director proposes past its written condition. Nothing has happened yet; you are
+  deciding whether it will.
 - **True / Not yet** — a line that **gave in play**. The gate already resolved it, so
   refusing means it stays scene-local rather than never having occurred. There is nothing to
   edit and no way to un-play it.
-- **True / Only who was there** — a world fact proposed as **common knowledge**. The refusal
-  narrows the audience rather than rejecting the fact; the thing is true either way and the
-  question is who it reached. See `world_common_knowledge`.
+
+**Who knows is an audience, not an action.** A world fact proposed as common knowledge used
+to take a third set, *True / Only who was there*, where the refusal narrowed the audience
+instead of rejecting the fact. That made one value of the audience into a button, and it cost
+the card its Edit. The audience control now sits on the card — the same one the authoring form
+uses — and *everyone* is one of its values. Narrowing and refusing stop competing for the same
+gesture: you say who it reached, and then you say whether it happened.
 
 Authored cards carry their author where an extracted one carries the engine, and are
 otherwise identical.
@@ -156,8 +161,13 @@ Opened from a cast row it arrives with that character and that scene already fil
 
 **What changes** is a dropdown rather than a fixed shape: a fact, temperament, cover, a
 refusal, a compulsion, a relationship. It uses the same switchable pill the perspective
-control does. Refusal and compulsion carry the left-rule the sheet gives them, so the two
-directions are distinguishable before you pick one.
+control does, and they are **plain options like any other** — a refusal and a compulsion
+need no special treatment in the list they are chosen from. The left-rule the sheet gives
+them appears on the form once one is picked, where it is describing something that exists.
+
+The form opens **in place**, under the proposals, where the *add an entry* row was. It is
+not a mode the screen enters: the list it was opened from stays on the page, because what
+you are writing is usually a gap in what you were just reading.
 
 **The current value is shown for whatever is picked, struck through.** Most authored entries
 are revisions rather than replacements, and editing something you can't see is how you
@@ -223,6 +233,12 @@ exactly that.
 *Add* takes a target and a regard, and names somebody who doesn't exist yet the way the sheet
 does — they join the campaign as a walk-on and stay unwritten until needed.
 
+**The walk-on is minted when the proposal is accepted, not when it is written.** A
+relationship targets an id, so accepting one that names a stranger has to produce a person
+for it to point at; a name that already belongs to somebody resolves to **them** rather than
+minting a second. Doing it at accept rather than at propose is what stops a refused proposal
+leaving somebody in the campaign — *No* is entitled to mean nobody arrived.
+
 *Remove* ends one direction and says so: what he thinks of her is untouched and stays on his
 sheet. Without that sentence, removing a direction reads as severing a relationship.
 
@@ -231,6 +247,10 @@ sheet. Without that sentence, removing a direction reads as severing a relations
 The same form with a shorter dropdown and one control more. A world has **a fact or a rule** —
 no temperament, no cover, no lines to hold — and every entry carries **who knows**, which is
 the audience picker doing the job it does on a secret.
+
+It carries a **Because** like every other entry. *What in the story made this true* is the
+same question whoever the subject is, and a world fact with no reason on it reads worse than
+a character's, not better — nobody can ask the world why.
 
 A world's default audience is **everyone**, so narrowing is what marks an entry rather than
 widening. That is the opposite direction from a character and the same rule underneath: the
@@ -241,12 +261,14 @@ else — a rule the town doesn't know is how a world keeps a secret.
 
 ### `world_common_knowledge` — A fact proposed as everyone's
 
-Its own state because its **actions differ**: **True / Only who was there**. The refusal
-narrows the audience rather than rejecting the fact, which no other card does.
+Its own state because of the **audience control** it carries, not because its actions differ:
+*everyone* and *only who was there* are two values of one question, and picking between them
+is not the same act as accepting the fact. The card keeps True / Edit / No.
 
 What accepting means is worth saying on the card: anyone off-screen is told this the next
 time they turn up, and reacts to it on the page rather than arriving already used to it. That
 is the off-screen problem being solved by delivery rather than by extrapolation.
 
 *Everyone* means common knowledge with no scoping — not *the whole town*, which would be a
-location audience once locations exist.
+location audience once locations exist. It is also the world's **default**: narrowing is what
+marks an entry, which is the opposite direction from a character and the same rule underneath.
