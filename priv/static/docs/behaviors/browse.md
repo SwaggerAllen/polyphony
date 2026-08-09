@@ -1,6 +1,6 @@
 # Browse
 
-<!-- rev: 4 -->
+<!-- rev: 5 -->
 
 | | |
 |---|---|
@@ -151,11 +151,6 @@ copy; they need to keep reading it the way they were.
 
 The alternative is offered in the same breath — *or take it unread and find out in play* —
 which is a real way to use this and not a consolation.
-
-**This corrects the mock.** §04's *Take the world* frame currently reads *"Some of this world
-isn't shown — Ilse kept a few things back, and those don't come with it."* That describes a
-partial copy, which is not what happens. It is wrong twice over: nothing is withheld from the
-bible, and the thing that *is* withheld — the arc — isn't mentioned at all.
 
 ### `taking_not_forkable` — Shared to be read, not continued
 
