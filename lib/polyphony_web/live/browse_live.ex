@@ -44,14 +44,14 @@ defmodule PolyphonyWeb.BrowseLive do
   alias Polyphony.{Accounts, Library, Moderation, Permissions, Reading}
   alias Polyphony.Owner
   alias PolyphonyCore.Publication
-  alias Polyphony.Authoring.WorldBible
   alias Polyphony.Reading.Session
   alias PolyphonyWeb.Screens
 
   @tabs ~w(stories worlds)
 
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, page_title: "Browse", reporting: false, sort: "any", who: nil)}
+    {:ok,
+     assign(socket, page_title: "Browse", reporting: false, sort: "any", who: nil, info: false)}
   end
 
   # Everything is in the URL: which story, which scene, which perspective. A reading
@@ -294,6 +294,13 @@ defmodule PolyphonyWeb.BrowseLive do
 
   def handle_event("close_who", _params, socket), do: {:noreply, assign(socket, who: nil)}
 
+  # The drawer behind the ⓘ on the perspective control — opened from the selector,
+  # never pushed at anybody (no toast on switch; it gets irritating by the second one).
+  def handle_event("reading_as_info", _params, socket),
+    do: {:noreply, assign(socket, info: true)}
+
+  def handle_event("close_info", _params, socket), do: {:noreply, assign(socket, info: false)}
+
   def handle_event("report", _params, socket),
     do: {:noreply, assign(socket, reporting: true)}
 
@@ -352,9 +359,12 @@ defmodule PolyphonyWeb.BrowseLive do
 
   # Taking the world out of a *story* is not the same operation: the bible is embedded
   # in the frozen snapshot, so there's no library entry to copy. It is put into the
-  # reader's library as a new original — and **stripped to its public entries**, because
-  # what the author kept back was never shared and doesn't travel with the setting
-  # (§2.17). Which is exactly what the screen says: some of this world isn't shown.
+  # reader's library as a new original — **whole**. There is no partial copy and no
+  # permission tier inside a world: everything the author wrote comes across, including
+  # entries kept from the reader while they were reading. What does not come across is
+  # the arc, and that needs no stripping here — the arc lives outside the bible, so the
+  # embedded copy is already the world at scene one, before anything in the story
+  # happened to it (STR-63; the screen says both halves).
   def handle_event("take_story_world", _params, socket) do
     safe(socket, fn ->
       case {socket.assigns.current_user, Screens.Browse.embedded_bible(socket.assigns.snapshot)} do
@@ -368,14 +378,14 @@ defmodule PolyphonyWeb.BrowseLive do
           Library.put(%{
             owner: Owner.of(user),
             kind: "world_bible",
-            payload: WorldBible.stripped(bible)
+            payload: bible
           })
 
           {:noreply,
            put_flash(
              socket,
              :info,
-             "A copy is in your library — minus whatever was kept back."
+             "A copy is in your library — the world as it began, not as the story left it."
            )}
       end
     end)
@@ -446,6 +456,7 @@ defmodule PolyphonyWeb.BrowseLive do
       events={@events}
       gap={@gap}
       gone={@gone}
+      info={@info}
       mode={@mode}
       names={@names}
       pub={@pub}

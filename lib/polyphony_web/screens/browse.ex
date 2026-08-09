@@ -264,23 +264,89 @@ defmodule PolyphonyWeb.Screens.Browse do
   end
 
   # An action that isn't available simply isn't shown — no greyed-out buttons and no
-  # "request access". Not a locked door, a different offer.
+  # "request access". Not a locked door, a different offer. The four combinations of
+  # forkable? and an embedded world are the four `taking*` states.
   defp take_actions(assigns) do
+    assigns = assign(assigns, :bible, embedded_bible(assigns.snapshot))
+
     ~H"""
-    <div class="flex flex-wrap gap-1.5">
-      <Kit.btn :if={Publication.forkable?(@pub)} size={:sm} type="button" phx-click="fork">
-        Make it mine
-      </Kit.btn>
-      <Kit.btn :if={embedded_bible(@snapshot)} size={:sm} type="button" phx-click="take_story_world">
-        Use this world
-      </Kit.btn>
-      <Kit.btn size={:sm} type="button" phx-click="report" class="ml-auto">Report</Kit.btn>
-    </div>
-    <p :if={not Publication.forkable?(@pub)} class="text-[11px] leading-relaxed dim mt-2">
+    <.fork_offer :if={Publication.forkable?(@pub)} {assigns} />
+    <p :if={not Publication.forkable?(@pub)} class="text-[11px] leading-relaxed dim mb-2">
       <%= shared_to_be_read(assigns) %>
     </p>
+    <.world_offer :if={@bible} {assigns} />
+    <div class="flex">
+      <Kit.btn size={:sm} type="button" phx-click="report" class="ml-auto">Report</Kit.btn>
+    </div>
     """
   end
+
+  # The fork offer, explicit about scale because a fork is not a bookmark. The two
+  # sentences in the inset are load-bearing and not to be cut for length: the first
+  # answers the fear that taking something damages it, the second the opposite fear —
+  # that a fork is a shared document rather than a divergent copy.
+  defp fork_offer(assigns) do
+    ~H"""
+    <div class="mb-3">
+      <div class="ttl text-[15px] mb-1.5 font-semibold">Carry this on yourself?</div>
+      <p class="text-[13px] leading-relaxed dim mb-2.5">
+        You'll get your own copy of everything — the world, everyone in it, and everything
+        that happened to them. It picks up where this leaves off, and nothing you do touches
+        the original.
+      </p>
+      <div class="rounded-lg p-2.5 mb-3" style="background:var(--b3)">
+        <p class="text-[12px] leading-relaxed">
+          <%= @row.author %>'s version stays exactly as it is. Yours becomes a different
+          story from the first thing you change.
+        </p>
+      </div>
+      <Kit.btn kind={:primary} type="button" phx-click="fork" class="w-full justify-center">
+        Make it mine
+      </Kit.btn>
+    </div>
+    """
+  end
+
+  # The world on its own, with its cover. You take the whole bible and none of the arc —
+  # nothing is withheld from a world you may take, and what *is* withheld is everything
+  # the campaign changed, so the copy is the world at scene one. Both halves need saying,
+  # and the second is the one people get wrong: read a story about a city falling and you
+  # take home the city standing. The fork pointer appears only when a fork is offered.
+  defp world_offer(assigns) do
+    ~H"""
+    <div class="mb-3">
+      <div class="lbl dim mb-1">World</div>
+      <div class="ttl text-[16px] mb-1 font-semibold"><%= world_name(@bible) %></div>
+      <p :if={Map.get(@bible, :cover)} class="text-[13px] leading-relaxed mb-2.5">
+        <%= Map.get(@bible, :cover) %>
+      </p>
+      <div class="rounded-lg p-2.5 mb-3" style="background:var(--b3)">
+        <p class="text-[12px] leading-relaxed dim mb-2">
+          The whole bible goes in your library — everything <%= @row.author %> wrote,
+          including what was kept from you while you were reading.
+        </p>
+        <p class="text-[12px] leading-relaxed dim">
+          What doesn't come is everything the story did to it. You get
+          <%= world_name(@bible) %> as it stood at the first scene.<%= if Publication.forkable?(@pub) do %>
+            To have it as the story left it, fork the campaign.<% end %>
+        </p>
+      </div>
+      <Kit.btn
+        kind={:primary}
+        type="button"
+        phx-click="take_story_world"
+        class="w-full justify-center mb-1.5"
+      >
+        Use this world
+      </Kit.btn>
+      <p class="text-[11px] leading-relaxed dim text-center">
+        Or take it unread and find out in play.
+      </p>
+    </div>
+    """
+  end
+
+  defp world_name(bible), do: Map.get(bible, :name) || "the world"
 
   defp report_panel(assigns) do
     assigns = assign_new(assigns, :id, fn -> "" end)
@@ -324,7 +390,11 @@ defmodule PolyphonyWeb.Screens.Browse do
     # A share token is a credential, not a state of this screen, so it defaults away
     # rather than becoming a fifteenth thing every storybook variation has to declare.
     # The public and unlisted readers are the same markup; only how you got here differs.
-    assigns = assigns |> assign_new(:token, fn -> nil end) |> assign_new(:id, fn -> "" end)
+    assigns =
+      assigns
+      |> assign_new(:token, fn -> nil end)
+      |> assign_new(:id, fn -> "" end)
+      |> assign_new(:info, fn -> false end)
 
     ~H"""
     <Kit.frame register={:page} class="flex flex-col min-h-[100dvh]">
@@ -364,9 +434,52 @@ defmodule PolyphonyWeb.Screens.Browse do
               </optgroup>
             </Kit.viewas_select>
           </form>
+          <%!-- The one thing the reader adds beside the control, and the only
+                surface-specific affordance the perspective control carries anywhere
+                (play.md, *The perspective control*). The control itself is identical
+                on all three surfaces; the explanation is not, because a reader is
+                being shown a deliberately partial story and has no way to know that
+                is intended. No toast on switch — the answer lives where somebody
+                confused would idiomatically go looking. --%>
+          <Kit.info label="Reading as" phx-click="reading_as_info" />
           <Layouts.nav_menu current_user={@current_user} />
         </:actions>
       </Kit.header>
+
+      <%!-- Connection. The same class-driven treatment as play's, promising less: a
+            reader has nothing at risk in the first place, and reading position is a
+            URL, so even a full reload returns to the same place. No retry — this is
+            the transport, not the fiction. --%>
+      <div
+        class="hidden [.phx-loading_&]:flex items-center gap-2 px-4 py-2 row"
+        style="background:color-mix(in srgb,var(--lamp) 12%,transparent)"
+      >
+        <Kit.dot colour="var(--lamp)" />
+        <span class="text-[12.5px]">
+          Reconnecting — the story is still there, the page is catching up.
+        </span>
+      </div>
+      <div
+        class="hidden [.phx-error_&]:flex items-center gap-2 px-4 py-2 row"
+        style="background:color-mix(in srgb,var(--pencil) 12%,transparent)"
+      >
+        <Kit.dot colour="var(--pencil)" />
+        <span class="text-[12.5px]">
+          No connection. The text you have stays readable — the page will catch up when
+          you're back.
+        </span>
+      </div>
+
+      <Kit.info_drawer :if={@info} title="Reading as" on_close="close_info">
+        <:intro>
+          Each of these people knows different things, so the story is a different length
+          depending on whose eyes you're behind.
+        </:intro>
+        <:part name="Switching keeps your place">
+          Things will appear and disappear — that's the point, not a fault. Nothing is
+          hidden from you on purpose except what that person doesn't know.
+        </:part>
+      </Kit.info_drawer>
 
       <div class="flex-1 min-h-0 overflow-y-auto px-5 pb-3">
         <Transcript.transcript

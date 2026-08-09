@@ -1363,8 +1363,9 @@ defmodule PolyphonyWeb.CampaignLive do
 
       # Attaching *copies*, so an unchecked id is a way to take a private bible —
       # secrets included — out of somebody else's library. Taking a published world is
-      # a real flow, but it belongs to Browse, which strips what was kept back
-      # (`WorldBible.stripped/1`); this path would copy it whole.
+      # a real flow, but it belongs to Browse, which gates on what the reader may
+      # *view* (`Permissions.can_view?/3`); this path is the author's own, and edit is
+      # the bar.
       not Permissions.can_edit?(source, socket.assigns.current_user) ->
         {socket.assigns.payload[:bible_id], "That world isn't yours to attach."}
 
