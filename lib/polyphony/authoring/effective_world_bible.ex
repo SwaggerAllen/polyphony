@@ -27,19 +27,50 @@ defmodule Polyphony.Authoring.EffectiveWorldBible do
   def apply(%WorldBible{} = bible, entries, reach \\ :all, opts \\ []) do
     members_of = Keyword.get(opts, :scene_members, fn _scene_id -> [] end)
 
-    additions =
+    applicable =
       entries
       |> Enum.filter(&(&1.status == :canon))
       |> Enum.filter(&reaches?(&1, reach))
-      |> Enum.sort_by(&(&1.beat || 0))
-      # `scope` said *where* it landed; the entry's own audience says *who knows*, and
-      # the two stay separate axes. "Everyone" folds in public — which is what fixes the
-      # off-screen problem, since the fact is simply present the next time they turn up.
-      # "Whoever was there" folds in concealed, with the scene's cast as its audience.
-      |> Enum.map(&fold_entry(&1, members_of))
+      |> Enum.sort_by(&{if(&1.timing == :always, do: 0, else: 1), &1.beat || 0})
 
-    %{bible | starting_canon: WorldBible.entries(bible.starting_canon) ++ additions}
+    # An authored entry names its list (`sheet_field: "rules"` or canon) and may be a
+    # list operation (`:change` / `:remove` naming its target via `replaces`); an
+    # extracted entry is always an addition to canon.
+    {rules_entries, canon_entries} = Enum.split_with(applicable, &(&1.sheet_field == "rules"))
+
+    %{
+      bible
+      | starting_canon:
+          fold_list(WorldBible.entries(bible.starting_canon), canon_entries, members_of),
+        rules: fold_list(WorldBible.entries(bible.rules), rules_entries, members_of)
+    }
   end
+
+  # `scope` said *where* it landed; the entry's own audience says *who knows*, and
+  # the two stay separate axes. "Everyone" folds in public — which is what fixes the
+  # off-screen problem, since the fact is simply present the next time they turn up.
+  # "Whoever was there" folds in concealed, with the scene's cast as its audience.
+  defp fold_list(base, entries, members_of) do
+    Enum.reduce(entries, base, fn e, acc ->
+      case e.operation do
+        :remove ->
+          target = e.replaces || e.statement
+          Enum.reject(acc, &(normalize(&1.statement) == normalize(target)))
+
+        :change when is_binary(e.replaces) and e.replaces != "" ->
+          Enum.map(acc, fn item ->
+            if normalize(item.statement) == normalize(e.replaces),
+              do: %WorldBible.Entry{item | statement: e.statement},
+              else: item
+          end)
+
+        _add_or_extracted ->
+          acc ++ [fold_entry(e, members_of)]
+      end
+    end)
+  end
+
+  defp normalize(s), do: s |> to_string() |> String.trim() |> String.downcase()
 
   # A **whoever was there** audience is expanded here, into the actual cast of the
   # scene the fact came from — unlike a group, which is named and never expanded.

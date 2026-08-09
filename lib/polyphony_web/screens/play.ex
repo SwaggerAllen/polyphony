@@ -30,7 +30,7 @@ defmodule PolyphonyWeb.Screens.Play do
   use PolyphonyWeb, :html
 
   alias PolyphonyCore.Scene.Cast
-  alias PolyphonyWeb.{Kit, Layouts, Transcript, TurnEdit, Voice}
+  alias PolyphonyWeb.{Kit, Layouts, Screens, Transcript, TurnEdit, Voice}
 
   # Who the beat loop is generating right now, if anyone — the strip's live slot.
   def generating_now(%{phase: :generating, subject: s}) when is_binary(s) and s != "", do: s
@@ -329,8 +329,15 @@ defmodule PolyphonyWeb.Screens.Play do
   # can disagree with each other.
   attr(:intros_view, :atom,
     default: :panel,
-    values: [:panel, :write_new, :picker, :picker_confirm],
+    values: [:panel, :write_new, :picker, :picker_confirm, :arc_gate],
     doc: "which face of the introductions panel is showing"
+  )
+
+  attr(:arc_gate, :any,
+    default: nil,
+    doc:
+      "%{id, name, colour, proposals, editing} — somebody whose arc is pending, met " <>
+        "on the way into the scene (STR-62)"
   )
 
   attr(:suggestion, :any,
@@ -1081,9 +1088,69 @@ defmodule PolyphonyWeb.Screens.Play do
         </Kit.btn>
         <p class="text-[11px] dim mt-2.5 text-center">They come in at the next beat.</p>
       </div>
+
+      <%!-- The gate, met on the way in. Casting somebody is casting somebody wherever
+            you do it, so this is the same review the campaign's cast rows carry, with
+            the same cards — a character who walks on mid-scene with unreviewed arc is
+            a character the Director writes two scenes out of date. --%>
+      <div :if={@panel == :intros and @intros_view == :arc_gate and @arc_gate} class="px-4 py-3.5">
+        <div class="flex items-center gap-2.5 mb-2.5">
+          <span class="av shrink-0" style={"background:#{@arc_gate.colour}"}></span>
+          <div class="min-w-0 flex-1">
+            <div class="text-[13px] font-semibold"><%= @arc_gate.name %></div>
+            <div class="text-[11px]" style="color:var(--lamp)">
+              <%= gate_line(@arc_gate.proposals) %>
+            </div>
+          </div>
+        </div>
+
+        <p :if={@arc_gate.proposals != []} class="text-[12.5px] leading-relaxed dim mb-2.5">
+          They'd come on as they were before it. Say yes or no first, and they walk in
+          current.
+        </p>
+
+        <Kit.sheet :if={@arc_gate.proposals != []} class="mb-2.5">
+          <Screens.ArcReview.proposal_card
+            :for={e <- @arc_gate.proposals}
+            entry={e}
+            editing={@arc_gate.editing}
+            events="arc_"
+          />
+        </Kit.sheet>
+
+        <Kit.btn
+          :if={@arc_gate.proposals != []}
+          kind={:primary}
+          class="w-full justify-center"
+          phx-click="arc_accept_all"
+        >
+          Accept <%= length(@arc_gate.proposals) %> and bring them on
+        </Kit.btn>
+
+        <Kit.btn
+          :if={@arc_gate.proposals == []}
+          kind={:primary}
+          class="w-full justify-center"
+          phx-click="arc_gate_continue"
+        >
+          Bring them on
+        </Kit.btn>
+
+        <button
+          type="button"
+          class="btn btn-gh w-full justify-center mt-1.5"
+          phx-click="arc_gate_cancel"
+        >
+          Not now
+        </button>
+      </div>
     </Kit.frame>
     """
   end
+
+  defp gate_line([]), do: "Up to date"
+  defp gate_line([_]), do: "1 change to say yes or no to"
+  defp gate_line(proposals), do: "#{length(proposals)} changes to say yes or no to"
 
   # ── Transcript blocks ─────────────────────────────────────────────────────────
 

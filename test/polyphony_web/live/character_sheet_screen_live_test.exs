@@ -128,9 +128,14 @@ defmodule PolyphonyWeb.CharacterSheetScreenLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/authoring/character/#{entry.id}")
 
+      # The Secret toggle is gone (STR-62): concealment is what the audience says.
+      # Naming anyone besides her is what conceals, and always-in-mind stays its
+      # own, unrelated switch.
       view
-      |> element("button[phx-click=toggle_fact][phx-value-index='0'][phx-value-flag=concealed]")
+      |> element("button[phx-click=open_audience][phx-value-index='0']")
       |> render_click()
+
+      render_click(view, "toggle_audience", %{"kind" => "character", "id" => "77"})
 
       view |> form("form[phx-submit=save]", %{name: "Wren"}) |> render_submit()
 

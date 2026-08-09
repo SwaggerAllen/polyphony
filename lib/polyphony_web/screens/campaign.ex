@@ -11,7 +11,7 @@ defmodule PolyphonyWeb.Screens.Campaign do
   alias PolyphonyCore.Content.CampaignConfig
   alias Polyphony.Library
   alias Polyphony.ReadModels.BuildRun
-  alias PolyphonyWeb.{Kit, Layouts, Voice}
+  alias PolyphonyWeb.{Kit, Layouts, Screens, Voice}
 
   # The campaign's sections, in the design's order. Premise sits after Cast because
   # the pitch is written *from* the cast (`ux/README.md`), and Quick Build is
@@ -93,6 +93,26 @@ defmodule PolyphonyWeb.Screens.Campaign do
   attr(:scene_location, :string, default: "")
   attr(:scene_premise, :string, default: "")
   attr(:scene_suggesting, :boolean, default: false)
+
+  attr(:arc_rows, :map,
+    default: %{},
+    doc:
+      "character_id => %{count:, running:, failure:, proposals: [%{entry:, was:}]} — " <>
+        "the gate made visible on the cast rows (STR-62)"
+  )
+
+  attr(:world_arc, :map,
+    default: %{count: 0, proposals: []},
+    doc: "pending world arc — gates every scene, whoever is in it"
+  )
+
+  attr(:gate_expanded, :any,
+    default: nil,
+    doc: "the row open in place: a character id or \"world\""
+  )
+
+  attr(:gate_editing, :any, default: nil, doc: "the proposal being corrected on a row")
+  attr(:arc_backlog, :integer, default: 0, doc: "pending on people not in this scene")
 
   attr(:generating, :boolean, default: false, doc: "the pending cast is being filled in")
   attr(:expanding_premise, :boolean, default: false)
@@ -1045,33 +1065,230 @@ defmodule PolyphonyWeb.Screens.Campaign do
     <div>
       <Kit.row class="px-4 py-2.5 flex items-center justify-between gap-2" style="background:var(--b2)">
         <span class="lbl dim"><%= length(@scenes) %> <%= if length(@scenes) == 1, do: "scene", else: "scenes" %></span>
-        <Kit.btn kind={:primary} size={:sm} type="button" phx-click="start_scene" disabled={scene_cast_entries(assigns) == []}>
+        <Kit.btn
+          kind={:primary}
+          size={:sm}
+          type="button"
+          phx-click="start_scene"
+          disabled={scene_cast_entries(assigns) == [] or not_ready(assigns) > 0}
+        >
           Set a scene
         </Kit.btn>
       </Kit.row>
 
+      <%!-- The submit control says what remains, not a refusal — the work is all on
+            the rows below it. --%>
+      <Kit.row :if={not_ready(assigns) > 0} class="px-4 py-2" style="background:var(--b2)">
+        <p class="text-[11.5px] leading-relaxed dim">
+          <%= not_ready_line(assigns) %> — sorting them out below lights this up.
+        </p>
+      </Kit.row>
+
+      <%!-- The world takes a row of its own, above the cast and set apart from it,
+            whenever it has pending changes. Pending world proposals gate every scene
+            in the campaign whoever is in it — without a row the form refuses for a
+            reason that names nobody in it. It is not cast: nobody can select or
+            deselect it, so it sits in its own band; with nothing pending, the band is
+            absent rather than empty. --%>
+      <div :if={@world_arc.count > 0}>
+        <div class="px-4 py-1.5" style="background:var(--b3)">
+          <span class="lbl dim">The world · holds up every scene</span>
+        </div>
+        <Kit.row class="px-4 py-2.5">
+          <div class="flex items-center gap-2.5">
+            <span class="av" style="background:var(--bcm);border-radius:3px"></span>
+            <div class="min-w-0 flex-1">
+              <div class="text-[13px] font-semibold"><%= campaign_title(@payload) %></div>
+              <div class="text-[11px]" style="color:var(--lamp)">
+                <%= changes_line(@world_arc.count) %>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="dim text-[14px] shrink-0"
+              phx-click="gate_expand"
+              phx-value-id="world"
+              aria-expanded={to_string(@gate_expanded == "world")}
+            >
+              <span class="sr-only">Read them</span>
+              <%= if @gate_expanded == "world", do: "⌃", else: "⌄" %>
+            </button>
+          </div>
+          <div class="flex gap-1.5 mt-2 pl-[2.375rem]">
+            <Kit.btn
+              kind={:primary}
+              size={:sm}
+              type="button"
+              phx-click="gate_accept_all"
+              phx-value-subject="world"
+            >
+              Accept <%= if @world_arc.count == 2, do: "both", else: "all #{@world_arc.count}" %>
+            </Kit.btn>
+            <Kit.btn
+              :if={@gate_expanded != "world"}
+              size={:sm}
+              type="button"
+              phx-click="gate_expand"
+              phx-value-id="world"
+            >
+              Read them
+            </Kit.btn>
+          </div>
+        </Kit.row>
+        <div :if={@gate_expanded == "world"}>
+          <Screens.ArcReview.proposal_card
+            :for={e <- @world_arc.proposals}
+            entry={e}
+            editing={@gate_editing}
+            world={true}
+          />
+        </div>
+        <div class="px-4 py-1.5" style="background:var(--b3)">
+          <span class="lbl dim">Who's in it</span>
+        </div>
+      </div>
+
       <%!-- Who is in it. Not every scene is the whole cast, and opening one with
             everybody present is how a two-hander becomes a crowd — the roster is what
             turn order walks, so it is also a cost. Everyone ready is the default, so
-            an author who never touches this gets exactly what they got before. --%>
+            an author who never touches this gets exactly what they got before.
+
+            Every cast row carries that character's arc state — the gate made visible
+            as you build the scene rather than as a refusal when you submit it. --%>
       <Kit.row :if={@cast != []} class="px-4 py-3">
         <div class="flex items-center justify-between gap-2">
           <span class="lbl dim">Who's in it</span>
           <span class="text-[11px] dim"><%= length(scene_cast_entries(assigns)) %> of <%= length(scene_ready(@cast)) %></span>
         </div>
-        <div class="flex flex-wrap gap-1.5 mt-1.5">
-          <button
-            :for={c <- scene_ready(@cast)}
-            type="button"
-            class={["pill", not MapSet.member?(scene_cast_ids(assigns), c.id) && "dim"]}
-            style={MapSet.member?(scene_cast_ids(assigns), c.id) && "background:var(--b3)"}
-            aria-pressed={to_string(MapSet.member?(scene_cast_ids(assigns), c.id))}
-            phx-click="toggle_scene_cast"
-            phx-value-id={c.id}
-          >
-            <%= char_name(c) %>
-          </button>
+        <div class="flex flex-col mt-1.5">
+          <div :for={c <- scene_ready(@cast)} class="row py-2">
+            <div class="flex items-center gap-2.5">
+              <button
+                type="button"
+                class="flex items-center gap-2.5 min-w-0 flex-1 text-left"
+                aria-pressed={to_string(MapSet.member?(scene_cast_ids(assigns), c.id))}
+                phx-click="toggle_scene_cast"
+                phx-value-id={c.id}
+              >
+                <span
+                  class={["av shrink-0", not MapSet.member?(scene_cast_ids(assigns), c.id) && "opacity-40"]}
+                  style={"background:#{Voice.of_sheet(Library.payload(c))}"}
+                >
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class={[
+                    "block text-[13px] font-semibold truncate",
+                    not MapSet.member?(scene_cast_ids(assigns), c.id) && "dim"
+                  ]}>
+                    <%= char_name(c) %>
+                  </span>
+                  <span
+                    class={["block text-[11px]", row_state(assigns, c.id) in [:clear, :running] && "dim"]}
+                    style={row_state_style(row_state(assigns, c.id))}
+                  >
+                    <%= row_line(assigns, c.id) %>
+                  </span>
+                </span>
+              </button>
+              <button
+                :if={row_state(assigns, c.id) in [:pending, :failed]}
+                type="button"
+                class="dim text-[14px] shrink-0"
+                phx-click="gate_expand"
+                phx-value-id={c.id}
+                aria-expanded={to_string(@gate_expanded == to_string(c.id))}
+              >
+                <span class="sr-only">Read them</span>
+                <%= if @gate_expanded == to_string(c.id), do: "⌃", else: "⌄" %>
+              </button>
+            </div>
+
+            <div
+              :if={row_state(assigns, c.id) == :pending and @gate_expanded != to_string(c.id)}
+              class="flex gap-1.5 mt-2 pl-[2.375rem]"
+            >
+              <Kit.btn
+                kind={:primary}
+                size={:sm}
+                type="button"
+                phx-click="gate_accept_all"
+                phx-value-subject={c.id}
+              >
+                Accept all <%= arc_row(assigns, c.id).count %>
+              </Kit.btn>
+            </div>
+
+            <%!-- The caret opens the proposals in place, as the same cards the review
+                  screen shows — not a summary of them. The full card is what makes
+                  navigation unnecessary. --%>
+            <div :if={@gate_expanded == to_string(c.id) and row_state(assigns, c.id) == :pending}>
+              <Screens.ArcReview.proposal_card
+                :for={p <- arc_row(assigns, c.id).proposals}
+                entry={p.entry}
+                was={p[:was]}
+                editing={@gate_editing}
+              />
+              <div class="flex items-center justify-between gap-2 py-2.5">
+                <span class="text-[12px] dim"><%= rest_line(arc_row(assigns, c.id)) %></span>
+                <Kit.btn
+                  size={:sm}
+                  type="button"
+                  phx-click="gate_accept_all"
+                  phx-value-subject={c.id}
+                >
+                  Accept the rest
+                </Kit.btn>
+              </div>
+              <%!-- Last in the expansion, a row for adding one yourself — the fan-out
+                    proposes what the scene concluded, not what it missed. It opens the
+                    review screen's authoring form with this character filled in. --%>
+              <.link
+                navigate={~p"/arc/#{@entry.id}?#{[tab: c.id, authoring: "fact"]}"}
+                class="field block px-3 py-2 text-[13px] dim mb-2"
+              >
+                ✦ Something else changed about <%= char_name(c) %>…
+              </.link>
+            </div>
+
+            <%!-- Extraction failed. Per-row, because failure is per-character; no
+                  open-anyway, because arc extraction and turn generation call the same
+                  provider — a row that can't extract is evidence the scene can't run. --%>
+            <div
+              :if={@gate_expanded == to_string(c.id) and row_state(assigns, c.id) == :failed}
+              class="mt-2 pl-[2.375rem]"
+            >
+              <div
+                class="rounded-lg p-2.5 mb-2"
+                style="background:color-mix(in srgb,var(--pencil) 9%,transparent);border-left:2px solid var(--pencil)"
+              >
+                <div class="text-[12.5px] font-semibold mb-0.5">
+                  <%= char_name(c) %>'s changes couldn't be worked out
+                </div>
+                <p class="text-[12px] leading-relaxed dim">
+                  The model is busy. This usually clears on its own in a few minutes — and a
+                  scene would be struggling too until it does.
+                </p>
+              </div>
+              <Kit.btn
+                kind={:primary}
+                size={:sm}
+                type="button"
+                phx-click="gate_retry"
+                phx-value-id={arc_row(assigns, c.id).failure.id}
+              >
+                Try again
+              </Kit.btn>
+            </div>
+          </div>
         </div>
+
+        <%!-- The per-cast rule expressed as a sentence rather than as an absence:
+              the backlog is visible but not in the way. --%>
+        <p :if={@arc_backlog > 0} class="text-[11px] leading-relaxed dim mt-2">
+          <%= changes_line(@arc_backlog) %> still waiting on people who aren't in this
+          scene. They can keep waiting.
+        </p>
+
         <p :if={scene_cast_entries(assigns) == []} class="text-[11px] leading-relaxed mt-1.5" style="color:var(--pencil)">
           Nobody is in it. Pick at least one.
         </p>
@@ -1199,6 +1416,84 @@ defmodule PolyphonyWeb.Screens.Campaign do
     </div>
     """
   end
+
+  # ── The gate on the row (STR-62) ─────────────────────────────────────────────
+
+  # Four things a row can say: up to date, n changes to say yes or no to, still
+  # being worked out, couldn't be worked out. Failure outranks running (the failure
+  # row is written when the job gives up), and pending proposals are the ordinary
+  # blocked case.
+  defp row_state(assigns, id) do
+    row = arc_row(assigns, id)
+
+    cond do
+      row.failure != nil -> :failed
+      row.running -> :running
+      row.count > 0 -> :pending
+      true -> :clear
+    end
+  end
+
+  defp arc_row(assigns, id) do
+    Map.get(assigns.arc_rows, to_string(id), %{
+      count: 0,
+      running: false,
+      failure: nil,
+      proposals: []
+    })
+  end
+
+  defp row_state_line(:clear), do: "Up to date"
+  defp row_state_line(:running), do: "Still being worked out"
+  defp row_state_line(:failed), do: "Couldn't be worked out"
+
+  defp row_state_style(:pending), do: "color:var(--lamp)"
+  defp row_state_style(:failed), do: "color:var(--pencil)"
+  defp row_state_style(_), do: nil
+
+  # The pending row says the count; the others say their state in words.
+  defp row_line(assigns, id) do
+    case row_state(assigns, id) do
+      :pending -> changes_line(arc_row(assigns, id).count)
+      other -> row_state_line(other)
+    end
+  end
+
+  defp changes_line(1), do: "1 change to say yes or no to"
+  defp changes_line(n), do: "#{n} changes to say yes or no to"
+
+  defp rest_line(%{count: 1}), do: "1 left"
+  defp rest_line(%{count: n}), do: "#{n} left"
+
+  # How many of the people going on stage aren't ready — plus the world, which gates
+  # every scene whoever is in it. A statement of what remains, not a refusal.
+  defp not_ready(assigns) do
+    cast_blocked =
+      assigns
+      |> scene_cast_entries()
+      |> Enum.count(&(row_state(assigns, &1.id) != :clear))
+
+    cast_blocked + if assigns.world_arc.count > 0, do: 1, else: 0
+  end
+
+  defp not_ready_line(assigns) do
+    world_blocked = assigns.world_arc.count > 0
+
+    people =
+      assigns
+      |> scene_cast_entries()
+      |> Enum.count(&(row_state(assigns, &1.id) != :clear))
+
+    cond do
+      world_blocked and people == 0 -> "The world isn't ready"
+      world_blocked -> "The world and #{people_word(people)} aren't ready"
+      people == 1 -> "1 person isn't ready"
+      true -> "#{people} people aren't ready"
+    end
+  end
+
+  defp people_word(1), do: "1 person"
+  defp people_word(n), do: "#{n} people"
 
   # ── Render helpers ────────────────────────────────────────────────────────────
 

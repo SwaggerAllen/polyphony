@@ -247,6 +247,14 @@
   height: 2.75rem;
 }
 
+.h-2 {
+  height: 0.5rem;
+}
+
+.h-2\.5 {
+  height: 0.625rem;
+}
+
 .max-h-\[50dvh\] {
   max-height: 50dvh;
 }
@@ -343,6 +351,10 @@
 
 .items-baseline {
   align-items: baseline;
+}
+
+.justify-start {
+  justify-content: flex-start;
 }
 
 .justify-end {
@@ -454,6 +466,10 @@
 
 .break-all {
   word-break: break-all;
+}
+
+.rounded {
+  border-radius: 0.25rem;
 }
 
 .rounded-full {
@@ -601,6 +617,10 @@
   padding-bottom: 2.25rem;
 }
 
+.pb-2 {
+  padding-bottom: 0.5rem;
+}
+
 .pb-3 {
   padding-bottom: 0.75rem;
 }
@@ -615,6 +635,10 @@
 
 .pl-6 {
   padding-left: 1.5rem;
+}
+
+.pl-\[2\.375rem\] {
+  padding-left: 2.375rem;
 }
 
 .pt-0 {
@@ -779,6 +803,10 @@
 
 .underline {
   text-decoration-line: underline;
+}
+
+.opacity-40 {
+  opacity: 0.4;
 }
 
 .opacity-50 {

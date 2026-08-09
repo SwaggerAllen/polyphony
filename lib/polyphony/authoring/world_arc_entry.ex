@@ -40,6 +40,15 @@ defmodule Polyphony.Authoring.WorldArcEntry do
 
   `scope` is a different axis and stays one: it says *where* a fact landed, not who
   knows it.
+
+  ## Authored entries (STR-62)
+
+  The author can write a world entry by hand — the same object, reviewed the same
+  way. `author` is who says so (`nil` means the engine); `sheet_field` says whether
+  it is canon (`nil` / `"starting_canon"`) or a rule (`"rules"`) — a world has a
+  fact or a rule and nothing else; `operation` (`:add | :change | :remove`) and
+  `replaces` are the list operations the authoring form needs, since *which one*
+  has to be answerable before *what about it*.
   """
   @derive Jason.Encoder
   defstruct [
@@ -50,6 +59,11 @@ defmodule Polyphony.Authoring.WorldArcEntry do
     :beat,
     :source_scene_id,
     :location_id,
+    :author,
+    :operation,
+    :timing,
+    :replaces,
+    :sheet_field,
     concealed: false,
     scope: :global,
     status: :proposed,
@@ -64,6 +78,11 @@ defmodule Polyphony.Authoring.WorldArcEntry do
           beat: integer() | nil,
           source_scene_id: term() | nil,
           location_id: String.t() | nil,
+          author: String.t() | nil,
+          operation: :add | :change | :remove | nil,
+          timing: :always | :scene | :now | nil,
+          replaces: String.t() | nil,
+          sheet_field: String.t() | nil,
           scope: scope(),
           status: :proposed | :canon | :retracted,
           promotable: boolean()

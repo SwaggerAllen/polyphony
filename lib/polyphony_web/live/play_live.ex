@@ -60,7 +60,9 @@ defmodule PolyphonyWeb.PlayLive do
     SupersedePacket
   }
 
-  alias Polyphony.Authoring.{CharacterSheet, Stub, WorldBible}
+  alias Polyphony.Authoring.{ArcAccept, CharacterSheet, Stub, WorldBible}
+  alias Polyphony.ReadModels.ArcEntry, as: ArcRM
+  alias Polyphony.Repo
 
   alias PolyphonyCore.Events.{
     IntroductionProposed,
@@ -132,6 +134,7 @@ defmodule PolyphonyWeb.PlayLive do
        introductions: [],
        suggestion: nil,
        intros_view: :panel,
+       arc_gate: nil,
        intro_control: "autonomous",
        admitted: [],
        sending_away: nil,
@@ -506,7 +509,77 @@ defmodule PolyphonyWeb.PlayLive do
   # their frozen context so the Director loop can cast them next. The character enters
   # by **library id** (§5.2) — the same mint as scene open — with the name kept only
   # for what the author reads.
-  defp admit(socket, entry, %CharacterSheet{name: name} = sheet) do
+  # The gate, met on the way in (STR-62). `arc_review.md` says the review is the same
+  # component in all three places you cast somebody, and this is two of them: adding
+  # someone mid-scene, and admitting a Director proposal. A character enters as their
+  # sheet reads, so entering one with unreviewed arc puts somebody two scenes out of
+  # date on stage — the same staleness the scene-setup gate exists to prevent.
+  #
+  # Only *their* pending arc counts. Pending world arc gates opening a scene, because a
+  # world fact is true for everybody; this scene is already open, and the world's
+  # backlog says nothing about whether this person's sheet is current.
+  defp admit(socket, entry, %CharacterSheet{} = sheet) do
+    case ArcRM.list_proposed(Repo, to_string(entry.id)) do
+      [] -> do_admit(socket, entry, sheet)
+      pending -> open_arc_gate(socket, entry, sheet, pending)
+    end
+  end
+
+  defp admit(socket, _entry, _other),
+    do: put_flash(socket, :error, "That character has no usable sheet yet.")
+
+  defp arc_gate_act(socket, fun, id) do
+    safe(socket, fn ->
+      fun.(String.to_integer(id))
+      {:noreply, socket |> update_arc_gate(&%{&1 | editing: nil}) |> refresh_arc_gate()}
+    end)
+  end
+
+  defp update_arc_gate(socket, fun) do
+    case socket.assigns.arc_gate do
+      nil -> socket
+      gate -> assign(socket, arc_gate: fun.(gate))
+    end
+  end
+
+  defp refresh_arc_gate(socket) do
+    case socket.assigns.arc_gate do
+      nil ->
+        socket
+
+      gate ->
+        assign(socket, arc_gate: %{gate | proposals: ArcRM.list_proposed(Repo, gate.id)})
+    end
+  end
+
+  # The entrance the gate interrupted, now that they are current.
+  defp continue_admission(socket, gate) do
+    entry = Library.get(gate.id)
+    sheet = entry && Library.payload(entry)
+
+    if match?(%CharacterSheet{}, sheet) do
+      socket |> assign(arc_gate: nil) |> close_intros() |> do_admit(entry, sheet)
+    else
+      socket |> assign(arc_gate: nil, intros_view: :panel) |> put_flash(:error, "They're gone.")
+    end
+  end
+
+  defp open_arc_gate(socket, entry, sheet, pending) do
+    socket
+    |> assign(
+      intros_view: :arc_gate,
+      arc_gate: %{
+        id: to_string(entry.id),
+        name: sheet.name,
+        colour: Voice.of_sheet(sheet),
+        proposals: pending,
+        editing: nil
+      }
+    )
+    |> assign(panel: :intros)
+  end
+
+  defp do_admit(socket, entry, %CharacterSheet{name: name} = sheet) do
     scene_id = socket.assigns.scene_id
     beat = max(socket.assigns.next_beat - 1, 1)
     character_id = to_string(entry.id)
@@ -524,11 +597,12 @@ defmodule PolyphonyWeb.PlayLive do
 
     # Fold the newcomer into the Director's omniscient brief so the next beat knows them.
     SceneBrief.note_character(scene_id, sheet)
-    socket |> reload() |> put_flash(:info, "#{name} joins the scene.")
-  end
 
-  defp admit(socket, _entry, _other),
-    do: put_flash(socket, :error, "That character has no usable sheet yet.")
+    socket
+    |> assign(arc_gate: nil, intros_view: :panel)
+    |> reload()
+    |> put_flash(:info, "#{name} joins the scene.")
+  end
 
   # ── Admit first, write after (§07, `admitted_writing`) ────────────────────────
   #
@@ -1584,6 +1658,64 @@ defmodule PolyphonyWeb.PlayLive do
     end)
   end
 
+  # ── The gate, met on the way in (STR-62) ─────────────────────────────────────
+  #
+  # The cards are the review screen's own, prefixed because this screen already owns
+  # an `edit`/`cancel_edit` for turns. Accept-all is the one-tap path and carries
+  # straight on into the entrance it interrupted — the person who wants to play taps
+  # once, which is the same promise the cast rows make.
+
+  def handle_event("arc_accept", %{"id" => id}, socket),
+    do: arc_gate_act(socket, &ArcAccept.accept(&1, Owner.of(socket.assigns.current_user)), id)
+
+  def handle_event("arc_reject", %{"id" => id}, socket),
+    do: arc_gate_act(socket, &ArcRM.reject(Repo, &1), id)
+
+  def handle_event("arc_set_audience", %{"id" => id, "who" => who}, socket) do
+    who = if who == "there", do: :there, else: :everyone
+    arc_gate_act(socket, &ArcRM.set_audience(Repo, &1, who), id)
+  end
+
+  def handle_event("arc_edit", %{"id" => id}, socket),
+    do: {:noreply, update_arc_gate(socket, &%{&1 | editing: String.to_integer(id)})}
+
+  def handle_event("arc_cancel_edit", _params, socket),
+    do: {:noreply, update_arc_gate(socket, &%{&1 | editing: nil})}
+
+  def handle_event("arc_save_edit", %{"entry_id" => id} = params, socket) do
+    safe(socket, fn ->
+      ArcRM.edit(Repo, String.to_integer(id), %{statement: params["statement"]})
+      {:noreply, socket |> update_arc_gate(&%{&1 | editing: nil}) |> refresh_arc_gate()}
+    end)
+  end
+
+  def handle_event("arc_accept_all", _params, socket) do
+    safe(socket, fn ->
+      case socket.assigns.arc_gate do
+        nil ->
+          {:noreply, socket}
+
+        gate ->
+          ArcAccept.accept_all(gate.id, "character", Owner.of(socket.assigns.current_user))
+          {:noreply, continue_admission(socket, gate)}
+      end
+    end)
+  end
+
+  def handle_event("arc_gate_continue", _params, socket) do
+    safe(socket, fn ->
+      case socket.assigns.arc_gate do
+        nil -> {:noreply, socket}
+        gate -> {:noreply, continue_admission(socket, gate)}
+      end
+    end)
+  end
+
+  # Backing out leaves them out of the scene and their arc where it was. Nothing was
+  # half-done: the entrance never happened.
+  def handle_event("arc_gate_cancel", _params, socket),
+    do: {:noreply, assign(socket, arc_gate: nil, intros_view: :panel)}
+
   def handle_event("intro_dismiss", %{"name" => name}, socket) do
     safe(socket, fn ->
       :ok = App.dispatch(%DismissIntroduction{scene_id: socket.assigns.scene_id, name: name})
@@ -2300,6 +2432,7 @@ defmodule PolyphonyWeb.PlayLive do
       introductions={@introductions}
       suggestion={@suggestion}
       intros_view={@intros_view}
+      arc_gate={@arc_gate}
       intro_control={@intro_control}
       admitted={@admitted}
       sending_away={@sending_away}

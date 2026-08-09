@@ -80,6 +80,9 @@ defmodule Storybook.Screens.SheetEditor do
       dirty: false,
       saved: false,
       audience_at: nil,
+      arc_counts: %{},
+      arc_prompt: nil,
+      arc_scenes: [],
       picker_groups: [{"g1", "The Tidewatch", "6 members"}],
       picker_people: [{"p2", "Ilias", :recurring, "hsl(40 40% 55%)"}],
       picker_labels: %{"g1" => "The Tidewatch", "p2" => "Ilias"},
@@ -122,8 +125,24 @@ defmodule Storybook.Screens.SheetEditor do
       ),
       v(
         :a_secret,
-        "The control that only appears on a concealed fact: **who else knows**. Written from the secret's side, so it scales with the number of secrets rather than secrets times cast.",
+        "A fact somebody else knows. The audience picker is **always on the row** — *Nobody* is the honest resting state — and the purple treatment is derived from the audience rather than stored beside it, so a fact marked secret with an empty audience cannot be represented at all.",
         %{audience_at: 1, panel: :facts}
+      ),
+      v(
+        :arc_touched,
+        "Editing a field play has revised asks **which you mean**: *she's changed again* proposes on top of what play did and leaves her history standing, while *I wrote her wrong* rewrites the origin and play's changes still apply on top. Guessing would produce a sheet whose history is quietly false.",
+        %{
+          arc_counts: %{"temperament" => 2},
+          arc_scenes: [%{id: "c1-s3", label: "Scene 3"}],
+          arc_prompt: %{
+            field: "temperament",
+            label: "Temperament",
+            value: "Steady, and starting to sound like it costs her.",
+            count: 2,
+            because: "",
+            scene_id: nil
+          }
+        }
       ),
       v(
         :audience_open,

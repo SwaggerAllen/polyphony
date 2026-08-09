@@ -58,6 +58,18 @@ defmodule PolyphonyWeb.Screens.SheetEditor do
   attr(:blocks, :any, default: %{}, doc: "the prose fields, edited as blocks")
   attr(:facts, :list, default: [], doc: "a concealed one gains a *who else knows* control")
 
+  attr(:arc_counts, :map,
+    default: %{},
+    doc: "field => how many times play has revised it (STR-62)"
+  )
+
+  attr(:arc_prompt, :any,
+    default: nil,
+    doc: "the which-do-you-mean prompt for an edit to an arc-touched field, or nil"
+  )
+
+  attr(:arc_scenes, :list, default: [], doc: "the campaign's scenes, for *in a scene*")
+
   attr(:boundaries, :list,
     default: [],
     doc: "what they won't do, and which way the pressure runs"
@@ -360,14 +372,21 @@ defmodule PolyphonyWeb.Screens.SheetEditor do
           </Kit.info_drawer>
 
           <%!-- ── The five written fields ─────────────────────────────────── --%>
-          <.block_field
-            :for={{f, label} <- field_specs()}
-            id={eid(@id, f)}
-            field={f}
-            label={label}
-            blocks={@blocks[f]}
-            generating={@generating}
-          />
+          <div :for={{f, label} <- field_specs()}>
+            <.block_field
+              id={eid(@id, f)}
+              field={f}
+              label={label}
+              blocks={@blocks[f]}
+              generating={@generating}
+            />
+            <%!-- The field carries how many times play has changed it — the warning
+                  that an edit here will ask which kind of change it is (STR-62). --%>
+            <p :if={Map.get(@arc_counts, f, 0) > 0} class="px-4 pb-2 text-[11px] dim">
+              Play has changed this <%= times_word(Map.get(@arc_counts, f)) %> — editing
+              will ask which you mean.
+            </p>
+          </div>
 
           <%!-- ── Facts ───────────────────────────────────────────────────── --%>
           <div class="row px-4 py-3" id={eid(@id, "facts")}>
@@ -615,6 +634,7 @@ defmodule PolyphonyWeb.Screens.SheetEditor do
         <.relationship_panel :if={@panel == "relationship"} id={@id} names={@char_names} />
         <.pressure_panel :if={@panel == "pressure"} id={@id} />
         <.group_panel :if={@panel == "group"} id={@id} groups={joinable(@all_groups, @groups)} />
+        <.arc_touched_panel :if={@arc_prompt} id={@id} prompt={@arc_prompt} scenes={@arc_scenes} />
 
         <Kit.info_drawer :if={@drawer == "groups"} on_close="close_drawer" title="About groups">
           <:intro>
@@ -716,30 +736,24 @@ defmodule PolyphonyWeb.Screens.SheetEditor do
             </span>
             <Kit.sw on={!!@fact.core} colour="var(--lamp)" />
           </button>
+          <%!-- Concealment is what the audience says, not a flag beside it (STR-62).
+                The picker is always on the row; *Nobody* is the honest resting state,
+                a fact about the world rather than a setting you left off. Name anyone
+                and the row goes purple — the treatment is derived, never stored beside
+                an audience it could disagree with. --%>
           <button
-            type="button"
-            class="row w-full px-4 py-2.5 flex items-center justify-between gap-3 text-left"
-            phx-click="toggle_fact"
-            phx-value-index={@index}
-            phx-value-flag="concealed"
-            aria-pressed={to_string(!!@fact.concealed)}
-          >
-            <span>
-              <span class="block text-[13px] font-semibold">Secret</span>
-              <span class="block text-[11px] dim">Nobody else starts out knowing</span>
-            </span>
-            <Kit.sw on={!!@fact.concealed} colour="var(--secret)" />
-          </button>
-          <%!-- Secret first, audience second: nothing to point at until it's marked. --%>
-          <button
-            :if={@fact.concealed}
             type="button"
             class="row w-full px-4 py-2.5 flex items-center justify-between gap-2 text-[13px] text-left"
             phx-click="open_audience"
             phx-value-index={@index}
           >
-            <span>Who else knows this</span>
-            <span class="dim"><%= knows_count(@fact.audience) %></span>
+            <span>Who else knows</span>
+            <span class={[
+              "pill",
+              not @fact.concealed && "dim"
+            ]} style={@fact.concealed && "border-color:var(--secret);color:var(--secret)"}>
+              <%= knows_count(@fact.audience) %> ▾
+            </span>
           </button>
           <button
             type="button"
@@ -754,6 +768,82 @@ defmodule PolyphonyWeb.Screens.SheetEditor do
     </details>
     """
   end
+
+  # Editing a field play has already revised asks which you mean (STR-62). The two
+  # answers land in different places in her history: *she's changed again* is an
+  # authored proposal on top of what play did, *I wrote her wrong* rewrites the
+  # origin and play's changes still apply on top.
+  attr(:id, :string, required: true)
+  attr(:prompt, :map, required: true)
+  attr(:scenes, :list, default: [])
+
+  defp arc_touched_panel(assigns) do
+    ~H"""
+    <Kit.sheet class="mx-4 mb-4" id={eid(@id, "arc-touched")}>
+      <Kit.row class="px-4 py-3 flex items-center justify-between" style="background:var(--b2)">
+        <span class="ttl text-[15px] font-semibold"><%= @prompt.label %> — which do you mean?</span>
+        <button
+          type="button"
+          class="dim text-[17px] leading-none"
+          phx-click="arc_prompt_cancel"
+          aria-label="Keep it as it was"
+        >
+          ×
+        </button>
+      </Kit.row>
+      <div class="px-4 py-3">
+        <p class="text-[12.5px] leading-relaxed dim mb-2.5">
+          Play has changed this <%= times_word(@prompt.count) %>. The same keystrokes can
+          mean two different things, and they land in different places in her history.
+        </p>
+
+        <Kit.marked mark={:prop} class="mb-2.5">
+          <p class="text-[13px] leading-relaxed"><%= @prompt.value %></p>
+        </Kit.marked>
+
+        <form id={eid(@id, "arc-touched-form")} phx-change="arc_prompt_sync" phx-submit="arc_changed_again">
+          <div class="lbl dim mb-1">Because <span class="dim">· optional</span></div>
+          <label for={eid(@id, "arc-because")} class="sr-only">Because</label>
+          <input
+            id={eid(@id, "arc-because")}
+            type="text"
+            name="because"
+            value={@prompt.because}
+            placeholder="Leave empty if you just decided it"
+            class="field px-3 py-2 text-[12.5px] w-full mb-2.5"
+          />
+
+          <div :if={@scenes != []}>
+            <div class="lbl dim mb-1">In a scene <span class="dim">· optional</span></div>
+            <label for={eid(@id, "arc-scene")} class="sr-only">Which scene</label>
+            <select id={eid(@id, "arc-scene")} name="scene_id" class="field px-3 py-2 text-[13px] w-full mb-2.5">
+              <option value="" selected={is_nil(@prompt.scene_id)}>No scene · just now</option>
+              <option :for={s <- @scenes} value={s.id} selected={@prompt.scene_id == s.id}>
+                <%= s.label %>
+              </option>
+            </select>
+          </div>
+
+          <Kit.btn kind={:primary} type="submit" class="w-full justify-center mb-1.5">
+            She's changed again — propose it
+          </Kit.btn>
+        </form>
+        <Kit.btn type="button" phx-click="arc_wrote_wrong" class="w-full justify-center">
+          I wrote her wrong — rewrite the origin
+        </Kit.btn>
+        <p class="text-[11px] leading-relaxed dim mt-2">
+          Proposing leaves her history standing and joins her pending arc. Rewriting the
+          origin corrects the person you first wrote — what play has concluded since still
+          applies on top.
+        </p>
+      </div>
+    </Kit.sheet>
+    """
+  end
+
+  defp times_word(1), do: "once"
+  defp times_word(2), do: "twice"
+  defp times_word(n), do: "#{n} times"
 
   # A panel is a sheet with a header, a form, and a way out. Every one of them is the
   # same shape, so the shape lives here and each panel is only its fields.
@@ -1132,7 +1222,7 @@ defmodule PolyphonyWeb.Screens.SheetEditor do
   defp knows_count(audience) do
     case length(Audience.named(Audience.from(audience))) +
            length(Audience.from(audience).group_ids) do
-      0 -> "nobody else"
+      0 -> "Nobody"
       n -> to_string(n)
     end
   end

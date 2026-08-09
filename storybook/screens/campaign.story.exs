@@ -117,6 +117,11 @@ defmodule Storybook.Screens.Campaign do
       scene_location: "",
       scene_premise: "",
       scene_suggesting: false,
+      arc_rows: %{},
+      world_arc: %{count: 0, proposals: []},
+      gate_expanded: nil,
+      gate_editing: nil,
+      arc_backlog: 0,
       generating: false,
       expanding_premise: false,
       writing_in: MapSet.new(),
@@ -358,6 +363,116 @@ defmodule Storybook.Screens.Campaign do
             kind: :campaign,
             premise: "A shipment came in that isn't on any manifest.",
             scenes: ["c1-s1", "c1-s2"]
+          }
+        }
+      ),
+      v(
+        :scenes_gate_expanded,
+        "Reviewing a character's changes on the row. The caret opens the proposals in place, **as the same cards the review screen shows** — Was and Because included, with True, Edit and No on each — plus a row for writing the entry the extraction missed. The world holds its own band above the cast, because pending world arc gates every scene whoever is in it.",
+        %{
+          tab: "scenes",
+          gate_expanded: "11",
+          arc_rows: %{
+            "11" => %{
+              count: 2,
+              running: false,
+              failure: nil,
+              proposals: [
+                %{
+                  entry: %{
+                    id: 901,
+                    kind: "revision",
+                    sheet_field: "temperament",
+                    statement:
+                      "Steady in the way of someone holding a door shut. The practice is starting to show at the edges.",
+                    reason:
+                      "Two scenes of being asked questions she can't answer flatly any more.",
+                    released_topic: nil,
+                    operation: nil,
+                    condition_met: nil,
+                    author: nil,
+                    line_condition: nil,
+                    concealed: false,
+                    scope: nil
+                  },
+                  was:
+                    "Steady to the point of being unnerving. What looks like calm is mostly practice."
+                },
+                %{
+                  entry: %{
+                    id: 902,
+                    kind: "release",
+                    sheet_field: "boundaries",
+                    statement:
+                      "She lets the silences sit, and lets people draw their own conclusions.",
+                    reason: "She heard the bell twice on a night with one tide.",
+                    released_topic: "Can't stop covering for her father",
+                    operation: nil,
+                    condition_met: nil,
+                    author: nil,
+                    line_condition: "Someone she loves is going to be hurt by the silence.",
+                    concealed: false,
+                    scope: nil
+                  },
+                  was: nil
+                }
+              ]
+            },
+            "12" => %{count: 0, running: true, failure: nil, proposals: []},
+            "13" => %{count: 0, running: false, failure: nil, proposals: []}
+          },
+          world_arc: %{
+            count: 2,
+            proposals: [
+              %{
+                id: 903,
+                kind: "discovery",
+                sheet_field: nil,
+                statement:
+                  "The tide bell has been rung twice in a night, for the first time in nine years.",
+                reason: "The whole quay heard it.",
+                released_topic: nil,
+                operation: nil,
+                condition_met: nil,
+                author: nil,
+                line_condition: nil,
+                concealed: false,
+                scope: "global"
+              },
+              %{
+                id: 904,
+                kind: "discovery",
+                sheet_field: nil,
+                statement: "The customs house keeps a second ledger.",
+                reason: "Ilias said so, in front of witnesses.",
+                released_topic: nil,
+                operation: nil,
+                condition_met: nil,
+                author: nil,
+                line_condition: nil,
+                concealed: true,
+                scope: "local"
+              }
+            ]
+          },
+          arc_backlog: 3
+        }
+      ),
+      v(
+        :scenes_gate_failed,
+        "A character's changes couldn't be worked out. The row says so and expands to explain — the model is busy, it usually clears, and a scene would be struggling too until it does. **Try again** is the only action: arc extraction and turn generation call the same provider, so an open-anyway would move the failure to one beat after the author committed to playing.",
+        %{
+          tab: "scenes",
+          gate_expanded: "11",
+          arc_rows: %{
+            "11" => %{
+              count: 0,
+              running: false,
+              failure: %{id: 71, reason: "the model is busy", kind: "transport"},
+              proposals: []
+            },
+            "12" => %{count: 0, running: false, failure: nil, proposals: []},
+            "13" => %{count: 0, running: false, failure: nil, proposals: []}
           }
         }
       ),

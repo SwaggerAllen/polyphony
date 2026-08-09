@@ -40,6 +40,19 @@ defmodule Polyphony.ReadModels.ArcEntry do
     field(:concealed, :boolean, default: false)
     # Encoded `Polyphony.Authoring.Audience` — who starts out knowing a world fact.
     field(:audience, :binary)
+    # Authored entries (STR-62). All nil on an extracted proposal.
+    field(:author, :string)
+    field(:operation, :string)
+    field(:timing, :string)
+    field(:replaces, :string)
+    field(:direction, :string)
+    field(:line_condition, :string)
+    field(:after_release, :string)
+    # Release proposals: false means the Director proposed past the written condition.
+    field(:condition_met, :boolean)
+    field(:core, :boolean)
+    field(:target, :string)
+    field(:target_id, :string)
     timestamps(type: :naive_datetime_usec)
   end
 
@@ -58,7 +71,20 @@ defmodule Polyphony.ReadModels.ArcEntry do
       status: to_string(entry.status || :proposed),
       promotable: entry.promotable,
       beat: entry.beat,
-      source_scene_id: entry.source_scene_id && to_string(entry.source_scene_id)
+      source_scene_id: entry.source_scene_id && to_string(entry.source_scene_id),
+      concealed: entry.concealed || false,
+      audience: entry.audience && Blob.encode(entry.audience),
+      author: entry.author,
+      operation: entry.operation && to_string(entry.operation),
+      timing: entry.timing && to_string(entry.timing),
+      replaces: entry.replaces,
+      direction: entry.direction && to_string(entry.direction),
+      line_condition: entry.line_condition,
+      after_release: entry.after_release,
+      condition_met: entry.condition_met,
+      core: entry.core,
+      target: entry.target,
+      target_id: entry.target_id && to_string(entry.target_id)
     })
   end
 
@@ -68,6 +94,7 @@ defmodule Polyphony.ReadModels.ArcEntry do
       subject_id: to_string(campaign_id),
       subject_type: "world",
       kind: to_string(entry.kind),
+      sheet_field: entry.sheet_field,
       statement: entry.statement,
       reason: entry.reason,
       status: to_string(entry.status || :proposed),
@@ -77,7 +104,11 @@ defmodule Polyphony.ReadModels.ArcEntry do
       scope: to_string(entry.scope || :global),
       location_id: entry.location_id && to_string(entry.location_id),
       concealed: entry.concealed,
-      audience: Blob.encode(entry.audience)
+      audience: Blob.encode(entry.audience),
+      author: entry.author,
+      operation: entry.operation && to_string(entry.operation),
+      timing: entry.timing && to_string(entry.timing),
+      replaces: entry.replaces
     })
   end
 
@@ -98,6 +129,25 @@ defmodule Polyphony.ReadModels.ArcEntry do
 
   @doc "Proposed **world** arc awaiting review for a campaign."
   def list_proposed_world(repo, campaign_id), do: list_proposed(repo, campaign_id, "world")
+
+  @doc """
+  Pending-proposal counts for many characters at once — what the Set-the-scene cast
+  rows read (STR-62). Returns `%{subject_id => count}`; a subject with nothing
+  pending is absent.
+  """
+  @spec proposed_counts(Ecto.Repo.t(), [term()]) :: %{String.t() => non_neg_integer()}
+  def proposed_counts(repo, subject_ids) do
+    sids = subject_ids |> Enum.map(&to_string/1) |> Enum.uniq()
+
+    repo.all(
+      from(a in __MODULE__,
+        where: a.subject_id in ^sids and a.subject_type == "character" and a.status == "proposed",
+        group_by: a.subject_id,
+        select: {a.subject_id, count(a.id)}
+      )
+    )
+    |> Map.new()
+  end
 
   # ── Reads: canon as domain structs (for the effective fold) ──────────────────
 
@@ -158,6 +208,33 @@ defmodule Polyphony.ReadModels.ArcEntry do
   def reject(repo, id), do: set_status(repo, id, "retracted")
 
   @doc """
+  Set who knows a world proposal, before it is reviewed (STR-62).
+
+  Common knowledge is a **value of the audience**, not a way of refusing — so this
+  is the same question the authoring form asks, asked again on the card. `:everyone`
+  is the world's default and clears the audience; `:there` narrows to a `scene: true`
+  audience, which resolves to the cast of the entry's source scene.
+
+  Deliberately leaves `status` alone: narrowing is not a decision about whether the
+  fact is true, and a card whose audience you changed is still a card you have to
+  accept.
+  """
+  @spec set_audience(Ecto.Repo.t(), term(), :everyone | :there) :: t()
+  def set_audience(repo, id, :there) do
+    set_audience_fields(repo, id, true, %Polyphony.Authoring.Audience{scene: true})
+  end
+
+  def set_audience(repo, id, :everyone) do
+    set_audience_fields(repo, id, false, nil)
+  end
+
+  defp set_audience_fields(repo, id, concealed, audience) do
+    repo.get!(__MODULE__, id)
+    |> Ecto.Changeset.change(concealed: concealed, audience: Blob.encode(audience))
+    |> repo.update!()
+  end
+
+  @doc """
   Take back something already accepted.
 
   A real action rather than accept-or-reject at review time only: something you
@@ -187,6 +264,22 @@ defmodule Polyphony.ReadModels.ArcEntry do
 
     repo.get!(__MODULE__, id)
     |> Ecto.Changeset.change(changes)
+    |> repo.update!()
+  end
+
+  @doc "One row by id, or nil."
+  def get(repo, id), do: repo.get(__MODULE__, id)
+
+  @doc """
+  Point an authored relationship at the character it names (STR-62).
+
+  Set when the proposal is accepted and the target is resolved or minted — see
+  `Polyphony.Authoring.ArcAccept`. A relationship targets an **id**, with the name
+  rendered beside it, because a name is display and two people can share one.
+  """
+  def set_target_id(repo, id, target_id) do
+    repo.get!(__MODULE__, id)
+    |> Ecto.Changeset.change(target_id: to_string(target_id))
     |> repo.update!()
   end
 
@@ -221,13 +314,27 @@ defmodule Polyphony.ReadModels.ArcEntry do
       beat: row.beat,
       source_scene_id: row.source_scene_id,
       status: safe_atom(row.status),
-      promotable: row.promotable
+      promotable: row.promotable,
+      concealed: row.concealed || false,
+      audience: decode_audience(row.audience),
+      author: row.author,
+      operation: safe_atom(row.operation),
+      timing: safe_atom(row.timing),
+      replaces: row.replaces,
+      direction: safe_atom(row.direction),
+      line_condition: row.line_condition,
+      after_release: row.after_release,
+      condition_met: row.condition_met,
+      core: row.core,
+      target: row.target,
+      target_id: row.target_id
     }
   end
 
   defp to_world_domain(row) do
     %WorldArcEntry{
       kind: safe_atom(row.kind),
+      sheet_field: row.sheet_field,
       statement: row.statement,
       reason: row.reason,
       scope: safe_atom(row.scope || "global"),
@@ -237,7 +344,11 @@ defmodule Polyphony.ReadModels.ArcEntry do
       beat: row.beat,
       source_scene_id: row.source_scene_id,
       status: safe_atom(row.status),
-      promotable: row.promotable
+      promotable: row.promotable,
+      author: row.author,
+      operation: safe_atom(row.operation),
+      timing: safe_atom(row.timing),
+      replaces: row.replaces
     }
   end
 

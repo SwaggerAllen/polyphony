@@ -30,7 +30,7 @@ defmodule Polyphony.SceneClose do
 
   require Logger
 
-  alias Polyphony.{App, Embeddings, Repo}
+  alias Polyphony.{App, Embeddings, Library, Repo}
   alias PolyphonyCore.Packets
   alias Polyphony.Costs.Attribution
   alias Polyphony.SceneClose.{Summarizer, ArcExtractor, WorldArcExtractor}
@@ -157,15 +157,20 @@ defmodule Polyphony.SceneClose do
   def extract_participant(scene_id, character_id, opts) do
     repo = Keyword.get(opts, :repo) || Repo
     events = stored_events(scene_id)
+    lines = character_lines(repo, character_id)
 
     ext_opts =
       opts
       |> Keyword.put(:source_scene_id, scene_id)
+      |> Keyword.put(:lines, lines)
       |> meter(scene_id, "arc")
 
     case ArcExtractor.extract(events, character_id, ext_opts) do
       {:ok, entries} ->
-        Enum.each(entries, &ArcEntry.put(repo, &1, character_id))
+        entries
+        |> Enum.map(&annotate_release(&1, lines))
+        |> Enum.each(&ArcEntry.put(repo, &1, character_id))
+
         {:ok, length(entries)}
 
       {:error, :invalid_arc} ->
@@ -177,6 +182,36 @@ defmodule Polyphony.SceneClose do
   rescue
     e -> {:error, e}
   end
+
+  # The character's lines with their written conditions, read off the effective sheet
+  # (canon arc applied, so a line play already opened or added is current). Fed to the
+  # extractor's prompt and used to annotate release proposals (STR-62).
+  defp character_lines(repo, character_id) do
+    with %{} = entry <- Library.get(character_id, repo: repo),
+         %Polyphony.Authoring.CharacterSheet{} = sheet <- Library.payload(entry) do
+      Polyphony.Authoring.Effective.sheet(sheet, character_id, repo).boundaries
+      |> Kernel.||([])
+      |> Enum.map(&%{topic: &1.topic, condition: &1.condition, stance: &1.stance})
+    else
+      _ -> []
+    end
+  end
+
+  # A release proposal carries the written condition of the line it names, so the
+  # review card can show it — struck through and marked unmet when the Director went
+  # past it. A hard line has no condition that could have fired, so its release is
+  # never `condition_met`.
+  defp annotate_release(%Polyphony.Authoring.ArcEntry{kind: :release} = entry, lines) do
+    case Enum.find(lines, &(normalize(&1.topic) == normalize(entry.released_topic))) do
+      nil -> entry
+      %{stance: :closed} -> %{entry | condition_met: false}
+      %{condition: c} -> %{entry | line_condition: c}
+    end
+  end
+
+  defp annotate_release(entry, _lines), do: entry
+
+  defp normalize(s), do: s |> to_string() |> String.trim() |> String.downcase()
 
   @doc """
   Extract and store the scene's proposed **world** arc (§2.8) — one call per scene,

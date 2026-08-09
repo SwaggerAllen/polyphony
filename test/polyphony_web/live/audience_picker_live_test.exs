@@ -57,12 +57,15 @@ defmodule PolyphonyWeb.AudiencePickerLiveTest do
       %{entry: entry, group: group, sable: sable}
     end
 
-    test "is reachable only from a secret", %{conn: conn, user: user} do
+    # STR-62: concealment is what the audience says, not a flag beside it — the
+    # picker is always on the row, and a public entry answers *Everyone*.
+    test "is always reachable, and a public entry reads as everyone's", %{conn: conn, user: user} do
       public =
         world(user, %WorldBible{name: "Low Water", starting_canon: [%Entry{statement: @bell}]})
 
       {:ok, _view, html} = live(conn, ~p"/authoring/bible/#{public.id}")
-      refute html =~ ~s(phx-click="open_audience")
+      assert html =~ ~s(phx-click="open_audience")
+      assert html =~ "Everyone ▾"
     end
 
     test "a group ticked in it persists, and reads back on the item's own line",
