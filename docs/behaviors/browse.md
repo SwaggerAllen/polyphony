@@ -1,6 +1,6 @@
 # Browse
 
-<!-- rev: 2 -->
+<!-- rev: 3 -->
 
 | | |
 |---|---|
@@ -8,8 +8,14 @@
 | Storybook | Screens → Browse |
 | Code | `PolyphonyWeb.Screens.Browse`, `PolyphonyWeb.BrowseLive` |
 
-Published stories, and reading one. Two jobs on one route: the shelf of what other people
-have published, and a story's front page once you pick one.
+Published stories, and reading one. **Three** jobs on one route: the shelf of what other
+people have published, a story's front page once you pick one, and the reader itself. They
+share a screen because they are one continuous act — you don't navigate to a reader, you
+start reading.
+
+The reading half is the point of the other two. Publishing worked for a long time and
+produced nothing anybody could read; this is where a published campaign becomes a thing a
+stranger can sit down with.
 
 ## Standing decisions
 
@@ -38,6 +44,25 @@ have published, and a story's front page once you pick one.
 - **You may take a copy of anything you may read.** Not only what is listed: a world shared
   by link is a world somebody meant you to have. What you may *not* read you may not copy —
   taking a copy is reading it and keeping it, so it cannot be the looser of the two.
+- **The reader is the play screen with a different bottom bar.** Same header, same
+  perspective control, same transcript, same beat rules — only the composer is replaced, by
+  scene navigation. It takes the *page* register, because it isn't an authoring surface, it
+  is a way of reading. Anything that drifts between the two is a bug in whichever one moved:
+  the perspective control in particular is defined on play and appears here unchanged, and
+  drift between its treatments was the worst consistency failure of the design pass.
+- **Two different kinds of empty, and they must not be said the same way.** *Sable wasn't
+  here* is a fact about the reader's **perspective** and has a way out — switch heads, or
+  carry on. *This one isn't shared* is a fact about the **publication** and has none. Both
+  are shown rather than skipped: silently dropping a scene would make the numbering lie and
+  the story jump.
+- **Reading never hits a wall; only the actions do.** A signed-out visitor gets the whole
+  story. Keeping your place, taking a copy, and reading it as someone in it are the three
+  things that need an account, and that is said once, plainly, under the pager — not as a
+  gate in front of the text.
+- **A reading position is a URL.** Which story, which scene, which perspective, all three in
+  the address bar. A position you can't link to isn't one you can come back to, and those are
+  exactly the three things the bookmark stores. The place is written **on arrival** rather
+  than on leaving, because the reader who closes the tab mid-scene is the one who needs it.
 
 ## States
 
@@ -69,9 +94,62 @@ Republishing replaces the copy somebody was in the middle of, which is the one p
 trade becomes visible. The bookmark falls back to the start rather than stranding the reader
 on a link into nothing.
 
-### `not_shared` — A scene nobody granted can read
+### `reading` — A scene, read as one of the published heads
 
-In the contents, marked. See the standing decision.
+The reader proper. The story's name is the eyebrow, the scene's title is the title, and the
+chevron goes back to the front page rather than into browser history — it is the one link out
+of a story that isn't a patch, so it is also the one that has to carry an unlisted reader's
+grant with it.
+
+The perspective control names *Reading as*, and it splits into two groups: **who can show you
+this**, and **not in this one** — the heads that are published but weren't in this scene,
+listed with *wasn't there* rather than removed. Removing them would make the story look like
+it has fewer heads than it does; greying them out and saying why is the same information
+without the lie. The reader's current perspective stays in the list either way, so nothing
+jumps under them when they switch.
+
+The bottom bar is where play's composer would be: the place in the story, and the way on.
+
+### `reading_spectator` — The same scene, nobody's thoughts
+
+Everything said and done, no interiority. Worth its own state rather than being filed as a
+perspective option, because this is the difference the product exists for: one scene, two
+heads, genuinely different text. It is a property of the projection — what the log gives that
+reader — not a display setting the screen applies, and nothing on this screen re-implements
+it.
+
+### `reading_not_present` — Read as somebody who wasn't in this scene
+
+A fact about the reader's **perspective**, so it has a way out: switch heads, or carry on.
+The copy says what a filtered scene means rather than what the app couldn't do — they found
+out about this the way you're about to, afterwards, from someone else.
+
+### `not_shared` — A scene no granted perspective can reach
+
+A fact about the **publication**, so unlike `reading_not_present` it offers nothing to switch
+to. It appears twice on purpose: marked in the contents on the front page, and as this screen
+if the reader opens it anyway. Silently omitting it would make the story look shorter than it
+is, and the author was warned about the gap when they published.
+
+### `reading_who` — Who is this?
+
+Opened from a name in the transcript. A reader meets six names in two pages and had no way to
+ask about any of them without leaving the story. It shows that character's **cover** — the
+field written to be shown — and never the sheet, half of which is things this reader is
+specifically not supposed to know. The same card play uses, asked from the other side.
+
+Opening a new scene closes it: it was about somebody in the scene you left.
+
+### `reading_last_scene` — The end of the story
+
+*That's the end of it*, in place of the pager's Next. To a reader, running out and being
+finished are different events and only one of them wants somewhere to go.
+
+### `reading_signed_out` — Reading without an account
+
+The whole story, and one line under the pager naming the three things that need signing in:
+keeping your place, taking a copy, and reading it as someone in it. See the standing
+decision — the line sits at the point those become relevant, not in front of the text.
 
 ### `nobody_shared` — Published with no perspectives at all
 
