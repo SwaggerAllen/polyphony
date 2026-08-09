@@ -348,10 +348,23 @@ defmodule PolyphonyWeb.Screens.Library do
         <span class="text-[11px] dim"><%= started_line(w.started) %></span>
       </Kit.row>
 
-      <Kit.empty :if={@worlds == []} headline="No worlds yet." class="py-9">
-        You'll write one inside your first campaign. It'll show up here afterwards, and you
-        can use it again in another campaign.
-      </Kit.empty>
+      <%!-- A tab explains (see the standing decision): the copy says what a world *is*,
+            and nothing about sharing — attaching copies a world, so two campaigns never
+            hold the same one. No create button: a world is written inside a campaign, and
+            offering one here would be a campaign-picker wearing a create button. --%>
+      <div :if={@worlds == []} class="px-6 py-16 text-center">
+        <p class="text-[14px] leading-relaxed dim" style="max-width:30ch;margin:0 auto">
+          A world holds the setting a story runs on — its rules, its facts, its tone.
+        </p>
+        <div class="mt-8">
+          <.link patch={~p"/library?#{[tab: "campaigns"]}"} class="btn btn-gh btn-sm">
+            Go to a campaign
+          </.link>
+        </div>
+        <p class="text-[11.5px] leading-relaxed dim" style="max-width:28ch;margin:1.5rem auto 0">
+          Worlds are written inside a campaign.
+        </p>
+      </div>
     </Kit.sheet>
     """
   end
@@ -492,10 +505,23 @@ defmodule PolyphonyWeb.Screens.Library do
         </p>
       </div>
 
-      <Kit.empty :if={@groups == []} headline="No groups yet." class="py-9">
-        A group is written like a character and used as a starting point for others — a crew,
-        a household, an order. It saves writing the same person five times.
-      </Kit.empty>
+      <%!-- The most common state on this tab, and not a to-do: Quick Build's group switch
+            is off by default, so this is what a perfectly healthy library looks like. The
+            copy makes the case for groups rather than reporting a gap. --%>
+      <div :if={@groups == []} class="px-6 py-16 text-center">
+        <p class="text-[14px] leading-relaxed dim" style="max-width:32ch;margin:0 auto">
+          A group saves writing the same person five times, and gives a secret somewhere to
+          point.
+        </p>
+        <div class="mt-8">
+          <.link patch={~p"/library?#{[tab: "campaigns"]}"} class="btn btn-gh btn-sm">
+            Go to a campaign
+          </.link>
+        </div>
+        <p class="text-[11.5px] leading-relaxed dim" style="max-width:28ch;margin:1.5rem auto 0">
+          Groups are written inside a campaign, like characters.
+        </p>
+      </div>
     </Kit.sheet>
     """
   end

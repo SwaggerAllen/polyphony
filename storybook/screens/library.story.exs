@@ -26,9 +26,10 @@ defmodule Storybook.Screens.Library do
     do: %{
       id: id,
       name: name,
-      named?: true,
-      blurb: opts[:blurb] || "A drowned county that still collects its tolls.",
-      visibility: opts[:visibility] || "private"
+      named?: opts[:named?] != false,
+      blurb: Keyword.get(opts, :blurb, "A drowned county that still collects its tolls."),
+      visibility: opts[:visibility] || "private",
+      started: opts[:started] || 0
     }
 
   # `%{campaign, campaign_id, people}` — people are grouped by the campaign that cast
@@ -46,6 +47,13 @@ defmodule Storybook.Screens.Library do
   defp cast_of(campaign, id, people),
     do: %{campaign: campaign, campaign_id: id, people: people}
 
+  # A group belongs to a campaign the way a character does, so the screen takes them
+  # banded by campaign — the shape `LibraryLive.group_rows/2` builds.
+  defp band_of(campaign, groups), do: %{campaign: campaign, groups: groups}
+
+  defp group(id, name, members, secrets, colour \\ "var(--v1)"),
+    do: %{id: id, name: name, members: members, secrets: secrets, colour: colour}
+
   defp base do
     %{
       current_user: %{id: "u1", username: "wren", role: "user"},
@@ -55,7 +63,7 @@ defmodule Storybook.Screens.Library do
         campaign("c1", "The Salt Line"),
         campaign("c2", "Nightjar", status: :finished, status_label: "Finished", pending: 3)
       ],
-      worlds: [world("w1", "Saltmarch")],
+      worlds: [world("w1", "Saltmarch", started: 2)],
       people: [
         cast_of("The Salt Line", "c1", [
           person("p1", "Wren Ashgrove", :main, "Keeps the tide ledger."),
@@ -63,7 +71,7 @@ defmodule Storybook.Screens.Library do
           person("p3", "The harbourmaster", :incidental)
         ])
       ],
-      groups: [%{id: "g1", name: "The Tidewatch", named?: true, members: 6, secrets: 2}],
+      groups: [band_of("The Salt Line", [group("g1", "The Tidewatch", 6, 2)])],
       reading: [],
       archived: [],
       trashed: []
@@ -108,6 +116,48 @@ defmodule Storybook.Screens.Library do
           tab: "people",
           people: [cast_of("The Salt Line", "c1", [person("p1", "Wren Ashgrove", :main)])]
         }
+      ),
+      v(
+        :worlds,
+        "The worlds you've written. Each row carries whether it is private or public, its cover line, and how many campaigns were started from it — starts, not shares, because attaching a world copies it. A world with nothing past its name still gets a row, marked never used.",
+        %{
+          tab: "worlds",
+          worlds: [
+            world("w1", "Saltmarch",
+              blurb: "A port town that runs on tides and debts.",
+              started: 2
+            ),
+            world("w2", "The Ninth Gate",
+              blurb: "Sunless city, nine districts, one way out.",
+              visibility: "public",
+              started: 1
+            ),
+            world("w3", "Untitled world", named?: false, blurb: nil)
+          ]
+        }
+      ),
+      v(
+        :worlds_empty,
+        "No worlds yet, with campaigns already on the shelf — a campaign exists before its world is written, so this is not a first-run state. No create button: worlds are written inside a campaign, and the copy says what a world *is* rather than that the tab is empty.",
+        %{tab: "worlds", worlds: []}
+      ),
+      v(
+        :groups,
+        "The groups you've written, banded by the campaign each belongs to — the band is what tells two crews of the same name apart. A row carries members and secrets, and the secrets are the number that distinguishes them: a group whose facts are all public is a tag rather than a membership.",
+        %{
+          tab: "groups",
+          groups: [
+            band_of("The Salt Line", [
+              group("g1", "The Tidewatch", 6, 2, "var(--secret)"),
+              group("g2", "The harbour office", 3, 0)
+            ])
+          ]
+        }
+      ),
+      v(
+        :groups_empty,
+        "No groups yet — the most common state on this tab, and not a to-do: Quick Build's group switch is off by default, so this is what a perfectly healthy library looks like for a long time. The copy makes the case for groups rather than reporting a gap.",
+        %{tab: "groups", groups: []}
       ),
       v(
         :searching,
