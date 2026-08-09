@@ -27,7 +27,7 @@ defmodule Polyphony.SceneClose.ArcExtractor do
     filtered = Visibility.project(events, {:character, character_id})
 
     messages = [
-      %{role: "system", content: system_prompt(character_id)},
+      %{role: "system", content: system_prompt(character_id, Keyword.get(opts, :lines, []))},
       %{role: "user", content: EventText.render(filtered)}
     ]
 
@@ -53,14 +53,37 @@ defmodule Polyphony.SceneClose.ArcExtractor do
   # argument is that this is what makes accepting quick: an author can check the
   # reasoning without going back and rereading, so a proposal that can't say why is one
   # they have to earn twice.
-  defp system_prompt(id),
+  defp system_prompt(id, lines),
     do:
       "You are extracting durable changes for #{id} after a scene. List only what is now " <>
         "TRUE of #{id} (a discovery that was always true but unstated, or a revision of something " <>
         "authored) — never another character's belief about #{id}. Use kind \"release\" when a " <>
-        "line #{id} held gave way during the scene, and name it in \"released_topic\". For " <>
-        "EVERY entry give a \"reason\": the specific thing in this scene that caused it, in one " <>
-        "sentence, concrete enough that the author can recognise the moment. Respond as JSON: " <>
+        "line #{id} held gave way during the scene, and name it in \"released_topic\". " <>
+        lines_prompt(id, lines) <>
+        "For EVERY entry give a \"reason\": the specific thing in this scene that caused it, in " <>
+        "one sentence, concrete enough that the author can recognise the moment. Respond as JSON: " <>
         ~s({"entries":[{"kind":"discovery|revision|release","sheet_field":null,) <>
-        ~s("released_topic":null,"statement":"...","reason":"..."}]}.)
+        ~s("released_topic":null,"condition_met":null,"statement":"...","reason":"..."}]}.)
+
+  # The written conditions the character's lines carry (STR-62). A release is a
+  # different claim depending on whether the line's own condition fired: met in play
+  # takes True / Not yet at review, while a scene breaking a line some other way is a
+  # proposal like any other — the card shows the unmet condition struck through, so
+  # the author sees their rule being gone past rather than silently reinterpreted.
+  defp lines_prompt(_id, []), do: ""
+
+  defp lines_prompt(id, lines) do
+    listed =
+      Enum.map_join(lines, "\n", fn l ->
+        case l[:condition] do
+          c when is_binary(c) and c != "" -> "- #{l[:topic]} (not until: #{c})"
+          _ -> "- #{l[:topic]} (a hard line)"
+        end
+      end)
+
+    "The lines #{id} holds:\n#{listed}\n" <>
+      "On a \"release\", set \"condition_met\": true only when the line's own written " <>
+      "condition is what fired; set it false when the scene broke the line some other way " <>
+      "(a hard line giving is always false). "
+  end
 end

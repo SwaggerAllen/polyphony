@@ -251,17 +251,8 @@ defmodule PolyphonyWeb.BibleEditorLive do
     {:noreply, update_items(socket, f, &List.delete_at(&1, String.to_integer(i)))}
   end
 
-  # The same control in three places (§04) — identical here, on a character's facts,
-  # and wherever locations land. What it *means* is structural: see the moduledoc.
-  def handle_event("toggle_secret", %{"field" => f, "index" => i}, socket)
-      when f in @list_fields do
-    idx = String.to_integer(i)
-
-    {:noreply,
-     update_items(socket, f, fn items ->
-       List.update_at(items, idx, &%Entry{&1 | concealed: not &1.concealed})
-     end)}
-  end
+  # The Secret toggle is gone (STR-62): concealment is derived from the audience in
+  # `toggle_audience`, so there is no separate flag to fall out of step with it.
 
   def handle_event("move_item", %{"field" => f, "index" => i, "by" => by}, socket)
       when f in @list_fields do
@@ -419,10 +410,14 @@ defmodule PolyphonyWeb.BibleEditorLive do
   def handle_event("toggle_audience", %{"kind" => kind, "id" => id}, socket) do
     case socket.assigns.audience_at do
       {field, index} ->
+        # Concealment is what the audience says (STR-62): a world's facts start
+        # shared, so naming anyone narrows the audience and that narrowing is what
+        # conceals — derived, never stored beside an audience it could disagree with.
         {:noreply,
          update_items(socket, field, fn items ->
            List.update_at(items, index, fn item ->
-             %Entry{item | audience: toggle(item.audience, kind, id)}
+             audience = toggle(item.audience, kind, id)
+             %Entry{item | audience: audience, concealed: not Audience.empty?(audience)}
            end)
          end)}
 

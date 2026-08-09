@@ -57,4 +57,51 @@ defmodule Polyphony.Authoring.EffectiveWorldBibleTest do
     omni = canon(EffectiveWorldBible.apply(%WorldBible{}, entries, :all))
     assert "global fact" in omni and "harbour murder" in omni
   end
+
+  # ── Authored world entries (STR-62) ─────────────────────────────────────────
+
+  test "an authored rule folds into rules, not canon" do
+    bible = %WorldBible{rules: ["No magic."]}
+
+    entry =
+      e(
+        statement: "Anyone on the quay when the bell rings twice knows what it means.",
+        sheet_field: "rules",
+        operation: :add,
+        author: "allen"
+      )
+
+    out = EffectiveWorldBible.apply(bible, [entry], :all)
+
+    assert WorldBible.statements(out.rules) == [
+             "No magic.",
+             "Anyone on the quay when the bell rings twice knows what it means."
+           ]
+
+    assert canon(out) == []
+  end
+
+  test "an authored change supersedes the entry `replaces` names in place" do
+    bible = %WorldBible{starting_canon: ["The sea is cold.", "The wall holds."]}
+
+    entry =
+      e(
+        kind: :revision,
+        statement: "The wall failed twice this spring.",
+        replaces: "The wall holds.",
+        operation: :change
+      )
+
+    out = EffectiveWorldBible.apply(bible, [entry], :all)
+    assert canon(out) == ["The sea is cold.", "The wall failed twice this spring."]
+  end
+
+  test "an authored remove stops carrying the entry forward" do
+    bible = %WorldBible{starting_canon: ["The sea is cold.", "The wall holds."]}
+
+    entry = e(statement: "The wall holds.", replaces: "The wall holds.", operation: :remove)
+
+    out = EffectiveWorldBible.apply(bible, [entry], :all)
+    assert canon(out) == ["The sea is cold."]
+  end
 end

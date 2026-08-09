@@ -7,6 +7,9 @@ defmodule Polyphony.ReadModels.Failure do
   use Ecto.Schema
   import Ecto.Query
 
+  @typedoc "A row of this table. `Ecto.Schema` generates no `t/0`, so it is declared here."
+  @type t :: %__MODULE__{}
+
   schema "generation_failures" do
     field(:scene_id, :string)
     field(:beat, :integer)

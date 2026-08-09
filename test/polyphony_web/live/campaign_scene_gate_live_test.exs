@@ -50,13 +50,33 @@ defmodule PolyphonyWeb.CampaignSceneGateLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=cast")
 
-    assert {:error, {:redirect, %{to: path}}} =
-             view |> element("button[phx-click=start_scene]") |> render_click()
+    # The gate is met on the row now (STR-62): no redirect — the refusal restates
+    # what the cast rows on the scenes tab already show, and the fix is on them.
+    html = view |> element("button[phx-click=start_scene]") |> render_click()
+    assert html =~ "isn&#39;t ready"
 
-    assert path == "/arc/#{camp.id}"
+    # The scenes tab carries the row state and its one-tap fix.
+    {:ok, _view, scenes_html} = live(conn, ~p"/campaigns/#{camp.id}?tab=scenes")
+    assert scenes_html =~ "1 change to say yes or no to"
+    assert scenes_html =~ "Accept all 1"
 
     # No scene was opened.
     assert Library.payload(Library.get(camp.id))[:scenes] == []
+  end
+
+  test "the row's accept-all clears the gate in place (STR-62)", %{conn: conn, user: user} do
+    {camp, mira_id} = campaign_with_ready_cast(user)
+    propose_arc(mira_id)
+
+    {:ok, view, _html} = live(conn, ~p"/campaigns/#{camp.id}?tab=scenes")
+
+    html =
+      view
+      |> element("button[phx-click=gate_accept_all][phx-value-subject='#{mira_id}']")
+      |> render_click()
+
+    assert html =~ "Up to date"
+    assert Repo.get_by!(ArcRM, subject_id: mira_id).status == "canon"
   end
 
   test "with no pending arc, starting a scene opens play", %{conn: conn, user: user} do

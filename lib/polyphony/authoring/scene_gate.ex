@@ -24,15 +24,32 @@ defmodule Polyphony.Authoring.SceneGate do
   gate used to resolve library ids to names to do this lookup; it doesn't any more,
   because there is only one identity again.
 
-  *Not yet modelled here:* the "extraction failed → block with a retry" and the
-  "extraction still running → not ready yet" states (§3.0). Those need the async
-  extraction status; the proposal gate below is the correctness core.
+  ## The gate is met on the row (STR-62)
+
+  `row_states/3` is the per-character read the Set-the-scene cast rows render: how
+  many proposals are pending, whether extraction is still running (an `ExtractArc`
+  job not yet done — a wait, not a fault), and whether it failed (an open arc
+  failure, which carries the retry). Failure is per-character — one person's
+  extraction can fail while everybody else's succeeded — which is why this is a map
+  per id rather than a verdict for the form.
+
+  `check/3` stays the correctness core: whatever the rows say, a scene must not open
+  past pending arc, and the rows are how an author clears it without leaving.
   """
+
+  import Ecto.Query
 
   alias Polyphony.Repo
   alias Polyphony.ReadModels.ArcEntry
+  alias Polyphony.ReadModels.Failure
 
   @type blocked :: %{characters: [String.t()], world: non_neg_integer()}
+
+  @type row_state :: %{
+          pending: non_neg_integer(),
+          running: boolean(),
+          failure: Failure.t() | nil
+        }
 
   @doc """
   May a new scene open for `campaign_id` with cast `character_ids`? `:ok`, or
@@ -55,5 +72,63 @@ defmodule Polyphony.Authoring.SceneGate do
     else
       {:blocked, %{characters: blocked_chars, world: world_pending}}
     end
+  end
+
+  @doc """
+  The per-row arc state for a cast (STR-62): `%{characters: %{id => row_state},
+  world: pending_world_count}`. Every id in `character_ids` gets an entry — a row
+  with nothing to say still says *up to date*.
+  """
+  @spec row_states(term(), [term()], module()) :: %{
+          characters: %{String.t() => row_state()},
+          world: non_neg_integer()
+        }
+  def row_states(campaign_id, character_ids, repo \\ Repo) do
+    ids = character_ids |> Enum.map(&to_string/1) |> Enum.uniq()
+
+    pending = ArcEntry.proposed_counts(repo, ids)
+    failures = open_arc_failures(repo, ids)
+    running = running_extractions(repo, ids)
+
+    characters =
+      Map.new(ids, fn id ->
+        {id,
+         %{
+           pending: Map.get(pending, id, 0),
+           running: MapSet.member?(running, id),
+           failure: Map.get(failures, id)
+         }}
+      end)
+
+    %{characters: characters, world: length(ArcEntry.list_proposed_world(repo, campaign_id))}
+  end
+
+  # Newest open arc-extraction failure per character. Arc failures are author-facing
+  # (`Polyphony.Failures` keeps them omniscient-only on broadcast), and this read is
+  # for the author's own casting form.
+  defp open_arc_failures(repo, ids) do
+    repo.all(
+      from(f in Failure,
+        where: f.subject in ^ids and f.operation == "arc" and f.status == "open",
+        order_by: [asc: f.inserted_at]
+      )
+    )
+    |> Map.new(&{&1.subject, &1})
+  end
+
+  # An extraction that hasn't finished: an `ExtractArc` job for this character that
+  # Oban still holds. `retryable` counts — a job between attempts is still a wait,
+  # not a fault; the fault only exists once the failure row is written.
+  defp running_extractions(repo, ids) do
+    repo.all(
+      from(j in Oban.Job,
+        where:
+          j.worker == "Polyphony.Jobs.ExtractArc" and
+            j.state in ["available", "scheduled", "executing", "retryable"] and
+            fragment("?->>'character_id' = ANY(?)", j.args, ^ids),
+        select: fragment("?->>'character_id'", j.args)
+      )
+    )
+    |> MapSet.new()
   end
 end

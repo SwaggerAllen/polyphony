@@ -50,11 +50,17 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
         character_id
       )
 
-  defp world_proposal(camp, statement, scope),
+  defp world_proposal(camp, statement, scope, opts \\ []),
     do:
       ArcRM.put_world(
         Repo,
-        %WorldArcEntry{kind: :discovery, scope: scope, statement: statement, status: :proposed},
+        %WorldArcEntry{
+          kind: :discovery,
+          scope: scope,
+          statement: statement,
+          status: :proposed,
+          concealed: Keyword.get(opts, :concealed, false)
+        },
         camp.id
       )
 
@@ -164,7 +170,9 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
   test "accepting promotes to canon; rejecting retracts", %{conn: conn, user: user} do
     {camp, mira_id} = campaign(user)
     keep = char_proposal(mira_id, "Keep this one.")
-    drop = world_proposal(camp, "Drop this one.", :global)
+    # Concealed, so it takes the ordinary True / Edit / No — a fact proposed as
+    # common knowledge has no reject at all (STR-62), only a narrowing.
+    drop = world_proposal(camp, "Drop this one.", :global, concealed: true)
 
     {:ok, view, _html} = live(conn, ~p"/arc/#{camp.id}")
     view |> element("button[phx-value-id='#{keep.id}'][phx-click='accept']") |> render_click()
@@ -179,6 +187,31 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
 
     assert Repo.get!(ArcRM, drop.id).status == "retracted"
     refute render(world_view) =~ "Drop this one."
+  end
+
+  test "a fact proposed as everyone's narrows rather than rejects (STR-62)", %{
+    conn: conn,
+    user: user
+  } do
+    {camp, _mira_id} = campaign(user)
+    fact = world_proposal(camp, "The bell rang twice.", :global)
+
+    {:ok, view, html} = live(conn, ~p"/arc/#{camp.id}?tab=world")
+
+    # No reject and no edit on a common-knowledge card — the thing is true either
+    # way and the question is who it reached.
+    refute has_element?(view, "button[phx-value-id='#{fact.id}'][phx-click='reject']")
+    refute has_element?(view, "button[phx-value-id='#{fact.id}'][phx-click='edit']")
+    assert html =~ "Only who was there"
+
+    view
+    |> element("button[phx-value-id='#{fact.id}'][phx-click='accept_narrowed']")
+    |> render_click()
+
+    row = Repo.get!(ArcRM, fact.id)
+    assert row.status == "canon"
+    assert row.concealed == true
+    assert %Polyphony.Authoring.Audience{scene: true} = PolyphonyCore.Blob.decode(row.audience)
   end
 
   test "accept all promotes every proposal at once (the §3.0 fast path)", %{
@@ -205,7 +238,8 @@ defmodule PolyphonyWeb.ArcReviewLiveTest do
     user: user
   } do
     {camp, _mira_id} = campaign(user)
-    p = world_proposal(camp, "vaeg statement", :global)
+    # Concealed, so the card carries Edit — a common-knowledge card doesn't (STR-62).
+    p = world_proposal(camp, "vaeg statement", :global, concealed: true)
 
     {:ok, view, _html} = live(conn, ~p"/arc/#{camp.id}?tab=world")
 

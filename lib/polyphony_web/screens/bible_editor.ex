@@ -498,32 +498,24 @@ defmodule PolyphonyWeb.Screens.BibleEditor do
         </summary>
 
         <nav class="sheet mt-1.5" style="background:var(--b2)">
+            <%!-- Concealment is what the audience says, not a flag beside it
+                  (STR-62). The picker is always on the row; a world's facts start
+                  shared, so *naming* an audience is what conceals — the opposite
+                  direction from a character's, and the same rule underneath. --%>
             <button
-              type="button"
-              class="row w-full px-4 py-2.5 flex items-center justify-between gap-3 text-left"
-              phx-click="toggle_secret"
-              phx-value-field={@field}
-              phx-value-index={i}
-              aria-pressed={to_string(item.concealed)}
-            >
-              <span>
-                <span class="block text-[13px] font-semibold">Secret</span>
-                <span class="block text-[11px] dim">Kept out of every character's head</span>
-              </span>
-              <Kit.sw on={item.concealed} colour="var(--secret)" />
-            </button>
-            <%!-- Secret first, audience second: there is nothing to point at until
-                  the item is marked. --%>
-            <button
-              :if={item.concealed}
               type="button"
               class="row w-full px-4 py-2.5 flex items-center justify-between gap-2 text-[13px] text-left"
               phx-click="open_audience"
               phx-value-field={@field}
               phx-value-index={i}
             >
-              <span>Who knows this</span>
-              <span class="dim"><%= @knows_counts[{@field, i}] || "nobody else" %></span>
+              <span>Who knows</span>
+              <span
+                class={["pill", not item.concealed && "dim"]}
+                style={item.concealed && "border-color:var(--secret);color:var(--secret)"}
+              >
+                <%= if item.concealed, do: @knows_counts[{@field, i}] || "A few", else: "Everyone" %> ▾
+              </span>
             </button>
             <button
               type="button"

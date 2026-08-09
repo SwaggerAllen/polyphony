@@ -27,7 +27,10 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Groups
   alias Polyphony.Builds
   alias Polyphony.Generations
+  alias Polyphony.Failures
   alias Polyphony.Jobs.QuickBuild, as: BuildJob
+  alias Polyphony.Repo
+  alias Polyphony.ReadModels.ArcEntry, as: ReadArcEntry
   alias Polyphony.ReadModels.BuildRun
   alias Polyphony.Campaigns
   alias PolyphonyCore.Content.CampaignConfig
@@ -83,6 +86,10 @@ defmodule PolyphonyWeb.CampaignLive do
          # a cast that grows between scenes is included by default rather than silently
          # left out of the selection made three scenes ago.
          scene_cast: nil,
+         # The gate on the row (STR-62): which row is open in place, and which of its
+         # proposals is being corrected.
+         gate_expanded: nil,
+         gate_editing: nil,
          tab: "settings"
        )
        |> subscribe_build(entry)
@@ -198,9 +205,99 @@ defmodule PolyphonyWeb.CampaignLive do
       published?: Library.published?(socket.assigns.entry)
     )
     |> assign_scene_rows()
+    |> assign_arc_rows()
     |> assign_seen()
     |> preflight()
   end
+
+  # The gate made visible on the cast rows (STR-62): per-character pending arc,
+  # extraction still running, extraction failed — plus the world's own band and the
+  # backlog on people not in this scene. Read here and handed over as assigns; a
+  # screen is a function of them.
+  defp assign_arc_rows(socket) do
+    cast = socket.assigns.cast
+    ids = Enum.map(cast, &to_string(&1.id))
+    states = SceneGate.row_states(socket.assigns.entry.id, ids)
+    sheets = Map.new(cast, &{to_string(&1.id), Library.payload(&1)})
+
+    arc_rows =
+      Map.new(states.characters, fn {id, s} ->
+        proposals =
+          if s.pending > 0 do
+            Repo
+            |> proposals_for(id)
+            |> Enum.map(&%{entry: &1, was: was_of(&1, sheets[id])})
+          else
+            []
+          end
+
+        {id,
+         %{
+           count: s.pending,
+           running: s.running,
+           failure: s.failure,
+           proposals: proposals
+         }}
+      end)
+
+    world_proposals =
+      Polyphony.ReadModels.ArcEntry.list_proposed_world(Repo, socket.assigns.entry.id)
+
+    # The per-cast rule as a sentence: pending on people *not* going on stage.
+    selected =
+      socket.assigns
+      |> Map.put(:arc_rows, arc_rows)
+      |> Screens.Campaign.scene_cast_entries()
+      |> MapSet.new(&to_string(&1.id))
+
+    backlog =
+      arc_rows
+      |> Enum.reject(fn {id, _} -> MapSet.member?(selected, id) end)
+      |> Enum.map(fn {_id, row} -> row.count end)
+      |> Enum.sum()
+
+    assign(socket,
+      arc_rows: arc_rows,
+      world_arc: %{count: length(world_proposals), proposals: world_proposals},
+      arc_backlog: backlog
+    )
+  end
+
+  defp proposals_for(repo, id), do: Polyphony.ReadModels.ArcEntry.list_proposed(repo, id)
+
+  defp gate_act(socket, fun, id, msg) do
+    safe(socket, fn ->
+      fun.(String.to_integer(id))
+
+      {:noreply,
+       socket |> assign(gate_editing: nil) |> put_flash(:info, msg) |> assign_arc_rows()}
+    end)
+  end
+
+  defp arc_made_true(1), do: "1 change made true."
+  defp arc_made_true(n), do: "#{n} changes made true."
+
+  # What a revision replaces, read off the sheet it would replace it on — the same
+  # answer the review screen gives, so the row's cards are the same cards.
+  defp was_of(%{kind: "revision", sheet_field: field, replaces: replaces}, sheet) do
+    cond do
+      is_binary(replaces) and replaces != "" ->
+        replaces
+
+      is_binary(field) and field != "" and is_struct(sheet) ->
+        case Map.get(sheet, String.to_existing_atom(field)) do
+          value when is_binary(value) and value != "" -> value
+          _ -> nil
+        end
+
+      true ->
+        nil
+    end
+  rescue
+    ArgumentError -> nil
+  end
+
+  defp was_of(_entry, _sheet), do: nil
 
   # A group is made **inside** a campaign, like a world or a character — the library's
   # only create action is a campaign (`LibraryLive`), and two front doors for one thing
@@ -607,18 +704,112 @@ defmodule PolyphonyWeb.CampaignLive do
 
         # Arc-review gate (§3.0): no new scene while the cast (or the campaign's world)
         # has unreviewed arc — generation works from the sheet, so open one and the
-        # Director writes a character who's fallen behind the story. Accept-all on the
-        # review screen is the one-tap way through.
+        # Director writes a character who's fallen behind the story.
+        # The gate is met on the row (STR-62): the cast rows above the form carry each
+        # character's state and its fix, so a refusal here just restates what the rows
+        # already show — no redirect, the work is all on this screen.
         # Checked by library id — the same identity the cast enters the scene under
         # and arc extraction files proposals against (§5.2).
         match?({:blocked, _}, SceneGate.check(entry.id, Enum.map(ready, & &1.id))) ->
           {:noreply,
            socket
-           |> put_flash(:error, "Review the pending arc changes before the next scene.")
-           |> redirect(to: ~p"/arc/#{entry.id}")}
+           |> assign_arc_rows()
+           |> put_flash(:error, "Some of this cast isn't ready — the rows above say who.")}
 
         true ->
           start_scene(socket, ready, pending)
+      end
+    end)
+  end
+
+  # ── The gate on the row (STR-62) ─────────────────────────────────────────────
+  #
+  # The caret opens a character's proposals in place, as the same cards the review
+  # screen shows; the row's Accept-all is the intended fast path, and the only one.
+
+  def handle_event("gate_expand", %{"id" => id}, socket) do
+    {:noreply,
+     assign(socket,
+       gate_expanded: if(socket.assigns.gate_expanded == id, do: nil, else: id),
+       gate_editing: nil
+     )}
+  end
+
+  def handle_event("gate_accept_all", %{"subject" => "world"}, socket) do
+    safe(socket, fn ->
+      count = ReadArcEntry.accept_all(Repo, socket.assigns.entry.id, "world")
+
+      {:noreply,
+       socket
+       |> put_flash(:info, arc_made_true(count))
+       |> assign(gate_expanded: nil)
+       |> assign_arc_rows()}
+    end)
+  end
+
+  def handle_event("gate_accept_all", %{"subject" => subject}, socket) do
+    safe(socket, fn ->
+      count = ReadArcEntry.accept_all(Repo, subject, "character")
+
+      {:noreply,
+       socket
+       |> put_flash(:info, arc_made_true(count))
+       |> assign(gate_expanded: nil)
+       |> assign_arc_rows()}
+    end)
+  end
+
+  # The cards on a row emit the same events the review screen's do — refusing one
+  # here is the same act as refusing it there.
+  def handle_event("accept", %{"id" => id}, socket),
+    do: gate_act(socket, &ReadArcEntry.accept(Repo, &1), id, "Made true.")
+
+  def handle_event("reject", %{"id" => id}, socket),
+    do: gate_act(socket, &ReadArcEntry.reject(Repo, &1), id, "Left as it was.")
+
+  def handle_event("accept_narrowed", %{"id" => id}, socket),
+    do:
+      gate_act(
+        socket,
+        &ReadArcEntry.accept_narrowed(Repo, &1),
+        id,
+        "True — for whoever was there."
+      )
+
+  def handle_event("edit", %{"id" => id}, socket),
+    do: {:noreply, assign(socket, gate_editing: String.to_integer(id))}
+
+  def handle_event("cancel_edit", _params, socket),
+    do: {:noreply, assign(socket, gate_editing: nil)}
+
+  def handle_event("save_edit", %{"entry_id" => id} = params, socket) do
+    safe(socket, fn ->
+      attrs = %{statement: params["statement"]}
+
+      attrs =
+        if params["scope"] in [nil, ""], do: attrs, else: Map.put(attrs, :scope, params["scope"])
+
+      ReadArcEntry.edit(Repo, String.to_integer(id), attrs)
+
+      {:noreply,
+       socket |> assign(gate_editing: nil) |> put_flash(:info, "Updated.") |> assign_arc_rows()}
+    end)
+  end
+
+  # Try again is the only action on a failed row — no open-anyway, because arc
+  # extraction and turn generation call the same provider.
+  def handle_event("gate_retry", %{"id" => id}, socket) do
+    safe(socket, fn ->
+      case Failures.retry(String.to_integer(id)) do
+        {:ok, _} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "Trying again.")
+           |> assign(gate_expanded: nil)
+           |> assign_arc_rows()}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Couldn't retry: #{inspect(reason)}")}
       end
     end)
   end
@@ -1511,6 +1702,11 @@ defmodule PolyphonyWeb.CampaignLive do
       scene_suggesting={@scene_suggesting}
       scenes={@scenes}
       scene_rows={@scene_rows}
+      arc_rows={@arc_rows}
+      world_arc={@world_arc}
+      gate_expanded={@gate_expanded}
+      gate_editing={@gate_editing}
+      arc_backlog={@arc_backlog}
       seen={@seen}
       tab={@tab}
       viewer={@viewer}

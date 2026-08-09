@@ -125,6 +125,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
            relations_context(sheet.relationships || [], socket.assigns.current_user, entry.id),
          boundaries: sheet.boundaries || [],
          facts: sheet.facts || [],
+         # STR-62: which fields play has revised (canon arc per sheet_field), the
+         # which-do-you-mean prompt, and the one-save permission to rewrite the origin.
+         arc_counts: arc_counts(entry.id),
+         arc_prompt: nil,
+         arc_allow: MapSet.new(),
+         arc_scenes: arc_scenes(campaign),
          scene_count: scene_count(entry.id),
          groups:
            group_rows(Groups.for_character(Owner.of(socket.assigns.current_user), entry.id)),
@@ -146,6 +152,29 @@ defmodule PolyphonyWeb.SheetEditorLive do
     Membership.scene_count(Repo, id)
   rescue
     _ -> 0
+  end
+
+  # How many times play has revised each prose field — the count the arc-touched
+  # prompt states, and the reason the prompt exists at all (STR-62).
+  defp arc_counts(id) do
+    Repo
+    |> Polyphony.ReadModels.ArcEntry.list_canon(id)
+    |> Enum.filter(&(&1.sheet_field in @block_fields))
+    |> Enum.frequencies_by(& &1.sheet_field)
+  rescue
+    _ -> %{}
+  end
+
+  # The campaign's scenes, for "she changed in a scene". Optional on purpose:
+  # between-session changes are real changes and belong to no scene.
+  defp arc_scenes(nil), do: []
+
+  defp arc_scenes(campaign) do
+    (Library.payload(campaign)[:scenes] || [])
+    |> Enum.with_index(1)
+    |> Enum.map(fn {id, n} -> %{id: to_string(id), label: "Scene #{n}"} end)
+  rescue
+    _ -> []
   end
 
   # ── Editing the sheet form ──────────────────────────────────────────────────
@@ -419,15 +448,15 @@ defmodule PolyphonyWeb.SheetEditorLive do
     {:noreply, socket |> assign(facts: List.delete_at(socket.assigns.facts, idx)) |> touch()}
   end
 
-  # The two flags are independently toggleable because they're independent: always-in-
-  # mind is whether she carries it, secret is who else has it.
-  def handle_event("toggle_fact", %{"index" => i, "flag" => flag}, socket)
-      when flag in ["core", "concealed"] do
+  # Always-in-mind is the one flag left to toggle: concealment is derived from the
+  # audience in `toggle_audience` (STR-62), so there is no Secret switch to fall out
+  # of step with it. The two are orthogonal — she can have a secret she never thinks
+  # about.
+  def handle_event("toggle_fact", %{"index" => i, "flag" => "core"}, socket) do
     idx = String.to_integer(i)
-    key = String.to_existing_atom(flag)
 
     facts =
-      List.update_at(socket.assigns.facts, idx, fn f -> Map.put(f, key, !Map.get(f, key)) end)
+      List.update_at(socket.assigns.facts, idx, fn f -> Map.put(f, :core, !Map.get(f, :core)) end)
 
     {:noreply, socket |> assign(facts: facts) |> touch()}
   end
@@ -443,6 +472,106 @@ defmodule PolyphonyWeb.SheetEditorLive do
     end)
   end
 
+  # ── Arc-touched fields (STR-62) ─────────────────────────────────────────────
+  #
+  # Once arc has touched a field there are two different things an author can be
+  # doing and the app cannot tell them apart from the keystrokes. *She's changed
+  # again* adds to what play did and leaves her history standing — an authored
+  # proposal, reviewed like any other. *I wrote her wrong* corrects the person
+  # originally written, and play's changes still apply on top.
+
+  def handle_event("arc_prompt_sync", params, socket) do
+    case socket.assigns.arc_prompt do
+      nil ->
+        {:noreply, socket}
+
+      prompt ->
+        {:noreply,
+         assign(socket, :arc_prompt, %{
+           prompt
+           | because: params["because"] || prompt.because,
+             scene_id: present(params["scene_id"])
+         })}
+    end
+  end
+
+  def handle_event("arc_changed_again", params, socket) do
+    safe(socket, fn ->
+      case socket.assigns.arc_prompt do
+        nil ->
+          {:noreply, socket}
+
+        prompt ->
+          scene_id = present(params["scene_id"])
+          because = present(params["because"])
+          saved = Map.get(socket.assigns.sheet, String.to_existing_atom(prompt.field))
+
+          Polyphony.ReadModels.ArcEntry.put(
+            Repo,
+            %Polyphony.Authoring.ArcEntry{
+              kind: :revision,
+              sheet_field: prompt.field,
+              statement: prompt.value,
+              replaces: saved,
+              reason: because,
+              author: author_name(socket),
+              operation: :change,
+              timing: if(scene_id, do: :scene, else: :now),
+              source_scene_id: scene_id
+            },
+            socket.assigns.entry.id
+          )
+
+          # The change lands through review, so the field itself stands as saved.
+          {:noreply,
+           socket
+           |> assign(
+             arc_prompt: nil,
+             arc_counts: arc_counts(socket.assigns.entry.id),
+             blocks:
+               Map.put(
+                 socket.assigns.blocks,
+                 prompt.field,
+                 to_blocks(to_string(saved || ""))
+               )
+           )
+           |> put_flash(:info, "Proposed — it's waiting with the other arc changes.")}
+      end
+    end)
+  end
+
+  def handle_event("arc_wrote_wrong", _params, socket) do
+    case socket.assigns.arc_prompt do
+      nil ->
+        {:noreply, socket}
+
+      prompt ->
+        {:noreply,
+         socket
+         |> assign(
+           arc_prompt: nil,
+           arc_allow: MapSet.put(socket.assigns.arc_allow, prompt.field)
+         )
+         |> touch()}
+    end
+  end
+
+  def handle_event("arc_prompt_cancel", _params, socket) do
+    case socket.assigns.arc_prompt do
+      nil ->
+        {:noreply, socket}
+
+      prompt ->
+        saved = Map.get(socket.assigns.sheet, String.to_existing_atom(prompt.field))
+
+        {:noreply,
+         assign(socket,
+           arc_prompt: nil,
+           blocks: Map.put(socket.assigns.blocks, prompt.field, to_blocks(to_string(saved || "")))
+         )}
+    end
+  end
+
   # ── Audience (§3.3) ─────────────────────────────────────────────────────────
 
   # Reachable only from a secret, and the same component the world bible opens — one
@@ -456,9 +585,13 @@ defmodule PolyphonyWeb.SheetEditorLive do
   def handle_event("toggle_audience", %{"kind" => kind, "id" => id}, socket) do
     case socket.assigns.audience_at do
       index when is_integer(index) ->
+        # Concealment is what the audience says (STR-62): secret when anybody
+        # besides her is named, derived rather than stored beside it — so a fact
+        # marked secret with an empty audience cannot be represented at all.
         facts =
           List.update_at(socket.assigns.facts, index, fn fact ->
-            %Fact{fact | audience: toggle(fact.audience, kind, id)}
+            audience = toggle(fact.audience, kind, id)
+            %Fact{fact | audience: audience, concealed: not Audience.empty?(audience)}
           end)
 
         {:noreply, socket |> assign(facts: facts) |> touch()}
@@ -806,6 +939,12 @@ defmodule PolyphonyWeb.SheetEditorLive do
   defp persist(socket, opts) do
     %{entry: %{id: id}, blocks: blocks} = socket.assigns
 
+    # Editing a field play has already revised asks which you mean (STR-62): the
+    # edit is held out of this save and the prompt opens instead. Everything else
+    # on the sheet still saves without ceremony — the friction appears exactly
+    # where the ambiguity is.
+    {held, saving} = split_arc_touched(socket, blocks)
+
     sheet = %CharacterSheet{
       socket.assigns.sheet
       | name: socket.assigns.name,
@@ -813,11 +952,11 @@ defmodule PolyphonyWeb.SheetEditorLive do
         role: Screens.SheetEditor.blank_to_nil(socket.assigns.role),
         cover: Screens.SheetEditor.blank_to_nil(socket.assigns.cover),
         tier: socket.assigns.tier,
-        premise: join_blocks(blocks["premise"]),
-        appearance: join_blocks(blocks["appearance"]),
-        voice: join_blocks(blocks["voice"]),
-        temperament: join_blocks(blocks["temperament"]),
-        backstory: join_blocks(blocks["backstory"]),
+        premise: join_blocks(saving["premise"]),
+        appearance: join_blocks(saving["appearance"]),
+        voice: join_blocks(saving["voice"]),
+        temperament: join_blocks(saving["temperament"]),
+        backstory: join_blocks(saving["backstory"]),
         world_bible_id: world_id_int(socket.assigns.world_id),
         relationships: socket.assigns.relationships,
         boundaries: socket.assigns.boundaries,
@@ -836,9 +975,51 @@ defmodule PolyphonyWeb.SheetEditorLive do
       sheet: sheet,
       name: sheet.name || "",
       pronouns: sheet.pronouns || "",
-      blocks: blocks_from_sheet(sheet)
+      # A held field keeps its draft on screen — the prompt is about it.
+      blocks: Map.merge(blocks_from_sheet(sheet), Map.new(held)),
+      arc_allow: MapSet.new()
     )
+    |> prompt_arc_touched(held)
     |> Autosave.saved()
+  end
+
+  # Splits the drafted blocks into the ones this save is allowed to write and the
+  # ones held for the prompt: fields play has revised, whose draft differs from the
+  # saved sheet, and which the author hasn't already answered for.
+  defp split_arc_touched(socket, blocks) do
+    Enum.reduce(@block_fields, {[], blocks}, fn f, {held, saving} ->
+      draft = join_blocks(blocks[f])
+      saved = to_string(Map.get(socket.assigns.sheet, String.to_existing_atom(f)) || "")
+
+      if Map.get(socket.assigns.arc_counts, f, 0) > 0 and draft != saved and
+           not MapSet.member?(socket.assigns.arc_allow, f) do
+        {held ++ [{f, blocks[f]}], Map.put(saving, f, to_blocks(saved))}
+      else
+        {held, saving}
+      end
+    end)
+  end
+
+  defp prompt_arc_touched(socket, []), do: socket
+
+  defp prompt_arc_touched(%{assigns: %{arc_prompt: nil}} = socket, [{field, draft_blocks} | _]) do
+    assign(socket, :arc_prompt, %{
+      field: field,
+      label: field_label(field),
+      value: join_blocks(draft_blocks),
+      count: Map.get(socket.assigns.arc_counts, field, 0),
+      because: "",
+      scene_id: nil
+    })
+  end
+
+  defp prompt_arc_touched(socket, _held), do: socket
+
+  defp field_label(field) do
+    case List.keyfind(@field_specs, field, 0) do
+      {_f, label} -> label
+      nil -> String.capitalize(field)
+    end
   end
 
   defp touch(socket), do: Autosave.touch(socket)
@@ -918,6 +1099,15 @@ defmodule PolyphonyWeb.SheetEditorLive do
   end
 
   defp down(name), do: name |> to_string() |> String.trim() |> String.downcase()
+
+  # Who says so, on an authored proposal. The Because answers a different question.
+  defp author_name(socket) do
+    case socket.assigns.current_user do
+      %{username: username} when is_binary(username) and username != "" -> username
+      %{email: email} when is_binary(email) -> email
+      _ -> "the author"
+    end
+  end
 
   defp user_attribution(socket) do
     case socket.assigns.current_user do
