@@ -1,6 +1,7 @@
 defmodule Storybook.Screens.Browse do
   use PhoenixStorybook.Story, :component
 
+  alias Polyphony.Authoring.WorldBible
   alias PolyphonyCore.Publication
 
   def container, do: {:div, style: "width:100%"}
@@ -29,6 +30,14 @@ defmodule Storybook.Screens.Browse do
   end
 
   defp scene(id, title), do: %{id: id, title: title}
+
+  # The real struct, because `embedded_bible/1` pattern-matches on it — a plain map is
+  # exactly how a snapshot with no *takeable* world looks.
+  defp bible,
+    do: %WorldBible{
+      name: "The Salt Line",
+      cover: "A customs house that signs for things nobody sees."
+    }
 
   defp snapshot,
     do: %{
@@ -129,6 +138,7 @@ defmodule Storybook.Screens.Browse do
       gap: nil,
       gone: nil,
       who: nil,
+      info: false,
       reporting: nil
     }
   end
@@ -165,6 +175,13 @@ defmodule Storybook.Screens.Browse do
       attributes: Map.put(attrs, :id, to_string(id))
     }
 
+  # The connection banners are driven by the classes **LiveView puts on the container**,
+  # not by an assign — `Storybook.Screens.Play` has the same helper for the same reason.
+  # A per-variation template puts the class on an ancestor so they can be looked at.
+  defp connection(id, class, description) do
+    %{v(id, description, read(%{})) | template: ~s|<div class="#{class}"><.psb-variation/></div>|}
+  end
+
   def variations do
     [
       v(
@@ -196,6 +213,33 @@ defmodule Storybook.Screens.Browse do
         :bookmark_gone,
         "A bookmark into a scene the author's republish removed. It falls back to the start rather than stranding the reader on a link into nothing — republishing replaces the copy somebody was in the middle of, which is the one place that trade shows.",
         front(%{mode: :limited, bookmark: %{scene_id: "deleted", perspective: "wren"}})
+      ),
+      v(
+        :taking,
+        "The fork offer — forkable, no takeable world. Explicit about scale, because a fork is not a bookmark: a copy of everything, picking up where this leaves off. The two inset sentences are load-bearing — nothing you do touches the original, and yours becomes a different story from the first thing you change.",
+        front(%{
+          pub: pub(["wren", "ilias"], forkable: true),
+          row: row("s1", "The Salt Line", pub: pub(["wren", "ilias"], forkable: true))
+        })
+      ),
+      v(
+        :taking_world,
+        "Just the setting, beside the fork offer. You take the whole bible and none of the arc — nothing is withheld from a world you may take, and what *is* withheld is everything the campaign changed, so you get the world as it stood at the first scene. Both halves are said, and the fork is named as the way to get the other thing.",
+        front(%{
+          pub: pub(["wren", "ilias"], forkable: true),
+          row: row("s1", "The Salt Line", pub: pub(["wren", "ilias"], forkable: true)),
+          snapshot: Map.put(snapshot(), :bible, bible())
+        })
+      ),
+      v(
+        :taking_not_forkable,
+        "Shared to be read, not continued — and the world can still be taken. A different offer rather than a refusal: the line says what the author chose, in their terms, and no disabled fork control appears anywhere, per the standing decision.",
+        front(%{snapshot: Map.put(snapshot(), :bible, bible())})
+      ),
+      v(
+        :taking_nothing,
+        "Neither forkable nor carrying a public world. Both facts in one line, and the only remaining action is to keep reading. Not an apology — the author published a story to be read and a reader is reading it; nothing has gone wrong.",
+        front(%{})
       ),
       v(
         :reading,
@@ -247,6 +291,21 @@ defmodule Storybook.Screens.Browse do
         :reading_signed_out,
         "Reading never hits a wall; only the actions do. A signed-out visitor gets the whole story, and the line under the pager is where keeping your place, taking a copy and reading as someone in it are said to need an account — once, plainly, at the point it matters.",
         read(%{current_user: nil})
+      ),
+      v(
+        :reading_as_info,
+        "The drawer behind the ⓘ on the perspective control — the only thing the reader adds beside it, and the only surface-specific affordance the control carries anywhere. It says the two things a confused reader needs: the story is a different length depending on whose eyes you're behind, and switching keeps your place. No toast on switch.",
+        read(%{info: true})
+      ),
+      connection(
+        :reconnecting,
+        "phx-loading",
+        "The socket dropped and is coming back, on the screen most likely to be read on a train. Play's treatment, promising less: a reader has nothing at risk in the first place, so the sentence is smaller — the story is still there, the page is catching up."
+      ),
+      connection(
+        :disconnected,
+        "phx-error",
+        "The socket is gone and not coming back on its own. The pager and the perspective control stop responding; the text you already have stays readable, which is why this state doesn't borrow play's urgency — and there is no retry, because this is the transport rather than the fiction."
       ),
       v(
         :nobody_shared,

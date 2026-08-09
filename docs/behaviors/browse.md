@@ -1,6 +1,6 @@
 # Browse
 
-<!-- rev: 3 -->
+<!-- rev: 4 -->
 
 | | |
 |---|---|
@@ -44,6 +44,16 @@ stranger can sit down with.
 - **You may take a copy of anything you may read.** Not only what is listed: a world shared
   by link is a world somebody meant you to have. What you may *not* read you may not copy —
   taking a copy is reading it and keeping it, so it cannot be the looser of the two.
+- **An action that isn't available isn't shown.** No greyed-out buttons, no *request access*,
+  no *upgrade*. A story shared to be read and not continued is **not a locked door — it is a
+  different offer**, and the difference matters: a disabled control tells a reader they are
+  the wrong sort of person, while an absent one lets the page say what it *does* offer. The
+  page names what was shared instead, in the author's terms, and stops there.
+- **People can't be taken on their own.** Characters travel only inside a fork. A character
+  lifted out of their campaign has no history and knows nobody — the arc that makes them
+  worth having is a record of scenes that came with a world and a cast, and copying the sheet
+  alone would produce a stranger wearing a name. Three appetites are legitimate — carry the
+  story on, borrow the setting, keep the person — and the product answers the first two.
 - **The reader is the play screen with a different bottom bar.** Same header, same
   perspective control, same transcript, same beat rules — only the composer is replaced, by
   scene navigation. It takes the *page* register, because it isn't an authoring surface, it
@@ -77,7 +87,13 @@ as a blank page.
 
 ### `front_page` — A story's front page
 
-What it is, who wrote it, and how you can read it. See the standing decision.
+What it is, who wrote it, how you can read it, and **what you may take away with you**. See
+the standing decisions.
+
+The take actions are computed from the snapshot rather than offered and refused: *make it
+mine* appears when the publication is forkable, *use this world* when the snapshot embeds a
+bible, and reporting always. Which of them a reader sees is therefore a description of what
+the author shared, and the four combinations are the four `taking*` states below.
 
 ### `start_reading` — Never opened this one
 
@@ -93,6 +109,71 @@ where it is kept: the scene, and the perspective you were in.
 Republishing replaces the copy somebody was in the middle of, which is the one place that
 trade becomes visible. The bookmark falls back to the start rather than stranding the reader
 on a link into nothing.
+
+### `taking` — Carry this on yourself
+
+The fork offer, and it is explicit about scale because a fork is not a bookmark: **a copy of
+everything** — the world, every person, and everything that happened to them. It picks up
+where this leaves off.
+
+Two sentences do the real work, and neither should be cut for length. *Nothing you do touches
+the original* answers the fear that taking something damages it. *Their version stays exactly
+as it is; yours becomes a different story from the first thing you change* answers the
+opposite fear, that a fork is a shared document — it is the moment somebody understands they
+are getting a divergent copy rather than a collaboration.
+
+### `taking_world` — Just the setting
+
+The world on its own, with its cover, offered as a copy into the reader's library.
+
+**You take the whole bible, and none of the arc — which means you get the world as it was
+before the story started.** Both halves of that need saying and the second is the one people
+will get wrong.
+
+There is no partial copy and no permission tier inside a world: everything the author wrote
+comes across, including entries they kept from you while you were reading. What does not come
+across is the **arc**, and the arc is everything the campaign changed. Strip it and you are
+left with the starting bible — the world at scene one, before anything in the story you just
+read happened to it.
+
+That is a feature and it is also a surprise. Somebody who read a story about a city falling
+takes home the city standing. The page has to say so, because the alternative is a reader
+attaching a world in play and discovering the difference through a Director that has never
+heard of the events they remember. **The only way to get the world as the story left it is to
+fork the campaign** — that is what a fork carries and this does not. (Prequel handling is
+specced and unbuilt; when it lands it is the other answer to this same question.)
+
+The other half is worth a sentence too: a reader who spent an evening not knowing something is
+about to own the answer. **The view-as selector is the control for that**, and it is the same
+one they were reading with — set it to a character and the bible shows what that character
+knows. Somebody who wants the setting without spoiling the story does not need a different
+copy; they need to keep reading it the way they were.
+
+The alternative is offered in the same breath — *or take it unread and find out in play* —
+which is a real way to use this and not a consolation.
+
+**This corrects the mock.** §04's *Take the world* frame currently reads *"Some of this world
+isn't shown — Ilse kept a few things back, and those don't come with it."* That describes a
+partial copy, which is not what happens. It is wrong twice over: nothing is withheld from the
+bible, and the thing that *is* withheld — the arc — isn't mentioned at all.
+
+### `taking_not_forkable` — Shared to be read, not continued
+
+The story cannot be forked and the world can be taken. The copy says what the author chose,
+in their terms — *shared this to be read, not continued* — and immediately what remains
+possible: take the world and write your own people into it.
+
+**No disabled fork control.** See the standing decision. The state's whole job is to read as a
+different offer rather than a refusal, and a greyed-out button undoes that in one glance.
+
+### `taking_nothing` — Nothing to take with you
+
+Neither forkable nor carrying a public world. It names both facts in one sentence and offers
+the only remaining action, which is to keep reading.
+
+This is the state most at risk of being written as an apology. It should not be. The author
+published a story to be read and a reader is reading it; nothing has gone wrong, and the page
+should not imply the reader was owed more.
 
 ### `reading` — A scene, read as one of the published heads
 
@@ -150,6 +231,63 @@ finished are different events and only one of them wants somewhere to go.
 The whole story, and one line under the pager naming the three things that need signing in:
 keeping your place, taking a copy, and reading it as someone in it. See the standing
 decision — the line sits at the point those become relevant, not in front of the text.
+
+### `reading_as_info` — Why the story changes when you switch
+
+The drawer behind the ⓘ on the perspective control, opened from the selector rather than
+pushed at anybody. It says the two things a confused reader needs: each of these people knows
+different things, **so the story is a different length depending on whose eyes you are
+behind**; and switching keeps your place, with things appearing and disappearing being *the
+point rather than a fault*.
+
+**No toast on switch.** That gets irritating by the second one, and the explanation belongs
+where somebody confused would idiomatically go looking — beside the control that confused
+them.
+
+**The control beside it stays a plain native select.** `polyphony-browse.html` §03 draws its
+open list as a styled panel, grouped into *who can show you this scene* and *not in this one*,
+with absent characters dimmed. **None of that is buildable and the frame comes out.** The
+control is a native `<select>`; its open list is drawn by the operating system and cannot be
+styled, grouped or dimmed. Drawing one is how the grouping came to be proposed at all.
+
+The closed pill is the whole of the control a mock can show, which is why play and the
+campaign's world tab only ever draw that — and it is the strongest form of the identical-
+treatment rule, since a control nobody can restyle cannot drift.
+
+Nothing is lost by not warning first. `reading_not_present` already says Halden wasn't there
+the moment you pick him, which is when it matters; warning first and explaining second says
+the same thing twice.
+
+The ⓘ is therefore the **only** thing the reader adds, and it adds it beside the control
+rather than inside it.
+
+This is a **surface-specific affordance, and the only one the perspective control carries.**
+See the amendment to `play.md`'s perspective-control section: the control itself is identical
+everywhere and that is not negotiable, but what sits beside it may differ, because the thing
+needing explanation differs. An author on play is choosing which projection to write as and
+nothing is being withheld from them; a reader is being shown a deliberately partial story and
+has no way to know that is intended.
+
+### `reconnecting` — The socket dropped and is coming back
+
+The reader is a LiveView and drops like any other, on the screen most likely to be read on a
+train. Same treatment as `play.md`'s, and for the same reason: driven by the class LiveView
+puts on the container rather than by an assign.
+
+It differs from play's in what it can promise. Play says nothing written is at risk because
+reconnecting replays the log; **a reader has nothing at risk in the first place**, so the
+sentence is smaller — the story is still there, the page is catching up. Reading position is
+a URL, so even a full reload returns to the same place.
+
+### `disconnected` — The socket is gone
+
+Not coming back on its own. Says the page will catch up rather than offering a retry, because
+there is nothing here to retry — the transport rather than the fiction, as `play.md` has it.
+
+The pager and the perspective control stop responding, which is the visible consequence and
+the thing to say: the text you already have stays readable. A reader who can still read is
+much less stranded than a player who cannot act, and this state should not borrow play's
+urgency.
 
 ### `nobody_shared` — Published with no perspectives at all
 

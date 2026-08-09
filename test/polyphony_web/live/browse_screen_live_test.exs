@@ -213,7 +213,10 @@ defmodule PolyphonyWeb.BrowseScreenLiveTest do
   end
 
   describe "taking the world out of a story" do
-    test "copies the setting and leaves what the author kept back", %{conn: conn, user: user} do
+    test "copies the whole bible — concealed entries travel, the arc doesn't", %{
+      conn: conn,
+      user: user
+    } do
       bible = %WorldBible{
         name: "The Ninth Gate",
         cover: "A city with no sky.",
@@ -232,18 +235,30 @@ defmodule PolyphonyWeb.BrowseScreenLiveTest do
       taken = Library.payload(copy)
 
       assert taken.name == "The Ninth Gate"
-      assert WorldBible.statements(taken.rules) == ["Nobody walks the stair twice."]
-      # The one that matters: a secret doesn't travel with the setting.
-      refute "The ninth district is a lie." in WorldBible.statements(taken.rules)
+      # No permission tier inside a world (STR-63): what was kept from you while you
+      # were reading still comes across, concealed exactly as the author wrote it.
+      # What doesn't come is the arc, which never lived in the bible.
+      assert WorldBible.statements(taken.rules) == [
+               "Nobody walks the stair twice.",
+               "The ninth district is a lie."
+             ]
+
+      assert [%{concealed: false}, %{concealed: true}] = WorldBible.entries(taken.rules)
     end
 
-    test "and the offer says so rather than implying it away", %{conn: conn} do
+    test "and the offer says both halves — the whole bible, as it began", %{conn: conn} do
       story = publish(user_fixture(), stair(), %{perspectives: [@halden], forkable: false})
 
       {:ok, _view, html} = live(conn, ~p"/browse?#{[story: story.id]}")
 
       assert html =~ "Use this world"
       assert html =~ "take the world and write your own people into it"
+      assert html =~ "The whole bible goes in your library"
+      assert html =~ "as it stood at the first scene"
+      # Not forkable, so the fork isn't named as the way to the other thing — an
+      # action that isn't available isn't shown, and isn't advertised either.
+      refute html =~ "fork the campaign"
+      refute html =~ "Make it mine"
     end
   end
 
@@ -301,6 +316,24 @@ defmodule PolyphonyWeb.BrowseScreenLiveTest do
       {:ok, _v, html} = live(conn, ~p"/browse?#{[story: story.id, scene: scene, as: @ruthe]}")
 
       refute html =~ "Eleven years she has had the answer ready."
+    end
+
+    test "the ⓘ beside the control explains, and only when asked", %{conn: conn} do
+      scene = stair()
+      story = publish(user_fixture(), scene, %{perspectives: [@halden]})
+
+      {:ok, view, html} =
+        live(conn, ~p"/browse?#{[story: story.id, scene: scene, as: @halden]}")
+
+      # No toast on switch — the explanation waits beside the control that confused you.
+      refute html =~ "depending on whose eyes"
+
+      html = view |> element("button[phx-click=reading_as_info]") |> render_click()
+      assert html =~ "depending on whose eyes"
+      assert html =~ "Switching keeps your place"
+
+      html = view |> element("button[phx-click=close_info]") |> render_click()
+      refute html =~ "depending on whose eyes"
     end
   end
 

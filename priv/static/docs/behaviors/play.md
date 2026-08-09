@@ -1,6 +1,6 @@
 # Play
 
-<!-- rev: 4 -->
+<!-- rev: 5 -->
 
 | | |
 |---|---|
@@ -58,6 +58,27 @@ the same position, naming *Omniscient* or one character. It is the thing that de
 projection of the log you are looking at, so it is never styled as a filter or tucked into a
 menu — drift between its three treatments was the worst consistency failure of the design
 pass, and it is not to be repeated.
+
+What may differ is what sits **beside** it. The published reader carries an ⓘ opening a
+short explanation of why the story changes when you switch; play and the campaign's world tab
+do not, and should not acquire one for symmetry's sake. The control is identical because it
+does the same job everywhere; the explanation is not, because the thing needing explaining
+isn't. An author choosing a projection to write as is not being kept from anything — a reader
+is being shown a deliberately partial story with no way to know that is intended rather than
+broken.
+
+The line between the two is worth holding precisely: **the trigger, its markup, its position
+and its options are the control** and may not vary. An affordance placed next to it, opening
+something that is not the control, is not covered by this decision. If a fourth surface wants
+the control, it gets the control unchanged; whether it also wants an explanation is a separate
+question with a separate answer.
+
+It is worth recording *why* this has held so well without anybody policing it: the control is
+a native `<select>`, so its open list is drawn by the operating system and cannot be styled,
+grouped or dimmed. A mock can only ever show the closed pill. **A control nobody can restyle
+cannot drift** — which is also the trap, since drawing the open list as a styled panel is
+exactly how somebody comes to propose grouping or dimming it. If a mock shows this control
+open, that is the error.
 
 ## States
 
