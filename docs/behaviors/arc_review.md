@@ -1,6 +1,6 @@
 # Arc review
 
-<!-- rev: 4 -->
+<!-- rev: 5 -->
 
 | | |
 |---|---|
@@ -114,7 +114,7 @@ A card says what it would change, what it changes it **from**, and what in the s
 it — the last being what makes accepting quick, since you can check the reasoning without
 rereading the scene.
 
-**Three action sets, and which one a card gets is a claim about what has already happened.**
+**Two action sets, and which one a card gets is a claim about what has already happened.**
 
 - **True / Edit / No** — the ordinary set. A new fact, a field being replaced, a
   relationship, an authored entry of any kind, a world fact however wide its audience, and a
