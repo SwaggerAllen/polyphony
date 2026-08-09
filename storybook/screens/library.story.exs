@@ -22,7 +22,7 @@ defmodule Storybook.Screens.Library do
     }
   end
 
-  defp world(id, name, opts \\ []),
+  defp world(id, name, opts),
     do: %{
       id: id,
       name: name,
