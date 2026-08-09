@@ -1446,7 +1446,6 @@ defmodule PolyphonyWeb.Screens.Campaign do
   defp row_state_line(:clear), do: "Up to date"
   defp row_state_line(:running), do: "Still being worked out"
   defp row_state_line(:failed), do: "Couldn't be worked out"
-  defp row_state_line(_), do: nil
 
   defp row_state_style(:pending), do: "color:var(--lamp)"
   defp row_state_style(:failed), do: "color:var(--pencil)"
