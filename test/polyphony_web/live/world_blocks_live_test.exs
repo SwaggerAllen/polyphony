@@ -101,7 +101,7 @@ defmodule PolyphonyWeb.WorldBlocksLiveTest do
       refute html =~ ~s(name="b_rules[]")
       assert html =~ "gravity is weak"
       assert html =~ "time loops"
-      assert html =~ ~s(phx-click="toggle_secret")
+      assert html =~ ~s(phx-click="open_audience")
       assert html =~ ~s(phx-click="move_item")
     end
 
@@ -182,7 +182,7 @@ defmodule PolyphonyWeb.WorldBlocksLiveTest do
       # The menu is still reachable and still does what it did.
       assert has_element?(
                view,
-               "#starting_canon details nav button[phx-click=toggle_secret]"
+               "#starting_canon details nav button[phx-click=open_audience]"
              )
     end
 

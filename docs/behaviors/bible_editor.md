@@ -1,6 +1,6 @@
 # World bible
 
-<!-- rev: 1 -->
+<!-- rev: 2 -->
 
 | | |
 |---|---|
@@ -26,6 +26,12 @@ are known to whom.
   back without saying what.
 - **A resolved audience answers "right now".** Somebody joining a group changes what a
   secret's audience line says, without anybody touching the secret.
+- **Concealment is what the audience says, not a flag beside it.** A rule or a piece of
+  canon carries an audience and nothing else, and is concealed when the audience is anything
+  short of everyone. There is no separate toggle to fall out of step with it. The world's
+  default is the opposite of a character's — a world's facts start shared, a person's start
+  private — but the rule underneath is the same one: the treatment follows the audience
+  differing from the default, and is derived rather than stored.
 - **A name clash is flagged on save, not on every keystroke.** A name you are halfway through
   typing always clashes with nothing.
 
@@ -39,9 +45,15 @@ Cover, setting, tone, rules, starting canon.
 
 The cover placeholder does the explaining, since it is the only part a stranger ever sees.
 
-### `a_secret` — A concealed rule
+### `a_secret` — A rule not everyone knows
 
-With the line saying how many others know it.
+With the line saying how many others know it. Not a mode the entry is put into: the audience
+picker is always on the row, and this is what the row looks like once it names fewer than
+everyone.
+
+A rule can be concealed like any other entry — a rule the town doesn't know is how a world
+keeps a secret, and it is the shape a trigger will eventually read without anybody being able
+to see it coming.
 
 ### `audience_open` — The picker, with a group ticked
 

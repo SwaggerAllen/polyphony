@@ -15,11 +15,51 @@ defmodule Storybook.Screens.ArcReview do
       concealed: opts[:concealed] || false,
       released_topic: opts[:released_topic],
       sheet_field: opts[:sheet_field],
-      subject_id: opts[:subject_id]
+      subject_id: opts[:subject_id],
+      # STR-62: who says so, the authoring axes, and a release's written condition.
+      author: opts[:author],
+      operation: opts[:operation],
+      condition_met: opts[:condition_met],
+      line_condition: opts[:line_condition]
     }
   end
 
   defp cast, do: [%{id: "wren", name: "Wren Ashgrove"}, %{id: "ilias", name: "Ilias"}]
+
+  # The authoring form's whole state — the LiveView owns every value; a variation is
+  # one shape of it.
+  defp authoring(overrides) do
+    Map.merge(
+      %{
+        world: false,
+        subject_id: "wren",
+        subject_name: "Wren Ashgrove",
+        colour: "hsl(210 40% 55%)",
+        kind: "fact",
+        op: "add",
+        items: [],
+        picked: nil,
+        picker_label: "Which one",
+        was: nil,
+        statement: "",
+        because: "",
+        until: "",
+        and_then: "",
+        never: false,
+        timing: "now",
+        scene_id: nil,
+        scenes: [%{id: "c1-s3", label: "Scene 3"}],
+        core: false,
+        audience_label: "Nobody",
+        audience_secret: false,
+        who: "everyone",
+        target: "",
+        target_known: false,
+        satisfied_disabled: false
+      },
+      overrides
+    )
+  end
 
   defp base do
     %{
@@ -37,12 +77,27 @@ defmodule Storybook.Screens.ArcReview do
             reason: "She heard it twice on a night with one tide.",
             kind: :release,
             concealed: true
+          ),
+          entry("a3", "Covering for her father — it broke.",
+            reason:
+              "She told Ilias the truth in front of three people. Nothing you wrote fired, but the scene reads as the line giving.",
+            kind: :release,
+            released_topic: "Can't stop covering for her father",
+            condition_met: false,
+            line_condition: "Someone she loves is going to be hurt by the silence."
+          ),
+          entry("a4", "She has taken to carrying her father's key.",
+            kind: :discovery,
+            sheet_field: "facts",
+            author: "allen",
+            operation: :add
           )
         ],
         "ilias" => []
       },
       world: [],
-      groups: []
+      groups: [],
+      authoring: nil
     }
   end
 
@@ -95,6 +150,125 @@ defmodule Storybook.Screens.ArcReview do
                 members: [{"wren", [entry("m1", "She has stopped reporting in.")]}]
               }
             }
+          ]
+        }
+      ),
+      v(
+        :authoring,
+        "Writing an entry yourself — the simple case, a field holding **one value** like temperament or cover. The current value is struck through above the replacement, the Because is offered rather than demanded, and *when it became true* has three answers that are not degrees of the same thing.",
+        %{
+          authoring:
+            authoring(%{
+              kind: "temperament",
+              op: "change",
+              was: "Steady in the way of someone holding a door shut.",
+              statement: "Steady, and starting to sound like it costs her.",
+              because: "Two scenes of holding it together in front of Ilias.",
+              timing: "scene",
+              scene_id: "c1-s3"
+            })
+        }
+      ),
+      v(
+        :authoring_list,
+        "A field that holds many, so an operation comes first: add, change, remove. *Which one* has to be answerable before *what about it* — change strikes the picked fact through above its replacement, and removing is not deleting: it stops being true from here and stays in the history.",
+        %{
+          authoring:
+            authoring(%{
+              kind: "fact",
+              op: "change",
+              items: [
+                %{
+                  key: "She has stopped signing the register in her mother's hand.",
+                  label: "She has stopped signing the register in her mother's hand."
+                },
+                %{
+                  key: "She reads every manifest twice.",
+                  label: "She reads every manifest twice."
+                },
+                %{
+                  key: "Her father taught her the tide tables before she could write.",
+                  label: "Her father taught her the tide tables before she could write."
+                }
+              ],
+              picked: "She has stopped signing the register in her mother's hand.",
+              was: "She has stopped signing the register in her mother's hand.",
+              statement: "She has stopped signing the register at all."
+            })
+        }
+      ),
+      v(
+        :authoring_line,
+        "A refusal or a compulsion. A line is **never** or **earnable** — an earnable one carries an *until* and an *and then*, written now and not told to her until it happens. Four operations rather than three, because satisfaction is its own operation.",
+        %{
+          authoring:
+            authoring(%{
+              kind: "compulsion",
+              op: "add",
+              statement: "Can't stop covering for her father.",
+              until: "Someone she loves is going to be hurt by the silence.",
+              and_then: "She lets the silences sit, and lets people draw their own conclusions.",
+              because: "She did it twice off-screen between sessions.",
+              timing: "now"
+            })
+        }
+      ),
+      v(
+        :authoring_relationship,
+        "Directional, so you pick a direction: *Wren → Aldous* and *Aldous → Wren* are separate rows, four rows for two people. Changing what she thinks of him must not touch what he thinks of her, and a picker listing names invites exactly that.",
+        %{
+          authoring:
+            authoring(%{
+              kind: "relationship",
+              op: "change",
+              picker_label: "Which direction",
+              items: [
+                %{key: "aldous", label: "Aldous Ashgrove", prefix: "Wren → "},
+                %{key: "ilias", label: "Ilias Vane", prefix: "Wren → "}
+              ],
+              picked: "aldous",
+              was:
+                "She has spent her whole life covering for him and has never once asked what for.",
+              statement: "She has started asking, and doesn't like the answers.",
+              target: "Aldous Ashgrove",
+              target_known: true
+            })
+        }
+      ),
+      v(
+        :authoring_world,
+        "The world's own entries: the same form with a shorter dropdown — a fact or a rule — and one control more. Every entry carries **who knows**, and a world's default audience is everyone, so narrowing is what marks an entry rather than widening.",
+        %{
+          tab: "world",
+          authoring:
+            authoring(%{
+              world: true,
+              subject_id: "camp-1",
+              subject_name: "The Salt Line",
+              colour: "var(--bcm)",
+              kind: "fact",
+              op: "add",
+              statement:
+                "The tide bell has been rung twice in a night, for the first time in nine years.",
+              who: "everyone",
+              timing: "scene",
+              scene_id: "c1-s3"
+            })
+        }
+      ),
+      v(
+        :world_common_knowledge,
+        "A fact proposed as everyone's. Its own state because of the **audience control** it carries, not because its actions differ — *everyone* and *only who was there* are two values of one question, and picking between them isn't the same act as accepting the fact. Accepting means anyone off-screen is told the next time they turn up.",
+        %{
+          tab: "world",
+          world: [
+            entry(
+              "w9",
+              "The tide bell has been rung twice in a night, for the first time in nine years.",
+              kind: :discovery,
+              reason: "The whole quay heard it.",
+              scope: "global"
+            )
           ]
         }
       )

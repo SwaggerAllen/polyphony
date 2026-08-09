@@ -1,6 +1,6 @@
 # Play
 
-<!-- rev: 3 -->
+<!-- rev: 4 -->
 
 | | |
 |---|---|
@@ -184,6 +184,22 @@ A second step rather than one-click entry from the row. It shows the face, the t
 were last seen, and their cover line — enough to catch *wrong Sable* before she walks in — and
 it carries the *she'll be* control, because this is the last moment before the character is in
 the room.
+
+### `intros_arc_gate` — They're behind, and this is where you catch them up
+
+Casting somebody is casting somebody wherever you do it, so the arc gate is met here too —
+on the way in from the picker, and on the way in from a Director proposal. A character enters
+as their sheet reads, so admitting one with unreviewed arc puts somebody two scenes out of
+date on stage, which is the same staleness the scene-setup gate exists to prevent.
+
+**The same cards, not a summary of them** — `arc_review.md`'s, with the same accept, edit and
+refuse. *Accept all and bring them on* is one tap and carries straight on into the entrance it
+interrupted; *Not now* leaves them out of the scene and their arc exactly where it was, because
+nothing was half-done.
+
+Only **their** pending arc counts. Pending world arc gates *opening* a scene, since a world
+fact is true for everybody — but this scene is already open, and the world's backlog says
+nothing about whether this person's sheet is current.
 
 ### `admitted_writing` — In the room, sheet still being written
 

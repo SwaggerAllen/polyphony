@@ -325,6 +325,109 @@ defmodule PolyphonyWeb.PlayIntrosPanelLiveTest do
     end
   end
 
+  describe "the arc gate, met on the way in (STR-62)" do
+    setup do
+      %{arc: Polyphony.ReadModels.ArcEntry}
+    end
+
+    defp propose(character_id, statement) do
+      Polyphony.ReadModels.ArcEntry.put(
+        Polyphony.Repo,
+        %Polyphony.Authoring.ArcEntry{
+          kind: :revision,
+          sheet_field: "temperament",
+          statement: statement,
+          reason: "The last scene said so.",
+          status: :proposed
+        },
+        to_string(character_id)
+      )
+    end
+
+    test "admitting somebody with pending arc reviews them first, with the real cards",
+         %{conn: conn, user: user} do
+      sable = character(user, "Sable", :full)
+      {view, id, _html} = opened(conn, user, [sable])
+      propose(sable.id, "Careful in the way of somebody caught once.")
+
+      view |> element("button[phx-click=intros_picker]") |> render_click()
+      render_click(view, "picker_choose", %{"id" => to_string(sable.id)})
+      html = render_click(view, "picker_admit", %{"id" => to_string(sable.id)})
+
+      # Not in the scene: a character enters as their sheet reads, and this one is
+      # two scenes out of date.
+      refute to_string(sable.id) in members(id)
+
+      # The review screen's own card, not a summary of it.
+      assert html =~ "1 change to say yes or no to"
+      assert html =~ "Careful in the way of somebody caught once."
+      assert html =~ "Because"
+      assert html =~ "The last scene said so."
+      assert html =~ "Accept 1 and bring them on"
+    end
+
+    test "accept-all carries straight on into the entrance it interrupted",
+         %{conn: conn, user: user} do
+      sable = character(user, "Sable", :full)
+      {view, id, _html} = opened(conn, user, [sable])
+      row = propose(sable.id, "Careful now.")
+
+      view |> element("button[phx-click=intros_picker]") |> render_click()
+      render_click(view, "picker_choose", %{"id" => to_string(sable.id)})
+      render_click(view, "picker_admit", %{"id" => to_string(sable.id)})
+
+      render_click(view, "arc_accept_all", %{})
+
+      # One tap: canon, and on stage.
+      assert Polyphony.Repo.get!(Polyphony.ReadModels.ArcEntry, row.id).status == "canon"
+      assert to_string(sable.id) in members(id)
+    end
+
+    test "backing out leaves them out of the scene and the arc where it was",
+         %{conn: conn, user: user} do
+      sable = character(user, "Sable", :full)
+      {view, id, _html} = opened(conn, user, [sable])
+      row = propose(sable.id, "Careful now.")
+
+      view |> element("button[phx-click=intros_picker]") |> render_click()
+      render_click(view, "picker_choose", %{"id" => to_string(sable.id)})
+      render_click(view, "picker_admit", %{"id" => to_string(sable.id)})
+      render_click(view, "arc_gate_cancel", %{})
+
+      refute to_string(sable.id) in members(id)
+      assert Polyphony.Repo.get!(Polyphony.ReadModels.ArcEntry, row.id).status == "proposed"
+    end
+
+    test "clearing the last one by hand opens the way in", %{conn: conn, user: user} do
+      sable = character(user, "Sable", :full)
+      {view, id, _html} = opened(conn, user, [sable])
+      row = propose(sable.id, "Careful now.")
+
+      view |> element("button[phx-click=intros_picker]") |> render_click()
+      render_click(view, "picker_choose", %{"id" => to_string(sable.id)})
+      render_click(view, "picker_admit", %{"id" => to_string(sable.id)})
+
+      # Refusing is a decision too — the row empties either way.
+      html = render_click(view, "arc_reject", %{"id" => to_string(row.id)})
+      assert html =~ "Up to date"
+      assert html =~ "Bring them on"
+
+      render_click(view, "arc_gate_continue", %{})
+      assert to_string(sable.id) in members(id)
+    end
+
+    test "a clean character still walks straight in", %{conn: conn, user: user} do
+      sable = character(user, "Sable", :full)
+      {view, id, _html} = opened(conn, user, [sable])
+
+      view |> element("button[phx-click=intros_picker]") |> render_click()
+      render_click(view, "picker_choose", %{"id" => to_string(sable.id)})
+      render_click(view, "picker_admit", %{"id" => to_string(sable.id)})
+
+      assert to_string(sable.id) in members(id)
+    end
+  end
+
   test "none of the panel is offered to a character viewer", %{conn: conn, user: user} do
     wren = character(user, "Wren")
     camp = campaign(user, [wren.id])

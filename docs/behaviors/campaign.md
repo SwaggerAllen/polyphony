@@ -1,6 +1,6 @@
 # Campaign
 
-<!-- rev: 3 -->
+<!-- rev: 4 -->
 
 | | |
 |---|---|
@@ -172,10 +172,86 @@ Where it happens, what is already true when it opens, and who is in it. Who's in
 choice with a cost — the roster is what turn order walks — and everyone ready is the default,
 so an author who never touches it gets exactly what they got before.
 
+**Every cast row carries that character's arc state**, which is the gate made visible as you
+build the scene rather than as a refusal when you submit it. Four things a row can say:
+
+- **Up to date.** Nothing pending. The ordinary case.
+- **_n_ changes to say yes or no to**, with *Accept all n* on the row and a caret to read
+  them first. One tap is always available: the person who wants to read expands, the person
+  who wants to play taps once, and both end up consistent.
+- **Still being worked out.** Extraction is running. A wait, not a fault — see
+  `arc_review.md`.
+- **Couldn't be worked out.** Extraction failed. See `scenes_gate_failed`.
+
+A row also carries how that character will be played, so the two facts about somebody going
+on stage are read together.
+
+**The world takes a row of its own, above the cast and set apart from it**, whenever it has
+pending changes. Pending world proposals gate every scene in the campaign whoever is in it,
+so without a row the form refuses to open for a reason that names nobody in it — which reads
+as a bug rather than as a gate. It sits above the cast because it outranks them: clearing
+every character still won't open the scene. It sits in its own band because it is not cast —
+nobody can select or deselect it, and putting it in the list proper would imply otherwise.
+With nothing pending against the world, the band is absent rather than empty.
+
+When proposals are pending on people **not** in this scene, the form says so and says they
+can keep waiting. The backlog is visible but not in the way, which is the per-cast rule
+expressed as a sentence rather than as an absence.
+
+The submit control says how many people aren't ready and that sorting them lights it up. It
+is a statement of what remains, not a refusal — the work is all on the rows above it.
+
 Below the form, the scenes already played: **newest first, numbered by position**, each with
 its beat count and the premise it opened on. The numbers therefore count down, which is what
 a reverse-chronological list of chapters looks like. Each row carries a delete that names
 what goes with it — see the standing decision.
+
+### `scenes_gate_expanded` — Reviewing a character's changes on the row
+
+The caret opens the proposals in place, **as the same cards the review screen shows** — not a
+summary of them. Each carries what it would change, what it changes it **from**, and the
+*Because* line naming what in the scene caused it, with *True*, *Edit* and *No* on each.
+Beneath them, *Accept the rest* for whatever is left, so reading two of four does not commit
+you to reading four of four.
+
+The full card rather than an abbreviation is what makes navigation unnecessary. An author
+deciding whether Wren has really stopped signing the register needs to see what her
+temperament said *before* and why the scene concluded otherwise; abbreviating to *replaces
+her temperament* sends them to the sheet to find out, holding a half-built scene. §04c of the
+mock draws the abbreviated version while claiming identical controls to the review screen —
+the controls are identical, the content was shorthand, and the shorthand is the reason this
+question kept coming up.
+
+**Last in the expansion, a row for adding one yourself.** The fan-out proposes what the scene
+concluded; it does not propose what it missed. An author who knows a scene changed somebody
+in a way the extraction didn't catch has, until now, had nowhere to say so at the moment they
+noticed — which is here, looking at the things it did catch. It opens `arc_review.md`'s
+authoring states, with this character and this scene already filled in, since both are known
+from where the row was tapped — `authoring_list` for a fact, `authoring_line` for a boundary,
+and so on by what is being changed.
+
+A card here may carry a different action set — a line that gave in play takes *True / Not
+yet*, and a world fact proposed as common knowledge takes *True / Only who was there*. The
+row's *Accept all* covers all three the same way; the difference only shows when somebody
+reads before tapping. See `arc_review.md`.
+
+Refusing one proposal here is the same act as refusing it on the review screen, and
+`arc_review.md`'s standing decision about refusal applies unchanged.
+
+### `scenes_gate_failed` — A character's changes couldn't be worked out
+
+The row says so and expands to explain: the model is busy, it usually clears in a few
+minutes, and — the part worth keeping — *a scene would be struggling too until it does.*
+**Try again** is the only action.
+
+**No open-anyway**, and the reason is not caution. Arc extraction and turn generation call
+the same provider, so a row that can't extract is evidence the scene can't run. An escape
+hatch would move the failure to one beat after the author committed to playing, which is
+worse. See the standing decision in `arc_review.md`.
+
+Per-row rather than per-form, because failure is per-character: one person's extraction can
+fail while everybody else's succeeded, and a whole-form error would claim the scene is broken
+when three of four rows are fine.
 
 ### `scenes_write_in` — Writing a walk-on into the scene
 

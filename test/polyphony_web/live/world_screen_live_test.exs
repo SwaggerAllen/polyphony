@@ -50,16 +50,20 @@ defmodule PolyphonyWeb.WorldScreenLiveTest do
   end
 
   describe "secrets" do
+    # STR-62: the Secret toggle is gone — concealment is what the audience says.
+    # Naming anyone short of everyone is what conceals, derived rather than stored
+    # beside an audience it could disagree with.
     test "a marked entry reads as secret and persists that way", %{conn: conn, user: user} do
       entry = world(user, %{starting_canon: [%Entry{statement: @secret}]})
       {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
 
-      html =
-        view
-        |> element(
-          "button[phx-click=toggle_secret][phx-value-field=starting_canon][phx-value-index='0']"
-        )
-        |> render_click()
+      view
+      |> element(
+        "button[phx-click=open_audience][phx-value-field=starting_canon][phx-value-index='0']"
+      )
+      |> render_click()
+
+      html = render_click(view, "toggle_audience", %{"kind" => "character", "id" => "77"})
 
       assert html =~ ~s(class="secret min-w-0 flex-1")
 
@@ -73,8 +77,10 @@ defmodule PolyphonyWeb.WorldScreenLiveTest do
       {:ok, view, _html} = live(conn, ~p"/authoring/bible/#{entry.id}")
 
       view
-      |> element("button[phx-click=toggle_secret][phx-value-field=rules][phx-value-index='0']")
+      |> element("button[phx-click=open_audience][phx-value-field=rules][phx-value-index='0']")
       |> render_click()
+
+      render_click(view, "toggle_audience", %{"kind" => "character", "id" => "77"})
 
       view |> form("form[phx-submit=save]", %{name: "Saltmarch"}) |> render_submit()
       assert [%Entry{concealed: true}] = bible_of(entry).rules
