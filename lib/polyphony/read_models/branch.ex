@@ -30,6 +30,8 @@ defmodule Polyphony.ReadModels.Branch do
     timestamps(type: :naive_datetime_usec)
   end
 
+  @type t :: %__MODULE__{}
+
   def get(repo, id), do: repo.get(__MODULE__, id)
 
   @doc "Every line in a campaign, oldest first — the raw material for the tree."
