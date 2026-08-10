@@ -142,6 +142,7 @@ defmodule Storybook.Screens.Browse do
       reporting: nil,
       off_canon: nil,
       diverged: nil,
+      diverged_pending: nil,
       gone_notice: nil
     }
   end
@@ -322,7 +323,13 @@ defmodule Storybook.Screens.Browse do
         "Picking up a story that has moved on. A dialog rather than a pill, because *continue reading* is a request to be put somewhere and this is the moment to say the obvious place has changed. Reading the current version is primary and not out of deference — an abandoned line ends wherever it was left, so the recommendation is about which version has more story in it. Carrying on stays available and unstigmatised, and the question is asked once per line, not once per visit.",
         front(%{
           bookmark: %{scene_id: "sc2", perspective: "wren"},
-          diverged: %{shared_point: "The tide bell", author: "@ilias"}
+          diverged: %{shared_point: "The tide bell", author: "@ilias"},
+          diverged_pending: %{
+            line_id: "b1",
+            shared_point: "The tide bell",
+            shared_scene_id: "sc1",
+            author: "@ilias"
+          }
         })
       ),
       v(

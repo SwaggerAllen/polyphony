@@ -38,6 +38,15 @@ defmodule Polyphony.Repo.Migrations.CreateBranches do
       # a scene no branch claims belongs to it, which keeps a never-branched campaign
       # free of bookkeeping.
       add(:scene_ids, {:array, :string}, null: false, default: [])
+      # Copy-on-branch (play.md: *a branch copies everything and shares nothing*):
+      # the line's own copies of the cast and the world, made at the cut. The root
+      # line owns nothing here either — the campaign payload is its copy.
+      add(:character_ids, {:array, :string}, null: false, default: [])
+      add(:bible_id, :string)
+      # Who is who across the cut: `%{parent's character id => this line's copy}`.
+      # The published reader needs it to keep a granted head granted on every
+      # line — the same person is a different library id on each side of a cut.
+      add(:parent_map, :map, null: false, default: %{})
       timestamps(type: :naive_datetime_usec)
     end
 
@@ -56,6 +65,10 @@ defmodule Polyphony.Repo.Migrations.CreateBranches do
       add(:campaign_id, :string, null: false)
       add(:parent_id, :bigint)
       add(:cut_beat, :integer)
+      # Where the cut happened and which scenes the line held — what lets a link
+      # naming one of its scenes find this tombstone, and land somewhere honest.
+      add(:origin_scene_id, :string)
+      add(:scene_ids, {:array, :string}, null: false, default: [])
       timestamps(type: :naive_datetime_usec, updated_at: false)
     end
 

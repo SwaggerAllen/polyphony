@@ -801,7 +801,15 @@ defmodule PolyphonyWeb.PlayLive do
            scene_opened(socket.assigns.scene_id),
          campaign when not is_nil(campaign) <- Library.get(cid),
          %{bible_id: bid} <- Library.payload(campaign) do
-      normalize_id(bid)
+      # A branch scene grounds new people in the line's own copy of the world.
+      case Branching.line_of(cid, socket.assigns.scene_id) do
+        %{parent_id: parent, bible_id: line_bid}
+        when not is_nil(parent) and not is_nil(line_bid) ->
+          normalize_id(line_bid)
+
+        _ ->
+          normalize_id(bid)
+      end
     else
       _ -> nil
     end
@@ -958,11 +966,18 @@ defmodule PolyphonyWeb.PlayLive do
   # it stood when the beat opened.
   defp offered?(offers, id), do: Enum.any?(offers, &(to_string(&1.id) == to_string(id)))
 
+  # The roster the picker reaches: this campaign's — and once the campaign has
+  # branched, this **line's**. Copy-on-branch means a branch scene's people are
+  # the line's copies, and offering the original cast here would cast the other
+  # line's Wren into this one's story.
   defp campaign_character_ids(socket) do
     with cid when not is_nil(cid) <- campaign_of(socket.assigns.scene_id),
          entry when not is_nil(entry) <- Library.get(cid),
          %{} = payload <- Library.payload(entry) do
-      Map.get(payload, :character_ids) || []
+      case Branching.line_of(cid, socket.assigns.scene_id) do
+        %{parent_id: parent, character_ids: ids} when not is_nil(parent) and ids != [] -> ids
+        _ -> Map.get(payload, :character_ids) || []
+      end
     else
       _ -> []
     end
@@ -1162,16 +1177,28 @@ defmodule PolyphonyWeb.PlayLive do
             )
 
           validity = if params["invalidates"] == "true", do: :invalid, else: :valid
+          cid = campaign_of(scene)
 
-          case Edit.edit(scene, beat, c, corrected, validity, label: "edited at beat #{beat}") do
+          # Copy-on-branch: an edit that changes history is a branch, so it copies
+          # the cast and world like any other — and the map has to exist before
+          # the fork so the copied prefix speaks with the copies' ids.
+          copies =
+            if validity == :invalid and cid, do: Branching.prepare_line(cid, scene)
+
+          edit_opts =
+            [label: "edited at beat #{beat}"] ++
+              if(copies, do: [character_map: copies.character_map], else: [])
+
+          case Edit.edit(scene, beat, c, corrected, validity, edit_opts) do
             {:ok, %{forked: true, scene_id: branch}} ->
               # A branch made by an edit is a branch: record the line so the
               # navigator and the hub can see it, rather than leaving a stream only
               # the address bar knows about.
-              if cid = campaign_of(scene),
+              if cid,
                 do:
                   Branching.register_fork(cid, scene, branch, beat,
-                    location: socket.assigns.scene_title
+                    location: socket.assigns.scene_title,
+                    copies: copies
                   )
 
               # The branch is where the corrected turn lives, so that is where the
@@ -1185,7 +1212,7 @@ defmodule PolyphonyWeb.PlayLive do
             {:ok, _} ->
               # An in-place correction still changed what a reader may have read:
               # the line's divergence cursor moves if this sits earlier than it.
-              if cid = campaign_of(scene), do: Branching.notice_change(cid, scene, beat)
+              if cid, do: Branching.notice_change(cid, scene, beat)
 
               {:noreply,
                socket

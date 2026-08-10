@@ -167,7 +167,10 @@ defmodule PolyphonyWeb.Screens.Browse do
   # ── A story's front page ─────────────────────────────────────────────────────
 
   defp front_page(assigns) do
-    assigns = assign_new(assigns, :diverged, fn -> nil end)
+    assigns =
+      assigns
+      |> assign_new(:diverged, fn -> nil end)
+      |> assign_new(:diverged_pending, fn -> nil end)
 
     ~H"""
     <Kit.frame register={:page} class="flex flex-col min-h-[100dvh]">
@@ -245,8 +248,21 @@ defmodule PolyphonyWeb.Screens.Browse do
             <%!-- The shelf promises exactly one thing — you can get back to where you
                   were — and this is where it's kept. A reader who has never opened this
                   one starts at the beginning; a reader who has picks up mid-scene. --%>
+            <%!-- Continue reading is a request to be put somewhere, and when the
+                  story has moved on this is the moment to say the obvious place
+                  changed (browse.md, `continue_reading_diverged`) — so the tap opens
+                  the dialog instead of navigating. Everyone else goes straight in. --%>
+            <Kit.btn
+              :if={@mode && Session.scenes(@snapshot) != [] && @diverged_pending}
+              kind={:primary}
+              type="button"
+              class="w-full justify-center mb-2"
+              phx-click="carry_on_diverged"
+            >
+              Carry on reading
+            </Kit.btn>
             <.link
-              :if={@mode && Session.scenes(@snapshot) != []}
+              :if={@mode && Session.scenes(@snapshot) != [] && is_nil(@diverged_pending)}
               patch={scene_path(@story.id, resume_scene(assigns), @mode)}
               class="btn btn-pri w-full justify-center mb-2"
             >

@@ -118,18 +118,25 @@ defmodule PolyphonyWeb.CampaignLive do
   # The tab lives in the URL, so it's linkable, survives a reload, and back works
   # between sections of a screen that used to be one long scroll.
   def handle_params(params, _uri, socket) do
+    socket =
+      socket
+      |> assign(
+        tab: tab_param(params["tab"]),
+        # The current line and the navigator live in the URL like the tab does:
+        # the hub gained a mode, and a mode that doesn't survive a reload is a
+        # mode the header would silently lie about.
+        line_id: params["branch"],
+        branch_navigator_open: params["branches"] == "open"
+      )
+      |> assign_branch_state()
+
+    # After the line is resolved, because the viewer is validated against the
+    # cast and the cast is now the line's — a viewpoint from another line's
+    # roster must fall back rather than leak that line's secrets in this one.
     {:noreply,
      socket
-     |> assign(
-       tab: tab_param(params["tab"]),
-       viewer: viewer_param(socket, params),
-       # The current line and the navigator live in the URL like the tab does:
-       # the hub gained a mode, and a mode that doesn't survive a reload is a
-       # mode the header would silently lie about.
-       line_id: params["branch"],
-       branch_navigator_open: params["branches"] == "open"
-     )
-     |> assign_branch_state()
+     |> assign(viewer: viewer_param(socket, params))
+     |> assign_arc_rows()
      |> assign_scene_rows()
      |> assign_seen()}
   end
@@ -249,15 +256,44 @@ defmodule PolyphonyWeb.CampaignLive do
         line: line,
         branch: line && %{id: line.id, name: line.name, canon?: line.canonical},
         branches: navigator_rows(socket, tree, line),
-        # Choosing a line scopes the whole hub to it: its scenes here, and the
-        # cast/world copies once copy-on-branch carries them (the scenes list is
-        # what exists to scope today).
+        # Choosing a line scopes the whole hub to it: its scenes, and — through
+        # copy-on-branch — its own copies of the cast and world.
         scenes: Branching.scenes_for(cid, line)
       )
+      |> scope_line_assets(line)
     else
       assign(socket, line: nil, branch: nil, branches: [], branch_navigator_open: false)
     end
   end
+
+  # The hub's cast and world tabs, scoped to the line: a branch holds its own
+  # copies (made at the cut), so this is where "the Wren in one is not the Wren in
+  # the other" becomes literal — two lines never show the same sheet. The root
+  # line's copies are the campaign payload itself, which `load/1` already set.
+  defp scope_line_assets(socket, %{parent_id: parent, character_ids: ids} = line)
+       when not is_nil(parent) and ids != [] do
+    cast = ids |> Enum.map(&Library.get/1) |> Enum.reject(&is_nil/1)
+    bible = line.bible_id && Library.get(line.bible_id)
+
+    bible_payload =
+      case bible && Library.payload(bible) do
+        %WorldBible{} = b -> b
+        _ -> nil
+      end
+
+    assign(socket,
+      cast: cast,
+      # Adding somebody from the library would add them to the campaign payload —
+      # the root line's roster — so while scoped to a branch the honest offer is
+      # writing somebody new, which lands on this line's copies.
+      addable: [],
+      bible_id: bible && normalize_id(bible.id),
+      bible_name: bible_payload && bible_payload.name,
+      world: bible_payload
+    )
+  end
+
+  defp scope_line_assets(socket, _line), do: socket
 
   # The line the URL names, falling back to canonical — the hub opens on it.
   defp current_line(tree, line_id) do
@@ -1117,8 +1153,14 @@ defmodule PolyphonyWeb.CampaignLive do
 
   def handle_event("publish", _params, socket) do
     safe(socket, fn ->
-      %{entry: entry, payload: payload, cast: cast, owner: owner} = socket.assigns
-      bible = if payload[:bible_id], do: Library.get(payload[:bible_id]) |> maybe_payload()
+      %{entry: entry, payload: payload, owner: owner} = socket.assigns
+
+      # Only canonical publishes (campaign.md): whatever line the hub happens to
+      # be scoped to, the published story is the canonical one — its scenes, its
+      # copies of the cast and world. A fork is a reader's own campaign; a branch
+      # is a line in this one, and exactly one of them is what everybody sees.
+      canonical = Branching.canonical_line(entry.id)
+      {cast, bible} = publish_assets(socket, canonical)
 
       characters =
         Enum.map(cast, fn c ->
@@ -1137,9 +1179,15 @@ defmodule PolyphonyWeb.CampaignLive do
             content: CampaignConfig.from_payload(payload),
             # The grant travels with the published copy, since that's the thing readers
             # hold — and it is replaced wholesale on a republish, so narrowing it here
-            # narrows it for everyone reading.
-            publication: publication(socket),
-            scenes: Preflight.scenes(socket.assigns.scenes)
+            # narrows it for everyone reading. The heads were ticked on whatever line
+            # the hub was scoped to; the granted ids must be canonical's people.
+            publication: canonical_publication(socket, canonical),
+            scenes: Preflight.scenes(Branching.scenes_for(entry.id, canonical)),
+            branch_id: canonical && canonical.id,
+            # The other lines travel too — not listed, but a link somebody was sent
+            # into one keeps answering, and the off-canon pill needs to know what it
+            # is looking at without asking the live campaign.
+            lines: publish_lines(entry.id, canonical, cast)
           },
           visibility: "public"
         )
@@ -1321,6 +1369,70 @@ defmodule PolyphonyWeb.CampaignLive do
 
   def handle_info({:build_cleared, _campaign_id}, socket),
     do: {:noreply, assign(socket, build: nil)}
+
+  # What publishes: the canonical line's own copies of the cast and world, or the
+  # campaign payload's when canonical is the root (or the campaign never branched).
+  defp publish_assets(socket, canonical) do
+    %{payload: payload} = socket.assigns
+
+    case canonical do
+      %{parent_id: parent, character_ids: ids} = line when not is_nil(parent) and ids != [] ->
+        cast = ids |> Enum.map(&Library.get/1) |> Enum.reject(&is_nil/1)
+        bible = if line.bible_id, do: Library.get(line.bible_id) |> maybe_payload()
+        {cast, bible}
+
+      _root_or_nil ->
+        root_cast =
+          (payload[:character_ids] || [])
+          |> Enum.map(&Library.get/1)
+          |> Enum.reject(&is_nil/1)
+
+        bible = if payload[:bible_id], do: Library.get(payload[:bible_id]) |> maybe_payload()
+        {root_cast, bible}
+    end
+  end
+
+  # The non-canonical lines, frozen into the snapshot: name, lineage, their
+  # contents lists in the same shape as the published scenes, and their casts'
+  # display names — copy-on-branch means each line speaks with its own copies'
+  # ids, which the canonical pinned sheets know nothing about. Archived lines stay
+  # out — leaving the selector and the tree's default view means leaving this too.
+  defp publish_lines(campaign_id, canonical, canonical_cast) do
+    payload = Library.get(campaign_id) |> maybe_payload() || %{}
+    canonical_ids = Enum.map(canonical_cast, &to_string(&1.id))
+
+    for %{branch: line} <- Branching.tree(campaign_id),
+        canonical == nil or line.id != canonical.id do
+      ids =
+        if is_nil(line.parent_id),
+          do: Enum.map(List.wrap(payload[:character_ids]), &to_string/1),
+          else: line.character_ids
+
+      %{
+        id: line.id,
+        name: line.name,
+        parent_id: line.parent_id,
+        cut_beat: line.cut_beat,
+        scenes: Preflight.scenes(Branching.scenes_for(campaign_id, line)),
+        names: line_names(ids),
+        # Who is who over here: the granted heads are canonical's pinned ids, and
+        # copy-on-branch means the same person is a different id on this line.
+        heads: Branching.head_map(campaign_id, canonical, line, canonical_ids)
+      }
+    end
+  end
+
+  defp line_names(ids) do
+    for id <- ids,
+        entry = Library.get(id),
+        entry != nil,
+        into: %{} do
+      case Library.payload(entry) do
+        %{name: n} when is_binary(n) and n != "" -> {to_string(id), n}
+        _ -> {to_string(id), "Someone"}
+      end
+    end
+  end
 
   defp deleted_branch_note(1, 0), do: "Deleted. Links into it will land on its parent at the cut."
 
@@ -1817,6 +1929,24 @@ defmodule PolyphonyWeb.CampaignLive do
       spectator: socket.assigns.pub_spectator,
       forkable: socket.assigns.pub_forkable
     }
+  end
+
+  # The grant, translated to canonical's people: the perspective checkboxes list
+  # the line the hub is scoped to, and copy-on-branch means the same head is a
+  # different library id on canonical. Identity when the two lines are one, or
+  # the campaign never branched.
+  defp canonical_publication(socket, canonical) do
+    pub = publication(socket)
+    line = socket.assigns.line
+
+    if canonical == nil or line == nil or line.id == canonical.id do
+      pub
+    else
+      heads =
+        Branching.head_map(socket.assigns.entry.id, line, canonical, pub.perspectives)
+
+      %Publication{pub | perspectives: Enum.map(pub.perspectives, &Map.get(heads, &1, &1))}
+    end
   end
 
   # Said before and after, because it's the surprising half: there is one published

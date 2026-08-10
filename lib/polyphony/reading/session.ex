@@ -58,6 +58,60 @@ defmodule Polyphony.Reading.Session do
   def scenes(snapshot), do: Map.get(snapshot, :scenes) || []
 
   @doc """
+  The campaign's other lines at publish (STR-8): `%{id:, name:, parent_id:,
+  cut_beat:, scenes: [...]}` each. Empty for a story that has only ever had one —
+  which is almost always.
+  """
+  @spec lines(Snapshot.t() | map()) :: [map()]
+  def lines(snapshot), do: Map.get(snapshot, :lines) || []
+
+  @doc """
+  The line a scene belongs to: `:canonical` when it is in the published contents,
+  a line map when a non-canonical line holds it, `nil` when nothing here does.
+  A reader has no branch to choose — this is what decides whether the off-canon
+  pill has anything to say.
+  """
+  @spec line_for_scene(Snapshot.t() | map(), term()) :: :canonical | map() | nil
+  def line_for_scene(snapshot, scene_id) do
+    want = to_string(scene_id)
+
+    cond do
+      index_of(snapshot, want) != nil ->
+        :canonical
+
+      line = Enum.find(lines(snapshot), &line_holds?(&1, want)) ->
+        line
+
+      true ->
+        nil
+    end
+  end
+
+  defp line_holds?(line, scene_id),
+    do: Enum.any?(Map.get(line, :scenes) || [], &(scene_id(&1) == scene_id))
+
+  @doc """
+  The last point a line and the published story share: the deepest scene their
+  contents lists agree on. Everything before it is identical — the shared past is
+  literal, the prefix scenes are the same rows — so there is no reason to make
+  anybody read it twice. Nil when they share nothing that survived.
+  """
+  @spec shared_point(Snapshot.t() | map(), map()) :: map() | nil
+  def shared_point(snapshot, line) do
+    canonical = scenes(snapshot)
+    other_ids = Enum.map(Map.get(line, :scenes) || [], &scene_id/1)
+
+    canonical
+    |> Enum.zip(other_ids)
+    |> Enum.take_while(fn {canon_scene, other_id} -> scene_id(canon_scene) == other_id end)
+    |> List.last()
+    |> case do
+      {scene, _} -> scene
+      nil -> nil
+    end
+  end
+
+  @doc """
   A scene's id, whichever shape the list is in.
 
   A published snapshot carries `%{id:, title:, cast:, beats:}` per scene; a campaign

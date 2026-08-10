@@ -23,7 +23,12 @@ defmodule Polyphony.Reading.Bookmark do
             beat: nil,
             perspective: :omniscient,
             last_read_at: nil,
-            finished_at: nil
+            finished_at: nil,
+            # The line this reader chose to stay on when the story moved on (STR-8).
+            # The continue-reading question is asked once per line, not once per
+            # visit: somebody who chose to carry on has answered it, and asking
+            # again next session would be nagging.
+            stayed_line_id: nil
 
   @type t :: %__MODULE__{
           published_id: term(),
@@ -31,6 +36,7 @@ defmodule Polyphony.Reading.Bookmark do
           beat: integer() | nil,
           perspective: term(),
           last_read_at: NaiveDateTime.t() | nil,
-          finished_at: NaiveDateTime.t() | nil
+          finished_at: NaiveDateTime.t() | nil,
+          stayed_line_id: term() | nil
         }
 end

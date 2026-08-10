@@ -44,6 +44,7 @@ defmodule Polyphony.Branching do
   """
 
   alias Polyphony.{Campaigns, Fork, Library}
+  alias Polyphony.Authoring.Effective
   alias Polyphony.ReadModels.{Branch, BranchTombstone}
   alias Polyphony.Repo
 
@@ -63,15 +64,105 @@ defmodule Polyphony.Branching do
   @spec branch_from(term(), term(), integer(), keyword()) ::
           {:ok, %{branch: Branch.t() | struct(), scene_id: term()}} | {:error, term()}
   def branch_from(campaign_id, parent_scene_id, through_beat, opts \\ []) do
+    # Copies first: the fork has to re-point the prefix's character references at
+    # the copies, so the map must exist before the stream does. A fork that fails
+    # after this leaves orphaned copies in the library — recoverable clutter,
+    # where the reverse order would be a branch whose transcript speaks as the
+    # *original* cast and feeds their arc queue.
+    copies = prepare_line(campaign_id, parent_scene_id, opts)
+
     with {:ok, new_scene_id} <-
            Fork.fork(
              parent_scene_id,
              through_beat,
              Keyword.take(opts, [:new_scene_id]) ++
-               [label: opts[:name] || "branched at beat #{through_beat}"]
+               [
+                 label: opts[:name] || "branched at beat #{through_beat}",
+                 character_map: copies.character_map
+               ]
            ) do
-      branch = register_fork(campaign_id, parent_scene_id, new_scene_id, through_beat, opts)
+      branch =
+        register_fork(
+          campaign_id,
+          parent_scene_id,
+          new_scene_id,
+          through_beat,
+          Keyword.put(opts, :copies, copies)
+        )
+
       {:ok, %{branch: branch, scene_id: new_scene_id}}
+    end
+  end
+
+  @doc """
+  Copy-on-branch, the copying half: duplicate the line's cast and world into new
+  library entries and return `%{character_map:, character_ids:, bible_id:}`.
+
+  Each character copy's base sheet is the **effective** sheet at the cut — the
+  authored sheet with its accepted arc folded in — because the branch copies
+  everything *up to* the cut and shares nothing after: the two Wrens agree about
+  the past and are free to disagree from here. Pending proposals stay with the
+  original line; they were raised by its scenes.
+
+  Called separately by the edit path, which needs the map before `Edit.edit/6`
+  forks the stream.
+  """
+  def prepare_line(campaign_id, parent_scene_id, opts \\ []) do
+    source = line_of(campaign_id, parent_scene_id, opts)
+
+    {char_ids, bible_id, owner} = line_assets(campaign_id, source, opts)
+
+    pairs =
+      for old_id <- char_ids,
+          entry = Library.get(old_id, opts),
+          entry != nil do
+        sheet = Library.payload(entry)
+
+        copy =
+          Library.put(
+            %{owner: owner, kind: "character", payload: Effective.sheet(sheet, entry.id)},
+            opts
+          )
+
+        {to_string(old_id), to_string(copy.id)}
+      end
+
+    bible_copy =
+      with id when not is_nil(id) <- bible_id,
+           entry when not is_nil(entry) <- Library.get(id, opts) do
+        Library.put(%{owner: owner, kind: "world_bible", payload: Library.payload(entry)}, opts)
+      else
+        _ -> nil
+      end
+
+    %{
+      character_map: Map.new(pairs),
+      character_ids: Enum.map(pairs, &elem(&1, 1)),
+      bible_id: bible_copy && to_string(bible_copy.id)
+    }
+  end
+
+  # What the line being branched *from* holds: the parent branch's own copies, or
+  # the campaign payload for the root line.
+  defp line_assets(campaign_id, source, opts) do
+    entry = Library.get(campaign_id, opts)
+    payload = (entry && Library.payload(entry)) || %{}
+
+    owner =
+      entry &&
+        %Polyphony.Owner{
+          type: String.to_existing_atom(entry.owner_type),
+          id: to_string(entry.owner_id)
+        }
+
+    case source do
+      %Branch{parent_id: parent, character_ids: ids, bible_id: bid}
+      when not is_nil(parent) and ids != [] ->
+        {ids, bid, owner}
+
+      _root_or_nil ->
+        {Enum.map(List.wrap(Map.get(payload, :character_ids)), &to_string/1),
+         Map.get(payload, :bible_id), owner}
     end
   end
 
@@ -89,6 +180,7 @@ defmodule Polyphony.Branching do
 
     root = ensure_root(cid, opts)
     parent = Branch.of_scene(repo, cid, parent_scene_id) || root
+    copies = opts[:copies] || %{character_ids: [], bible_id: nil}
 
     name =
       opts[:name] ||
@@ -103,6 +195,11 @@ defmodule Polyphony.Branching do
         name: name,
         canonical: false,
         scene_ids: [to_string(new_scene_id)],
+        # Copy-on-branch: the line's own cast and world, copied at the cut — and
+        # who is who across it, so a reader's granted head survives a line switch.
+        character_ids: copies.character_ids,
+        bible_id: copies.bible_id,
+        parent_map: Map.get(copies, :character_map, %{}),
         # A fresh branch diverges exactly at its cut — the cursor starts there and
         # only ever moves earlier.
         cursor_scene_id: to_string(new_scene_id),
@@ -215,6 +312,10 @@ defmodule Polyphony.Branching do
   def branched?(campaign_id, opts \\ []),
     do: Branch.list_for_campaign(repo(opts), to_string(campaign_id)) != []
 
+  @doc "The canonical line — what publishes — or nil when the campaign never branched."
+  def canonical_line(campaign_id, opts \\ []),
+    do: Branch.canonical(repo(opts), to_string(campaign_id))
+
   @doc """
   The campaign's tree, depth-first: `[%{branch:, depth:}]`, archived lines
   excluded unless `include_archived: true`. Empty when the campaign has never
@@ -253,40 +354,72 @@ defmodule Polyphony.Branching do
   end
 
   @doc """
-  This line's scenes, in campaign order — what the hub's scenes list means once a
-  second branch exists. `branch` may be a `%Branch{}` or nil/root, in which case
-  the answer is every scene no branch has claimed.
+  This line's scenes, in story order — what the hub's scenes list and a reader's
+  contents mean once a second branch exists.
+
+  A line's story is **the shared past plus its own scenes**: everything its
+  ancestors played *before* the scene it was cut in (that scene itself came
+  across as the branch's own copy, so it is not repeated), then what the line
+  played since. Two lines are separate stories that happen to remember the same
+  past, and the remembering is literal — the prefix scenes are the same rows.
+
+  `branch` may be a `%Branch{}` or nil/root, where the answer is every scene no
+  branch has claimed.
   """
   def scenes_for(campaign_id, branch, opts \\ []) do
     repo = repo(opts)
     cid = to_string(campaign_id)
+    payload_scenes = payload_scenes(cid, opts)
+    rows = Branch.list_for_campaign(repo, cid)
+    line_scenes(branch, payload_scenes, Map.new(rows, &{&1.id, &1}))
+  end
 
-    payload_scenes =
-      case Library.get(cid, opts) do
+  defp payload_scenes(cid, opts) do
+    case Library.get(cid, opts) do
+      nil ->
+        []
+
+      entry ->
+        (Library.payload(entry) || %{})
+        |> Map.get(:scenes)
+        |> List.wrap()
+        |> Enum.map(&to_string/1)
+    end
+  end
+
+  defp line_scenes(%Branch{parent_id: parent} = b, payload_scenes, by_id)
+       when not is_nil(parent) do
+    own = Enum.filter(payload_scenes, &(&1 in b.scene_ids))
+
+    prefix =
+      case Map.get(by_id, parent) do
         nil ->
           []
 
-        entry ->
-          (Library.payload(entry) || %{})
-          |> Map.get(:scenes)
-          |> List.wrap()
-          |> Enum.map(&to_string/1)
+        parent_row ->
+          parent_list = line_scenes(parent_row, payload_scenes, by_id)
+
+          case Enum.find_index(parent_list, &(&1 == b.origin_scene_id)) do
+            # The origin scene is gone from the parent: the anchor for "before the
+            # cut" went with it, so the shared past can't be reconstructed here.
+            # The line keeps its own scenes — which are the ones it can vouch for.
+            nil -> []
+            idx -> Enum.take(parent_list, idx)
+          end
       end
 
-    case branch do
-      %Branch{parent_id: parent} = b when not is_nil(parent) ->
-        Enum.filter(payload_scenes, &(&1 in b.scene_ids))
+    prefix ++ own
+  end
 
-      _root_or_nil ->
-        claimed =
-          for b <- Branch.list_for_campaign(repo, cid),
-              not is_nil(b.parent_id),
-              s <- b.scene_ids,
-              into: MapSet.new(),
-              do: s
+  defp line_scenes(_root_or_nil, payload_scenes, by_id) do
+    claimed =
+      for {_id, b} <- by_id,
+          not is_nil(b.parent_id),
+          s <- b.scene_ids,
+          into: MapSet.new(),
+          do: s
 
-        Enum.reject(payload_scenes, &MapSet.member?(claimed, &1))
-    end
+    Enum.reject(payload_scenes, &MapSet.member?(claimed, &1))
   end
 
   # ── Canonical ────────────────────────────────────────────────────────────────
@@ -430,18 +563,27 @@ defmodule Polyphony.Branching do
     repo = repo(opts)
 
     # The record that keeps circulating links answerable: the line's id, its
-    # parent, and the beat it was cut at. Written before the row goes, so a crash
-    # between the two errs on the side of the link still resolving.
+    # parent, the beat it was cut at, and the scenes it held — the last is what
+    # lets a link naming one of its scenes find this at all. Written before the
+    # row goes, so a crash between the two errs on the side of the link resolving.
     BranchTombstone.put(repo, %{
       branch_id: branch.id,
       campaign_id: branch.campaign_id,
       parent_id: branch.parent_id,
-      cut_beat: branch.cut_beat
+      cut_beat: branch.cut_beat,
+      origin_scene_id: branch.origin_scene_id,
+      scene_ids: branch.scene_ids
     })
 
     Enum.each(branch.scene_ids, fn scene_id ->
       _ = Campaigns.delete_scene(branch.campaign_id, scene_id, opts)
     end)
+
+    # Its copies of the cast and world go with it — to the trash, like everything
+    # else the library lets go of, so the countdown applies rather than the axe.
+    for id <- branch.character_ids ++ List.wrap(branch.bible_id) do
+      _ = Library.soft_delete(id, opts)
+    end
 
     repo.delete!(branch)
     :ok
@@ -483,6 +625,48 @@ defmodule Polyphony.Branching do
     end
   end
 
+  @doc """
+  Answer a link that names a **scene** of a line that may be gone: `{:ok, line}`
+  when a live line holds it, `{:moved, ancestor, landing_scene_id}` when only a
+  tombstone remembers it — the reader lands on the nearest surviving ancestor, at
+  the deleted line's origin if it survives, else at the ancestor's own earliest
+  change, else its first scene. `:error` when nothing here ever held that scene.
+  """
+  def resolve_scene(campaign_id, scene_id, opts \\ []) do
+    repo = repo(opts)
+    cid = to_string(campaign_id)
+
+    case Branch.of_scene(repo, cid, scene_id) do
+      %Branch{} = line ->
+        {:ok, line}
+
+      nil ->
+        case BranchTombstone.of_scene(repo, cid, scene_id) do
+          nil ->
+            :error
+
+          t ->
+            case walk_tombstones(t.branch_id, t.cut_beat, opts) do
+              :error -> :error
+              {:moved, ancestor, _cut} -> {:moved, ancestor, landing(cid, ancestor, t, opts)}
+            end
+        end
+    end
+  end
+
+  # The last content the link promised that still exists: the deleted line's
+  # origin scene if the surviving ancestor still tells it, else the ancestor's
+  # own earliest change, else the top of its story.
+  defp landing(campaign_id, ancestor, tombstone, opts) do
+    scenes = scenes_for(campaign_id, ancestor, opts)
+
+    cond do
+      tombstone.origin_scene_id in scenes -> tombstone.origin_scene_id
+      ancestor.cursor_scene_id in scenes -> ancestor.cursor_scene_id
+      true -> List.first(scenes)
+    end
+  end
+
   # ── The divergence cursor ────────────────────────────────────────────────────
 
   @doc """
@@ -497,33 +681,84 @@ defmodule Polyphony.Branching do
   """
   def notice_change(campaign_id, scene_id, beat, opts \\ []) do
     repo = repo(opts)
+    cid = to_string(campaign_id)
+    rows = Branch.list_for_campaign(repo, cid)
+    payload_scenes = payload_scenes(cid, opts)
+    by_id = Map.new(rows, &{&1.id, &1})
 
-    case line_of(campaign_id, scene_id, opts) do
-      # A campaign that has never branched has no divergence to track.
-      nil ->
-        :ok
+    # A shared-past scene sits on more than one line — a change to it moves every
+    # cursor it is earlier than, not just its claiming line's. A campaign that has
+    # never branched has no rows and no divergence to track.
+    for line <- rows do
+      order = line_scenes(line, payload_scenes, by_id)
+      new_pos = position(order, scene_id, beat)
+      cur_pos = position(order, line.cursor_scene_id, line.cursor_beat)
 
-      %Branch{} = line ->
-        order = scenes_for(campaign_id, line, opts)
-        new_pos = position(order, scene_id, beat)
-        cur_pos = position(order, line.cursor_scene_id, line.cursor_beat)
-
-        if new_pos != nil and (cur_pos == nil or new_pos < cur_pos) do
-          line
-          |> Ecto.Changeset.change(
-            cursor_scene_id: to_string(scene_id),
-            cursor_beat: beat || 0
-          )
-          |> repo.update!()
-        end
-
-        :ok
+      if new_pos != nil and (cur_pos == nil or new_pos < cur_pos) do
+        line
+        |> Ecto.Changeset.change(
+          cursor_scene_id: to_string(scene_id),
+          cursor_beat: beat || 0
+        )
+        |> repo.update!()
+      end
     end
+
+    :ok
   end
 
   @doc "Where a line diverges now: `{scene_id, beat}` or nil."
   def cursor(%Branch{cursor_scene_id: nil}), do: nil
   def cursor(%Branch{cursor_scene_id: s, cursor_beat: b}), do: {s, b || 0}
+
+  # ── Who is who across lines ──────────────────────────────────────────────────
+
+  @doc """
+  Translate character ids from one line to another: `%{from_id => to_id}` for
+  `ids`, walking each id up `from_line`'s cuts (inverse `parent_map`) to the
+  deepest common ancestor and back down `to_line`'s. Copy-on-branch means the
+  same person is a different library id on every line; this is what lets a
+  reader's granted head survive a line switch, and it composes across nested
+  cuts. Ids a map doesn't know pass through unchanged — an edit-fork made before
+  copies existed still answers, identically.
+  """
+  def head_map(campaign_id, from_line, to_line, ids, opts \\ []) do
+    rows = Branch.list_for_campaign(repo(opts), to_string(campaign_id))
+    by_id = Map.new(rows, &{&1.id, &1})
+    from_path = chain(from_line, by_id)
+    to_path = chain(to_line, by_id)
+    to_ids = MapSet.new(to_path, & &1.id)
+
+    case Enum.find(from_path, &MapSet.member?(to_ids, &1.id)) do
+      nil ->
+        %{}
+
+      ancestor ->
+        lift = Enum.take_while(from_path, &(&1.id != ancestor.id))
+        descend = to_path |> Enum.take_while(&(&1.id != ancestor.id)) |> Enum.reverse()
+
+        for id <- ids, into: %{} do
+          up = Enum.reduce(lift, to_string(id), &uncopy(&1.parent_map, &2))
+          down = Enum.reduce(descend, up, &Map.get(&1.parent_map || %{}, &2, &2))
+          {to_string(id), down}
+        end
+    end
+  end
+
+  # A line, then its parents up to the root. Nil (a never-branched campaign)
+  # has no chain to speak of.
+  defp chain(nil, _by_id), do: []
+
+  defp chain(row, by_id) do
+    case row.parent_id && Map.get(by_id, row.parent_id) do
+      nil -> [row]
+      parent -> [row | chain(parent, by_id)]
+    end
+  end
+
+  # The inverse step: this line's copy back to its parent's original.
+  defp uncopy(map, id),
+    do: Enum.find_value(map || %{}, id, fn {parent_id, own_id} -> own_id == id && parent_id end)
 
   defp position(_order, nil, _beat), do: nil
 

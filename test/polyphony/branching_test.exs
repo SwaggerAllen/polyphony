@@ -11,7 +11,8 @@ defmodule Polyphony.BranchingTest do
   use ExUnit.Case, async: false
 
   alias Polyphony.{Branching, Library, Owner, Repo}
-  alias Polyphony.ReadModels.BranchTombstone
+  alias Polyphony.Authoring.CharacterSheet
+  alias Polyphony.ReadModels.{Branch, BranchTombstone}
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -19,11 +20,15 @@ defmodule Polyphony.BranchingTest do
 
   defp owner, do: Owner.coerce(System.unique_integer([:positive]))
 
-  defp campaign(scenes) do
+  defp campaign(scenes, attrs \\ %{}) do
     Library.put(%{
       owner: owner(),
       kind: "campaign",
-      payload: %{kind: :campaign, name: "The Salt Line", character_ids: [], scenes: scenes}
+      payload:
+        Map.merge(
+          %{kind: :campaign, name: "The Salt Line", character_ids: [], scenes: scenes},
+          attrs
+        )
     })
   end
 
@@ -216,4 +221,156 @@ defmodule Polyphony.BranchingTest do
   end
 
   defp reload(branch), do: Polyphony.ReadModels.Branch.get(Repo, branch.id)
+
+  # ── Copy-on-branch ─────────────────────────────────────────────────────────
+
+  defp character(owner, name) do
+    Library.put(%{owner: owner, kind: "character", payload: %CharacterSheet{name: name}})
+  end
+
+  defp bible(owner) do
+    Library.put(%{
+      owner: owner,
+      kind: "world_bible",
+      payload: %Polyphony.Authoring.WorldBible{name: "Saltmarch", cover: "A drowned county."}
+    })
+  end
+
+  defp peopled_campaign do
+    o = owner()
+    wren = character(o, "Wren Ashgrove")
+    ilias = character(o, "Ilias Vane")
+    world = bible(o)
+
+    entry =
+      Library.put(%{
+        owner: o,
+        kind: "campaign",
+        payload: %{
+          kind: :campaign,
+          name: "The Salt Line",
+          character_ids: [wren.id, ilias.id],
+          bible_id: world.id,
+          scenes: ["s1"]
+        }
+      })
+
+    {entry, [wren, ilias], world}
+  end
+
+  test "a branch copies the cast and world, and shares nothing" do
+    {entry, [wren, ilias], world} = peopled_campaign()
+
+    copies = Branching.prepare_line(entry.id, "s1")
+
+    # Two new people and a new world exist; the originals are untouched.
+    assert map_size(copies.character_map) == 2
+    assert copies.bible_id != to_string(world.id)
+
+    copied_wren = Library.get(copies.character_map[to_string(wren.id)])
+    assert %CharacterSheet{name: "Wren Ashgrove"} = Library.payload(copied_wren)
+    refute copied_wren.id in [wren.id, ilias.id]
+
+    b =
+      Branching.register_fork(entry.id, "s1", "s1-b", 3,
+        location: "The quay",
+        copies: copies
+      )
+
+    assert b.character_ids == copies.character_ids
+    assert b.bible_id == copies.bible_id
+    assert b.parent_map == copies.character_map
+  end
+
+  test "branching from a branch copies the branch's copies, not the root's cast" do
+    {entry, [wren, _ilias], _world} = peopled_campaign()
+
+    first = Branching.prepare_line(entry.id, "s1")
+    a = Branching.register_fork(entry.id, "s1", "s1-a", 3, location: "The quay", copies: first)
+
+    second = Branching.prepare_line(entry.id, "s1-a")
+
+    # The second cut copies the first line's Wren, so the chain composes.
+    a_wren = first.character_map[to_string(wren.id)]
+    assert Map.has_key?(second.character_map, a_wren)
+    refute Map.has_key?(second.character_map, to_string(wren.id))
+
+    b =
+      Branching.register_fork(entry.id, "s1-a", "s1-b", 5,
+        location: "The counting house",
+        copies: second
+      )
+
+    # head_map walks the cuts both ways: root's Wren is line B's copy-of-a-copy…
+    root = Enum.find(Branching.tree(entry.id), &(&1.depth == 0)).branch
+    b_wren = second.character_map[a_wren]
+
+    assert Branching.head_map(entry.id, root, b, [wren.id]) == %{to_string(wren.id) => b_wren}
+    # …and back.
+    assert Branching.head_map(entry.id, b, root, [b_wren]) == %{b_wren => to_string(wren.id)}
+    # Sibling-to-sibling composes up through the common ancestor too.
+    assert Branching.head_map(entry.id, b, a, [b_wren]) == %{b_wren => a_wren}
+  end
+
+  test "deleting a line trashes its copies of the cast and world" do
+    {entry, _cast, _world} = peopled_campaign()
+
+    copies = Branching.prepare_line(entry.id, "s1")
+    b = Branching.register_fork(entry.id, "s1", "s1-b", 3, location: "The quay", copies: copies)
+
+    {:ok, _} = Branching.delete(b.id)
+
+    for id <- copies.character_ids ++ [copies.bible_id] do
+      copy = Library.get(id, include_deleted: true)
+      assert copy == nil or copy.deleted_at != nil
+    end
+  end
+
+  # ── The shared past ────────────────────────────────────────────────────────
+
+  test "a line's scenes are the shared past plus its own" do
+    entry = campaign(["s1", "s2", "s3"])
+    b = Branching.register_fork(entry.id, "s2", "s2-b", 3, location: "The quay")
+
+    root = Enum.find(Branching.tree(entry.id), &(&1.depth == 0)).branch
+
+    # The branch remembers s1 — played before its origin scene — then its own copy.
+    assert Branching.scenes_for(entry.id, b) == ["s1", "s2-b"]
+    # The root keeps its whole story; the branch's copy is not in it.
+    assert Branching.scenes_for(entry.id, root) == ["s1", "s2", "s3"]
+  end
+
+  test "a change to a shared-past scene moves every line's cursor it is earlier than" do
+    entry = campaign(["s1", "s2", "s3"])
+    b = Branching.register_fork(entry.id, "s2", "s2-b", 3, location: "The quay")
+    root = Enum.find(Branching.tree(entry.id), &(&1.depth == 0)).branch
+
+    # Root has no cursor yet; the branch's sits at its cut.
+    assert Branching.cursor(root) == nil
+    assert Branching.cursor(reload(b)) == {"s2-b", 3}
+
+    # Deleting content in s1 changes the past both lines share.
+    :ok = Branching.notice_change(entry.id, "s1", 0)
+    assert Branching.cursor(reload(root)) == {"s1", 0}
+    assert Branching.cursor(reload(b)) == {"s1", 0}
+  end
+
+  test "a link naming a deleted line's scene resolves through the tombstone" do
+    entry = campaign(["s1", "s2"])
+    b = Branching.register_fork(entry.id, "s2", "s2-b", 3, location: "The quay")
+    root = Enum.find(Branching.tree(entry.id), &(&1.depth == 0)).branch
+
+    # While the line lives, the scene answers with it.
+    assert {:ok, %Branch{id: id}} = Branching.resolve_scene(entry.id, "s2-b")
+    assert id == b.id
+
+    {:ok, _} = Branching.delete(b.id)
+
+    # Gone: the tombstone knows the scenes, the walk lands on the ancestor, and
+    # the landing is the origin scene — the last content the link promised.
+    assert {:moved, %Branch{id: rid}, "s2"} = Branching.resolve_scene(entry.id, "s2-b")
+    assert rid == root.id
+
+    assert :error = Branching.resolve_scene(entry.id, "never-existed")
+  end
 end

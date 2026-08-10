@@ -1098,6 +1098,15 @@ defmodule PolyphonyWeb.Screens.Campaign do
         </p>
       </div>
 
+      <%!-- Only canonical publishes (campaign.md, the standing decision): the
+            selector may have the hub scoped to another line, and this is the one
+            place where that difference silently matters — so it is said. --%>
+      <p :if={canonical_name(@branches)} class="text-[11px] leading-relaxed dim mb-3">
+        Publishing points at the canonical line —
+        <span class="ttl" style="color:var(--lamp)"><%= canonical_name(@branches) %></span>.
+        Readers get its scenes, whichever line you're working in.
+      </p>
+
       <div class="flex flex-wrap items-center gap-1.5">
         <Kit.btn
           kind={:primary}
@@ -1114,6 +1123,15 @@ defmodule PolyphonyWeb.Screens.Campaign do
       </div>
     </Kit.row>
     """
+  end
+
+  # The canonical line's name, or nil for a campaign that has never branched —
+  # which should hear nothing about lines it doesn't have.
+  defp canonical_name(branches) do
+    Enum.find_value(branches, fn
+      %{canon?: true, name: name} -> name
+      _ -> nil
+    end)
   end
 
   defp unreadable_line(%{scenes: [_]}), do: "One scene nobody will be able to read"

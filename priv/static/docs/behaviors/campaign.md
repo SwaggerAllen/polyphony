@@ -1,6 +1,6 @@
 # Campaign
 
-<!-- rev: 5 -->
+<!-- rev: 6 -->
 
 | | |
 |---|---|
@@ -167,6 +167,12 @@ mark on the tab.
 ### `publish` — What a reader gets
 
 Spectator, heads, forkable. See the standing decision.
+
+Once the campaign has more than one line, the tab says plainly that **publishing points
+at the canonical line**, and names it. The hub may be scoped to any line while the
+author works; this is the one control where that difference silently matters, so it is
+said rather than implied. A campaign that has never branched hears nothing about lines
+it does not have.
 
 ### `publish_gap` — A scene nobody will be able to read
 
