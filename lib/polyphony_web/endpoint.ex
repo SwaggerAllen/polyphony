@@ -11,11 +11,25 @@ defmodule PolyphonyWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :polyphony
 
   # The session — signed cookie. Auth stores the current user id here (§B2 transport).
+  #
+  # `max_age` is 30 days. It used to be absent, which does not mean "forever" — it makes
+  # a *session cookie*, one the browser drops when it closes, and on a phone that is
+  # whenever the OS decides. `Plug.Session.COOKIE` puts no separate expiry on the
+  # signature (it verifies without a `max_age`), so this value is the whole lifetime:
+  # after 30 days the cookie is gone and the next visit is a signed-out one.
+  #
+  # This is a real credential, unlike `_polyphony_remember` — it *is* being signed in,
+  # where the remember cookie only offers to email you a link. So the two are not the
+  # same kind of thing with different numbers on them, and the session must stay the
+  # shorter of the two.
+  @session_max_age 60 * 60 * 24 * 30
+
   @session_options [
     store: :cookie,
     key: "_polyphony_key",
     signing_salt: "pR6pHoNy",
-    same_site: "Lax"
+    same_site: "Lax",
+    max_age: @session_max_age
   ]
 
   socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]])
