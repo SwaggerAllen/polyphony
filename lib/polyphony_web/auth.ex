@@ -127,9 +127,10 @@ defmodule PolyphonyWeb.Auth do
   Log out: drop the session, and forget the device.
 
   Forgetting is the difference between *signed out* and *expired*. The remember cookie
-  exists because the session cookie has no `max_age` — it dies when the browser does,
-  which on a phone is whenever the OS feels like it — and coming back to a form you
-  have to retype is the entire complaint. But "sign me out" is a deliberate act, and
+  exists because the session ends on its own — it now carries a 30-day `max_age`
+  (`PolyphonyWeb.Endpoint`), and before that it died with the browser, which on a phone
+  is whenever the OS feels like it. Either way it runs out, and coming back to a form
+  you have to retype is the entire complaint. But "sign me out" is a deliberate act, and
   leaving the address behind for the next person to see would answer a question nobody
   asked.
   """
@@ -150,8 +151,12 @@ defmodule PolyphonyWeb.Auth do
   # Deliberately **not** a credential. It holds a user id and nothing else, and the
   # only thing it can do is put a *Send me a link* button on screen — the link still
   # goes to the inbox, which is the one thing a stolen device doesn't come with. That
-  # is the whole reason this can be a year-long cookie while the session is not: the
-  # worst it grants is the ability to send its owner an email.
+  # is the whole reason this outlives the session rather than matching it: the worst it
+  # grants is the ability to send its owner an email.
+  #
+  # It must stay **longer** than the session's 30 days (`PolyphonyWeb.Endpoint`). If the
+  # two ever meet, an expiring session lands on the sign-in form instead of `/resume`,
+  # and this cookie stops doing the one job it has.
   @remember_cookie "_polyphony_remember"
   @remember_max_age 60 * 60 * 24 * 60
 

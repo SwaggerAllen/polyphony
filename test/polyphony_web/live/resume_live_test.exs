@@ -19,6 +19,14 @@ defmodule PolyphonyWeb.ResumeLiveTest do
 
   @cookie "_polyphony_remember"
 
+  @session_cookie "_polyphony_key"
+
+  # The session cookie's lifetime as the browser is actually told it — read off a real
+  # `Set-Cookie`, not off the endpoint's config. The distinction matters: `Plug.Session`
+  # only forwards a subset of its options to the cookie, so a `max_age` that is set and
+  # not forwarded would pass a config assertion and expire nothing.
+  defp session_max_age(conn), do: conn.resp_cookies[@session_cookie].max_age
+
   # Signs in the way the app does — through the controller — so the cookie under test
   # is the one the real path sets, not one the test made up.
   defp signed_in_conn(user) do
@@ -31,8 +39,8 @@ defmodule PolyphonyWeb.ResumeLiveTest do
     conn = signed_in_conn(user)
 
     # Carry the response cookie onto a fresh conn *without* the session: that is the
-    # state this whole feature is about — the session cookie has no max_age, so it dies
-    # with the browser while the remember cookie doesn't.
+    # state this whole feature is about — the session runs out (30 days, or sooner if
+    # the browser drops it) while the remember cookie is still there.
     Phoenix.ConnTest.build_conn()
     |> Plug.Test.init_test_session(%{})
     |> Plug.Test.put_req_cookie(@cookie, conn.resp_cookies[@cookie].value)
@@ -55,14 +63,30 @@ defmodule PolyphonyWeb.ResumeLiveTest do
       assert Plug.Conn.fetch_cookies(base, encrypted: [@cookie]).cookies[@cookie] == user.id
     end
 
-    test "it is http-only and long-lived, and the session cookie is neither" do
-      cookie = signed_in_conn(user_fixture()).resp_cookies[@cookie]
+    test "it is http-only and long-lived, and outlives the session" do
+      conn = signed_in_conn(user_fixture())
+      cookie = conn.resp_cookies[@cookie]
 
       # http_only keeps it away from any script that gets onto the page.
       assert cookie.http_only
       assert cookie.same_site == "Lax"
-      # Long on purpose — outliving the session is the entire feature.
-      assert cookie.max_age > 60 * 60 * 24 * 30
+
+      # Outliving the session is the entire feature, so the two are compared against
+      # **each other** rather than against a number written twice. If the session's TTL
+      # is ever raised past this cookie's, an expiring session starts landing on the
+      # sign-in form instead of `/resume` and remember-me quietly stops working — which
+      # is a thing nobody would notice for a month.
+      assert cookie.max_age > session_max_age(conn)
+    end
+
+    test "the session is a real credential, so it expires — at 30 days" do
+      conn = signed_in_conn(user_fixture())
+
+      # It used to carry no `max_age` at all, which is not "forever": it made a browser
+      # session cookie, dropped whenever the browser closed. Now it is an explicit 30
+      # days, and this is the assertion that would fail if it silently went back to
+      # being unset — `nil` is the value that reads as "fine" and isn't.
+      assert session_max_age(conn) == 60 * 60 * 24 * 30
     end
 
     test "signing out forgets the device" do
