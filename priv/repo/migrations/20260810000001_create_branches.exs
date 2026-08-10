@@ -43,10 +43,6 @@ defmodule Polyphony.Repo.Migrations.CreateBranches do
       # line owns nothing here either — the campaign payload is its copy.
       add(:character_ids, {:array, :string}, null: false, default: [])
       add(:bible_id, :string)
-      # Who is who across the cut: `%{parent's character id => this line's copy}`.
-      # The published reader needs it to keep a granted head granted on every
-      # line — the same person is a different library id on each side of a cut.
-      add(:parent_map, :map, null: false, default: %{})
       timestamps(type: :naive_datetime_usec)
     end
 

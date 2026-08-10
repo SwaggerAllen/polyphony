@@ -27,7 +27,6 @@ defmodule Polyphony.ReadModels.Branch do
     field(:scene_ids, {:array, :string}, default: [])
     field(:character_ids, {:array, :string}, default: [])
     field(:bible_id, :string)
-    field(:parent_map, :map, default: %{})
     timestamps(type: :naive_datetime_usec)
   end
 

@@ -247,9 +247,17 @@ defmodule PolyphonyWeb.BrowseLive do
 
         # The URL wins, then where they were last time, then what the publication leads
         # with. Coming back into a different head is coming back to a different story,
-        # so a bookmark is a stronger signal than a default (§3.1e).
+        # so a bookmark is a stronger signal than a default (§3.1e) — and a head that
+        # names another line's copy of the same person still counts as that head,
+        # via the persona join, before anything falls back to a default.
         mode =
-          [Publication.from_param(as), bookmarked_mode(socket), Publication.default_mode(pub)]
+          [
+            Publication.from_param(as),
+            equivalent_head(snapshot, Publication.from_param(as)),
+            bookmarked_mode(socket),
+            equivalent_head(snapshot, bookmarked_mode(socket)),
+            Publication.default_mode(pub)
+          ]
           |> Enum.find(&(&1 && Publication.offers?(pub, &1)))
 
         assign(socket, pub: pub, mode: mode)
@@ -325,9 +333,9 @@ defmodule PolyphonyWeb.BrowseLive do
 
     # Copy-on-branch means this line's people are different library ids for the
     # same folk. The grant is checked in canonical's ids (the publication's), the
-    # projection runs in the line's own — `heads` is the translation both ways.
-    heads = (line && Map.get(line, :heads)) || %{}
-    unheads = Map.new(heads, fn {canon, local} -> {local, canon} end)
+    # projection runs in the line's own — and the translation is a flat persona
+    # join, so it survives any intermediate line being deleted.
+    {heads, unheads} = line_maps(snapshot, line)
 
     gap = scene && Session.gap(snapshot, uncopy_cast(scene, unheads), mode)
 
@@ -357,6 +365,57 @@ defmodule PolyphonyWeb.BrowseLive do
       viewer -> viewer
     end
   end
+
+  # `%{canonical_id => persona}` for the pinned cast. A pinned character without
+  # a persona (published before the field) is their own — same rule as the sheet.
+  defp canon_personas(snapshot) do
+    for c <- Map.get(snapshot, :characters) || [], into: %{} do
+      id = to_string(Map.get(c, :source_id))
+      {id, to_string(Map.get(c, :persona) || id)}
+    end
+  end
+
+  # The two directions of the persona join for a line: `heads` (canonical id →
+  # this line's id) and `unheads` (back). Empty maps for the canonical line
+  # itself, and for lines published before personas — identity fallback.
+  defp line_maps(_snapshot, nil), do: {%{}, %{}}
+
+  defp line_maps(snapshot, line) do
+    by_persona = snapshot |> canon_personas() |> Map.new(fn {id, p} -> {p, id} end)
+
+    unheads =
+      for {local, persona} <- Map.get(line, :personas) || %{},
+          canon = Map.get(by_persona, to_string(persona)),
+          canon != nil,
+          into: %{},
+          do: {to_string(local), canon}
+
+    {Map.new(unheads, fn {local, canon} -> {canon, local} end), unheads}
+  end
+
+  # A granted head is a person, not a library id: a bookmark (or a stale link)
+  # whose perspective names another line's copy still deserves its head — same
+  # persona, different id — rather than falling back to somebody else's default.
+  defp equivalent_head(snapshot, {:character, id}) do
+    canon = canon_personas(snapshot)
+    by_persona = Map.new(canon, fn {cid, p} -> {p, cid} end)
+
+    everyone =
+      Enum.reduce(Session.lines(snapshot), canon, fn line, acc ->
+        Enum.reduce(Map.get(line, :personas) || %{}, acc, fn {local, p}, acc ->
+          Map.put(acc, to_string(local), to_string(p))
+        end)
+      end)
+
+    with p when not is_nil(p) <- Map.get(everyone, to_string(id)),
+         canon_id when not is_nil(canon_id) <- Map.get(by_persona, p) do
+      {:character, canon_id}
+    else
+      _ -> nil
+    end
+  end
+
+  defp equivalent_head(_snapshot, _mode), do: nil
 
   # The link names a scene the snapshot no longer tells, on any line. Two honest
   # answers, neither of them a 404 (browse.md, `scene_gone` / `branch_gone`) —

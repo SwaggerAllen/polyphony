@@ -1164,7 +1164,14 @@ defmodule PolyphonyWeb.CampaignLive do
 
       characters =
         Enum.map(cast, fn c ->
-          %{source_id: c.id, source_version: c.version, sheet: Library.payload(c)}
+          %{
+            source_id: c.id,
+            source_version: c.version,
+            sheet: Library.payload(c),
+            # Who this is, across lines — the flat join key that keeps a granted
+            # head granted when a reader lands on a non-canonical line.
+            persona: Branching.persona_of(c)
+          }
         end)
 
       result =
@@ -1187,7 +1194,7 @@ defmodule PolyphonyWeb.CampaignLive do
             # The other lines travel too — not listed, but a link somebody was sent
             # into one keeps answering, and the off-canon pill needs to know what it
             # is looking at without asking the live campaign.
-            lines: publish_lines(entry.id, canonical, cast)
+            lines: publish_lines(entry.id, canonical)
           },
           visibility: "public"
         )
@@ -1397,9 +1404,8 @@ defmodule PolyphonyWeb.CampaignLive do
   # display names — copy-on-branch means each line speaks with its own copies'
   # ids, which the canonical pinned sheets know nothing about. Archived lines stay
   # out — leaving the selector and the tree's default view means leaving this too.
-  defp publish_lines(campaign_id, canonical, canonical_cast) do
+  defp publish_lines(campaign_id, canonical) do
     payload = Library.get(campaign_id) |> maybe_payload() || %{}
-    canonical_ids = Enum.map(canonical_cast, &to_string(&1.id))
 
     for %{branch: line} <- Branching.tree(campaign_id),
         canonical == nil or line.id != canonical.id do
@@ -1415,9 +1421,11 @@ defmodule PolyphonyWeb.CampaignLive do
         cut_beat: line.cut_beat,
         scenes: Preflight.scenes(Branching.scenes_for(campaign_id, line)),
         names: line_names(ids),
-        # Who is who over here: the granted heads are canonical's pinned ids, and
-        # copy-on-branch means the same person is a different id on this line.
-        heads: Branching.head_map(campaign_id, canonical, line, canonical_ids)
+        # Who is who over here: each of this line's people, by persona — the flat
+        # join key. Copy-on-branch means the same person is a different library id
+        # on every line, and a join beats a chain because it survives any
+        # intermediate line being deleted.
+        personas: Branching.personas(ids)
       }
     end
   end
@@ -1933,8 +1941,8 @@ defmodule PolyphonyWeb.CampaignLive do
 
   # The grant, translated to canonical's people: the perspective checkboxes list
   # the line the hub is scoped to, and copy-on-branch means the same head is a
-  # different library id on canonical. Identity when the two lines are one, or
-  # the campaign never branched.
+  # different library id on canonical — same persona, so the join answers.
+  # Identity when the two lines are one, or the campaign never branched.
   defp canonical_publication(socket, canonical) do
     pub = publication(socket)
     line = socket.assigns.line
@@ -1942,8 +1950,8 @@ defmodule PolyphonyWeb.CampaignLive do
     if canonical == nil or line == nil or line.id == canonical.id do
       pub
     else
-      heads =
-        Branching.head_map(socket.assigns.entry.id, line, canonical, pub.perspectives)
+      {canonical_cast, _bible} = publish_assets(socket, canonical)
+      heads = Branching.head_map(pub.perspectives, Enum.map(canonical_cast, & &1.id))
 
       %Publication{pub | perspectives: Enum.map(pub.perspectives, &Map.get(heads, &1, &1))}
     end

@@ -32,7 +32,7 @@ defmodule Polyphony.ReadingLinesTest do
           cut_beat: nil,
           scenes: [scene("s1", "The tide bell"), scene("s2", "What the ledger says")],
           names: %{"wren" => "Wren Ashgrove"},
-          heads: %{}
+          personas: %{"wren" => "wren"}
         }
       ],
       publication: %{spectator: true, perspectives: [], forkable: false}

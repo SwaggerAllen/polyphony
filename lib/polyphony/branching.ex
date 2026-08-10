@@ -118,11 +118,17 @@ defmodule Polyphony.Branching do
           entry != nil do
         sheet = Library.payload(entry)
 
-        copy =
-          Library.put(
-            %{owner: owner, kind: "character", payload: Effective.sheet(sheet, entry.id)},
-            opts
-          )
+        # `Map.put`, not struct-update: the copy carries the persona — who this
+        # *is*, across every copy of every copy — as a flat tag, so "same person?"
+        # is an equality join and never a walk. A source sheet written before the
+        # field existed decodes without the key, and history is allowed to be the
+        # wrong shape.
+        payload =
+          sheet
+          |> Effective.sheet(entry.id)
+          |> Map.put(:persona_id, persona_of(entry))
+
+        copy = Library.put(%{owner: owner, kind: "character", payload: payload}, opts)
 
         {to_string(old_id), to_string(copy.id)}
       end
@@ -195,11 +201,10 @@ defmodule Polyphony.Branching do
         name: name,
         canonical: false,
         scene_ids: [to_string(new_scene_id)],
-        # Copy-on-branch: the line's own cast and world, copied at the cut — and
-        # who is who across it, so a reader's granted head survives a line switch.
+        # Copy-on-branch: the line's own cast and world, copied at the cut. Who is
+        # who across lines is the copies' own persona tags, not a map here.
         character_ids: copies.character_ids,
         bible_id: copies.bible_id,
-        parent_map: Map.get(copies, :character_map, %{}),
         # A fresh branch diverges exactly at its cut — the cursor starts there and
         # only ever moves earlier.
         cursor_scene_id: to_string(new_scene_id),
@@ -714,51 +719,50 @@ defmodule Polyphony.Branching do
   # ── Who is who across lines ──────────────────────────────────────────────────
 
   @doc """
-  Translate character ids from one line to another: `%{from_id => to_id}` for
-  `ids`, walking each id up `from_line`'s cuts (inverse `parent_map`) to the
-  deepest common ancestor and back down `to_line`'s. Copy-on-branch means the
-  same person is a different library id on every line; this is what lets a
-  reader's granted head survive a line switch, and it composes across nested
-  cuts. Ids a map doesn't know pass through unchanged — an edit-fork made before
-  copies existed still answers, identically.
+  Who a character *is*, across copies: the persona stamped on the sheet at copy
+  time, or the entry's own id for an original — a sheet with no persona is the
+  persona. A flat tag rather than a chain of copy relationships, so the answer
+  survives any intermediate line being deleted: nothing here ever walks a tree.
   """
-  def head_map(campaign_id, from_line, to_line, ids, opts \\ []) do
-    rows = Branch.list_for_campaign(repo(opts), to_string(campaign_id))
-    by_id = Map.new(rows, &{&1.id, &1})
-    from_path = chain(from_line, by_id)
-    to_path = chain(to_line, by_id)
-    to_ids = MapSet.new(to_path, & &1.id)
+  def persona_of(entry_or_id, opts \\ [])
 
-    case Enum.find(from_path, &MapSet.member?(to_ids, &1.id)) do
-      nil ->
-        %{}
-
-      ancestor ->
-        lift = Enum.take_while(from_path, &(&1.id != ancestor.id))
-        descend = to_path |> Enum.take_while(&(&1.id != ancestor.id)) |> Enum.reverse()
-
-        for id <- ids, into: %{} do
-          up = Enum.reduce(lift, to_string(id), &uncopy(&1.parent_map, &2))
-          down = Enum.reduce(descend, up, &Map.get(&1.parent_map || %{}, &2, &2))
-          {to_string(id), down}
-        end
+  def persona_of(%{id: id} = entry, _opts) do
+    case Library.payload(entry) do
+      # `Map.get`, never dot-syntax: sheets stored before the field exist.
+      %{} = sheet -> to_string(Map.get(sheet, :persona_id) || id)
+      _ -> to_string(id)
     end
   end
 
-  # A line, then its parents up to the root. Nil (a never-branched campaign)
-  # has no chain to speak of.
-  defp chain(nil, _by_id), do: []
-
-  defp chain(row, by_id) do
-    case row.parent_id && Map.get(by_id, row.parent_id) do
-      nil -> [row]
-      parent -> [row | chain(parent, by_id)]
+  def persona_of(id, opts) do
+    case Library.get(id, opts) do
+      nil -> to_string(id)
+      entry -> persona_of(entry, opts)
     end
   end
 
-  # The inverse step: this line's copy back to its parent's original.
-  defp uncopy(map, id),
-    do: Enum.find_value(map || %{}, id, fn {parent_id, own_id} -> own_id == id && parent_id end)
+  @doc "`%{character_id => persona}` for a line's cast — the join key, per person."
+  def personas(ids, opts \\ []) do
+    Map.new(ids, fn id -> {to_string(id), persona_of(id, opts)} end)
+  end
+
+  @doc """
+  Translate character ids from one cast to another by persona equality:
+  `%{from_id => to_id}` for every id whose person also stands in `to_ids`. This
+  is what lets a reader's granted head survive a line switch — the same person
+  is a different library id on every line. Ids with no counterpart are absent,
+  and callers fall back to identity, so casts made before personas existed
+  degrade to pass-through rather than breaking.
+  """
+  def head_map(from_ids, to_ids, opts \\ []) do
+    by_persona = for id <- to_ids, into: %{}, do: {persona_of(id, opts), to_string(id)}
+
+    for id <- from_ids,
+        to = Map.get(by_persona, persona_of(id, opts)),
+        to != nil,
+        into: %{},
+        do: {to_string(id), to}
+  end
 
   defp position(_order, nil, _beat), do: nil
 

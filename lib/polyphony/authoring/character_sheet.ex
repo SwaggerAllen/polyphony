@@ -242,7 +242,15 @@ defmodule Polyphony.Authoring.CharacterSheet do
             # Optional authoring link to a `world_bible` Library entry (§15): when set,
             # it seeds character auto-generation (`Authoring.Autofill`) so backstory and
             # voice fit the setting. Purely an authoring aid — nil for a world-less sheet.
-            world_bible_id: nil
+            world_bible_id: nil,
+            # **Who this is**, across copies (STR-8). Copy-on-branch duplicates a sheet
+            # per line, and the copies need to answer "same person?" without walking a
+            # chain of copies — so the first copy stamps the original's id here and
+            # every copy of a copy inherits it verbatim. Nil on an original: a sheet
+            # with no persona *is* the persona, and its id stands in. Read with
+            # `Map.get` and written with `Map.put`, never dot-syntax — sheets stored
+            # before this field exist and history is allowed to be the wrong shape.
+            persona_id: nil
 
   @type status :: :stub | :proposed | :full
   @type tier :: :main | :recurring | :incidental

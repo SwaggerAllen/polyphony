@@ -279,10 +279,14 @@ defmodule Polyphony.BranchingTest do
 
     assert b.character_ids == copies.character_ids
     assert b.bible_id == copies.bible_id
-    assert b.parent_map == copies.character_map
+
+    # The copy knows who it is: the original's id, as a flat persona tag.
+    assert Branching.persona_of(copied_wren) == to_string(wren.id)
+    # An original is its own persona — a sheet with no tag is the person.
+    assert Branching.persona_of(wren) == to_string(wren.id)
   end
 
-  test "branching from a branch copies the branch's copies, not the root's cast" do
+  test "copies of copies keep the original persona, so identity is a join, not a walk" do
     {entry, [wren, _ilias], _world} = peopled_campaign()
 
     first = Branching.prepare_line(entry.id, "s1")
@@ -290,26 +294,30 @@ defmodule Polyphony.BranchingTest do
 
     second = Branching.prepare_line(entry.id, "s1-a")
 
-    # The second cut copies the first line's Wren, so the chain composes.
+    # The second cut copies the first line's Wren…
     a_wren = first.character_map[to_string(wren.id)]
     assert Map.has_key?(second.character_map, a_wren)
     refute Map.has_key?(second.character_map, to_string(wren.id))
 
-    b =
+    _b =
       Branching.register_fork(entry.id, "s1-a", "s1-b", 5,
         location: "The counting house",
         copies: second
       )
 
-    # head_map walks the cuts both ways: root's Wren is line B's copy-of-a-copy…
-    root = Enum.find(Branching.tree(entry.id), &(&1.depth == 0)).branch
+    # …and the copy-of-a-copy still answers to the original persona, verbatim.
     b_wren = second.character_map[a_wren]
+    assert Branching.persona_of(b_wren) == to_string(wren.id)
 
-    assert Branching.head_map(entry.id, root, b, [wren.id]) == %{to_string(wren.id) => b_wren}
-    # …and back.
-    assert Branching.head_map(entry.id, b, root, [b_wren]) == %{b_wren => to_string(wren.id)}
-    # Sibling-to-sibling composes up through the common ancestor too.
-    assert Branching.head_map(entry.id, b, a, [b_wren]) == %{b_wren => a_wren}
+    # So translation is persona equality, any direction, no tree in sight:
+    assert Branching.head_map([wren.id], [b_wren]) == %{to_string(wren.id) => b_wren}
+    assert Branching.head_map([b_wren], [wren.id]) == %{b_wren => to_string(wren.id)}
+    assert Branching.head_map([b_wren], [a_wren]) == %{b_wren => a_wren}
+
+    # Which is also why deleting the intermediate line changes nothing: the tag
+    # lives on the sheets, and nothing ever walks the branch rows to answer it.
+    {:ok, _} = Branching.delete(a.id)
+    assert Branching.head_map([wren.id], [b_wren]) == %{to_string(wren.id) => b_wren}
   end
 
   test "deleting a line trashes its copies of the cast and world" do

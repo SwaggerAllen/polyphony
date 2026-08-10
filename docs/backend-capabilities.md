@@ -302,10 +302,12 @@ frontend can't (yet) reach.
   `Polyphony.Branching` over `Fork.fork/3`, the ⑂ control on play's dividers, and the
   hub's selector + full-screen navigator (canonical, archive, re-parenting delete,
   tombstones, divergence cursor). Copy-on-branch copies the cast and world at the
-  cut and re-points the copied stream at the copies; publish points at the
-  canonical line and freezes the other lines (with `heads` id translation) into
-  the snapshot; the reader's off-canon / diverged / scene-gone / branch-gone
-  states are computed from that.
+  cut and re-points the copied stream at the copies (each copy stamped with a flat
+  **persona id** — the original's id — so "same person?" is an equality join that
+  survives deleted intermediate lines); publish points at the canonical line and
+  freezes the other lines, with per-line persona maps, into the snapshot; the
+  reader's off-canon / diverged / scene-gone / branch-gone states are computed
+  from that.
 - ✗ **Edit-as-fork** (`Edit.edit` `:invalid`) — no "this changes history, branch it?" flow.
 - ◐ **Autonomous multi-beat pacing** — Continue is single-beat only; no Play/Auto mode.
 - ◐ **`assisted` draft accept/discard** — mode selectable but no draft affordance.

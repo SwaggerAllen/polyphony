@@ -67,7 +67,12 @@ defmodule Polyphony.Library.Snapshot do
             derived_from_id: nil,
             derived_from_version: nil
 
-  @type pinned_character :: %{source_id: term(), source_version: integer(), sheet: map()}
+  @type pinned_character :: %{
+          optional(:persona) => term(),
+          source_id: term(),
+          source_version: integer(),
+          sheet: map()
+        }
   @type t :: %__MODULE__{
           campaign_id: term(),
           published_beat: integer() | nil,
