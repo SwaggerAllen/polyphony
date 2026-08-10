@@ -1,0 +1,122 @@
+<!--
+  The shipped page (PolyphonyWeb.ErrorHTML) is self-contained and MUST NOT link
+  polyphony-kit.css: a broken asset can be the error being shown. The frames below use
+  kit classes and var() tokens because this is a mock and the mock loads the kit; in the
+  real page those values are written out literally. They are the kit's values either
+  way — see error.md's first standing decision.
+
+  The "Today · 404, verbatim" frame is the live page fetched from production, kept for
+  comparison.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyphony · error screens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+
+<link rel="stylesheet" href="polyphony-kit.css">
+</head>
+<body class="antialiased">
+
+<section class="max-w-6xl mx-auto px-5 py-10">
+  <div class="wall mb-2">01 · The screen you get when there isn't one</div>
+  <h2 class="text-2xl font-bold mb-2">Self-contained, and still ours</h2>
+  <p class="max-w-2xl text-[15px] leading-relaxed note mb-3">
+    This page inlines everything, because a broken asset can be the error being shown. That
+    constraint decides the implementation and not the look: the values below are the kit's own,
+    written out literally rather than referenced. <strong>Today's page invents its own palette
+    and a system font stack, and reads as a different product.</strong>
+  </p>
+  <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
+    The copy changes too. Today every status says <em>Something went wrong</em> — including the
+    404, where nothing did.
+  </p>
+
+  <div class="grid md:grid-cols-2 gap-4">
+    <div><div class="wall mb-2">Today · 404, verbatim</div>
+      <div style="background:#0f1115;color:#e6e8ee;padding:1.75rem 1.5rem;border-radius:14px;font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+        <p style="font-size:3rem;font-weight:800;margin:0;color:#7c9cff;letter-spacing:.02em">404</p>
+        <h1 style="font-size:1.4rem;margin:.25rem 0 1rem">Not Found</h1>
+        <p style="color:#9aa2b1;font-size:.85rem;margin:0 0 1.5rem">request id: <code style="background:#1f232c;border-radius:6px;padding:.1rem .35rem">8dcf43c4-4987</code></p>
+        <p style="color:#9aa2b1">Something went wrong.</p>
+        <p style="margin-top:1.5rem"><a style="color:#7c9cff;text-decoration:none">← Home</a></p>
+      </div>
+      <p class="text-[11px] leading-relaxed dim mt-2">Fetched live. Blue accent, 800-weight numerals, system stack — none of it appears anywhere else in the product. And it tells somebody who mistyped a URL that something went wrong.</p></div>
+
+    <div><div class="wall mb-2">New · 404</div>
+      <div class="fr stage dark" style="padding:1.75rem 1.5rem">
+        <p style="font-family:var(--f-title);font-size:2.75rem;font-weight:600;margin:0;color:var(--bcm);letter-spacing:.01em">404</p>
+        <h1 style="font-family:var(--f-title);font-size:1.3rem;font-weight:500;margin:.35rem 0 1rem">Nothing here</h1>
+        <p style="color:var(--bcm);font-size:12px;margin:0 0 1.5rem">request id: <code style="background:var(--b2);border-radius:6px;padding:.1rem .35rem;font-family:var(--f-mono)">8dcf43c4-4987</code></p>
+        <p style="font-size:13.5px;line-height:1.6;margin:0 0 1.25rem;max-width:38ch">That address doesn't lead anywhere. It may have been mistyped, or the thing it pointed at may be gone.</p>
+        <p style="margin:0"><a style="color:var(--bc);border-bottom:1px solid var(--rule);text-decoration:none;font-size:13px">← Polyphony</a></p>
+      </div>
+      <p class="text-[11px] leading-relaxed dim mt-2">Says what happened and assigns no blame — the same argument <code>share.md</code> makes for a dead link. One route out, to the front door: not to a library, because this page must render without a session.</p></div>
+  </div>
+</section>
+
+<section class="max-w-6xl mx-auto px-5 pb-16">
+  <div class="wall mb-2">02 · The other four</div>
+  <p class="text-[13px] leading-relaxed note max-w-2xl mb-6">
+    A <strong>403 is the one state allowed to know whether you're signed in</strong>, because
+    it cannot be reached without auth having already run — deciding something is forbidden means
+    knowing who asked. Everything else on this page renders without a session, since a session is
+    exactly what may be broken.
+  </p>
+  <div class="grid md:grid-cols-2 gap-4">
+
+    <div><div class="wall mb-2">403 · signed in</div>
+      <div class="fr stage dark" style="padding:1.75rem 1.5rem">
+        <p style="font-family:var(--f-title);font-size:2.75rem;font-weight:600;margin:0;color:var(--bcm);letter-spacing:.01em">403</p>
+        <h1 style="font-family:var(--f-title);font-size:1.3rem;font-weight:500;margin:.35rem 0 1rem">This isn't yours</h1>
+        <p style="color:var(--bcm);font-size:12px;margin:0 0 1.5rem">request id: <code style="background:var(--b2);border-radius:6px;padding:.1rem .35rem;font-family:var(--f-mono)">8dcf43c4-4987</code></p>
+        <p style="font-size:13.5px;line-height:1.6;margin:0 0 1.25rem;max-width:38ch">You're signed in, but this campaign isn't one of yours. If somebody meant to share it, they'll need to add you.</p>
+        <p style="margin:0"><a style="color:var(--bc);border-bottom:1px solid var(--rule);text-decoration:none;font-size:13px">← Polyphony</a></p>
+      </div>
+      <p class="text-[11px] leading-relaxed dim mt-2">No request-access control — that's a feature, and this isn't the place to invent one. It says who to ask rather than pretending to ask for them.</p></div>
+
+    <div><div class="wall mb-2">403 · signed out</div>
+      <div class="fr stage dark" style="padding:1.75rem 1.5rem">
+        <p style="font-family:var(--f-title);font-size:2.75rem;font-weight:600;margin:0;color:var(--bcm);letter-spacing:.01em">403</p>
+        <h1 style="font-family:var(--f-title);font-size:1.3rem;font-weight:500;margin:.35rem 0 1rem">This one's private</h1>
+        <p style="color:var(--bcm);font-size:12px;margin:0 0 1.5rem">request id: <code style="background:var(--b2);border-radius:6px;padding:.1rem .35rem;font-family:var(--f-mono)">8dcf43c4-4987</code></p>
+        <p style="font-size:13.5px;line-height:1.6;margin:0 0 1.25rem;max-width:38ch">Who can open it depends on the account. You're not signed in on this device.</p>
+        <p style="margin:0 0 1rem"><button class="btn btn-pri btn-sm">Sign in</button></p>
+        <p style="margin:0"><a style="color:var(--bc);border-bottom:1px solid var(--rule);text-decoration:none;font-size:13px">← Polyphony</a></p>
+      </div>
+      <p class="text-[11px] leading-relaxed dim mt-2">Doesn't promise access after signing in — it can't know. It says access is decided by account and offers the door, which is the case for anybody with a second device.</p></div>
+
+    <div><div class="wall mb-2">500 · with detail</div>
+      <div class="fr stage dark" style="padding:1.75rem 1.5rem">
+        <p style="font-family:var(--f-title);font-size:2.75rem;font-weight:600;margin:0;color:var(--bcm);letter-spacing:.01em">500</p>
+        <h1 style="font-family:var(--f-title);font-size:1.3rem;font-weight:500;margin:.35rem 0 1rem">That one's on us</h1>
+        <p style="color:var(--bcm);font-size:12px;margin:0 0 1.5rem">request id: <code style="background:var(--b2);border-radius:6px;padding:.1rem .35rem;font-family:var(--f-mono)">8dcf43c4-4987</code></p>
+        <p style="font-size:13.5px;line-height:1.6;margin:0 0 1.25rem;max-width:38ch">Something broke while loading this. The details below are for whoever looks into it.</p>
+        <pre style="background:var(--b2);border:1px solid var(--rule);border-radius:10px;padding:.85rem;overflow-x:auto;font-family:var(--f-mono);font-size:11.5px;line-height:1.55;color:var(--pencil);white-space:pre-wrap;margin:0 0 1.25rem">** (Ecto.NoResultsError) expected at least one result but got none in query:
+
+from c0 in Polyphony.Campaigns.Campaign,
+  where: c0.id == ^"7f3a…"</pre>
+        <p style="margin:0"><a style="color:var(--bc);border-bottom:1px solid var(--rule);text-decoration:none;font-size:13px">← Polyphony</a></p>
+      </div>
+      <p class="text-[11px] leading-relaxed dim mt-2"><strong>The ordinary production case</strong> — detail is on by default and stays that way. The human sentence stays above the block so it reads first; the trace is monospace and set apart rather than styled as an alarm.</p></div>
+
+    <div><div class="wall mb-2">500 · detail off</div>
+      <div class="fr stage dark" style="padding:1.75rem 1.5rem">
+        <p style="font-family:var(--f-title);font-size:2.75rem;font-weight:600;margin:0;color:var(--bcm);letter-spacing:.01em">500</p>
+        <h1 style="font-family:var(--f-title);font-size:1.3rem;font-weight:500;margin:.35rem 0 1rem">That one's on us</h1>
+        <p style="color:var(--bcm);font-size:12px;margin:0 0 1.5rem">request id: <code style="background:var(--b2);border-radius:6px;padding:.1rem .35rem;font-family:var(--f-mono)">8dcf43c4-4987</code></p>
+        <p style="font-size:13.5px;line-height:1.6;margin:0 0 1.25rem;max-width:38ch">Something broke while loading this. Quote the id above if you tell us about it.</p>
+        <p style="margin:0"><a style="color:var(--bc);border-bottom:1px solid var(--rule);text-decoration:none;font-size:13px">← Polyphony</a></p>
+      </div>
+      <p class="text-[11px] leading-relaxed dim mt-2">What a reader sees if the flag is ever unset. Its own state rather than "the same page minus a div" — the layout has to stand up without the block carrying it.</p></div>
+
+  </div>
+</section>
+
+</body>
+</html>

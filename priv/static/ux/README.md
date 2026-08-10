@@ -23,6 +23,7 @@ CSS, no behaviour. Interactivity gets rewired server-side, so what's being hande
 | `polyphony-browse.html` | Published campaigns, the reading surface, perspectives, forking |
 | `polyphony-settings-auth.html` | Account, spending caps, sign-in, signup |
 | `polyphony-admin.html` | Moderation queue, reports, take-downs, invites, roles |
+| `polyphony-error.html` | The error page — 404, both 403s, 500 with and without detail, and today's page kept for comparison |
 | `archive/` | Superseded explorations. Kept for reasoning, not for building. |
 
 **Open the files with `polyphony-kit.css` beside them** or they render unstyled. The folder ships

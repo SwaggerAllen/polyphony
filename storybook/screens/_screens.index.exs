@@ -33,4 +33,5 @@ defmodule Storybook.Screens do
   def entry("bible_editor"), do: [name: "World bible"]
   def entry("campaign"), do: [name: "Campaign"]
   def entry("admin"), do: [name: "Moderation"]
+  def entry("error"), do: [name: "Error"]
 end
