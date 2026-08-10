@@ -1,0 +1,384 @@
+defmodule Polyphony.BranchingTest do
+  @moduledoc """
+  Branches as an author-facing thing (STR-8): the campaign-level tree over
+  `Fork.fork/3`'s scene streams.
+
+  These tests go through `register_fork/5` — the half every caller shares — so
+  they exercise the tree, naming, canonical, archive/delete/tombstones and the
+  divergence cursor without standing up the event store. `Fork.fork/3` itself is
+  pinned by `Polyphony.ForkTest`; `branch_from/4` is that plus this.
+  """
+  use ExUnit.Case, async: false
+
+  alias Polyphony.{Branching, Library, Owner, Repo}
+  alias Polyphony.Authoring.CharacterSheet
+  alias Polyphony.ReadModels.{Branch, BranchTombstone}
+
+  setup do
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+  end
+
+  defp owner, do: Owner.coerce(System.unique_integer([:positive]))
+
+  defp campaign(scenes, attrs \\ %{}) do
+    Library.put(%{
+      owner: owner(),
+      kind: "campaign",
+      payload:
+        Map.merge(
+          %{kind: :campaign, name: "The Salt Line", character_ids: [], scenes: scenes},
+          attrs
+        )
+    })
+  end
+
+  defp scenes_of(campaign_id),
+    do: campaign_id |> Library.get() |> Library.payload() |> Map.get(:scenes)
+
+  test "a campaign that has never branched carries no bookkeeping at all" do
+    entry = campaign(["s1"])
+    refute Branching.branched?(entry.id)
+    assert Branching.tree(entry.id) == []
+    assert Branching.line_of(entry.id, "s1") == nil
+    # The whole scenes list is the (implicit) root line's.
+    assert Branching.scenes_for(entry.id, nil) == ["s1"]
+  end
+
+  test "the first branch creates the root lazily — canonical, named for the campaign" do
+    entry = campaign(["s1", "s2"])
+    b = Branching.register_fork(entry.id, "s1", "s1-b", 3, location: "The quay")
+
+    assert [%{branch: root, depth: 0}, %{branch: ^b, depth: 1}] = Branching.tree(entry.id)
+    assert root.canonical
+    assert root.name == "The Salt Line"
+    assert root.parent_id == nil
+    assert b.parent_id == root.id
+    assert b.cut_beat == 3
+    assert b.origin_scene_id == "s1"
+    refute b.canonical
+  end
+
+  test "names default to scene · location · beat, ordinal only on collision" do
+    entry = campaign(["s1"])
+    a = Branching.register_fork(entry.id, "s1", "s1-a", 3, location: "The quay")
+    b = Branching.register_fork(entry.id, "s1", "s1-b", 3, location: "The quay")
+    c = Branching.register_fork(entry.id, "s1", "s1-c", 6, location: "The quay")
+
+    assert a.name == "The quay · beat 3"
+    assert b.name == "The quay · beat 3 (2)"
+    # A different beat is not a collision — the common case stays clean.
+    assert c.name == "The quay · beat 6"
+  end
+
+  test "the branch adopts its scene into the campaign, and scoping splits the lists" do
+    entry = campaign(["s1", "s2"])
+    b = Branching.register_fork(entry.id, "s1", "s1-b", 3, location: "The quay")
+
+    # The campaign names the new stream — both lines stay playable.
+    assert scenes_of(entry.id) == ["s1", "s2", "s1-b"]
+
+    # The hub shows one line at a time: the root gets what nobody claimed.
+    root = Branching.line_of(entry.id, "s1")
+    assert root.parent_id == nil
+    assert Branching.scenes_for(entry.id, root) == ["s1", "s2"]
+    assert Branching.scenes_for(entry.id, b) == ["s1-b"]
+    assert Branching.line_of(entry.id, "s1-b").id == b.id
+
+    # A scene opened while working in the branch joins its line.
+    Library.update_payload(entry.id, %{
+      kind: :campaign,
+      name: "The Salt Line",
+      character_ids: [],
+      scenes: ["s1", "s2", "s1-b", "s3"]
+    })
+
+    :ok = Branching.claim_scene(b.id, "s3")
+    assert Branching.scenes_for(entry.id, Branching.line_of(entry.id, "s3")) == ["s1-b", "s3"]
+    assert Branching.scenes_for(entry.id, root) == ["s1", "s2"]
+  end
+
+  test "canonical is one per campaign, and moves as a pair" do
+    entry = campaign(["s1"])
+    b = Branching.register_fork(entry.id, "s1", "s1-b", 2, location: "The quay")
+
+    :ok = Branching.set_canonical(b.id)
+
+    canon = Enum.filter(Branching.tree(entry.id), & &1.branch.canonical)
+    assert [%{branch: %{id: id}}] = canon
+    assert id == b.id
+  end
+
+  test "canonical can be neither archived nor deleted — set another line first" do
+    entry = campaign(["s1"])
+    b = Branching.register_fork(entry.id, "s1", "s1-b", 2, location: "The quay")
+    :ok = Branching.set_canonical(b.id)
+
+    assert {:error, :canonical} = Branching.archive(b.id)
+    assert {:error, :canonical} = Branching.delete(b.id)
+  end
+
+  test "archiving hides a line from the default tree and is reversible" do
+    entry = campaign(["s1"])
+    b = Branching.register_fork(entry.id, "s1", "s1-b", 2, location: "The quay")
+
+    :ok = Branching.archive(b.id)
+    refute Enum.any?(Branching.tree(entry.id), &(&1.branch.id == b.id))
+    assert Enum.any?(Branching.tree(entry.id, include_archived: true), &(&1.branch.id == b.id))
+
+    :ok = Branching.unarchive(b.id)
+    assert Enum.any?(Branching.tree(entry.id), &(&1.branch.id == b.id))
+  end
+
+  test "delete re-parents children to the grandparent and leaves a tombstone" do
+    entry = campaign(["s1"])
+    mid = Branching.register_fork(entry.id, "s1", "s1-mid", 3, location: "The quay")
+    kid = Branching.register_fork(entry.id, "s1-mid", "s1-kid", 5, location: "The counting house")
+    root = Enum.find(Branching.tree(entry.id), &(&1.depth == 0)).branch
+
+    assert {:ok, %{deleted: 1, reparented: 1}} = Branching.delete(mid.id)
+
+    # The child moved up under the grandparent and kept everything it copied.
+    tree = Branching.tree(entry.id)
+    assert %{depth: 1} = Enum.find(tree, &(&1.branch.id == kid.id))
+    assert Enum.find(tree, &(&1.branch.id == kid.id)).branch.parent_id == root.id
+    refute Enum.any?(tree, &(&1.branch.id == mid.id))
+
+    # The line's scenes left the campaign; the record survives.
+    assert scenes_of(entry.id) == ["s1", "s1-kid"]
+    assert %BranchTombstone{parent_id: parent, cut_beat: 3} = BranchTombstone.get(Repo, mid.id)
+    assert parent == root.id
+  end
+
+  test "recursive delete takes the subtree, each line leaving its own tombstone" do
+    entry = campaign(["s1"])
+    mid = Branching.register_fork(entry.id, "s1", "s1-mid", 3, location: "The quay")
+    kid = Branching.register_fork(entry.id, "s1-mid", "s1-kid", 5, location: "The counting house")
+
+    assert {:ok, %{deleted: 2, reparented: 0}} = Branching.delete(mid.id, recursive: true)
+
+    assert [%{depth: 0}] = Branching.tree(entry.id)
+    assert BranchTombstone.get(Repo, mid.id)
+    assert BranchTombstone.get(Repo, kid.id)
+    assert scenes_of(entry.id) == ["s1"]
+  end
+
+  test "a link into a deleted line resolves to the nearest surviving ancestor at the cut" do
+    entry = campaign(["s1"])
+    mid = Branching.register_fork(entry.id, "s1", "s1-mid", 3, location: "The quay")
+    kid = Branching.register_fork(entry.id, "s1-mid", "s1-kid", 5, location: "The counting house")
+    root = Enum.find(Branching.tree(entry.id), &(&1.depth == 0)).branch
+
+    assert {:ok, %{id: id}} = Branching.resolve(kid.id)
+    assert id == kid.id
+
+    # Delete the subtree: a link to the kid walks up past the mid's own tombstone
+    # and lands on the root — at the *kid's* cut, the last content the link
+    # promised that still exists.
+    {:ok, _} = Branching.delete(mid.id, recursive: true)
+    assert {:moved, %{id: root_id}, 5} = Branching.resolve(kid.id)
+    assert root_id == root.id
+
+    assert :error = Branching.resolve(-1)
+  end
+
+  test "the cursor starts at the cut and only ever moves earlier" do
+    entry = campaign(["s1"])
+    b = Branching.register_fork(entry.id, "s1", "s1-b", 4, location: "The quay")
+
+    assert Branching.cursor(b) == {"s1-b", 4}
+
+    # A later change doesn't move it.
+    :ok = Branching.notice_change(entry.id, "s1-b", 9)
+    assert Branching.cursor(reload(b)) == {"s1-b", 4}
+
+    # An earlier one does.
+    :ok = Branching.notice_change(entry.id, "s1-b", 2)
+    assert Branching.cursor(reload(b)) == {"s1-b", 2}
+  end
+
+  test "the cursor moves across scenes by the line's own order" do
+    entry = campaign(["s1", "s2"])
+    # Branch, then grow the line to two scenes.
+    b = Branching.register_fork(entry.id, "s1", "b-first", 3, location: "The quay")
+
+    Library.update_payload(entry.id, %{
+      kind: :campaign,
+      name: "The Salt Line",
+      character_ids: [],
+      scenes: ["s1", "s2", "b-first", "b-second"]
+    })
+
+    :ok = Branching.claim_scene(b.id, "b-second")
+
+    # A change in the later scene, at a *lower* beat, is still later than the
+    # cursor sitting in the earlier scene.
+    :ok = Branching.notice_change(entry.id, "b-second", 1)
+    assert Branching.cursor(reload(b)) == {"b-first", 3}
+
+    # Deleting content back in the first scene pulls it earlier.
+    :ok = Branching.notice_change(entry.id, "b-first", 0)
+    assert Branching.cursor(reload(b)) == {"b-first", 0}
+  end
+
+  defp reload(branch), do: Polyphony.ReadModels.Branch.get(Repo, branch.id)
+
+  # ── Copy-on-branch ─────────────────────────────────────────────────────────
+
+  defp character(owner, name) do
+    Library.put(%{owner: owner, kind: "character", payload: %CharacterSheet{name: name}})
+  end
+
+  defp bible(owner) do
+    Library.put(%{
+      owner: owner,
+      kind: "world_bible",
+      payload: %Polyphony.Authoring.WorldBible{name: "Saltmarch", cover: "A drowned county."}
+    })
+  end
+
+  defp peopled_campaign do
+    o = owner()
+    wren = character(o, "Wren Ashgrove")
+    ilias = character(o, "Ilias Vane")
+    world = bible(o)
+
+    entry =
+      Library.put(%{
+        owner: o,
+        kind: "campaign",
+        payload: %{
+          kind: :campaign,
+          name: "The Salt Line",
+          character_ids: [wren.id, ilias.id],
+          bible_id: world.id,
+          scenes: ["s1"]
+        }
+      })
+
+    {entry, [wren, ilias], world}
+  end
+
+  test "a branch copies the cast and world, and shares nothing" do
+    {entry, [wren, ilias], world} = peopled_campaign()
+
+    copies = Branching.prepare_line(entry.id, "s1")
+
+    # Two new people and a new world exist; the originals are untouched.
+    assert map_size(copies.character_map) == 2
+    assert copies.bible_id != to_string(world.id)
+
+    copied_wren = Library.get(copies.character_map[to_string(wren.id)])
+    assert %CharacterSheet{name: "Wren Ashgrove"} = Library.payload(copied_wren)
+    refute copied_wren.id in [wren.id, ilias.id]
+
+    b =
+      Branching.register_fork(entry.id, "s1", "s1-b", 3,
+        location: "The quay",
+        copies: copies
+      )
+
+    assert b.character_ids == copies.character_ids
+    assert b.bible_id == copies.bible_id
+
+    # The copy knows who it is: the original's id, as a flat persona tag.
+    assert Branching.persona_of(copied_wren) == to_string(wren.id)
+    # An original is its own persona — a sheet with no tag is the person.
+    assert Branching.persona_of(wren) == to_string(wren.id)
+  end
+
+  test "copies of copies keep the original persona, so identity is a join, not a walk" do
+    {entry, [wren, _ilias], _world} = peopled_campaign()
+
+    first = Branching.prepare_line(entry.id, "s1")
+    a = Branching.register_fork(entry.id, "s1", "s1-a", 3, location: "The quay", copies: first)
+
+    second = Branching.prepare_line(entry.id, "s1-a")
+
+    # The second cut copies the first line's Wren…
+    a_wren = first.character_map[to_string(wren.id)]
+    assert Map.has_key?(second.character_map, a_wren)
+    refute Map.has_key?(second.character_map, to_string(wren.id))
+
+    _b =
+      Branching.register_fork(entry.id, "s1-a", "s1-b", 5,
+        location: "The counting house",
+        copies: second
+      )
+
+    # …and the copy-of-a-copy still answers to the original persona, verbatim.
+    b_wren = second.character_map[a_wren]
+    assert Branching.persona_of(b_wren) == to_string(wren.id)
+
+    # So translation is persona equality, any direction, no tree in sight:
+    assert Branching.head_map([wren.id], [b_wren]) == %{to_string(wren.id) => b_wren}
+    assert Branching.head_map([b_wren], [wren.id]) == %{b_wren => to_string(wren.id)}
+    assert Branching.head_map([b_wren], [a_wren]) == %{b_wren => a_wren}
+
+    # Which is also why deleting the intermediate line changes nothing: the tag
+    # lives on the sheets, and nothing ever walks the branch rows to answer it.
+    {:ok, _} = Branching.delete(a.id)
+    assert Branching.head_map([wren.id], [b_wren]) == %{to_string(wren.id) => b_wren}
+  end
+
+  test "deleting a line trashes its copies of the cast and world" do
+    {entry, _cast, _world} = peopled_campaign()
+
+    copies = Branching.prepare_line(entry.id, "s1")
+    b = Branching.register_fork(entry.id, "s1", "s1-b", 3, location: "The quay", copies: copies)
+
+    {:ok, _} = Branching.delete(b.id)
+
+    for id <- copies.character_ids ++ [copies.bible_id] do
+      copy = Library.get(id, include_deleted: true)
+      assert copy == nil or copy.deleted_at != nil
+    end
+  end
+
+  # ── The shared past ────────────────────────────────────────────────────────
+
+  test "a line's scenes are the shared past plus its own" do
+    entry = campaign(["s1", "s2", "s3"])
+    b = Branching.register_fork(entry.id, "s2", "s2-b", 3, location: "The quay")
+
+    root = Enum.find(Branching.tree(entry.id), &(&1.depth == 0)).branch
+
+    # The branch remembers s1 — played before its origin scene — then its own copy.
+    assert Branching.scenes_for(entry.id, b) == ["s1", "s2-b"]
+    # The root keeps its whole story; the branch's copy is not in it.
+    assert Branching.scenes_for(entry.id, root) == ["s1", "s2", "s3"]
+  end
+
+  test "a change to a shared-past scene moves every line's cursor it is earlier than" do
+    entry = campaign(["s1", "s2", "s3"])
+    b = Branching.register_fork(entry.id, "s2", "s2-b", 3, location: "The quay")
+    root = Enum.find(Branching.tree(entry.id), &(&1.depth == 0)).branch
+
+    # Root has no cursor yet; the branch's sits at its cut.
+    assert Branching.cursor(root) == nil
+    assert Branching.cursor(reload(b)) == {"s2-b", 3}
+
+    # Deleting content in s1 changes the past both lines share.
+    :ok = Branching.notice_change(entry.id, "s1", 0)
+    assert Branching.cursor(reload(root)) == {"s1", 0}
+    assert Branching.cursor(reload(b)) == {"s1", 0}
+  end
+
+  test "a link naming a deleted line's scene resolves through the tombstone" do
+    entry = campaign(["s1", "s2"])
+    b = Branching.register_fork(entry.id, "s2", "s2-b", 3, location: "The quay")
+    root = Enum.find(Branching.tree(entry.id), &(&1.depth == 0)).branch
+
+    # While the line lives, the scene answers with it.
+    assert {:ok, %Branch{id: id}} = Branching.resolve_scene(entry.id, "s2-b")
+    assert id == b.id
+
+    {:ok, _} = Branching.delete(b.id)
+
+    # Gone: the tombstone knows the scenes, the walk lands on the ancestor, and
+    # the landing is the origin scene — the last content the link promised.
+    assert {:moved, %Branch{id: rid}, "s2"} = Branching.resolve_scene(entry.id, "s2-b")
+    assert rid == root.id
+
+    assert :error = Branching.resolve_scene(entry.id, "never-existed")
+  end
+end

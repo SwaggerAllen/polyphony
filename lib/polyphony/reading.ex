@@ -97,6 +97,24 @@ defmodule Polyphony.Reading do
   end
 
   @doc """
+  Remember that this reader chose to stay on `line_id` when the published story
+  moved on (STR-8). The continue-reading-diverged prompt appears **once per line**:
+  carrying on is an answer, and asking again next session would be nagging.
+  """
+  @spec stay(term(), term(), term(), keyword()) :: :ok
+  def stay(reader, published_id, line_id, opts \\ []) do
+    case entry_for(reader, published_id, opts) do
+      nil ->
+        :ok
+
+      entry ->
+        payload = entry |> Library.payload() |> Map.put(:stayed_line_id, to_string(line_id))
+        {:ok, _} = Library.update_payload(entry.id, payload, opts)
+        :ok
+    end
+  end
+
+  @doc """
   Say a reader reached the end. Distinct from `mark/4` at the last scene, because
   "finished it in March" is a different row from "partway through the last scene".
   """
@@ -251,9 +269,9 @@ defmodule Polyphony.Reading do
   and it made the whole module read as a query. Here it sits with the rest of the
   reading side, which is where a read belongs.
   """
-  @spec scene(Snapshot.t() | map(), term(), Publication.mode()) ::
+  @spec scene(Snapshot.t() | map(), term(), Publication.mode(), keyword()) ::
           {:ok, [struct()]} | {:error, :not_offered}
-  def scene(snapshot, scene_id, mode) do
+  def scene(snapshot, scene_id, mode, opts \\ []) do
     pub = Session.publication(snapshot)
 
     if Publication.offers?(pub, mode) do
@@ -262,7 +280,13 @@ defmodule Polyphony.Reading do
       member_at? =
         events |> MembershipSet.from_events() |> MembershipSet.member_at_fun()
 
-      {:ok, Visibility.project(events, Publication.viewer(pub, mode), member_at?)}
+      # `:viewer` overrides the projection identity while the *grant* stays the
+      # publication's (STR-8): on a non-canonical line the granted head is the
+      # same person under a different library id — copy-on-branch — so the caller
+      # translates the id and the offer check above still answers for the grant.
+      viewer = Keyword.get(opts, :viewer) || Publication.viewer(pub, mode)
+
+      {:ok, Visibility.project(events, viewer, member_at?)}
     else
       {:error, :not_offered}
     end

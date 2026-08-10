@@ -39,7 +39,9 @@ defmodule Polyphony.Edit do
   the corrected packet landed (the branch, when forked). `{:error,
   :packet_not_found}` if the character has no packet in the beat.
 
-  Opts (for `:invalid`) pass to the fork: `:label`, `:new_scene_id`.
+  Opts (for `:invalid`) pass to the fork: `:label`, `:new_scene_id`, and
+  `:character_map` — copy-on-branch (STR-8) re-points the copied prefix at the
+  branch's own cast, and an edit that branches is a branch.
   """
   @spec edit(term(), integer(), term(), struct(), :valid | :invalid, keyword()) ::
           {:ok, map()} | {:error, :packet_not_found}
@@ -60,14 +62,43 @@ defmodule Polyphony.Edit do
       # Preserve the original timeline on its own branch; apply the edit on a fork
       # taken through the edit beat, discarding what conditioned on the edited turn
       # (its in-beat tail; later beats never crossed the fork).
-      {:ok, branch} = Fork.fork(scene_id, beat, Keyword.take(opts, [:label, :new_scene_id]))
-      {:ok, branch_tail} = tail(branch, beat, character_id)
+      {:ok, branch} =
+        Fork.fork(scene_id, beat, Keyword.take(opts, [:label, :new_scene_id, :character_map]))
+
+      # Copy-on-branch re-pointed the copied prefix at the branch's own cast, so
+      # from here the edit talks about the copy: the tail, the supersedes and the
+      # corrected commit all key on the mapped id, and the correction's addressees
+      # move with it.
+      map = Keyword.get(opts, :character_map, %{})
+      branch_char = Map.get(map, to_string(character_id), character_id)
+
+      {:ok, branch_tail} = tail(branch, beat, branch_char)
 
       Enum.each(branch_tail, fn {char, pid} -> supersede(branch, beat, char, pid) end)
-      new_id = commit_corrected(branch, beat, character_id, corrected)
+      new_id = commit_corrected(branch, beat, branch_char, remap_addressees(corrected, map))
 
       {:ok, %{scene_id: branch, packet_id: new_id, forked: true, parent_scene_id: scene_id}}
     end
+  end
+
+  # The corrected packet arrived addressed in the parent's ids; on the branch those
+  # people are the copies.
+  defp remap_addressees(packet, map) when map_size(map) == 0, do: packet
+
+  defp remap_addressees(%{moves: moves} = packet, map) do
+    %{
+      packet
+      | moves:
+          Enum.map(moves, fn move ->
+            case Map.get(move, :addressed_to) do
+              ids when is_list(ids) ->
+                %{move | addressed_to: Enum.map(ids, &Map.get(map, to_string(&1), &1))}
+
+              _ ->
+                move
+            end
+          end)
+    }
   end
 
   # ── Primitives ────────────────────────────────────────────────────────────

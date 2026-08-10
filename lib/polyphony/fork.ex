@@ -26,7 +26,10 @@ defmodule Polyphony.Fork do
   Fork `parent_scene_id` at `through_beat`, keeping events **through** that beat
   and diverging after. Returns `{:ok, new_scene_id}`.
 
-  Opts: `:label` (branch label), `:new_scene_id` (override the generated id).
+  Opts: `:label` (branch label), `:new_scene_id` (override the generated id), and
+  `:character_map` (`%{old_character_id => new_character_id}`) — copy-on-branch
+  copies the cast too (STR-8), and the copied prefix has to speak with the copied
+  people's ids or the branch's arc would keep reaching the original cast's queue.
   """
   @spec fork(term(), integer(), keyword()) :: {:ok, term()} | {:error, :unknown_scene}
   def fork(parent_scene_id, through_beat, opts \\ []) do
@@ -38,11 +41,12 @@ defmodule Polyphony.Fork do
 
       events ->
         new_scene_id = opts[:new_scene_id] || gen_id(parent_scene_id)
+        character_map = opts[:character_map] || %{}
 
         prefix =
           events
           |> Enum.filter(&keep?(&1, through_beat))
-          |> Enum.map(&rewrite(&1, parent_scene_id, new_scene_id))
+          |> Enum.map(&rewrite(&1, parent_scene_id, new_scene_id, character_map))
 
         :ok =
           App.dispatch(%ForkScene{
@@ -75,10 +79,36 @@ defmodule Polyphony.Fork do
 
   # ── Re-pointing events onto the new stream ────────────────────────────────
 
-  defp rewrite(event, old_scene, new_scene) do
+  defp rewrite(event, old_scene, new_scene, character_map) do
     event
     |> repoint_scene(new_scene)
     |> repoint_packet(old_scene, new_scene)
+    |> repoint_characters(character_map)
+  end
+
+  # Copy-on-branch: every character reference in the copied prefix moves to the
+  # branch's own copy of that character. Field-agnostic on purpose — ids appear as
+  # `character_id`, `speaker_id`, inside `addressed_to` and `order` lists — so the
+  # walk maps any value (or list element) the map knows, rather than keeping a
+  # field list that rots when an event grows one.
+  defp repoint_characters(event, map) when map_size(map) == 0, do: event
+
+  defp repoint_characters(event, map) do
+    event
+    |> Map.from_struct()
+    |> Enum.reduce(event, fn
+      {key, value}, acc when is_binary(value) ->
+        case Map.get(map, value) do
+          nil -> acc
+          new -> Map.put(acc, key, new)
+        end
+
+      {key, value}, acc when is_list(value) ->
+        Map.put(acc, key, Enum.map(value, &Map.get(map, &1, &1)))
+
+      _other, acc ->
+        acc
+    end)
   end
 
   defp repoint_scene(event, new_scene) do

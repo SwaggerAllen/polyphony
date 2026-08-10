@@ -1,6 +1,6 @@
 # Browse
 
-<!-- rev: 5 -->
+<!-- rev: 6 -->
 
 | | |
 |---|---|
@@ -41,6 +41,13 @@ stranger can sit down with.
   is not evicting the people inside, and the reading shelf makes the same promise. Pulling
   it back to private is the real withdrawal, and that shuts the door on everyone: the story
   goes as unreachable here as it reads on the shelf.
+- **A reader is never moved without asking.** Canonical can change under somebody who is
+  halfway through, and the tempting answer is to quietly land them where the new line still
+  matches. It is the wrong one: being moved is indistinguishable from having misremembered,
+  and a reader who loses their place learns not to trust the place. So the position always
+  stands, the page **says** the line is no longer the current one, and switching is a thing
+  the reader does. The pill and the continue-reading prompt are the only two mechanisms, and
+  both are offers.
 - **You may take a copy of anything you may read.** Not only what is listed: a world shared
   by link is a world somebody meant you to have. What you may *not* read you may not copy —
   taking a copy is reading it and keeping it, so it cannot be the looser of the two.
@@ -300,6 +307,90 @@ says so, because its author follows the same link and a silent disappearance is 
 the news. An unpublished story and an **unlisted story opened without its link** both give
 the same neutral answer — *this link doesn't lead anywhere any more* — because telling them
 apart would tell a stranger which ids are stories.
+
+### `reading_off_canon` — Reading a line that isn't the current one
+
+A pill saying this version isn't the one the author is publishing now. It sits **on the second
+row of the header, to the right of the perspective control** — the slot the branch selector
+occupies on play and the campaign hub. Same position and the same question, *which line is
+this*; a reader has no branch to choose, so what fills it is a statement rather than a picker.
+See `play.md`'s perspective-control section.
+
+**Neutral, not gold.** Gold marks canon, and a reader following a link they were sent is
+exactly where somebody meant them to be. This is a fact, not a warning.
+
+Tapping it explains and offers the switch, which lands them at the **last point the two lines
+share** — everything before it is identical, so there is no reason to make anybody read it
+twice.
+
+Reachable two ways, and the copy should not try to distinguish them: they followed a link into
+a non-canonical line, or they were reading this line when it stopped being canonical. The
+answer is the same either way.
+
+### `continue_reading_diverged` — Picking up a story that has moved on
+
+The prompt when somebody taps *continue reading* on a story whose canonical line is no longer
+the one their position is in. A dialog rather than a pill, because *continue reading* is a
+request to be put somewhere and this is the moment to say the obvious place has changed.
+
+**Reading the current version is the primary action, and not out of deference to the author.**
+A non-canonical line is one nobody is writing any more: it ends wherever it was left, and a
+reader who carries on in it will simply run out of story. The recommendation is about which
+version has more of it.
+
+Saying that plainly is what makes the default honest rather than a nudge — *you're partway
+through a version she stopped writing; it ends where she left it.* Naming the shared point does
+double duty: it is the reassurance that they keep their place, and the concrete reason the
+switch is worth taking.
+
+**Carrying on stays available and unstigmatised.** Somebody may want to finish the version they
+started, and the dialog should not treat that as a mistake.
+
+It appears once per line, not once per visit. Somebody who chooses to carry on has answered
+the question, and asking again on their next session would be nagging.
+
+### `scene_gone` — A link to a scene that isn't there any more
+
+A link can name a scene that has since been deleted from its line. The reader lands at that
+line's **earliest change** — the cursor — rather than at an error, because that is the last
+point they can trust: everything after it may have moved, and the deleted scene is proof that
+something did.
+
+It says what happened without dressing it up: the scene the link named is gone, and this is
+where the line was still the story they were sent. **Worth watching:** if the cursor sits far
+earlier than the link did, this drops somebody a long way back. The alternative is worse — the
+nearest surviving scene may itself have been rewritten — but if this lands badly in practice
+it is the rule to revisit rather than the state.
+
+Distinct from `bookmark_gone`, which is a whole story disappearing, and from `branch_gone`,
+where the line itself is the thing that went.
+
+### `branch_gone` — A link to a version that was deleted
+
+**Not a 404.** `share.md` settles the principle: a dead link is the common case, tokens and
+links keep circulating long after what they named, and the person holding one did nothing
+wrong. `taken_down` already refuses to 404 for the same reason. A deleted branch is that case
+exactly — somebody was sent a link to a version an author later tidied up.
+
+So deleting a branch **leaves a record**: the line's id, its parent, and the beat it was cut
+at. Small, permanent, and the thing that makes the link answerable at all.
+
+**The reader lands on the nearest surviving ancestor, at the cut point** — not on canonical.
+The parent is what they were actually reading: everything up to the cut is identical in it, so
+that is the last content the link promised them that still exists. Canonical may be a line
+that diverged long before this one and has nothing to do with what they were sent.
+
+If the parent was deleted too, the walk continues upward. It always terminates, because
+canonical can be neither deleted nor archived — see `campaign.md`.
+
+The copy says the version is gone and that this is where it came from, and it does not
+apologise or imply the author did something wrong. Deleting an abandoned line is tidying, not
+retraction, and a reader who was sent a link to one is not owed an explanation of somebody
+else's housekeeping.
+
+Where they land may itself be off-canon, in which case `reading_off_canon`'s pill applies on
+top. The two states compose rather than competing: one says the version you asked for is gone,
+the other says the one you got isn't the current one.
 
 ### `reporting` — Reporting something
 

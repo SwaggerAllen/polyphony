@@ -51,11 +51,28 @@ defmodule Polyphony.Library.Snapshot do
             # unreadable-scene pre-flight (§3.1c-ii) — none of which can ask the author's
             # live campaign, because that's the coupling publishing exists to break.
             scenes: [],
+            # Which line these scenes are (STR-8): the canonical branch's id at publish,
+            # nil for a campaign that has never branched. Only canonical publishes — a
+            # branch is a line inside the author's campaign, where a fork is a reader's
+            # own campaign — so this is a single value, not a choice.
+            branch_id: nil,
+            # The campaign's *other* lines at publish, each `%{id:, name:, parent_id:,
+            # cut_beat:, scenes: [...]}` with scenes shaped like `scenes` above. Not
+            # listed on the front page — only canonical publishes — but reachable by a
+            # link somebody was sent: the reader is never moved without asking, so a
+            # position naming a non-canonical line keeps working and the off-canon pill
+            # says what it is. Frozen here so the reader never asks the live campaign.
+            lines: [],
             include_proposed: false,
             derived_from_id: nil,
             derived_from_version: nil
 
-  @type pinned_character :: %{source_id: term(), source_version: integer(), sheet: map()}
+  @type pinned_character :: %{
+          optional(:persona) => term(),
+          source_id: term(),
+          source_version: integer(),
+          sheet: map()
+        }
   @type t :: %__MODULE__{
           campaign_id: term(),
           published_beat: integer() | nil,
@@ -91,6 +108,8 @@ defmodule Polyphony.Library.Snapshot do
       content: Map.get(attrs, :content),
       publication: PolyphonyCore.Publication.from(Map.get(attrs, :publication)),
       scenes: Map.get(attrs, :scenes, []),
+      branch_id: Map.get(attrs, :branch_id),
+      lines: Map.get(attrs, :lines, []),
       include_proposed: include_proposed
     }
   end

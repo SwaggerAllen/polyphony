@@ -82,7 +82,9 @@ defmodule Storybook.Screens.Play do
         tone: nil
       },
       progress: %{phase: :idle, subject: nil, beat: nil},
-      writing_in: MapSet.new()
+      writing_in: MapSet.new(),
+      branch: nil,
+      branching: nil
     }
   end
 
@@ -152,6 +154,21 @@ defmodule Storybook.Screens.Play do
             said(1, "wren", "Nothing came in tonight."),
             thought(1, "wren", "Which is its own kind of answer.")
           ]
+        }
+      ),
+      v(
+        :branching,
+        "About to take a second run at it. The confirm names the beat, which the divider deliberately does not, then the three things people get wrong: what comes with you, where you end up, and that the original is untouched. No *are you sure* — nothing is destroyed and walking away undoes it, so deletion's grammar would misrepresent the act. The header carries the branch pill because this campaign already has more than one line; its dot is gold here because this is the canonical one.",
+        %{
+          branch: %{name: "The Salt Line", canon?: true},
+          branching: 3,
+          messages:
+            scene() ++
+              [
+                said(3, "wren", "Say it was nothing, then. Sign for it."),
+                said(4, "ilias", "He signs. The pen takes longer than the sentence did.")
+              ],
+          next_beat: 5
         }
       ),
       v(

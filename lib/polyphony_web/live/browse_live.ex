@@ -41,7 +41,7 @@ defmodule PolyphonyWeb.BrowseLive do
   """
   use PolyphonyWeb, :live_view
 
-  alias Polyphony.{Accounts, Library, Moderation, Permissions, Reading}
+  alias Polyphony.{Accounts, Branching, Library, Moderation, Permissions, Reading}
   alias Polyphony.Owner
   alias PolyphonyCore.Publication
   alias Polyphony.Reading.Session
@@ -51,7 +51,15 @@ defmodule PolyphonyWeb.BrowseLive do
 
   def mount(_params, _session, socket) do
     {:ok,
-     assign(socket, page_title: "Browse", reporting: false, sort: "any", who: nil, info: false)}
+     assign(socket,
+       page_title: "Browse",
+       reporting: false,
+       sort: "any",
+       who: nil,
+       info: false,
+       off_canon_open: false,
+       diverged: nil
+     )}
   end
 
   # Everything is in the URL: which story, which scene, which perspective. A reading
@@ -95,6 +103,33 @@ defmodule PolyphonyWeb.BrowseLive do
     |> assign(gone: gone_reason(socket.assigns.story_id, entry, story))
     |> assign(bookmark: bookmark_for(socket, story))
     |> assign(stories: story_rows(), worlds: world_rows())
+    |> assign_diverged_pending()
+  end
+
+  # Is this reader's place in a line the story has moved on from? Asked once per
+  # line, not once per visit: a bookmark that recorded *stay* for this line has
+  # answered, and the dialog stays away (browse.md, `continue_reading_diverged`).
+  defp assign_diverged_pending(socket) do
+    %{snapshot: snapshot, bookmark: bookmark} = socket.assigns
+
+    pending =
+      with %{} = snap <- snapshot,
+           %{scene_id: sid} = b when not is_nil(sid) <- bookmark,
+           %{} = line <- Session.line_for_scene(snap, sid),
+           true <- to_string(Map.get(line, :id)) != to_string(b.stayed_line_id || "") do
+        shared = Session.shared_point(snap, line)
+
+        %{
+          line_id: Map.get(line, :id),
+          shared_point: (shared && Map.get(shared, :title)) || "the beginning",
+          shared_scene_id: shared && Session.scene_id(shared),
+          author: socket.assigns.row && socket.assigns.row.author
+        }
+      else
+        _ -> nil
+      end
+
+    assign(socket, diverged_pending: pending, diverged: nil)
   end
 
   # A link that named a story and didn't get one has to say so. Dropping the reader on
@@ -212,9 +247,17 @@ defmodule PolyphonyWeb.BrowseLive do
 
         # The URL wins, then where they were last time, then what the publication leads
         # with. Coming back into a different head is coming back to a different story,
-        # so a bookmark is a stronger signal than a default (§3.1e).
+        # so a bookmark is a stronger signal than a default (§3.1e) — and a head that
+        # names another line's copy of the same person still counts as that head,
+        # via the persona join, before anything falls back to a default.
         mode =
-          [Publication.from_param(as), bookmarked_mode(socket), Publication.default_mode(pub)]
+          [
+            Publication.from_param(as),
+            equivalent_head(snapshot, Publication.from_param(as)),
+            bookmarked_mode(socket),
+            equivalent_head(snapshot, bookmarked_mode(socket)),
+            Publication.default_mode(pub)
+          ]
           |> Enum.find(&(&1 && Publication.offers?(pub, &1)))
 
         assign(socket, pub: pub, mode: mode)
@@ -222,7 +265,16 @@ defmodule PolyphonyWeb.BrowseLive do
   end
 
   defp load_scene(%{assigns: %{snapshot: nil}} = socket),
-    do: assign(socket, events: [], scene: nil, gap: nil, names: %{}, who: nil)
+    do:
+      assign(socket,
+        events: [],
+        scene: nil,
+        gap: nil,
+        names: %{},
+        who: nil,
+        off_canon: nil,
+        gone_notice: nil
+      )
 
   defp load_scene(%{assigns: %{scene_id: nil}} = socket),
     do:
@@ -230,29 +282,204 @@ defmodule PolyphonyWeb.BrowseLive do
         events: [],
         scene: nil,
         gap: nil,
-        names: Session.names(socket.assigns.snapshot)
+        names: Session.names(socket.assigns.snapshot),
+        off_canon: nil,
+        gone_notice: nil
       )
 
+  # Which line is this? The published contents are the canonical line; the other
+  # lines travel unlisted in the snapshot, reachable by a link somebody was sent;
+  # a scene in neither is gone, and the answer depends on *how* it went.
   defp load_scene(socket) do
-    %{snapshot: snapshot, scene_id: scene_id, mode: mode} = socket.assigns
+    %{snapshot: snapshot, scene_id: scene_id} = socket.assigns
 
-    scene =
-      snapshot
-      |> Session.scenes()
-      |> Enum.find(&(to_string(Map.get(&1, :id)) == to_string(scene_id)))
+    case Session.line_for_scene(snapshot, scene_id) do
+      :canonical ->
+        socket
+        |> assign(off_canon: nil, gone_notice: nil)
+        |> load_scene_at(scene_id, nil)
 
-    gap = scene && Session.gap(snapshot, scene, mode)
+      %{} = line ->
+        socket |> assign(gone_notice: nil) |> load_line_scene(scene_id, line)
+
+      nil ->
+        resolve_gone(socket)
+    end
+  end
+
+  # Reading a line that isn't the current one (browse.md, `reading_off_canon`):
+  # the pill states it, neutral rather than gold — a reader following a link they
+  # were sent is exactly where somebody meant them to be.
+  defp load_line_scene(socket, scene_id, line) do
+    shared = Session.shared_point(socket.assigns.snapshot, line)
+
+    socket
+    |> assign(
+      off_canon: %{
+        author: socket.assigns.row.author,
+        shared_point: (shared && Map.get(shared, :title)) || "the beginning",
+        shared_scene_id: shared && Session.scene_id(shared),
+        open: socket.assigns.off_canon_open
+      }
+    )
+    |> load_scene_at(scene_id, line)
+  end
+
+  defp load_scene_at(socket, scene_id, line) do
+    %{snapshot: snapshot, mode: mode} = socket.assigns
+
+    scenes = if line, do: Map.get(line, :scenes) || [], else: Session.scenes(snapshot)
+    scene = Enum.find(scenes, &(Session.scene_id(&1) == to_string(scene_id)))
+
+    # Copy-on-branch means this line's people are different library ids for the
+    # same folk. The grant is checked in canonical's ids (the publication's), the
+    # projection runs in the line's own — and the translation is a flat persona
+    # join, so it survives any intermediate line being deleted.
+    {heads, unheads} = line_maps(snapshot, line)
+
+    gap = scene && Session.gap(snapshot, uncopy_cast(scene, unheads), mode)
 
     events =
-      case scene && gap == nil && Reading.scene(snapshot, scene_id, mode) do
+      case scene && gap == nil &&
+             Reading.scene(snapshot, scene_id, mode, viewer: local_viewer(snapshot, mode, heads)) do
         {:ok, events} -> events
         _ -> []
       end
 
+    names = Map.merge(Session.names(snapshot), (line && Map.get(line, :names)) || %{})
+
     socket
     # A new scene closes an open card — it was about somebody in the one you left.
-    |> assign(scene: scene, gap: gap, events: events, names: Session.names(snapshot), who: nil)
+    |> assign(scene: scene, gap: gap, events: events, names: names, who: nil)
     |> mark_place()
+  end
+
+  defp uncopy_cast(scene, unheads) when map_size(unheads) == 0, do: scene
+
+  defp uncopy_cast(scene, unheads),
+    do: Map.put(scene, :cast, Enum.map(Map.get(scene, :cast) || [], &Map.get(unheads, &1, &1)))
+
+  defp local_viewer(snapshot, mode, heads) do
+    case Publication.viewer(Session.publication(snapshot), mode) do
+      {:character, id} -> {:character, Map.get(heads, to_string(id), id)}
+      viewer -> viewer
+    end
+  end
+
+  # `%{canonical_id => persona}` for the pinned cast. A pinned character without
+  # a persona (published before the field) is their own — same rule as the sheet.
+  defp canon_personas(snapshot) do
+    for c <- Map.get(snapshot, :characters) || [], into: %{} do
+      id = to_string(Map.get(c, :source_id))
+      {id, to_string(Map.get(c, :persona) || id)}
+    end
+  end
+
+  # The two directions of the persona join for a line: `heads` (canonical id →
+  # this line's id) and `unheads` (back). Empty maps for the canonical line
+  # itself, and for lines published before personas — identity fallback.
+  defp line_maps(_snapshot, nil), do: {%{}, %{}}
+
+  defp line_maps(snapshot, line) do
+    by_persona = snapshot |> canon_personas() |> Map.new(fn {id, p} -> {p, id} end)
+
+    unheads =
+      for {local, persona} <- Map.get(line, :personas) || %{},
+          canon = Map.get(by_persona, to_string(persona)),
+          canon != nil,
+          into: %{},
+          do: {to_string(local), canon}
+
+    {Map.new(unheads, fn {local, canon} -> {canon, local} end), unheads}
+  end
+
+  # A granted head is a person, not a library id: a bookmark (or a stale link)
+  # whose perspective names another line's copy still deserves its head — same
+  # persona, different id — rather than falling back to somebody else's default.
+  defp equivalent_head(snapshot, {:character, id}) do
+    canon = canon_personas(snapshot)
+    by_persona = Map.new(canon, fn {cid, p} -> {p, cid} end)
+
+    everyone =
+      Enum.reduce(Session.lines(snapshot), canon, fn line, acc ->
+        Enum.reduce(Map.get(line, :personas) || %{}, acc, fn {local, p}, acc ->
+          Map.put(acc, to_string(local), to_string(p))
+        end)
+      end)
+
+    with p when not is_nil(p) <- Map.get(everyone, to_string(id)),
+         canon_id when not is_nil(canon_id) <- Map.get(by_persona, p) do
+      {:character, canon_id}
+    else
+      _ -> nil
+    end
+  end
+
+  defp equivalent_head(_snapshot, _mode), do: nil
+
+  # The link names a scene the snapshot no longer tells, on any line. Two honest
+  # answers, neither of them a 404 (browse.md, `scene_gone` / `branch_gone`) —
+  # the branch read models are consulted for *where things went*, never for
+  # content: the snapshot stays the only thing a reader is shown.
+  defp resolve_gone(socket) do
+    %{snapshot: snapshot, row: row} = socket.assigns
+    campaign_id = Map.get(snapshot, :campaign_id)
+
+    case campaign_id && Branching.resolve_scene(campaign_id, socket.assigns.scene_id) do
+      # The line survives; the scene was tidied out of it. Land at the line's
+      # earliest change — the cursor — the last point the reader can trust.
+      {:ok, line} ->
+        land(socket, line.cursor_scene_id, %{kind: :scene, author: row.author})
+
+      # The line itself was deleted. The tombstone walk found the nearest
+      # surviving ancestor and the last content the link promised.
+      {:moved, _ancestor, landing_scene} ->
+        land(socket, landing_scene, %{kind: :branch, author: row.author})
+
+      # Nothing here ever held that scene — the republished-away bookmark case,
+      # answered as before: back to the front page's fallback.
+      _ ->
+        assign(socket,
+          scene: nil,
+          gap: nil,
+          events: [],
+          names: Session.names(snapshot),
+          off_canon: nil,
+          gone_notice: nil
+        )
+    end
+  end
+
+  # Land somewhere real, say what happened, and keep the two states composable:
+  # where the reader lands may itself be off-canon, in which case the pill
+  # applies on top of the notice.
+  defp land(socket, landing_scene, notice) do
+    snapshot = socket.assigns.snapshot
+
+    landing =
+      if landing_scene && Session.line_for_scene(snapshot, landing_scene) != nil do
+        to_string(landing_scene)
+      else
+        snapshot |> Session.scenes() |> List.first() |> then(&(&1 && Session.scene_id(&1)))
+      end
+
+    case landing do
+      nil ->
+        assign(socket,
+          scene: nil,
+          gap: nil,
+          events: [],
+          names: Session.names(snapshot),
+          off_canon: nil,
+          gone_notice: nil
+        )
+
+      landing ->
+        socket
+        |> assign(scene_id: landing)
+        |> load_scene()
+        |> assign(gone_notice: notice)
+    end
   end
 
   # Keeping the place is the one thing the reading shelf promises (§3.1e), so it's
@@ -334,6 +561,106 @@ defmodule PolyphonyWeb.BrowseLive do
       end
     end)
   end
+
+  # ── Which line is this (STR-8) ───────────────────────────────────────────────
+
+  # The off-canon pill explains on tap, never unprompted — it is a fact, not a
+  # warning, and the explanation lives where somebody curious would go looking.
+  def handle_event("off_canon_open", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(off_canon_open: true)
+     |> update(:off_canon, &(&1 && %{&1 | open: true}))}
+  end
+
+  def handle_event("off_canon_close", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(off_canon_open: false)
+     |> update(:off_canon, &(&1 && %{&1 | open: false}))}
+  end
+
+  # The switch lands at the last point the two lines share — everything before it
+  # is identical, so there is no reason to make anybody read it twice.
+  def handle_event("switch_to_current", _params, socket) do
+    %{story: story, snapshot: snapshot, mode: mode, off_canon: off_canon} = socket.assigns
+
+    landing =
+      (off_canon && off_canon.shared_scene_id) ||
+        snapshot |> Session.scenes() |> List.first() |> then(&(&1 && Session.scene_id(&1)))
+
+    case landing do
+      nil ->
+        {:noreply, socket |> assign(off_canon_open: false) |> push_patch(to: front_url(story))}
+
+      scene ->
+        {:noreply,
+         socket
+         |> assign(off_canon_open: false)
+         |> push_patch(to: scene_url(story, scene, mode))}
+    end
+  end
+
+  # Continue reading, on a story that has moved on: the dialog is opened by the
+  # tap, not pushed at anybody on arrival.
+  def handle_event("carry_on_diverged", _params, socket) do
+    case socket.assigns.diverged_pending do
+      nil ->
+        {:noreply, socket}
+
+      pending ->
+        {:noreply,
+         assign(socket, diverged: %{shared_point: pending.shared_point, author: pending.author})}
+    end
+  end
+
+  # Read the current version: land where the two last agree. The old position
+  # stands in the bookmark until the new scene writes over it — nothing is moved
+  # until the reader chooses.
+  def handle_event("continue_current", _params, socket) do
+    %{story: story, snapshot: snapshot, mode: mode, diverged_pending: pending} = socket.assigns
+
+    landing =
+      (pending && pending.shared_scene_id) ||
+        snapshot |> Session.scenes() |> List.first() |> then(&(&1 && Session.scene_id(&1)))
+
+    case landing do
+      nil ->
+        {:noreply, assign(socket, diverged: nil)}
+
+      scene ->
+        {:noreply,
+         socket
+         |> assign(diverged: nil, diverged_pending: nil)
+         |> push_patch(to: scene_url(story, scene, mode))}
+    end
+  end
+
+  # Carry on where I was — available and unstigmatised, and remembered per line so
+  # the question is never asked twice about the same choice.
+  def handle_event("continue_anyway", _params, socket) do
+    %{story: story, bookmark: bookmark, mode: mode, diverged_pending: pending} = socket.assigns
+
+    if socket.assigns.current_user && pending do
+      Reading.stay(Owner.of(socket.assigns.current_user), story.id, pending.line_id)
+    end
+
+    case bookmark && bookmark.scene_id do
+      nil ->
+        {:noreply, assign(socket, diverged: nil, diverged_pending: nil)}
+
+      scene ->
+        {:noreply,
+         socket
+         |> assign(diverged: nil, diverged_pending: nil)
+         |> push_patch(to: scene_url(story, scene, mode))}
+    end
+  end
+
+  # Carrying on from a landing needs no navigation — the reader is already there;
+  # the notice has said its piece.
+  def handle_event("dismiss_gone", _params, socket),
+    do: {:noreply, assign(socket, gone_notice: nil)}
 
   def handle_event("switch_mode", %{"as" => as}, socket) do
     story = socket.assigns.story
@@ -448,17 +775,26 @@ defmodule PolyphonyWeb.BrowseLive do
 
   defp author_of(_), do: "someone"
 
+  defp front_url(story), do: ~p"/browse?#{[story: story.id]}"
+
+  defp scene_url(story, scene_id, mode),
+    do: ~p"/browse?#{[story: story.id, scene: scene_id, as: mode && Publication.to_param(mode)]}"
+
   def render(assigns) do
     ~H"""
     <Screens.Browse.screen
       current_user={@current_user}
       bookmark={@bookmark}
+      diverged={@diverged}
+      diverged_pending={@diverged_pending}
       events={@events}
       gap={@gap}
       gone={@gone}
+      gone_notice={@gone_notice}
       info={@info}
       mode={@mode}
       names={@names}
+      off_canon={@off_canon}
       pub={@pub}
       reporting={@reporting}
       row={@row}

@@ -33,6 +33,7 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Repo
   alias Polyphony.ReadModels.ArcEntry, as: ReadArcEntry
   alias Polyphony.ReadModels.BuildRun
+  alias Polyphony.Branching
   alias Polyphony.Campaigns
   alias PolyphonyCore.Content.CampaignConfig
   alias PolyphonyCore.Publication
@@ -91,6 +92,14 @@ defmodule PolyphonyWeb.CampaignLive do
          # proposals is being corrected.
          gate_expanded: nil,
          gate_editing: nil,
+         # Which line the hub is scoped to (STR-8). Nil until the URL says
+         # otherwise; `assign_branch_state/1` resolves it to canonical.
+         line_id: nil,
+         line: nil,
+         branch: nil,
+         branches: [],
+         branch_navigator_open: false,
+         branch_deleting: nil,
          tab: "settings"
        )
        |> subscribe_build(entry)
@@ -109,9 +118,26 @@ defmodule PolyphonyWeb.CampaignLive do
   # The tab lives in the URL, so it's linkable, survives a reload, and back works
   # between sections of a screen that used to be one long scroll.
   def handle_params(params, _uri, socket) do
+    socket =
+      socket
+      |> assign(
+        tab: tab_param(params["tab"]),
+        # The current line and the navigator live in the URL like the tab does:
+        # the hub gained a mode, and a mode that doesn't survive a reload is a
+        # mode the header would silently lie about.
+        line_id: params["branch"],
+        branch_navigator_open: params["branches"] == "open"
+      )
+      |> assign_branch_state()
+
+    # After the line is resolved, because the viewer is validated against the
+    # cast and the cast is now the line's — a viewpoint from another line's
+    # roster must fall back rather than leak that line's secrets in this one.
     {:noreply,
      socket
-     |> assign(tab: tab_param(params["tab"]), viewer: viewer_param(socket, params))
+     |> assign(viewer: viewer_param(socket, params))
+     |> assign_arc_rows()
+     |> assign_scene_rows()
      |> assign_seen()}
   end
 
@@ -205,11 +231,112 @@ defmodule PolyphonyWeb.CampaignLive do
       groups: group_rows(owner, socket.assigns.entry.id),
       published?: Library.published?(socket.assigns.entry)
     )
+    |> assign_branch_state()
     |> assign_scene_rows()
     |> assign_arc_rows()
     |> assign_seen()
     |> preflight()
   end
+
+  # ── Branch state (STR-8) ──────────────────────────────────────────────────────
+
+  # The hub shows one branch at a time, and says which. Everything hangs off
+  # whether the campaign has ever branched: with one line there is no pill, no
+  # navigator, and no scoping — a campaign that has never branched is not a
+  # campaign with one branch.
+  defp assign_branch_state(socket) do
+    cid = socket.assigns.entry.id
+
+    if Branching.branched?(cid) do
+      tree = Branching.tree(cid)
+      line = current_line(tree, socket.assigns[:line_id])
+
+      socket
+      |> assign(
+        line: line,
+        branch: line && %{id: line.id, name: line.name, canon?: line.canonical},
+        branches: navigator_rows(socket, tree, line),
+        # Choosing a line scopes the whole hub to it: its scenes, and — through
+        # copy-on-branch — its own copies of the cast and world.
+        scenes: Branching.scenes_for(cid, line)
+      )
+      |> scope_line_assets(line)
+    else
+      assign(socket, line: nil, branch: nil, branches: [], branch_navigator_open: false)
+    end
+  end
+
+  # The hub's cast and world tabs, scoped to the line: a branch holds its own
+  # copies (made at the cut), so this is where "the Wren in one is not the Wren in
+  # the other" becomes literal — two lines never show the same sheet. The root
+  # line's copies are the campaign payload itself, which `load/1` already set.
+  defp scope_line_assets(socket, %{parent_id: parent, character_ids: ids} = line)
+       when not is_nil(parent) and ids != [] do
+    cast = ids |> Enum.map(&Library.get/1) |> Enum.reject(&is_nil/1)
+    bible = line.bible_id && Library.get(line.bible_id)
+
+    bible_payload =
+      case bible && Library.payload(bible) do
+        %WorldBible{} = b -> b
+        _ -> nil
+      end
+
+    assign(socket,
+      cast: cast,
+      # Adding somebody from the library would add them to the campaign payload —
+      # the root line's roster — so while scoped to a branch the honest offer is
+      # writing somebody new, which lands on this line's copies.
+      addable: [],
+      bible_id: bible && normalize_id(bible.id),
+      bible_name: bible_payload && bible_payload.name,
+      world: bible_payload
+    )
+  end
+
+  defp scope_line_assets(socket, _line), do: socket
+
+  # The line the URL names, falling back to canonical — the hub opens on it.
+  defp current_line(tree, line_id) do
+    branches = Enum.map(tree, & &1.branch)
+
+    Enum.find(branches, &(to_string(&1.id) == to_string(line_id))) ||
+      Enum.find(branches, & &1.canonical) ||
+      List.first(branches)
+  end
+
+  defp navigator_rows(socket, tree, line) do
+    names = Map.new(tree, fn %{branch: b} -> {b.id, b.name} end)
+
+    all_scenes =
+      (Library.payload(socket.assigns.entry) || %{})
+      |> Map.get(:scenes)
+      |> List.wrap()
+      |> MapSet.new(&to_string/1)
+
+    for %{branch: b, depth: depth} <- tree do
+      %{
+        id: b.id,
+        name: b.name,
+        made_label: made_label(b),
+        canon?: b.canonical,
+        current?: line != nil and line.id == b.id,
+        depth: depth,
+        parent_name: names[b.parent_id],
+        # A branch whose origin scene was deleted says so here, and nowhere else —
+        # lineage is the parent pointer, so nothing else is affected.
+        origin_gone?:
+          b.origin_scene_id != nil and not MapSet.member?(all_scenes, b.origin_scene_id)
+      }
+    end
+  end
+
+  # The timestamp earns its row: recall runs on *the one from Tuesday evening* far
+  # more reliably than on any generated name.
+  defp made_label(%{parent_id: nil, inserted_at: at}),
+    do: "Started #{Calendar.strftime(at, "%-d %b")}"
+
+  defp made_label(%{inserted_at: at}),
+    do: "Branched #{Calendar.strftime(at, "%-d %b, %-I:%M%P")}"
 
   # The gate made visible on the cast rows (STR-62): per-character pending arc,
   # extraction still running, extraction failed — plus the world's own band and the
@@ -877,6 +1004,11 @@ defmodule PolyphonyWeb.CampaignLive do
   # somebody's work, so it answers to ownership rather than to being signed in.
   def handle_event("delete_scene", %{"id" => scene_id}, socket) do
     owned(socket, fn ->
+      # Before the delete, while the scene still has a position: deleting a scene
+      # changes the line from that scene's start onward, so the divergence cursor
+      # moves there if it isn't already earlier (STR-8).
+      Branching.notice_change(socket.assigns.entry.id, scene_id, 0)
+
       case Campaigns.delete_scene(socket.assigns.entry.id, scene_id) do
         {:ok, %{rows: rows}} ->
           {:noreply,
@@ -894,14 +1026,152 @@ defmodule PolyphonyWeb.CampaignLive do
     end)
   end
 
+  # ── The branch navigator (STR-8) ─────────────────────────────────────────────
+
+  # The navigator's visibility lives in the URL like the tab does, so play can
+  # link straight into it and a reload lands where you were.
+  def handle_event("open_branches", _params, socket),
+    do: {:noreply, push_patch(socket, to: hub_path(socket, branches: "open"))}
+
+  def handle_event("close_branches", _params, socket),
+    do: {:noreply, socket |> assign(branch_deleting: nil) |> push_patch(to: hub_path(socket, []))}
+
+  # Choosing a branch closes the navigator and re-scopes the hub.
+  def handle_event("choose_branch", %{"id" => id}, socket) do
+    {:noreply,
+     socket
+     |> assign(line_id: id, branch_deleting: nil)
+     |> push_patch(to: hub_path(socket, branch: id))}
+  end
+
+  def handle_event("set_canonical", %{"id" => id}, socket) do
+    owned(socket, fn ->
+      case Branching.set_canonical(id) do
+        :ok ->
+          {:noreply,
+           socket
+           |> put_flash(
+             :info,
+             "That line is canonical now — it's what publishes and what the hub opens on."
+           )
+           |> assign_branch_state()
+           |> assign_scene_rows()}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Couldn't set that line canonical.")}
+      end
+    end)
+  end
+
+  def handle_event("rename_branch", %{"branch" => id, "name" => name}, socket) do
+    owned(socket, fn ->
+      case Branching.rename(id, name) do
+        :ok ->
+          {:noreply, socket |> assign_branch_state() |> assign_scene_rows()}
+
+        {:error, :empty_name} ->
+          {:noreply, put_flash(socket, :error, "A line needs a name.")}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Couldn't rename that line.")}
+      end
+    end)
+  end
+
+  def handle_event("archive_branch", %{"id" => id}, socket) do
+    owned(socket, fn ->
+      case Branching.archive(id) do
+        :ok ->
+          {:noreply,
+           socket
+           |> assign(branch_deleting: nil)
+           |> maybe_leave_line(id)
+           |> put_flash(:info, "Archived. It keeps everything and can come back.")
+           |> assign_branch_state()
+           |> assign_scene_rows()}
+
+        {:error, :canonical} ->
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "The canonical line can't be archived. Set another line canonical first."
+           )}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Couldn't archive that line.")}
+      end
+    end)
+  end
+
+  def handle_event("branch_delete_open", %{"id" => id}, socket),
+    do: {:noreply, assign(socket, branch_deleting: deleting_view(socket, id))}
+
+  def handle_event("branch_delete_cancel", _params, socket),
+    do: {:noreply, assign(socket, branch_deleting: nil)}
+
+  # Recursive is a toggle, default off, and counted — deleting a whole abandoned
+  # subtree is a real thing to want and also the destructive default that would
+  # eat work nobody meant to lose.
+  def handle_event("branch_delete_recursive", _params, socket) do
+    case socket.assigns.branch_deleting do
+      nil -> {:noreply, socket}
+      d -> {:noreply, assign(socket, branch_deleting: %{d | recursive?: not d.recursive?})}
+    end
+  end
+
+  def handle_event("branch_delete_confirm", _params, socket) do
+    owned(socket, fn ->
+      case socket.assigns.branch_deleting do
+        nil ->
+          {:noreply, socket}
+
+        d ->
+          case Branching.delete(d.id, recursive: d.recursive?) do
+            {:ok, %{deleted: deleted, reparented: reparented}} ->
+              {:noreply,
+               socket
+               |> assign(branch_deleting: nil, entry: Library.get(socket.assigns.entry.id))
+               |> maybe_leave_line(d.id)
+               |> put_flash(:info, deleted_branch_note(deleted, reparented))
+               |> load()}
+
+            {:error, :canonical} ->
+              {:noreply,
+               put_flash(
+                 socket,
+                 :error,
+                 "The canonical line can't be deleted. Set another line canonical first."
+               )}
+
+            {:error, _} ->
+              {:noreply, put_flash(socket, :error, "Couldn't delete that line.")}
+          end
+      end
+    end)
+  end
+
   def handle_event("publish", _params, socket) do
     safe(socket, fn ->
-      %{entry: entry, payload: payload, cast: cast, owner: owner} = socket.assigns
-      bible = if payload[:bible_id], do: Library.get(payload[:bible_id]) |> maybe_payload()
+      %{entry: entry, payload: payload, owner: owner} = socket.assigns
+
+      # Only canonical publishes (campaign.md): whatever line the hub happens to
+      # be scoped to, the published story is the canonical one — its scenes, its
+      # copies of the cast and world. A fork is a reader's own campaign; a branch
+      # is a line in this one, and exactly one of them is what everybody sees.
+      canonical = Branching.canonical_line(entry.id)
+      {cast, bible} = publish_assets(socket, canonical)
 
       characters =
         Enum.map(cast, fn c ->
-          %{source_id: c.id, source_version: c.version, sheet: Library.payload(c)}
+          %{
+            source_id: c.id,
+            source_version: c.version,
+            sheet: Library.payload(c),
+            # Who this is, across lines — the flat join key that keeps a granted
+            # head granted when a reader lands on a non-canonical line.
+            persona: Branching.persona_of(c)
+          }
         end)
 
       result =
@@ -916,9 +1186,15 @@ defmodule PolyphonyWeb.CampaignLive do
             content: CampaignConfig.from_payload(payload),
             # The grant travels with the published copy, since that's the thing readers
             # hold — and it is replaced wholesale on a republish, so narrowing it here
-            # narrows it for everyone reading.
-            publication: publication(socket),
-            scenes: Preflight.scenes(socket.assigns.scenes)
+            # narrows it for everyone reading. The heads were ticked on whatever line
+            # the hub was scoped to; the granted ids must be canonical's people.
+            publication: canonical_publication(socket, canonical),
+            scenes: Preflight.scenes(Branching.scenes_for(entry.id, canonical)),
+            branch_id: canonical && canonical.id,
+            # The other lines travel too — not listed, but a link somebody was sent
+            # into one keeps answering, and the off-canon pill needs to know what it
+            # is looking at without asking the live campaign.
+            lines: publish_lines(entry.id, canonical)
           },
           visibility: "public"
         )
@@ -1101,6 +1377,135 @@ defmodule PolyphonyWeb.CampaignLive do
   def handle_info({:build_cleared, _campaign_id}, socket),
     do: {:noreply, assign(socket, build: nil)}
 
+  # What publishes: the canonical line's own copies of the cast and world, or the
+  # campaign payload's when canonical is the root (or the campaign never branched).
+  defp publish_assets(socket, canonical) do
+    %{payload: payload} = socket.assigns
+
+    case canonical do
+      %{parent_id: parent, character_ids: ids} = line when not is_nil(parent) and ids != [] ->
+        cast = ids |> Enum.map(&Library.get/1) |> Enum.reject(&is_nil/1)
+        bible = if line.bible_id, do: Library.get(line.bible_id) |> maybe_payload()
+        {cast, bible}
+
+      _root_or_nil ->
+        root_cast =
+          (payload[:character_ids] || [])
+          |> Enum.map(&Library.get/1)
+          |> Enum.reject(&is_nil/1)
+
+        bible = if payload[:bible_id], do: Library.get(payload[:bible_id]) |> maybe_payload()
+        {root_cast, bible}
+    end
+  end
+
+  # The non-canonical lines, frozen into the snapshot: name, lineage, their
+  # contents lists in the same shape as the published scenes, and their casts'
+  # display names — copy-on-branch means each line speaks with its own copies'
+  # ids, which the canonical pinned sheets know nothing about. Archived lines stay
+  # out — leaving the selector and the tree's default view means leaving this too.
+  defp publish_lines(campaign_id, canonical) do
+    payload = Library.get(campaign_id) |> maybe_payload() || %{}
+
+    for %{branch: line} <- Branching.tree(campaign_id),
+        canonical == nil or line.id != canonical.id do
+      ids =
+        if is_nil(line.parent_id),
+          do: Enum.map(List.wrap(payload[:character_ids]), &to_string/1),
+          else: line.character_ids
+
+      %{
+        id: line.id,
+        name: line.name,
+        parent_id: line.parent_id,
+        cut_beat: line.cut_beat,
+        scenes: Preflight.scenes(Branching.scenes_for(campaign_id, line)),
+        names: line_names(ids),
+        # Who is who over here: each of this line's people, by persona — the flat
+        # join key. Copy-on-branch means the same person is a different library id
+        # on every line, and a join beats a chain because it survives any
+        # intermediate line being deleted.
+        personas: Branching.personas(ids)
+      }
+    end
+  end
+
+  defp line_names(ids) do
+    for id <- ids,
+        entry = Library.get(id),
+        entry != nil,
+        into: %{} do
+      case Library.payload(entry) do
+        %{name: n} when is_binary(n) and n != "" -> {to_string(id), n}
+        _ -> {to_string(id), "Someone"}
+      end
+    end
+  end
+
+  defp deleted_branch_note(1, 0), do: "Deleted. Links into it will land on its parent at the cut."
+
+  defp deleted_branch_note(1, n),
+    do:
+      "Deleted. Its #{n} #{if n == 1, do: "branch", else: "branches"} moved up a level, " <>
+        "and links into it will land on its parent at the cut."
+
+  defp deleted_branch_note(n, _),
+    do: "Deleted #{n} lines. Links into them will land on the nearest surviving line."
+
+  # Leaving the line you were scoped to (archived or deleted) falls back to
+  # canonical rather than a header naming a line that no longer exists.
+  defp maybe_leave_line(socket, id) do
+    if to_string(socket.assigns[:line_id]) == to_string(id),
+      do: assign(socket, line_id: nil),
+      else: socket
+  end
+
+  defp hub_path(socket, extra) do
+    params =
+      [tab: socket.assigns.tab] ++
+        if(socket.assigns[:line_id], do: [branch: socket.assigns.line_id], else: []) ++
+        Enum.map(extra, fn {k, v} -> {k, v} end)
+
+    ~p"/campaigns/#{socket.assigns.entry.id}?#{params}"
+  end
+
+  # The delete confirm's raw material: what goes, and where the children end up —
+  # by name, because that is a fact somebody needs before agreeing, not after.
+  defp deleting_view(socket, id) do
+    tree = Branching.tree(socket.assigns.entry.id, include_archived: true)
+    branches = Enum.map(tree, & &1.branch)
+    by_parent = Enum.group_by(branches, & &1.parent_id)
+
+    case Enum.find(branches, &(to_string(&1.id) == to_string(id))) do
+      nil ->
+        nil
+
+      b ->
+        children = Map.get(by_parent, b.id, [])
+        parent = Enum.find(branches, &(&1.id == b.parent_id))
+
+        %{
+          id: b.id,
+          name: b.name,
+          scenes: length(Branching.scenes_for(socket.assigns.entry.id, b)),
+          children_names: Enum.map(children, & &1.name),
+          beneath: descendants_below(by_parent, children),
+          parent_name: (parent && parent.name) || "the original line",
+          cut_label: if(b.cut_beat, do: "beat #{b.cut_beat}", else: "the start"),
+          recursive?: false
+        }
+    end
+  end
+
+  defp descendants_below(by_parent, children) do
+    children
+    |> Enum.map(fn c ->
+      kids = Map.get(by_parent, c.id, [])
+      length(kids) + descendants_below(by_parent, kids)
+    end)
+    |> Enum.sum()
+  end
+
   # Open the scene for the ready cast (the arc-review gate has passed).
   defp start_scene(socket, ready, pending) do
     %{entry: entry, payload: payload} = socket.assigns
@@ -1143,7 +1548,17 @@ defmodule PolyphonyWeb.CampaignLive do
       retriever: PgvectorRetriever
     )
 
-    Library.update_payload(entry.id, %{payload | scenes: [scene_id | socket.assigns.scenes]})
+    # The payload's own list, not the (branch-scoped) `scenes` assign — writing the
+    # scoped list back would silently drop every other line's scenes (STR-8).
+    Library.update_payload(
+      entry.id,
+      %{payload | scenes: [scene_id | List.wrap(payload[:scenes])]}
+    )
+
+    # A scene opened while working in a branch belongs to that line; unclaimed
+    # scenes belong to the root, so a never-branched campaign records nothing.
+    with %{id: line_id, parent_id: parent} when not is_nil(parent) <- socket.assigns.line,
+         do: Branching.claim_scene(line_id, scene_id)
 
     {:noreply,
      socket
@@ -1522,6 +1937,24 @@ defmodule PolyphonyWeb.CampaignLive do
       spectator: socket.assigns.pub_spectator,
       forkable: socket.assigns.pub_forkable
     }
+  end
+
+  # The grant, translated to canonical's people: the perspective checkboxes list
+  # the line the hub is scoped to, and copy-on-branch means the same head is a
+  # different library id on canonical — same persona, so the join answers.
+  # Identity when the two lines are one, or the campaign never branched.
+  defp canonical_publication(socket, canonical) do
+    pub = publication(socket)
+    line = socket.assigns.line
+
+    if canonical == nil or line == nil or line.id == canonical.id do
+      pub
+    else
+      {canonical_cast, _bible} = publish_assets(socket, canonical)
+      heads = Branching.head_map(pub.perspectives, Enum.map(canonical_cast, & &1.id))
+
+      %Publication{pub | perspectives: Enum.map(pub.perspectives, &Map.get(heads, &1, &1))}
+    end
   end
 
   # Said before and after, because it's the surprising half: there is one published

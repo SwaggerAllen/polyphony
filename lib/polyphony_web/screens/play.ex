@@ -307,6 +307,19 @@ defmodule PolyphonyWeb.Screens.Play do
 
   attr(:next_beat, :integer, default: 0)
 
+  attr(:branch, :any,
+    default: nil,
+    doc:
+      "%{name, canon?} — the line this scene is in, or nil when the campaign has one " <>
+        "line. A campaign that has never branched is not a campaign with one branch, " <>
+        "so nil renders no pill at all."
+  )
+
+  attr(:branching, :any,
+    default: nil,
+    doc: "the beat named by the tapped divider — the cut lands *before* it — or nil"
+  )
+
   attr(:roster, :list, default: [], doc: "character ids present at this beat")
   attr(:voices, :map, default: %{})
   attr(:control_modes, :map, default: %{})
@@ -391,11 +404,15 @@ defmodule PolyphonyWeb.Screens.Play do
       class="flex flex-col min-h-0"
       style="height:100dvh"
     >
-      <%!-- The kit's standard header: context small, the scene's location as the
-            title, perspective control top right, overflow last. --%>
+      <%!-- The kit's standard header, two rows: context and title with the menu
+            opposite, then the perspective control on its own row with *which line
+            you are in* at its right (play.md, *The perspective control*). --%>
       <Kit.header title={@scene_title} eyebrow={@campaign_name}>
         <:actions>
-          <form id={eid(@id, "viewer-form")} phx-change="view_as">
+          <Layouts.nav_menu current_user={@current_user} />
+        </:actions>
+        <:pills>
+          <form id={eid(@id, "viewer-form")} phx-change="view_as" class="shrink-0">
             <Kit.viewas_select
               id={eid(@id, "viewer-select")}
               label="Viewing as"
@@ -406,8 +423,21 @@ defmodule PolyphonyWeb.Screens.Play do
               <option :for={c <- @roster} value={c} selected={@viewer == {:character, c}}><%= name_of(@cast, c) %></option>
             </Kit.viewas_select>
           </form>
-          <Layouts.nav_menu current_user={@current_user} />
-        </:actions>
+          <%!-- The branch selector — the same pill the campaign hub defines
+                (campaign.md, `branch_selector`). Gold dot on the canonical line,
+                neutral off it: canon is the marked state, not the alarming one.
+                Absent when the campaign has one line; the row stays, because the
+                perspective control holds it. --%>
+          <Kit.viewas
+            :if={@branch}
+            tag="button"
+            type="button"
+            label={"⑂ #{@branch.name}"}
+            colour={if @branch.canon?, do: "var(--lamp)", else: "var(--bc)"}
+            class="shrink-0"
+            phx-click="open_branches"
+          />
+        </:pills>
       </Kit.header>
 
       <%!-- Connection. Silent when healthy: a permanent "everything is fine" light is
@@ -471,7 +501,26 @@ defmodule PolyphonyWeb.Screens.Play do
                 reason this screen is a function of its assigns. --%>
           <div id={eid(@id, "beats")} phx-update="stream">
           <div :for={{dom_id, beat} <- @beats} id={dom_id} class="beat">
-            <Kit.beat_rule :if={beat.beat > 0} beat={beat.beat} />
+            <%!-- The divider carries the branch control — the transcript's only
+                  structural seam, so the only place a cut is meaningful. ⑂ Branch and
+                  nothing more: the divider's position already says *before what is
+                  below this line*, and the confirm names the beat. Not on the newest
+                  beat — branching from the end of a scene is starting a scene. --%>
+            <Kit.beat_rule :if={beat.beat > 0} beat={beat.beat}>
+              <:action :if={beat.beat < @next_beat - 1}>
+                <button
+                  type="button"
+                  class="flex items-center gap-1.5"
+                  style="background:none;border:0;padding:0;cursor:pointer"
+                  phx-click="branch_open"
+                  phx-value-beat={beat.beat}
+                  aria-label={"Branch before beat #{beat.beat}"}
+                >
+                  <span style="font-size:17px;line-height:1;color:var(--lamp)" aria-hidden="true">⑂</span>
+                  <span class="lbl" style="color:var(--lamp)">Branch</span>
+                </button>
+              </:action>
+            </Kit.beat_rule>
 
             <.turn_block
               :for={{block, i} <- Enum.with_index(beat.blocks)}
@@ -530,6 +579,41 @@ defmodule PolyphonyWeb.Screens.Play do
         colour={Voice.of_sheet(@who)}
         on_close="close_who"
       />
+
+      <%!-- The branch confirm (play.md, `branching`). It names the beat, which the
+            divider deliberately does not, then the three things people get wrong:
+            what comes with you, where you end up, and that the original is untouched.
+            No *are you sure* — nothing is destroyed and walking away undoes it, so
+            deletion's grammar would misrepresent the act. --%>
+      <div :if={@branching} class="row px-4 py-3" style="background:var(--b2)">
+        <div class="lbl dim mb-1">Branch before beat <%= @branching %></div>
+        <h3 class="ttl text-[16px] mb-2.5 font-semibold">Take a second run at it?</h3>
+        <p class="text-[13px] leading-relaxed mb-2">
+          You'll get a copy of everything up to here — <%= branch_cargo(@roster, @branching) %>.
+        </p>
+        <p class="text-[13px] leading-relaxed mb-2">
+          You'll be playing the copy from now on.
+          <strong>This scene stays exactly as it is</strong>, and stays playable — you can
+          come back to it whenever.
+        </p>
+        <p class="text-[12px] leading-relaxed dim mb-3">
+          Both are yours. Neither replaces the other.
+        </p>
+        <div class="flex flex-wrap gap-1.5">
+          <Kit.btn
+            kind={:primary}
+            size={:sm}
+            type="button"
+            phx-click="branch_confirm"
+            phx-value-beat={@branching}
+          >
+            Branch it
+          </Kit.btn>
+          <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="branch_cancel">
+            Not now
+          </Kit.btn>
+        </div>
+      </div>
 
       <Kit.strip sentence={@strip.sentence} tone={@strip.tone}>
         <:slot_item
@@ -1394,6 +1478,34 @@ defmodule PolyphonyWeb.Screens.Play do
   # the omniscient author (per the kit's perspective-control spec).
   defp viewer_colour(:omniscient, _voices), do: Voice.neutral()
   defp viewer_colour({:character, id}, voices), do: Voice.of(voices, id)
+
+  # What comes with a branch, in units that mean something: the world, the people,
+  # and the beats already played. The cut lands *before* the named beat.
+  defp branch_cargo(roster, beat) do
+    [
+      "the world",
+      case length(roster) do
+        0 -> nil
+        1 -> "the one person in it"
+        2 -> "both people"
+        n -> "all #{count_word(n)} people"
+      end,
+      case beat - 1 do
+        0 -> "nothing played yet"
+        1 -> "the beat you've played"
+        m -> "the #{count_word(m)} beats you've played"
+      end
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> case do
+      [a, b] -> "#{a} and #{b}"
+      [a, b, c] -> "#{a}, #{b}, and #{c}"
+    end
+  end
+
+  @count_words ~w(one two three four five six seven eight nine ten eleven twelve)
+  defp count_word(n) when n in 1..12, do: Enum.at(@count_words, n - 1)
+  defp count_word(n), do: Integer.to_string(n)
 
   # One debug-timeline entry, stacked (never a horizontal table — unreadable on mobile):
   # a wrapping meta line, then the detail below it. Entries are separated by a rule via

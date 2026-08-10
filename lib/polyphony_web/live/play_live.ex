@@ -35,6 +35,7 @@ defmodule PolyphonyWeb.PlayLive do
 
   alias Polyphony.Context.{Store, PgvectorRetriever, Rebuild}
   alias Polyphony.Director.{Auto, BeatDriver}
+  alias Polyphony.Branching
   alias Polyphony.Campaigns
   alias Polyphony.Characters
   alias Polyphony.Edit
@@ -165,7 +166,9 @@ defmodule PolyphonyWeb.PlayLive do
        campaign_name: "",
        scene_title: "The scene",
        strip: %{slots: [], sentence: nil, tone: nil},
-       transcript_empty: true
+       transcript_empty: true,
+       branch: nil,
+       branching: nil
      )
      |> then(&if connected?(&1), do: restore_generations(&1), else: &1)}
   end
@@ -254,6 +257,7 @@ defmodule PolyphonyWeb.PlayLive do
       next_beat: next_beat,
       premise: scene_premise(plain),
       campaign_name: campaign_name(socket),
+      branch: branch_pill(socket),
       scene_title: scene_title(plain),
       control_modes: Map.new(roster, fn c -> {c, TurnOrder.control_mode(plain, c)} end),
       # The Director's pending introductions — author-facing tooling, so only the
@@ -797,7 +801,15 @@ defmodule PolyphonyWeb.PlayLive do
            scene_opened(socket.assigns.scene_id),
          campaign when not is_nil(campaign) <- Library.get(cid),
          %{bible_id: bid} <- Library.payload(campaign) do
-      normalize_id(bid)
+      # A branch scene grounds new people in the line's own copy of the world.
+      case Branching.line_of(cid, socket.assigns.scene_id) do
+        %{parent_id: parent, bible_id: line_bid}
+        when not is_nil(parent) and not is_nil(line_bid) ->
+          normalize_id(line_bid)
+
+        _ ->
+          normalize_id(bid)
+      end
     else
       _ -> nil
     end
@@ -954,11 +966,18 @@ defmodule PolyphonyWeb.PlayLive do
   # it stood when the beat opened.
   defp offered?(offers, id), do: Enum.any?(offers, &(to_string(&1.id) == to_string(id)))
 
+  # The roster the picker reaches: this campaign's — and once the campaign has
+  # branched, this **line's**. Copy-on-branch means a branch scene's people are
+  # the line's copies, and offering the original cast here would cast the other
+  # line's Wren into this one's story.
   defp campaign_character_ids(socket) do
     with cid when not is_nil(cid) <- campaign_of(socket.assigns.scene_id),
          entry when not is_nil(entry) <- Library.get(cid),
          %{} = payload <- Library.payload(entry) do
-      Map.get(payload, :character_ids) || []
+      case Branching.line_of(cid, socket.assigns.scene_id) do
+        %{parent_id: parent, character_ids: ids} when not is_nil(parent) and ids != [] -> ids
+        _ -> Map.get(payload, :character_ids) || []
+      end
     else
       _ -> []
     end
@@ -967,6 +986,19 @@ defmodule PolyphonyWeb.PlayLive do
   defp campaign_of(scene_id) do
     case scene_opened(scene_id) do
       %SceneOpened{campaign_id: cid} -> cid
+      _ -> nil
+    end
+  end
+
+  # The branch pill: which line this scene is in, or nil when the campaign has
+  # never branched — a campaign that has never branched is not a campaign with one
+  # branch, and the header should say nothing about a shape it does not have.
+  defp branch_pill(socket) do
+    with cid when not is_nil(cid) <- campaign_of(socket.assigns.scene_id),
+         true <- Branching.branched?(cid),
+         line when not is_nil(line) <- Branching.line_of(cid, socket.assigns.scene_id) do
+      %{name: line.name, canon?: line.canonical}
+    else
       _ -> nil
     end
   end
@@ -1145,9 +1177,30 @@ defmodule PolyphonyWeb.PlayLive do
             )
 
           validity = if params["invalidates"] == "true", do: :invalid, else: :valid
+          cid = campaign_of(scene)
 
-          case Edit.edit(scene, beat, c, corrected, validity, label: "edited at beat #{beat}") do
+          # Copy-on-branch: an edit that changes history is a branch, so it copies
+          # the cast and world like any other — and the map has to exist before
+          # the fork so the copied prefix speaks with the copies' ids.
+          copies =
+            if validity == :invalid and cid, do: Branching.prepare_line(cid, scene)
+
+          edit_opts =
+            [label: "edited at beat #{beat}"] ++
+              if(copies, do: [character_map: copies.character_map], else: [])
+
+          case Edit.edit(scene, beat, c, corrected, validity, edit_opts) do
             {:ok, %{forked: true, scene_id: branch}} ->
+              # A branch made by an edit is a branch: record the line so the
+              # navigator and the hub can see it, rather than leaving a stream only
+              # the address bar knows about.
+              if cid,
+                do:
+                  Branching.register_fork(cid, scene, branch, beat,
+                    location: socket.assigns.scene_title,
+                    copies: copies
+                  )
+
               # The branch is where the corrected turn lives, so that is where the
               # author now is. The original is untouched and still reachable by its id.
               {:noreply,
@@ -1157,6 +1210,10 @@ defmodule PolyphonyWeb.PlayLive do
                |> push_navigate(to: ~p"/play/#{branch}")}
 
             {:ok, _} ->
+              # An in-place correction still changed what a reader may have read:
+              # the line's divergence cursor moves if this sits earlier than it.
+              if cid, do: Branching.notice_change(cid, scene, beat)
+
               {:noreply,
                socket
                |> assign(editing: nil)
@@ -1168,6 +1225,56 @@ defmodule PolyphonyWeb.PlayLive do
           end
       end
     end)
+  end
+
+  # ── Branching (STR-8) ─────────────────────────────────────────────────────────
+
+  # The divider's ⑂ opens the confirm; nothing has happened yet. The confirm is
+  # where the beat gets named — the divider deliberately says only "Branch".
+  def handle_event("branch_open", %{"beat" => beat}, socket),
+    do: {:noreply, assign(socket, branching: String.to_integer(beat))}
+
+  # Walking away undoes it — nothing was created, so nothing needs cleaning up.
+  def handle_event("branch_cancel", _params, socket),
+    do: {:noreply, assign(socket, branching: nil)}
+
+  # The bare "branch from here": the cut lands *before* the named beat, so the
+  # copy keeps everything through the beat above the divider. You land in the
+  # branch immediately — the reason somebody asks for one is that they want to
+  # keep going differently, so landing anywhere else would be a detour.
+  def handle_event("branch_confirm", %{"beat" => beat}, socket) do
+    safe(socket, fn ->
+      scene = socket.assigns.scene_id
+      beat = String.to_integer(beat)
+
+      case campaign_of(scene) do
+        nil ->
+          {:noreply,
+           put_flash(socket, :error, "This scene isn't in a campaign, so it can't branch.")}
+
+        cid ->
+          case Branching.branch_from(cid, scene, beat - 1, location: socket.assigns.scene_title) do
+            {:ok, %{scene_id: new_scene}} ->
+              {:noreply,
+               socket
+               |> assign(branching: nil)
+               |> put_flash(:info, "Branched here. This scene stays exactly as it is.")
+               |> push_navigate(to: ~p"/play/#{new_scene}")}
+
+            {:error, reason} ->
+              {:noreply, put_flash(socket, :error, "Couldn't branch: #{inspect(reason)}")}
+          end
+      end
+    end)
+  end
+
+  # The pill opens the navigator, which lives on the campaign hub — the only
+  # screen where the whole tree is visible.
+  def handle_event("open_branches", _params, socket) do
+    case campaign_of(socket.assigns.scene_id) do
+      nil -> {:noreply, socket}
+      cid -> {:noreply, push_navigate(socket, to: ~p"/campaigns/#{cid}?branches=open")}
+    end
   end
 
   # Scan the scene's committed prose for characters mentioned but not yet created,

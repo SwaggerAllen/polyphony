@@ -1,6 +1,6 @@
 # Campaign
 
-<!-- rev: 4 -->
+<!-- rev: 6 -->
 
 | | |
 |---|---|
@@ -31,6 +31,18 @@ Six tabs, in the order somebody meets them — Settings, World, Cast, Groups, Pr
   people it produces; it is a kind of person, not a kind of setting. It is not part of
   first run: a campaign is ready to play without one, so the tab carries no *to do* mark
   where World, Cast and Premise do.
+- **The hub shows one branch at a time, and says which.** Choosing a branch scopes the whole
+  campaign screen to it: its cast, its groups, its world, its scenes. Copy-on-branch means two
+  branches hold different Wrens, and the only design that never has to explain which Wren you
+  are looking at is one that never shows both. The cost is that the hub now has a mode, so
+  something must name the current branch at all times — a tab that silently means *this branch*
+  while looking like it means *this campaign* is worse than no branching at all.
+- **One branch is canonical, and canonical is about people rather than truth.** Both lines are
+  equally real and neither is more true. What canonical decides is what everybody else sees:
+  the hub opens on it, publishing points at it, and once a group plays together the party
+  follows it — the GM sets which line the table is in. That is an authority claim about a
+  session, not a verdict on the fiction, and the word is worth keeping precisely because the
+  multiplayer case makes *whose line are we in* a question somebody has to be able to answer.
 - **Publishing a head is a spoiler control, not a reading preference.** Nothing is ticked by
   default. The list is in **tier order**, not roster order — the roster is the accident of
   how the campaign was built, the tier is the author's own statement about who the story is
@@ -156,6 +168,12 @@ mark on the tab.
 
 Spectator, heads, forkable. See the standing decision.
 
+Once the campaign has more than one line, the tab says plainly that **publishing points
+at the canonical line**, and names it. The hub may be scoped to any line while the
+author works; this is the one control where that difference silently matters, so it is
+said rather than implied. A campaign that has never branched hears nothing about lines
+it does not have.
+
 ### `publish_gap` — A scene nobody will be able to read
 
 Named, before publishing rather than after. The gap can be the point; it just must not happen
@@ -201,10 +219,17 @@ expressed as a sentence rather than as an absence.
 The submit control says how many people aren't ready and that sorting them lights it up. It
 is a statement of what remains, not a refusal — the work is all on the rows above it.
 
-Below the form, the scenes already played: **newest first, numbered by position**, each with
-its beat count and the premise it opened on. The numbers therefore count down, which is what
-a reverse-chronological list of chapters looks like. Each row carries a delete that names
-what goes with it — see the standing decision.
+Below the form, **this branch's** scenes already played: newest first, numbered by position,
+each with its beat count and the premise it opened on. The numbers count down, which is what a
+reverse-chronological list of chapters looks like. Each row carries a delete that names what
+goes with it — see the standing decision, and note that a scene with branches cut from it says
+so: those branches keep everything they copied and are reachable from the navigator whether or
+not this scene survives.
+
+No branch nesting here. A branch is a whole line, not a scene in this one, and indenting it
+under its origin would put a second campaign's worth of scenes inside a list that means *this
+branch*. The navigator is where a campaign's shape lives; this list is what happened in the
+line you are in.
 
 ### `scenes_gate_expanded` — Reviewing a character's changes on the row
 
@@ -261,3 +286,95 @@ they didn't ask for is not the answer. Written in, they are selected.
 ### `scenes_empty` — Nothing has happened yet
 
 On a campaign with a cast ready to make it happen.
+
+### `branch_selector` — Which line you are in
+
+**This screen defines the control; play and the published reader use it.** A pill naming the
+current branch, on the second row of the header beside the perspective control — see
+`play.md`'s perspective-control section for why that row exists and why it is the same row
+everywhere.
+
+**Absent when there is only one line.** A campaign that has never branched is not a campaign
+with one branch — it is a campaign, and the header should say nothing about a shape it does not
+have. The row remains, because the perspective control lives on it; only the pill appears and
+disappears.
+
+**Its dot is gold on the canonical line and neutral off it.** Canon is the marked state rather
+than the alarming one: it is what publishes, what the hub opens on, and what a party follows,
+so it is the thing worth lighting. Being on a non-canonical line is the ordinary way to work and
+should be legible without being scolded.
+
+Tapping it opens the navigator, unfolded to where you are.
+
+**The rest of the header moves to make room.** Privacy and the menu sit beside the title on the
+top row rather than competing with the perspective control, which thins a row that was
+carrying four things.
+
+### `branch_navigator` — The campaign's shape, full screen
+
+The tree, as a tree: each branch indented under the one it was cut from, carrying its name,
+the beat it was cut at, and **when it was made**. The timestamp earns its place because recall
+runs on *the one from Tuesday evening* far more reliably than on any generated name, and a
+timestamp stays true where a name describing the cut goes stale the moment the line diverges.
+
+Full screen rather than a dropdown. The expectation is bimodal — most campaigns never branch
+and the ones that do branch a lot — so the population that opens this at all needs room for
+depth, long names and a lot of rows. A dropdown would serve the case that does not exist.
+
+Names default to **scene · location · beat**, describing the cut because the content does not
+exist yet, with an ordinal appended **only when two branches were cut at the same beat**.
+Renaming is offered everywhere the name appears: the default is a handle, not a description,
+and the author will know what a line is for long before the app could.
+
+Choosing a branch closes the navigator and re-scopes the hub. Setting canonical, archiving and
+deleting all live here too — this is the only screen where the whole tree is visible, and
+deleting needs that: the confirm has to say where a line's children will end up, which is a
+sentence you can only write honestly while you can see them.
+
+**The tree is keyed on branches, not on scenes.** Lineage is a parent branch and a cut beat;
+the scene the cut happened in is a label. That is what stops a deleted scene stranding its
+children — a branch whose origin scene is gone still knows its parent, still sits in the right
+place, and simply says the origin is gone. Navigation must never depend on a scene surviving.
+
+A branch can itself be branched, and the nesting goes as deep as somebody takes it. Depth is
+not capped: the transcript's own structure allows it and a limit would be arbitrary. What is
+capped is presentation — beyond the second level the list indents no further and the row
+carries its parent's name instead, because a list that keeps indenting stops being readable on
+a phone at about three.
+
+**A branch whose origin scene was deleted says so here**, and nowhere else. The pill has no room
+for lineage and does not need it: the parent is rarely worth referencing while you are working.
+The navigator is where the shape lives, so it is where a missing origin is worth a line.
+
+### `branch_navigator_deleting` — Removing a line
+
+The confirm, naming what goes: this line, its scenes, and its copies of the cast and world.
+
+**Deleting a branch does not delete the branches cut from it.** Its immediate children are
+re-parented to its immediate parent and keep everything they copied. That is the behaviour
+somebody tidying up actually wants — a campaign with dozens of nested experiments has two or
+three worth keeping, and a recursive delete makes cleaning up an all-or-nothing act that
+people avoid rather than perform. Re-parenting is safe because a branch was never dependent on
+its parent: it copied everything at the cut and has been independent since.
+
+The confirm says where the children will go, by name. *Its two branches move up under __The
+quay · beat 6__* is a fact somebody needs before agreeing, not after.
+
+**Recursive deletion is offered as a toggle, default off.** It is a real thing to want — a
+whole abandoned subtree — and it is also the destructive default that would eat work nobody
+meant to lose. Off by default and counted when on: *and 4 branches beneath them*.
+
+**Links to the deleted line keep working, and the confirm says so.** A record survives — the
+line's id, its parent, the cut beat — so anybody holding a link is sent to the parent at the
+cut rather than to a 404. Worth stating in the confirm because it removes the main reason
+somebody hesitates: *anyone you sent a link to will land on __The quay · beat 6__ instead.*
+See `browse.md`'s `branch_gone`.
+
+Archiving sits beside it and is not the same thing: an archived branch leaves the selector and
+the tree's default view, keeps everything, and can come back. Most lines somebody wants rid of
+want archiving, and the confirm should say so rather than treating deletion as the obvious
+choice.
+
+Canonical cannot be deleted or archived. Set another line canonical first — a deliberate
+two-step, because the alternative is a campaign whose published line vanished underneath its
+readers.

@@ -118,6 +118,32 @@ defmodule PolyphonyWeb.Screens.Campaign do
   attr(:expanding_premise, :boolean, default: false)
   attr(:writing_in, :any, default: nil, doc: "MapSet of characters being filled in")
 
+  attr(:branch, :any,
+    default: nil,
+    doc:
+      "%{id, name, canon?} — the line the hub is scoped to, or nil when the campaign " <>
+        "has one line. A campaign that has never branched is not a campaign with one " <>
+        "branch, so nil renders no pill."
+  )
+
+  attr(:branches, :list,
+    default: [],
+    doc:
+      "navigator rows in tree order: %{id, name, made_label, canon?, current?, " <>
+        "depth, parent_name, origin_gone?}. Depth is presentation-capped at two — " <>
+        "deeper rows indent no further and carry their parent's name instead."
+  )
+
+  attr(:branch_navigator_open, :boolean, default: false)
+
+  attr(:branch_deleting, :any,
+    default: nil,
+    doc:
+      "the delete confirm: %{id, name, scenes, children_names, beneath, parent_name, " <>
+        "cut_label, recursive?} — children re-parent to the grandparent unless " <>
+        "recursive? is on"
+  )
+
   attr(:published?, :boolean, default: false)
   attr(:publish_help, :boolean, default: false)
   attr(:publish_warning, :any, default: nil)
@@ -130,13 +156,24 @@ defmodule PolyphonyWeb.Screens.Campaign do
     <Kit.frame class="flex flex-col min-h-[100dvh]">
       <Kit.header title={campaign_title(@payload)} subtitle={campaign_meta(assigns)}>
         <:actions>
+          <%!-- Privacy and the menu sit beside the title, which thins a top row that
+                was carrying four things (campaign.md, `branch_selector`). --%>
+          <Kit.pill><%= String.capitalize(to_string(@entry.visibility)) %></Kit.pill>
+          <Layouts.nav_menu current_user={@current_user} />
+        </:actions>
+        <:pills>
           <%!-- The perspective control, in the same place and the same markup it has on
                 every other surface with a viewpoint (`ux/README.md` calls its drift into
                 three treatments the worst consistency failure of the design pass). It
                 belongs here because this screen *reviews* content: the world tab is a
                 read of the bible, and "what does Wren actually know of this world"
                 is a question you can only answer by looking through her eyes. --%>
-          <form :if={scene_ready(@cast) != []} id={eid(@id, "campaign-viewer")} phx-change="view_as">
+          <form
+            :if={scene_ready(@cast) != []}
+            id={eid(@id, "campaign-viewer")}
+            phx-change="view_as"
+            class="shrink-0"
+          >
             <Kit.viewas_select
               id={eid(@id, "campaign-viewer-select")}
               label="Viewing as"
@@ -153,9 +190,20 @@ defmodule PolyphonyWeb.Screens.Campaign do
               </option>
             </Kit.viewas_select>
           </form>
-          <Kit.pill><%= String.capitalize(to_string(@entry.visibility)) %></Kit.pill>
-          <Layouts.nav_menu current_user={@current_user} />
-        </:actions>
+          <%!-- Which line the whole hub means (campaign.md, `branch_selector`): this
+                screen defines the pill; play and the published reader use it. Gold dot
+                on canon, neutral off it. Tapping opens the navigator, unfolded to
+                where you are. --%>
+          <Kit.viewas
+            :if={@branch}
+            tag="button"
+            type="button"
+            label={"⑂ #{@branch.name}"}
+            colour={if @branch.canon?, do: "var(--lamp)", else: "var(--bc)"}
+            class="shrink-0 ml-auto"
+            phx-click="open_branches"
+          />
+        </:pills>
       </Kit.header>
 
       <Kit.tabs>
@@ -177,9 +225,253 @@ defmodule PolyphonyWeb.Screens.Campaign do
         <.premise_tab :if={@tab == "premise"} {assigns} />
         <.scenes_tab :if={@tab == "scenes"} {assigns} />
       </div>
+
+      <.branch_navigator :if={@branch_navigator_open} {assigns} />
+      <.branch_deleting :if={@branch_deleting} {assigns} />
     </Kit.frame>
     """
   end
+
+  # ── The branch navigator (campaign.md, `branch_navigator`) ────────────────────
+
+  # Full screen rather than a dropdown: the expectation is bimodal — most campaigns
+  # never branch and the ones that do branch a lot — so the population that opens
+  # this at all needs room for depth, long names and a lot of rows. It is also the
+  # only screen where the whole tree is visible, which is what makes archive and
+  # delete safe to offer here: the delete confirm has to say where a line's children
+  # will end up, a sentence you can only write honestly while you can see them.
+  defp branch_navigator(assigns) do
+    ~H"""
+    <div
+      class="fixed inset-0 z-40 flex flex-col"
+      style="background:var(--b1)"
+      role="dialog"
+      aria-label="Branches"
+    >
+      <div
+        class="row shrink-0 px-4 py-3 flex items-center justify-between gap-2"
+        style="background:var(--b2)"
+      >
+        <div class="ttl text-[15px] font-semibold">Branches</div>
+        <button
+          type="button"
+          class="dim text-[15px] leading-none"
+          style="background:none;border:0;cursor:pointer"
+          phx-click="close_branches"
+          aria-label="Close"
+        >
+          ×
+        </button>
+      </div>
+      <div class="flex-1 min-h-0 overflow-y-auto">
+        <%!-- The tree is keyed on branches, not on scenes: lineage is a parent branch
+              and a cut beat, and the scene the cut happened in is a label — so a
+              branch whose origin scene is gone still knows its parent, still sits in
+              the right place, and simply says the origin is gone. Indentation is
+              capped at the second level; deeper rows carry their parent's name
+              instead, because a list that keeps indenting stops being readable on a
+              phone at about three. --%>
+        <div
+          :for={b <- @branches}
+          class={["pr-4 py-2.5 row flex items-center gap-2", branch_indent(b.depth)]}
+          style={if b.current?, do: "background:var(--b3)"}
+        >
+          <button
+            type="button"
+            class="min-w-0 flex-1 text-left"
+            style="background:none;border:0;padding:0;cursor:pointer"
+            phx-click="choose_branch"
+            phx-value-id={b.id}
+          >
+            <div class="text-[13px] font-semibold"><%= b.name %></div>
+            <div class="text-[11px] dim">
+              <%= b.made_label %><%= if b.depth > 2 and b.parent_name,
+                do: " · under #{b.parent_name}" %><%= if b.origin_gone?,
+                do: " · the scene it was cut from is gone" %>
+            </div>
+          </button>
+          <Kit.pill
+            :if={b.canon?}
+            colour="var(--lamp)"
+            class="shrink-0"
+          >
+            canon
+          </Kit.pill>
+          <details class="shrink-0 relative">
+            <summary
+              class="dim text-[14px] cursor-pointer select-none"
+              style="list-style:none"
+              aria-label={"Actions for #{b.name}"}
+            >
+              ⋯
+            </summary>
+            <div
+              class="absolute right-0 mt-1 sheet p-2 z-10 flex flex-col gap-1.5"
+              style="min-width:200px;background:var(--b2)"
+            >
+              <form phx-submit="rename_branch" class="flex gap-1">
+                <input type="hidden" name="branch" value={b.id} />
+                <label for={eid(@id, "rename-#{b.id}")} class="sr-only">Rename</label>
+                <input
+                  id={eid(@id, "rename-#{b.id}")}
+                  type="text"
+                  name="name"
+                  value={b.name}
+                  class="field px-2 py-1 text-[12px] flex-1 min-w-0"
+                />
+                <Kit.btn kind={:ghost} size={:sm} type="submit">Rename</Kit.btn>
+              </form>
+              <Kit.btn
+                :if={not b.canon?}
+                kind={:ghost}
+                size={:sm}
+                type="button"
+                phx-click="set_canonical"
+                phx-value-id={b.id}
+              >
+                Make this the canonical line
+              </Kit.btn>
+              <Kit.btn
+                :if={not b.canon?}
+                kind={:ghost}
+                size={:sm}
+                type="button"
+                phx-click="archive_branch"
+                phx-value-id={b.id}
+              >
+                Archive
+              </Kit.btn>
+              <Kit.btn
+                :if={not b.canon?}
+                kind={:pen}
+                size={:sm}
+                type="button"
+                phx-click="branch_delete_open"
+                phx-value-id={b.id}
+              >
+                Delete…
+              </Kit.btn>
+              <%!-- Canonical can be neither deleted nor archived — set another line
+                    canonical first. A deliberate two-step, because the alternative is
+                    a campaign whose published line vanished underneath its readers. --%>
+              <p :if={b.canon?} class="text-[11px] leading-relaxed dim" style="max-width:200px">
+                The canonical line can't be archived or deleted. Set another line
+                canonical first.
+              </p>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div class="px-4 py-3 shrink-0">
+        <p class="text-[11px] leading-relaxed dim">
+          Tap a line to work in it. ⋯ to rename, set canon, archive or delete.
+        </p>
+      </div>
+    </div>
+    """
+  end
+
+  defp branch_indent(0), do: "pl-4"
+  defp branch_indent(1), do: "pl-8"
+  defp branch_indent(_deeper), do: "pl-12"
+
+  # ── Deleting a line (campaign.md, `branch_navigator_deleting`) ─────────────────
+
+  # The confirm names what goes — this line, its scenes, its copies of the cast and
+  # world — and where its children end up, by name. Children re-parent to the
+  # grandparent and keep everything they copied; recursive is a toggle, default off,
+  # and counted when on. Links keep working: a record survives (the line's id, its
+  # parent, the cut beat), so anybody holding one lands on the parent at the cut.
+  defp branch_deleting(assigns) do
+    ~H"""
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style="background:color-mix(in srgb,var(--b1) 72%,transparent)"
+      role="dialog"
+      aria-label="Delete this line?"
+    >
+      <div class="sheet p-4 w-full" style="max-width:420px;background:var(--b2)">
+        <div class="lbl dim mb-1"><%= @branch_deleting.name %></div>
+        <h3 class="ttl text-[16px] mb-2.5 font-semibold">Delete this line?</h3>
+        <p class="text-[13px] leading-relaxed mb-2">
+          <%= branch_delete_goes(@branch_deleting) %>
+        </p>
+        <p :if={@branch_deleting.children_names != []} class="text-[13px] leading-relaxed mb-2">
+          <strong><%= branch_delete_children(@branch_deleting) %></strong>
+          and <%= if length(@branch_deleting.children_names) == 1, do: "keeps", else: "keep" %> everything
+          <%= if length(@branch_deleting.children_names) == 1, do: "it", else: "they" %> copied.
+        </p>
+        <div
+          :if={@branch_deleting.children_names != []}
+          class="rounded-lg p-2.5 mb-3"
+          style="background:var(--b3)"
+        >
+          <button
+            type="button"
+            class="flex items-center gap-2 w-full text-left"
+            style="background:none;border:0;padding:0;cursor:pointer"
+            phx-click="branch_delete_recursive"
+            aria-pressed={to_string(@branch_deleting.recursive?)}
+          >
+            <span class="min-w-0 flex-1">
+              <span class="text-[12.5px] block">Delete everything beneath it too</span>
+              <span class="text-[11px] dim block">
+                <%= length(@branch_deleting.children_names) %>
+                <%= if length(@branch_deleting.children_names) == 1, do: "branch", else: "branches" %>,
+                and <%= @branch_deleting.beneath %> beneath
+                <%= if length(@branch_deleting.children_names) == 1, do: "that", else: "them" %>
+              </span>
+            </span>
+            <Kit.sw on={@branch_deleting.recursive?} colour="var(--pencil)" class="shrink-0" />
+          </button>
+        </div>
+        <p class="text-[12px] leading-relaxed dim mb-3">
+          Anyone you sent a link to will land on
+          <strong><%= @branch_deleting.parent_name %></strong>
+          at <%= @branch_deleting.cut_label %> instead.
+        </p>
+        <div class="flex flex-wrap gap-1.5">
+          <Kit.btn kind={:red} size={:sm} type="button" phx-click="branch_delete_confirm">
+            Delete it
+          </Kit.btn>
+          <%!-- Most lines somebody wants rid of want archiving: it leaves the selector
+                and the tree's default view, keeps everything, and can come back. --%>
+          <Kit.btn
+            kind={:ghost}
+            size={:sm}
+            type="button"
+            phx-click="archive_branch"
+            phx-value-id={@branch_deleting.id}
+          >
+            Archive instead
+          </Kit.btn>
+          <Kit.btn kind={:ghost} size={:sm} type="button" phx-click="branch_delete_cancel">
+            Cancel
+          </Kit.btn>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # "Its 6 scenes go, and its copies of the cast and world." — destruction named in
+  # units that mean something.
+  defp branch_delete_goes(%{scenes: 0}),
+    do: "Its copies of the cast and world go. It has no scenes of its own yet."
+
+  defp branch_delete_goes(%{scenes: 1}),
+    do: "Its one scene goes, and its copies of the cast and world."
+
+  defp branch_delete_goes(%{scenes: n}),
+    do: "Its #{n} scenes go, and its copies of the cast and world."
+
+  # "Its 1 branch moves up under The Salt Line" — where the children end up, by name,
+  # before agreeing rather than after.
+  defp branch_delete_children(%{children_names: [_], parent_name: parent}),
+    do: "Its 1 branch moves up under #{parent}"
+
+  defp branch_delete_children(%{children_names: names, parent_name: parent}),
+    do: "Its #{length(names)} branches move up under #{parent}"
 
   # ── Settings ──────────────────────────────────────────────────────────────────
 
@@ -381,7 +673,23 @@ defmodule PolyphonyWeb.Screens.Campaign do
   defp delete_scene_confirm(scene) do
     "Delete #{scene_label(scene)}? " <>
       "#{count_label(scene.beats, "beat", "beats") || "Nothing"} played in it, and any arc " <>
-      "proposals it raised, are let go of. This can't be undone."
+      "proposals it raised, are let go of. This can't be undone." <>
+      branch_cut_confirm(scene)
+  end
+
+  # A scene with branches cut from it says so: those branches copied everything at
+  # the cut and stay reachable from the navigator whether or not this scene survives.
+  defp branch_cut_confirm(scene) do
+    case Map.get(scene, :branch_cuts, 0) do
+      0 ->
+        ""
+
+      1 ->
+        " The branch cut from it keeps everything it copied and stays in the navigator."
+
+      n ->
+        " The #{n} branches cut from it keep everything they copied and stay in the navigator."
+    end
   end
 
   defp campaign_label(assigns) do
@@ -790,6 +1098,15 @@ defmodule PolyphonyWeb.Screens.Campaign do
         </p>
       </div>
 
+      <%!-- Only canonical publishes (campaign.md, the standing decision): the
+            selector may have the hub scoped to another line, and this is the one
+            place where that difference silently matters — so it is said. --%>
+      <p :if={canonical_name(@branches)} class="text-[11px] leading-relaxed dim mb-3">
+        Publishing points at the canonical line —
+        <span class="ttl" style="color:var(--lamp)"><%= canonical_name(@branches) %></span>.
+        Readers get its scenes, whichever line you're working in.
+      </p>
+
       <div class="flex flex-wrap items-center gap-1.5">
         <Kit.btn
           kind={:primary}
@@ -806,6 +1123,15 @@ defmodule PolyphonyWeb.Screens.Campaign do
       </div>
     </Kit.row>
     """
+  end
+
+  # The canonical line's name, or nil for a campaign that has never branched —
+  # which should hear nothing about lines it doesn't have.
+  defp canonical_name(branches) do
+    Enum.find_value(branches, fn
+      %{canon?: true, name: name} -> name
+      _ -> nil
+    end)
   end
 
   defp unreadable_line(%{scenes: [_]}), do: "One scene nobody will be able to read"
@@ -1382,6 +1708,13 @@ defmodule PolyphonyWeb.Screens.Campaign do
         <.link navigate={~p"/play/#{s.id}"} class="min-w-0 flex-1">
           <div class="ttl text-[14.5px] font-semibold truncate"><%= scene_label(s) %></div>
           <div :if={scene_blurb(s) != ""} class="text-[11px] dim truncate"><%= scene_blurb(s) %></div>
+          <%!-- A scene with branches cut from it says so (campaign.md, `scenes`):
+                they keep everything they copied and are reachable from the navigator
+                whether or not this scene survives. --%>
+          <div :if={Map.get(s, :branch_cuts, 0) > 0} class="text-[11px] truncate" style="color:var(--lamp)">
+            ⑂ <%= Map.get(s, :branch_cuts) %>
+            <%= if Map.get(s, :branch_cuts) == 1, do: "branch", else: "branches" %> cut from it
+          </div>
         </.link>
         <Kit.btn
           kind={:pen}
