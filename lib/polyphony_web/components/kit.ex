@@ -93,35 +93,50 @@ defmodule PolyphonyWeb.Kit do
   attr(:class, :string, default: nil)
   slot(:actions, doc: "controls on the right — perspective control first, overflow last")
 
+  slot(:pills,
+    doc:
+      "the second row a screen with a perspective control carries: the control on the " <>
+        "left, *which line you are in* on the right (play.md, *The perspective control*). " <>
+        "The row exists whenever the slot is given — the branch pill inside it may come " <>
+        "and go, the row does not."
+  )
+
   def header(assigns) do
     ~H"""
-    <div
-      class={["row shrink-0 flex items-center justify-between gap-2 px-4 py-3", @class]}
-      style="background:var(--b2)"
-    >
-      <div class="flex items-center gap-2 min-w-0">
-        <%!-- The chevron is the way out of a drill-down, so on an editing screen it is
-              also the way out of unsaved work. `back_confirm` is nil unless there is
-              something to lose, so a clean screen never prompts. --%>
-        <.link
-          :if={@back}
-          navigate={@back}
-          class="dim text-[15px] leading-none"
-          aria-label={@back_label}
-          data-confirm={@back_confirm}
-        >
-          ‹
-        </.link>
-        <div class="min-w-0">
-          <div :if={@eyebrow} class="lbl dim"><%= @eyebrow %></div>
-          <div class={["ttl truncate font-semibold", if(@eyebrow, do: "text-[15px] mt-0.5", else: "text-[17px]")]}>
-            <%= @title %>
+    <div class={["row shrink-0 px-4 py-3", @class]} style="background:var(--b2)">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <%!-- The chevron is the way out of a drill-down, so on an editing screen it is
+                also the way out of unsaved work. `back_confirm` is nil unless there is
+                something to lose, so a clean screen never prompts. --%>
+          <.link
+            :if={@back}
+            navigate={@back}
+            class="dim text-[15px] leading-none"
+            aria-label={@back_label}
+            data-confirm={@back_confirm}
+          >
+            ‹
+          </.link>
+          <div class="min-w-0">
+            <div :if={@eyebrow} class="lbl dim"><%= @eyebrow %></div>
+            <div class={["ttl truncate font-semibold", if(@eyebrow, do: "text-[15px] mt-0.5", else: "text-[17px]")]}>
+              <%= @title %>
+            </div>
+            <div :if={@subtitle} class="lbl dim mt-0.5"><%= @subtitle %></div>
           </div>
-          <div :if={@subtitle} class="lbl dim mt-0.5"><%= @subtitle %></div>
+        </div>
+        <div :if={@actions != []} class="flex items-center gap-1.5 shrink-0">
+          <%= render_slot(@actions) %>
         </div>
       </div>
-      <div :if={@actions != []} class="flex items-center gap-1.5 shrink-0">
-        <%= render_slot(@actions) %>
+      <%!-- The perspective control's own row. It moved here from the top row on play,
+            the campaign hub and the published reader **at once** — a half-migrated
+            control is the drift play.md's perspective-control section was written
+            against. Left is the control; right is *which line you are in*: the branch
+            selector on play and the hub, the off-canon pill in the reader. --%>
+      <div :if={@pills != []} class="flex items-center justify-between gap-2 pt-2">
+        <%= render_slot(@pills) %>
       </div>
     </div>
     """
@@ -239,7 +254,7 @@ defmodule PolyphonyWeb.Kit do
   attr(:caret, :boolean, default: true, doc: "show ▾ — off when it isn't switchable")
   attr(:tag, :string, default: "span", doc: "span, button or a — a control when it acts")
   attr(:class, :string, default: nil)
-  attr(:rest, :global)
+  attr(:rest, :global, include: ~w(type))
 
   def viewas(assigns) do
     ~H"""
@@ -667,10 +682,23 @@ defmodule PolyphonyWeb.Kit do
   attr(:beat, :integer, required: true)
   attr(:class, :string, default: nil)
 
+  slot(:action,
+    doc:
+      "the far end of the rule — play's ⑂ Branch control. `order:1` puts it past the " <>
+        "rule `beat-rule::after` draws, so the affordance sits at the seam's quiet end."
+  )
+
   def beat_rule(assigns) do
     ~H"""
     <div class={["beat-rule", @class]}>
       <span class="ttl text-[14px] font-semibold">Beat <%= @beat %></span>
+      <span
+        :if={@action != []}
+        class="flex items-center gap-1.5"
+        style="order:1;white-space:nowrap"
+      >
+        <%= render_slot(@action) %>
+      </span>
     </div>
     """
   end

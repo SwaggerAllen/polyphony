@@ -139,7 +139,10 @@ defmodule Storybook.Screens.Browse do
       gone: nil,
       who: nil,
       info: false,
-      reporting: nil
+      reporting: nil,
+      off_canon: nil,
+      diverged: nil,
+      gone_notice: nil
     }
   end
 
@@ -306,6 +309,34 @@ defmodule Storybook.Screens.Browse do
         :disconnected,
         "phx-error",
         "The socket is gone and not coming back on its own. The pager and the perspective control stop responding; the text you already have stays readable, which is why this state doesn't borrow play's urgency — and there is no retry, because this is the transport rather than the fiction."
+      ),
+      v(
+        :reading_off_canon,
+        "Reading a line that isn't the current one. The pill sits on the second row of the header, in the slot the branch selector holds on play and the campaign hub — same position, same question, *which line is this* — and a reader has no branch to choose, so what fills it is a statement rather than a picker. Neutral, not gold: a reader following a link they were sent is exactly where somebody meant them to be. Tapping it explains and offers the switch, which lands at the last point the two lines share.",
+        read(%{
+          off_canon: %{shared_point: "The tide bell", author: "@ilias", open: true}
+        })
+      ),
+      v(
+        :continue_reading_diverged,
+        "Picking up a story that has moved on. A dialog rather than a pill, because *continue reading* is a request to be put somewhere and this is the moment to say the obvious place has changed. Reading the current version is primary and not out of deference — an abandoned line ends wherever it was left, so the recommendation is about which version has more story in it. Carrying on stays available and unstigmatised, and the question is asked once per line, not once per visit.",
+        front(%{
+          bookmark: %{scene_id: "sc2", perspective: "wren"},
+          diverged: %{shared_point: "The tide bell", author: "@ilias"}
+        })
+      ),
+      v(
+        :scene_gone,
+        "A link to a scene that has since been deleted from its line. The reader lands at the line's earliest change — the cursor — rather than at an error, because that is the last point they can trust: everything after it may have moved, and the deleted scene is proof that something did. Distinct from `bookmark_gone`, which is a whole story disappearing, and from `branch_gone`, where the line itself went.",
+        read(%{gone_notice: %{kind: :scene, author: "@ilias"}})
+      ),
+      v(
+        :branch_gone,
+        "A link to a version that was deleted. Not a 404 — a record survives deletion (the line's id, its parent, the cut beat), so the reader lands on the nearest surviving ancestor at the cut point, not on canonical: the parent is what they were actually reading. No apology, because deleting an abandoned line is tidying, not retraction. Where they land may itself be off-canon, in which case the pill applies on top — the two states compose.",
+        read(%{
+          gone_notice: %{kind: :branch, author: "@ilias"},
+          off_canon: %{shared_point: "The tide bell", author: "@ilias", open: false}
+        })
       ),
       v(
         :nobody_shared,

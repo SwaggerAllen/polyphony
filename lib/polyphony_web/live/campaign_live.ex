@@ -33,6 +33,7 @@ defmodule PolyphonyWeb.CampaignLive do
   alias Polyphony.Repo
   alias Polyphony.ReadModels.ArcEntry, as: ReadArcEntry
   alias Polyphony.ReadModels.BuildRun
+  alias Polyphony.Branching
   alias Polyphony.Campaigns
   alias PolyphonyCore.Content.CampaignConfig
   alias PolyphonyCore.Publication
@@ -91,6 +92,14 @@ defmodule PolyphonyWeb.CampaignLive do
          # proposals is being corrected.
          gate_expanded: nil,
          gate_editing: nil,
+         # Which line the hub is scoped to (STR-8). Nil until the URL says
+         # otherwise; `assign_branch_state/1` resolves it to canonical.
+         line_id: nil,
+         line: nil,
+         branch: nil,
+         branches: [],
+         branch_navigator_open: false,
+         branch_deleting: nil,
          tab: "settings"
        )
        |> subscribe_build(entry)
@@ -111,7 +120,17 @@ defmodule PolyphonyWeb.CampaignLive do
   def handle_params(params, _uri, socket) do
     {:noreply,
      socket
-     |> assign(tab: tab_param(params["tab"]), viewer: viewer_param(socket, params))
+     |> assign(
+       tab: tab_param(params["tab"]),
+       viewer: viewer_param(socket, params),
+       # The current line and the navigator live in the URL like the tab does:
+       # the hub gained a mode, and a mode that doesn't survive a reload is a
+       # mode the header would silently lie about.
+       line_id: params["branch"],
+       branch_navigator_open: params["branches"] == "open"
+     )
+     |> assign_branch_state()
+     |> assign_scene_rows()
      |> assign_seen()}
   end
 
@@ -205,11 +224,83 @@ defmodule PolyphonyWeb.CampaignLive do
       groups: group_rows(owner, socket.assigns.entry.id),
       published?: Library.published?(socket.assigns.entry)
     )
+    |> assign_branch_state()
     |> assign_scene_rows()
     |> assign_arc_rows()
     |> assign_seen()
     |> preflight()
   end
+
+  # ── Branch state (STR-8) ──────────────────────────────────────────────────────
+
+  # The hub shows one branch at a time, and says which. Everything hangs off
+  # whether the campaign has ever branched: with one line there is no pill, no
+  # navigator, and no scoping — a campaign that has never branched is not a
+  # campaign with one branch.
+  defp assign_branch_state(socket) do
+    cid = socket.assigns.entry.id
+
+    if Branching.branched?(cid) do
+      tree = Branching.tree(cid)
+      line = current_line(tree, socket.assigns[:line_id])
+
+      socket
+      |> assign(
+        line: line,
+        branch: line && %{id: line.id, name: line.name, canon?: line.canonical},
+        branches: navigator_rows(socket, tree, line),
+        # Choosing a line scopes the whole hub to it: its scenes here, and the
+        # cast/world copies once copy-on-branch carries them (the scenes list is
+        # what exists to scope today).
+        scenes: Branching.scenes_for(cid, line)
+      )
+    else
+      assign(socket, line: nil, branch: nil, branches: [], branch_navigator_open: false)
+    end
+  end
+
+  # The line the URL names, falling back to canonical — the hub opens on it.
+  defp current_line(tree, line_id) do
+    branches = Enum.map(tree, & &1.branch)
+
+    Enum.find(branches, &(to_string(&1.id) == to_string(line_id))) ||
+      Enum.find(branches, & &1.canonical) ||
+      List.first(branches)
+  end
+
+  defp navigator_rows(socket, tree, line) do
+    names = Map.new(tree, fn %{branch: b} -> {b.id, b.name} end)
+
+    all_scenes =
+      (Library.payload(socket.assigns.entry) || %{})
+      |> Map.get(:scenes)
+      |> List.wrap()
+      |> MapSet.new(&to_string/1)
+
+    for %{branch: b, depth: depth} <- tree do
+      %{
+        id: b.id,
+        name: b.name,
+        made_label: made_label(b),
+        canon?: b.canonical,
+        current?: line != nil and line.id == b.id,
+        depth: depth,
+        parent_name: names[b.parent_id],
+        # A branch whose origin scene was deleted says so here, and nowhere else —
+        # lineage is the parent pointer, so nothing else is affected.
+        origin_gone?:
+          b.origin_scene_id != nil and not MapSet.member?(all_scenes, b.origin_scene_id)
+      }
+    end
+  end
+
+  # The timestamp earns its row: recall runs on *the one from Tuesday evening* far
+  # more reliably than on any generated name.
+  defp made_label(%{parent_id: nil, inserted_at: at}),
+    do: "Started #{Calendar.strftime(at, "%-d %b")}"
+
+  defp made_label(%{inserted_at: at}),
+    do: "Branched #{Calendar.strftime(at, "%-d %b, %-I:%M%P")}"
 
   # The gate made visible on the cast rows (STR-62): per-character pending arc,
   # extraction still running, extraction failed — plus the world's own band and the
@@ -877,6 +968,11 @@ defmodule PolyphonyWeb.CampaignLive do
   # somebody's work, so it answers to ownership rather than to being signed in.
   def handle_event("delete_scene", %{"id" => scene_id}, socket) do
     owned(socket, fn ->
+      # Before the delete, while the scene still has a position: deleting a scene
+      # changes the line from that scene's start onward, so the divergence cursor
+      # moves there if it isn't already earlier (STR-8).
+      Branching.notice_change(socket.assigns.entry.id, scene_id, 0)
+
       case Campaigns.delete_scene(socket.assigns.entry.id, scene_id) do
         {:ok, %{rows: rows}} ->
           {:noreply,
@@ -890,6 +986,131 @@ defmodule PolyphonyWeb.CampaignLive do
         # second time would claim work nobody did.
         {:error, :no_such_scene} ->
           {:noreply, load(socket)}
+      end
+    end)
+  end
+
+  # ── The branch navigator (STR-8) ─────────────────────────────────────────────
+
+  # The navigator's visibility lives in the URL like the tab does, so play can
+  # link straight into it and a reload lands where you were.
+  def handle_event("open_branches", _params, socket),
+    do: {:noreply, push_patch(socket, to: hub_path(socket, branches: "open"))}
+
+  def handle_event("close_branches", _params, socket),
+    do: {:noreply, socket |> assign(branch_deleting: nil) |> push_patch(to: hub_path(socket, []))}
+
+  # Choosing a branch closes the navigator and re-scopes the hub.
+  def handle_event("choose_branch", %{"id" => id}, socket) do
+    {:noreply,
+     socket
+     |> assign(line_id: id, branch_deleting: nil)
+     |> push_patch(to: hub_path(socket, branch: id))}
+  end
+
+  def handle_event("set_canonical", %{"id" => id}, socket) do
+    owned(socket, fn ->
+      case Branching.set_canonical(id) do
+        :ok ->
+          {:noreply,
+           socket
+           |> put_flash(
+             :info,
+             "That line is canonical now — it's what publishes and what the hub opens on."
+           )
+           |> assign_branch_state()
+           |> assign_scene_rows()}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Couldn't set that line canonical.")}
+      end
+    end)
+  end
+
+  def handle_event("rename_branch", %{"branch" => id, "name" => name}, socket) do
+    owned(socket, fn ->
+      case Branching.rename(id, name) do
+        :ok ->
+          {:noreply, socket |> assign_branch_state() |> assign_scene_rows()}
+
+        {:error, :empty_name} ->
+          {:noreply, put_flash(socket, :error, "A line needs a name.")}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Couldn't rename that line.")}
+      end
+    end)
+  end
+
+  def handle_event("archive_branch", %{"id" => id}, socket) do
+    owned(socket, fn ->
+      case Branching.archive(id) do
+        :ok ->
+          {:noreply,
+           socket
+           |> assign(branch_deleting: nil)
+           |> maybe_leave_line(id)
+           |> put_flash(:info, "Archived. It keeps everything and can come back.")
+           |> assign_branch_state()
+           |> assign_scene_rows()}
+
+        {:error, :canonical} ->
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "The canonical line can't be archived. Set another line canonical first."
+           )}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Couldn't archive that line.")}
+      end
+    end)
+  end
+
+  def handle_event("branch_delete_open", %{"id" => id}, socket),
+    do: {:noreply, assign(socket, branch_deleting: deleting_view(socket, id))}
+
+  def handle_event("branch_delete_cancel", _params, socket),
+    do: {:noreply, assign(socket, branch_deleting: nil)}
+
+  # Recursive is a toggle, default off, and counted — deleting a whole abandoned
+  # subtree is a real thing to want and also the destructive default that would
+  # eat work nobody meant to lose.
+  def handle_event("branch_delete_recursive", _params, socket) do
+    case socket.assigns.branch_deleting do
+      nil -> {:noreply, socket}
+      d -> {:noreply, assign(socket, branch_deleting: %{d | recursive?: not d.recursive?})}
+    end
+  end
+
+  def handle_event("branch_delete_confirm", _params, socket) do
+    owned(socket, fn ->
+      case socket.assigns.branch_deleting do
+        nil ->
+          {:noreply, socket}
+
+        d ->
+          case Branching.delete(d.id, recursive: d.recursive?) do
+            {:ok, %{deleted: deleted, reparented: reparented}} ->
+              {:noreply,
+               socket
+               |> assign(branch_deleting: nil, entry: Library.get(socket.assigns.entry.id))
+               |> maybe_leave_line(d.id)
+               |> put_flash(:info, deleted_branch_note(deleted, reparented))
+               |> load()}
+
+            {:error, :canonical} ->
+              {:noreply,
+               put_flash(
+                 socket,
+                 :error,
+                 "The canonical line can't be deleted. Set another line canonical first."
+               )}
+
+            {:error, _} ->
+              {:noreply, put_flash(socket, :error, "Couldn't delete that line.")}
+          end
       end
     end)
   end
@@ -1101,6 +1322,70 @@ defmodule PolyphonyWeb.CampaignLive do
   def handle_info({:build_cleared, _campaign_id}, socket),
     do: {:noreply, assign(socket, build: nil)}
 
+  defp deleted_branch_note(1, 0), do: "Deleted. Links into it will land on its parent at the cut."
+
+  defp deleted_branch_note(1, n),
+    do:
+      "Deleted. Its #{n} #{if n == 1, do: "branch", else: "branches"} moved up a level, " <>
+        "and links into it will land on its parent at the cut."
+
+  defp deleted_branch_note(n, _),
+    do: "Deleted #{n} lines. Links into them will land on the nearest surviving line."
+
+  # Leaving the line you were scoped to (archived or deleted) falls back to
+  # canonical rather than a header naming a line that no longer exists.
+  defp maybe_leave_line(socket, id) do
+    if to_string(socket.assigns[:line_id]) == to_string(id),
+      do: assign(socket, line_id: nil),
+      else: socket
+  end
+
+  defp hub_path(socket, extra) do
+    params =
+      [tab: socket.assigns.tab] ++
+        if(socket.assigns[:line_id], do: [branch: socket.assigns.line_id], else: []) ++
+        Enum.map(extra, fn {k, v} -> {k, v} end)
+
+    ~p"/campaigns/#{socket.assigns.entry.id}?#{params}"
+  end
+
+  # The delete confirm's raw material: what goes, and where the children end up —
+  # by name, because that is a fact somebody needs before agreeing, not after.
+  defp deleting_view(socket, id) do
+    tree = Branching.tree(socket.assigns.entry.id, include_archived: true)
+    branches = Enum.map(tree, & &1.branch)
+    by_parent = Enum.group_by(branches, & &1.parent_id)
+
+    case Enum.find(branches, &(to_string(&1.id) == to_string(id))) do
+      nil ->
+        nil
+
+      b ->
+        children = Map.get(by_parent, b.id, [])
+        parent = Enum.find(branches, &(&1.id == b.parent_id))
+
+        %{
+          id: b.id,
+          name: b.name,
+          scenes: length(Branching.scenes_for(socket.assigns.entry.id, b)),
+          children_names: Enum.map(children, & &1.name),
+          beneath: descendants_below(by_parent, children),
+          parent_name: (parent && parent.name) || "the original line",
+          cut_label: if(b.cut_beat, do: "beat #{b.cut_beat}", else: "the start"),
+          recursive?: false
+        }
+    end
+  end
+
+  defp descendants_below(by_parent, children) do
+    children
+    |> Enum.map(fn c ->
+      kids = Map.get(by_parent, c.id, [])
+      length(kids) + descendants_below(by_parent, kids)
+    end)
+    |> Enum.sum()
+  end
+
   # Open the scene for the ready cast (the arc-review gate has passed).
   defp start_scene(socket, ready, pending) do
     %{entry: entry, payload: payload} = socket.assigns
@@ -1143,7 +1428,17 @@ defmodule PolyphonyWeb.CampaignLive do
       retriever: PgvectorRetriever
     )
 
-    Library.update_payload(entry.id, %{payload | scenes: [scene_id | socket.assigns.scenes]})
+    # The payload's own list, not the (branch-scoped) `scenes` assign — writing the
+    # scoped list back would silently drop every other line's scenes (STR-8).
+    Library.update_payload(
+      entry.id,
+      %{payload | scenes: [scene_id | List.wrap(payload[:scenes])]}
+    )
+
+    # A scene opened while working in a branch belongs to that line; unclaimed
+    # scenes belong to the root, so a never-branched campaign records nothing.
+    with %{id: line_id, parent_id: parent} when not is_nil(parent) <- socket.assigns.line,
+         do: Branching.claim_scene(line_id, scene_id)
 
     {:noreply,
      socket

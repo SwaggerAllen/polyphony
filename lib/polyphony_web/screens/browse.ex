@@ -167,6 +167,8 @@ defmodule PolyphonyWeb.Screens.Browse do
   # ── A story's front page ─────────────────────────────────────────────────────
 
   defp front_page(assigns) do
+    assigns = assign_new(assigns, :diverged, fn -> nil end)
+
     ~H"""
     <Kit.frame register={:page} class="flex flex-col min-h-[100dvh]">
       <Kit.header title={@row.name} eyebrow="Browse" subtitle={front_meta(@row)} back={~p"/browse"}>
@@ -258,6 +260,40 @@ defmodule PolyphonyWeb.Screens.Browse do
         </Kit.sheet>
 
         <.report_panel :if={@reporting} {assigns} />
+      </div>
+
+      <%!-- Picking up a story that has moved on (browse.md, `continue_reading_diverged`).
+            A dialog rather than a pill, because *continue reading* is a request to be
+            put somewhere and this is the moment to say the obvious place has changed.
+            The current version is primary and not out of deference: an abandoned line
+            ends wherever it was left, so the recommendation is about which version has
+            more story in it. Asked once per line, not once per visit. --%>
+      <div
+        :if={@diverged}
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style="background:color-mix(in srgb,var(--b1) 72%,transparent)"
+        role="dialog"
+        aria-label="This story has moved on"
+      >
+        <div class="sheet p-4 w-full" style="max-width:420px;background:var(--b2)">
+          <div class="lbl dim mb-1"><%= @row.name %></div>
+          <h3 class="ttl text-[15px] mb-2 font-semibold">This story has moved on</h3>
+          <p class="text-[13px] leading-relaxed mb-3">
+            You're partway through a version <%= @diverged.author %> stopped writing. It ends
+            where they left it — the version they're still adding to picks up from
+            <strong><%= @diverged.shared_point %></strong>, where the two last agree.
+          </p>
+          <div class="flex flex-col gap-1.5">
+            <Kit.btn kind={:primary} type="button" class="justify-center" phx-click="continue_current">
+              Read the current version
+            </Kit.btn>
+            <%!-- Available and unstigmatised: somebody may want to finish the version
+                  they started, and that is not a mistake. --%>
+            <Kit.btn kind={:ghost} type="button" class="justify-center" phx-click="continue_anyway">
+              Carry on where I was
+            </Kit.btn>
+          </div>
+        </div>
       </div>
     </Kit.frame>
     """
@@ -395,6 +431,8 @@ defmodule PolyphonyWeb.Screens.Browse do
       |> assign_new(:token, fn -> nil end)
       |> assign_new(:id, fn -> "" end)
       |> assign_new(:info, fn -> false end)
+      |> assign_new(:off_canon, fn -> nil end)
+      |> assign_new(:gone_notice, fn -> nil end)
 
     ~H"""
     <Kit.frame register={:page} class="flex flex-col min-h-[100dvh]">
@@ -405,45 +443,63 @@ defmodule PolyphonyWeb.Screens.Browse do
         back_label="The front page"
       >
         <:actions>
-          <form id={eid(@id, "mode-form")} phx-change="switch_mode">
-            <Kit.viewas_select
-              id={eid(@id, "mode-select")}
-              label="Reading as"
-              name="as"
-              colour={mode_colour(@mode, voices(@snapshot))}
-            >
-              <optgroup label="Who can show you this">
-                <option
-                  :for={m <- can_show(@snapshot, @scene, @pub, @mode)}
-                  value={Publication.to_param(m)}
-                  selected={m == @mode}
-                >
-                  <%= Publication.label(m, nil, @names) %>
-                </option>
-              </optgroup>
-              <%!-- Sorted by what it can actually give you here, with the reader's
-                    current perspective kept rather than removed, so nothing jumps. --%>
-              <optgroup :if={cannot_show(@snapshot, @scene, @pub, @mode) != []} label="Not in this one">
-                <option
-                  :for={m <- cannot_show(@snapshot, @scene, @pub, @mode)}
-                  value={Publication.to_param(m)}
-                  selected={m == @mode}
-                >
-                  <%= Publication.label(m, nil, @names) %> — wasn't there
-                </option>
-              </optgroup>
-            </Kit.viewas_select>
-          </form>
-          <%!-- The one thing the reader adds beside the control, and the only
-                surface-specific affordance the perspective control carries anywhere
-                (play.md, *The perspective control*). The control itself is identical
-                on all three surfaces; the explanation is not, because a reader is
-                being shown a deliberately partial story and has no way to know that
-                is intended. No toast on switch — the answer lives where somebody
-                confused would idiomatically go looking. --%>
-          <Kit.info label="Reading as" phx-click="reading_as_info" />
           <Layouts.nav_menu current_user={@current_user} />
         </:actions>
+        <:pills>
+          <div class="flex items-center gap-1.5 shrink-0 min-w-0">
+            <form id={eid(@id, "mode-form")} phx-change="switch_mode">
+              <Kit.viewas_select
+                id={eid(@id, "mode-select")}
+                label="Reading as"
+                name="as"
+                colour={mode_colour(@mode, voices(@snapshot))}
+              >
+                <optgroup label="Who can show you this">
+                  <option
+                    :for={m <- can_show(@snapshot, @scene, @pub, @mode)}
+                    value={Publication.to_param(m)}
+                    selected={m == @mode}
+                  >
+                    <%= Publication.label(m, nil, @names) %>
+                  </option>
+                </optgroup>
+                <%!-- Sorted by what it can actually give you here, with the reader's
+                      current perspective kept rather than removed, so nothing jumps. --%>
+                <optgroup :if={cannot_show(@snapshot, @scene, @pub, @mode) != []} label="Not in this one">
+                  <option
+                    :for={m <- cannot_show(@snapshot, @scene, @pub, @mode)}
+                    value={Publication.to_param(m)}
+                    selected={m == @mode}
+                  >
+                    <%= Publication.label(m, nil, @names) %> — wasn't there
+                  </option>
+                </optgroup>
+              </Kit.viewas_select>
+            </form>
+            <%!-- The one thing the reader adds beside the control, and the only
+                  surface-specific affordance the perspective control carries anywhere
+                  (play.md, *The perspective control*). The control itself is identical
+                  on all three surfaces; the explanation is not, because a reader is
+                  being shown a deliberately partial story and has no way to know that
+                  is intended. No toast on switch — the answer lives where somebody
+                  confused would idiomatically go looking. --%>
+            <Kit.info label="Reading as" phx-click="reading_as_info" />
+          </div>
+          <%!-- The off-canon pill (browse.md, `reading_off_canon`), in the slot the
+                branch selector holds on play and the hub. A reader has no branch to
+                choose, so what fills it is a statement rather than a picker. Neutral,
+                not gold: a reader following a link they were sent is exactly where
+                somebody meant them to be — a fact, not a warning. --%>
+          <Kit.viewas
+            :if={@off_canon}
+            tag="button"
+            type="button"
+            label="Not the current version"
+            colour="var(--bc)"
+            class="shrink-0 ml-auto"
+            phx-click="off_canon_open"
+          />
+        </:pills>
       </Kit.header>
 
       <%!-- Connection. The same class-driven treatment as play's, promising less: a
@@ -482,6 +538,73 @@ defmodule PolyphonyWeb.Screens.Browse do
       </Kit.info_drawer>
 
       <div class="flex-1 min-h-0 overflow-y-auto px-5 pb-3">
+        <%!-- Tapping the off-canon pill explains and offers the switch, which lands
+              at the last point the two lines share — everything before it is
+              identical, so there is no reason to make anybody read it twice. The copy
+              deliberately doesn't distinguish how they got here: a link into a
+              non-canonical line and a line that stopped being canonical under them
+              get the same answer. --%>
+        <Kit.sheet :if={@off_canon && @off_canon[:open]} class="my-3 p-4">
+          <h3 class="ttl text-[15px] mb-2 font-semibold">You're reading an older version</h3>
+          <p class="text-[13px] leading-relaxed mb-2">
+            <%= @off_canon.author %> has since published a different version of this story.
+            The two are the same up to <strong><%= @off_canon.shared_point %></strong>, and
+            go different ways after it.
+          </p>
+          <p class="text-[12px] leading-relaxed dim mb-3">
+            This one stays where it is. Nothing you've read disappears.
+          </p>
+          <div class="flex flex-col gap-1.5">
+            <Kit.btn kind={:primary} type="button" class="justify-center" phx-click="switch_to_current">
+              Read the current version
+            </Kit.btn>
+            <Kit.btn kind={:ghost} type="button" class="justify-center" phx-click="off_canon_close">
+              Stay on this one
+            </Kit.btn>
+          </div>
+        </Kit.sheet>
+
+        <%!-- A link to a scene that isn't there any more (browse.md, `scene_gone`):
+              the reader lands at the line's earliest change — the cursor — because
+              that is the last point they can trust. Distinct from `bookmark_gone`,
+              which is a whole story disappearing. --%>
+        <Kit.sheet :if={@gone_notice && @gone_notice.kind == :scene} class="my-3 p-4">
+          <div class="lbl dim mb-1"><%= story_name(@snapshot) %></div>
+          <h3 class="ttl text-[15px] mb-2 font-semibold">That scene isn't there any more</h3>
+          <p class="text-[13px] leading-relaxed mb-3">
+            The link pointed at a scene <%= @gone_notice.author %> has since removed. You're
+            at the last point this version was still the story you were sent.
+          </p>
+          <div class="flex flex-col gap-1.5">
+            <Kit.btn kind={:primary} type="button" class="justify-center" phx-click="dismiss_gone">
+              Carry on from here
+            </Kit.btn>
+          </div>
+        </Kit.sheet>
+
+        <%!-- A link to a version that was deleted (browse.md, `branch_gone`). Not a
+              404: a record survives deletion — the line's id, its parent, the cut
+              beat — so the reader lands on the nearest surviving ancestor, at the
+              cut. No apology: deleting an abandoned line is tidying, not
+              retraction. Where they land may itself be off-canon, in which case the
+              pill above applies on top — the two states compose. --%>
+        <Kit.sheet :if={@gone_notice && @gone_notice.kind == :branch} class="my-3 p-4">
+          <div class="lbl dim mb-1"><%= story_name(@snapshot) %></div>
+          <h3 class="ttl text-[15px] mb-2 font-semibold">That version was deleted</h3>
+          <p class="text-[13px] leading-relaxed mb-2">
+            The link named a version <%= @gone_notice.author %> has removed. This is the one
+            it came from, at the point they parted.
+          </p>
+          <p class="text-[12px] leading-relaxed dim mb-3">
+            Nothing was taken down — a line was tidied up.
+          </p>
+          <div class="flex flex-col gap-1.5">
+            <Kit.btn kind={:primary} type="button" class="justify-center" phx-click="dismiss_gone">
+              Carry on from here
+            </Kit.btn>
+          </div>
+        </Kit.sheet>
+
         <Transcript.transcript
           :if={@gap == nil}
           events={@events}

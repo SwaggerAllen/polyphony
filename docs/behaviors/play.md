@@ -1,6 +1,6 @@
 # Play
 
-<!-- rev: 5 -->
+<!-- rev: 6 -->
 
 | | |
 |---|---|
@@ -29,6 +29,26 @@ difference is a property of the data rather than an instruction anybody gave a m
   generation failure is a hole in the fiction and carries a retry; a lost connection is the
   transport, and everything on screen is still true — it has simply stopped being live. They
   look identical from the seat, which is exactly why the copy has to distinguish them.
+- **A branch is a scene, cut at a beat.** Three operations get confused with each other and
+  the vocabulary keeps them apart: moving a turn **within** a beat is a *reorder*, moving one
+  **between** beats is a rewrite of history, and a rewrite of history is a **branch**. There is
+  deliberately no turn-level fork control — see *Confirmed non-asks* — because a branch is not
+  an edit to a moment, it is a second version of everything after it. The cut lands on a **beat
+  boundary**, the transcript's only seam: where the room has finished speaking and nothing is
+  half-said.
+
+  A branch **copies everything and shares nothing.** Its cast are copies, its world is a copy,
+  and from the cut onwards the two lines are separate stories that happen to remember the same
+  past. That is what makes two live branches safe rather than confusing: the Wren in one is not
+  the Wren in the other, so their sheets can disagree without either being wrong, and neither
+  line's arc proposals can reach the other's queue.
+- **A branch is not a fork, and the words are not interchangeable.** A **branch** is a second
+  line inside your own campaign; it appears in the branch navigator and only the canonical one
+  publishes. A **fork** is somebody taking a published story into their own library, where it
+  becomes a campaign of theirs — independently publishable, never visible in the original
+  author's navigator. Both are `Fork.fork/3` underneath, which is exactly why the product must
+  keep them apart in language: one word doing two jobs is what made *only canonical publishes*
+  look like it needed an exception, when it never did.
 - **The composer answers a specific slot at a specific beat.** Not "the next free moment" —
   a turn committed at whatever beat happens to be current is how one beat ends up with two
   turns from the same person.
@@ -67,6 +87,18 @@ isn't. An author choosing a projection to write as is not being kept from anythi
 is being shown a deliberately partial story with no way to know that is intended rather than
 broken.
 
+**The control sits on a row of its own, and it is the same row everywhere.** Header layout on
+any screen carrying a perspective control is two rows: the title block and the menu on top,
+then the control on the left of a second row with **which line you are in** on its right. On
+play and the campaign hub that right-hand slot is the branch selector; in the published reader
+it is the off-canon pill. Same position, same question.
+
+This is a change to the control's position, so it moves on all three surfaces at once or on
+none — a half-migrated control is precisely the drift this section was written against. It
+buys two things beyond consistency: an authored scene title stops competing with a pill for
+the top row, and a second control finally balances a row that would otherwise hold one pill
+against dead space.
+
 The line between the two is worth holding precisely: **the trigger, its markup, its position
 and its options are the control** and may not vary. An affordance placed next to it, opening
 something that is not the control, is not covered by this decision. If a fourth surface wants
@@ -87,10 +119,68 @@ open, that is the error.
 Everything visible, interiority included, and the composer writes as whoever the perspective
 control names. This is the author's working view of their own story.
 
+**The header carries the branch selector when the campaign has more than one line** — a pill
+naming the current branch, on the second row beside the perspective control, opening the
+navigator unfolded to where you are. Its dot is **gold on the canonical line and neutral off
+it**: canon is the marked state rather than the alarming one, because it is what publishes,
+what the hub opens on, and what a party follows. See `campaign.md`, which defines it.
+
+Absent entirely when there is one line. A campaign that has never branched is not a campaign
+with one branch.
+
+**Beat dividers carry a branch control.** The divider is the transcript's only structural seam
+and the only place a cut is meaningful, so the affordance lives there rather than on a turn. It
+reads **⑂ Branch** and nothing more: the divider's position already says *before what is below
+this line*, and spelling the beat out on every seam spends words on the many people who will
+never use it. A first-time author may tap the wrong seam once — the confirm names the beat
+before anything happens, which is the right place for that sentence.
+
+Not offered on the newest beat. Branching from the end of a scene is starting a scene, and the
+campaign screen does that better.
+
 ### `page` — Read as one character
 
 The same scene as Wren. Gutter labels gone, type larger, and shorter — because what she was
 never told isn't there. See the standing decision above.
+
+**The header carries the branch selector when the campaign has more than one line** — a pill
+naming the current branch, on the second row beside the perspective control, opening the
+navigator unfolded to where you are. Its dot is **gold on the canonical line and neutral off
+it**: canon is the marked state rather than the alarming one, because it is what publishes,
+what the hub opens on, and what a party follows. See `campaign.md`, which defines it.
+
+Absent entirely when there is one line. A campaign that has never branched is not a campaign
+with one branch.
+
+**Beat dividers carry a branch control.** The divider is the transcript's only structural seam
+and the only place a cut is meaningful, so the affordance lives there rather than on a turn. It
+reads **⑂ Branch** and nothing more: the divider's position already says *before what is below
+this line*, and spelling the beat out on every seam spends words on the many people who will
+never use it. A first-time author may tap the wrong seam once — the confirm names the beat
+before anything happens, which is the right place for that sentence.
+
+Not offered on the newest beat. Branching from the end of a scene is starting a scene, and the
+campaign screen does that better.
+
+### `branching` — About to take a second run at it
+
+The confirm, and it exists because this is the largest cheap action in the product: one tap
+produces a copy of a world, a cast and a history.
+
+**It names the beat**, which the divider deliberately does not. Then three things, and the
+third is the one people get wrong:
+
+- **What comes with you.** Everything up to the cut — the world, the people, and the beats
+  already played. Not the beat below the divider: the cut is *before* it.
+- **Where you end up.** In the branch, immediately, with the campaign hub following you there.
+  The reason somebody asks for one is that they want to keep going differently, so landing
+  anywhere else would be a detour.
+- **What happens to the original.** *Nothing.* It stays exactly where it is and stays playable.
+  This is not an undo and the line you are leaving is not being abandoned — both are live.
+
+No *are you sure*. Nothing is destroyed and walking away from the branch undoes it, so a
+confirmation borrowing the grammar of deletion misrepresents the act. The question is *do you
+want two of these*, not *do you accept the risk*.
 
 ### `empty` — A scene nobody has played
 

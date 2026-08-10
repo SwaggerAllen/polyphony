@@ -130,8 +130,71 @@ defmodule Storybook.Screens.Campaign do
       publish_warning: nil,
       pub_spectator: false,
       pub_forkable: false,
-      pub_perspectives: []
+      pub_perspectives: [],
+      branch: nil,
+      branches: [],
+      branch_navigator_open: false,
+      branch_deleting: nil
     }
+  end
+
+  # The tree the navigator draws, and the pill's source of truth. Named per the
+  # mechanical default — *scene · location · beat*, ordinal only on collision (see
+  # the 9:12/11:40 pair) — with depth capped at two for presentation: the fourth
+  # level indents no further and carries its parent's name instead.
+  defp branches do
+    [
+      %{
+        id: "b0",
+        name: "The Salt Line",
+        made_label: "Started 12 Mar",
+        canon?: true,
+        current?: false,
+        depth: 0,
+        parent_name: nil,
+        origin_gone?: false
+      },
+      %{
+        id: "b1",
+        name: "The quay · beat 3",
+        made_label: "Branched 4 Aug, 9:12pm",
+        canon?: false,
+        current?: false,
+        depth: 1,
+        parent_name: "The Salt Line",
+        origin_gone?: false
+      },
+      %{
+        id: "b2",
+        name: "The quay · beat 3 (2)",
+        made_label: "Branched 4 Aug, 11:40pm",
+        canon?: false,
+        current?: false,
+        depth: 2,
+        parent_name: "The quay · beat 3",
+        origin_gone?: false
+      },
+      %{
+        id: "b3",
+        name: "The quay · beat 6",
+        made_label: "Branched Tue 7 Aug, 8:05pm",
+        canon?: false,
+        current?: true,
+        depth: 1,
+        parent_name: "The Salt Line",
+        origin_gone?: false
+      },
+      %{
+        id: "b4",
+        name: "The counting house · beat 2",
+        made_label: "Branched Tue 7 Aug, 10:30pm",
+        canon?: false,
+        current?: false,
+        depth: 3,
+        parent_name: "The quay · beat 6",
+        origin_gone?: true
+      }
+    ]
   end
 
   defp v(id, description, overrides),
@@ -489,6 +552,45 @@ defmodule Storybook.Screens.Campaign do
         :scenes_empty,
         "Nothing has happened yet, on a campaign with a cast ready to make it happen.",
         %{tab: "scenes"}
+      ),
+      v(
+        :branch_selector,
+        "Which line you are in. This screen defines the pill; play and the published reader use it. It sits on the second row of the header beside the perspective control, neutral-dotted here because this line isn't canonical — canon is the marked state (gold), not the alarming one, and being off it is the ordinary way to work. Privacy and the menu sit beside the title, thinning a top row that was carrying four things. Absent entirely when the campaign has one line.",
+        %{
+          tab: "scenes",
+          branch: %{id: "b3", name: "The quay · beat 6", canon?: false},
+          branches: branches()
+        }
+      ),
+      v(
+        :branch_navigator,
+        "The campaign's shape, full screen — a dropdown would serve the case that doesn't exist. Each branch is indented under the one it was cut from, with its name, and **when it was made**: recall runs on *the one from Tuesday evening* far more reliably than on any generated name. Names default to *scene · location · beat* with an ordinal only on collision (the 9:12/11:40 pair). Indentation caps at the second level — the deepest row carries its parent's name instead — and a branch whose origin scene was deleted says so here, and nowhere else.",
+        %{
+          tab: "scenes",
+          branch: %{id: "b3", name: "The quay · beat 6", canon?: false},
+          branches: branches(),
+          branch_navigator_open: true
+        }
+      ),
+      v(
+        :branch_navigator_deleting,
+        "Removing a line. The confirm names what goes — its scenes, its copies of the cast and world — and where its children end up, by name: they move up under the grandparent and keep everything they copied. Recursive is a toggle, default off, and counted when on. Links keep working — a record survives, so anyone holding one lands on the parent at the cut — and *Archive instead* sits beside delete because most lines somebody wants gone want archiving.",
+        %{
+          tab: "scenes",
+          branch: %{id: "b3", name: "The quay · beat 6", canon?: false},
+          branches: branches(),
+          branch_navigator_open: true,
+          branch_deleting: %{
+            id: "b1",
+            name: "The quay · beat 3",
+            scenes: 6,
+            children_names: ["The quay · beat 3 (2)"],
+            beneath: 0,
+            parent_name: "The Salt Line",
+            cut_label: "beat 3",
+            recursive?: false
+          }
+        }
       )
     ]
   end

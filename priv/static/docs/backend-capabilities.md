@@ -73,8 +73,8 @@ events carry `beat` (grouping label, *not* an ordering key), `packet_id`
 | **Delete** (supersede a turn out of canon) | `SupersedePacket` via `delete_turn` | ✅ "Delete" |
 | **Edit — in place** (supersede + recommit `edited:true`) | `play_live.ex save_edit` | ✅ inline edit |
 | **Edit — invalid/fork** (edit that invalidates the tail → branches) | `Polyphony.Edit.edit/6` (`:invalid`) | ✗ **backend-only** |
-| **Fork / branch-from-here** (copy-on-fork alternate timeline) | `Polyphony.Fork.fork/3` | ✗ **backend-only** |
-| **Branch navigator / lineage** (FS V2) | `ReadModels.SceneFork` | ✗ **backend-only** |
+| **Fork / branch-from-here** (copy-on-fork alternate timeline) | `Polyphony.Branching.branch_from/4` over `Polyphony.Fork.fork/3` | ✅ "⑂ Branch" on play's beat dividers (STR-8) |
+| **Branch navigator / lineage** (FS V2) | `Polyphony.Branching` + `ReadModels.Branch` (tree, canonical, cursor, tombstones) | ✅ campaign hub selector + full-screen navigator (STR-8) |
 
 ---
 
@@ -298,7 +298,12 @@ The design checklist. Each line is a place where the backend can do something th
 frontend can't (yet) reach.
 
 ### Timeline / play
-- ✗ **Fork / branch-from-here** (`Fork.fork`) + **branch navigator** (`ReadModels.SceneFork`, FS V2).
+- ✅ **Fork / branch-from-here** + **branch navigator** — shipped as STR-8:
+  `Polyphony.Branching` over `Fork.fork/3`, the ⑂ control on play's dividers, and the
+  hub's selector + full-screen navigator (canonical, archive, re-parenting delete,
+  tombstones, divergence cursor). Still open from that ticket: the reader's
+  off-canon / diverged / gone states are built and storybook-pinned but not yet
+  driven by publication data.
 - ✗ **Edit-as-fork** (`Edit.edit` `:invalid`) — no "this changes history, branch it?" flow.
 - ◐ **Autonomous multi-beat pacing** — Continue is single-beat only; no Play/Auto mode.
 - ◐ **`assisted` draft accept/discard** — mode selectable but no draft affordance.
