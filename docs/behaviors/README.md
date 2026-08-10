@@ -123,3 +123,4 @@ thread can edit made that a round trip through a pull request.
 | `arc_review.md` | What play proposed about your people, waiting on you. |
 | `settings.md` | The account: spend, caps, consent, deletion. |
 | `admin.md` | Moderation. |
+| `error.md` | The screen you get when there isn't one — 404, 403, 500. |
