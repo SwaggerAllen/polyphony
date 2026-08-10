@@ -4,9 +4,6 @@
   kit classes and var() tokens because this is a mock and the mock loads the kit; in the
   real page those values are written out literally. They are the kit's values either
   way — see error.md's first standing decision.
-
-  The "Today · 404, verbatim" frame is the live page fetched from production, kept for
-  comparison.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -29,8 +26,7 @@
   <p class="max-w-2xl text-[15px] leading-relaxed note mb-3">
     This page inlines everything, because a broken asset can be the error being shown. That
     constraint decides the implementation and not the look: the values below are the kit's own,
-    written out literally rather than referenced. <strong>Today's page invents its own palette
-    and a system font stack, and reads as a different product.</strong>
+    written out literally rather than referenced.
   </p>
   <p class="max-w-2xl text-[15px] leading-relaxed note mb-6">
     The copy changes too. Today every status says <em>Something went wrong</em> — including the
@@ -38,16 +34,6 @@
   </p>
 
   <div class="grid md:grid-cols-2 gap-4">
-    <div><div class="wall mb-2">Today · 404, verbatim</div>
-      <div style="background:#0f1115;color:#e6e8ee;padding:1.75rem 1.5rem;border-radius:14px;font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
-        <p style="font-size:3rem;font-weight:800;margin:0;color:#7c9cff;letter-spacing:.02em">404</p>
-        <h1 style="font-size:1.4rem;margin:.25rem 0 1rem">Not Found</h1>
-        <p style="color:#9aa2b1;font-size:.85rem;margin:0 0 1.5rem">request id: <code style="background:#1f232c;border-radius:6px;padding:.1rem .35rem">8dcf43c4-4987</code></p>
-        <p style="color:#9aa2b1">Something went wrong.</p>
-        <p style="margin-top:1.5rem"><a style="color:#7c9cff;text-decoration:none">← Home</a></p>
-      </div>
-      <p class="text-[11px] leading-relaxed dim mt-2">Fetched live. Blue accent, 800-weight numerals, system stack — none of it appears anywhere else in the product. And it tells somebody who mistyped a URL that something went wrong.</p></div>
-
     <div><div class="wall mb-2">New · 404</div>
       <div class="fr stage dark" style="padding:1.75rem 1.5rem">
         <p style="font-family:var(--f-title);font-size:2.75rem;font-weight:600;margin:0;color:var(--bcm);letter-spacing:.01em">404</p>
