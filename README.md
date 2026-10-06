@@ -285,3 +285,8 @@ do. What shipped, and why it is shaped the way it is, stays in
 inspector views, the notify-me-later push worker, richer authoring) and their rationale
 live in [`docs/decisions.md`](docs/decisions.md). Standing cleanup: optional move to
 ReqLLM.
+
+## License
+
+Polyphony is licensed under the [GNU Affero General Public
+License v3.0 or later](LICENSE) (AGPL-3.0-or-later).
